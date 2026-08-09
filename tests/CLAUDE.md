@@ -80,21 +80,24 @@ This directory contains the plugin's pytest test suite.
   complete, dormant optional tables are recognized, rotation orders all
   verification before writes, registered writers
   share the settings-row protocol and recovery uses one quoted PostgreSQL
-  table-lock protocol, reset is
-  confirmed/atomic/non-signaling and operationally disables affected rows,
+  table-lock protocol, reset is confirmed/atomic/non-signaling, clears only
+  undecryptable selected fields, preserves healthy fields/rows, and
+  operationally disables only affected rows,
   audit payloads are secret-free, key material is withheld, and
   signal/list/dashboard recovery surfaces stay fail-closed.
 - `test_encryption_key_recovery_django.py`: real-NetBox coverage for the eight
   always-installed families and eleven local ciphertext fields: successful rotation,
   wrong-old-key refusal, drifted-setting repair, corrupt-value full rollback,
-  proxbox-api versioned active-key/full-credential attestation and immutable
-  target capture, model/API/form mutation
+  proxbox-api versioned active-key/full-credential attestation, disabled-row
+  zero-network rotation, and immutable target capture, model/API/form mutation
   guards, exact reset confirmation, separate permission enforcement, selective
   trust-state clearing with no save signals, usable secret-free UI, and
   encryption-error signal boundaries. A PostgreSQL `TransactionTestCase` proves
   the table lock excludes a concurrent ciphertext writer and that a writer which
-  captured old-key ciphertext cannot save after rotation; stale full saves cannot
-  resurrect reset credentials, while explicit post-reset re-entry remains allowed.
+  captured old-key ciphertext cannot save after rotation; stale full/partial
+  saves and conditional `QuerySet.update()` writers cannot resurrect reset
+  credentials, trust, enabled state, or Firecracker online status, while explicit
+  post-reset credential re-entry remains allowed.
   It also proves the optional netbox-pbs family is omitted only when the app and
   table are genuinely absent, dormant ciphertext blocks rotation, an installed
   but unresolved model/schema/table fails closed, cloud-init/terminal/PBS writer

@@ -184,7 +184,7 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.fastapi = FastAPIEndpoint(
             name="recovery-backend",
             domain="recovery-backend.example.test",
-            enabled=False,
+            enabled=True,
             token_enc=secret(self.plaintexts["token_enc"]),
         )
         self.fastapi.backend_key_target_fingerprint = backend_key_target_fingerprint(
@@ -375,6 +375,27 @@ class EncryptionKeyRecoveryTest(TestCase):
         get_status.assert_called_once()
         self.settings_obj.refresh_from_db()
         self.assertEqual(self.settings_obj.encryption_key, self.new_key)
+
+    def test_rotation_never_contacts_a_disabled_backend(self) -> None:
+        FastAPIEndpoint.objects.filter(pk=self.fastapi.pk).update(enabled=False)
+
+        with patch(
+            "netbox_proxbox.services.encryption_recovery.requests.get"
+        ) as get_status:
+            rotate_encryption_key(
+                old_key=self.old_key,
+                new_key=self.new_key,
+                audit_actor=self.operator,
+                audit_request_id=uuid.uuid4(),
+            )
+
+        get_status.assert_not_called()
+        self.fastapi.refresh_from_db()
+        self.assertFalse(self.fastapi.enabled)
+        self.assertEqual(
+            enc_helpers.decrypt(self.fastapi.token_enc, key=self.new_key),
+            self.plaintexts["token_enc"],
+        )
 
     def test_attestation_dials_one_captured_ip_target(self) -> None:
         old_ip = IPAddress.objects.create(address="192.0.2.80/32")
@@ -869,6 +890,12 @@ class EncryptionKeyRecoveryTest(TestCase):
     def test_selective_reset_clears_trust_state_without_save_signals(self) -> None:
         calls: list[object] = []
         stale_proxmox = ProxmoxEndpoint.objects.get(pk=self.proxmox.pk)
+        ProxmoxEndpoint.objects.filter(pk=self.proxmox.pk).update(
+            password_enc="corrupt-proxmox-password"
+        )
+        PBSEndpoint.objects.filter(pk=self.pbs.pk).update(
+            token_secret_enc="corrupt-pbs-token"
+        )
 
         def record_save(*, instance: object, **_kwargs: object) -> None:
             calls.append(instance)
@@ -905,7 +932,10 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.proxmox.refresh_from_db()
         self.pbs.refresh_from_db()
         self.assertEqual(self.proxmox.password_enc, "")
-        self.assertEqual(self.proxmox.token_value_enc, "")
+        self.assertEqual(
+            enc_helpers.decrypt(self.proxmox.token_value_enc, key=self.old_key),
+            self.plaintexts["token_value_enc"],
+        )
         self.assertEqual(self.proxmox.pushed_credential_fingerprint, "")
         self.assertFalse(self.proxmox.enabled)
         self.assertNotEqual(self.proxmox.ssh_password_enc, "")
@@ -922,7 +952,46 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.assertEqual(self.proxmox.password_enc, "")
         self.assertFalse(self.proxmox.enabled)
 
+    def test_family_reset_preserves_healthy_fields_and_rows(self) -> None:
+        healthy_password = enc_helpers.encrypt("healthy-password", key=self.old_key)
+        healthy_token = enc_helpers.encrypt("healthy-token", key=self.old_key)
+        healthy = ProxmoxEndpoint(
+            name="healthy-recovery-pve",
+            domain="healthy-recovery-pve.example.test",
+            enabled=True,
+            password_enc=healthy_password,
+            token_value_enc=healthy_token,
+            pushed_credential_fingerprint="healthy-push-receipt",
+        )
+        ProxmoxEndpoint.objects.bulk_create([healthy])
+        original_token = self.proxmox.token_value_enc
+        ProxmoxEndpoint.objects.filter(pk=self.proxmox.pk).update(
+            password_enc="corrupt-selected-password"
+        )
+
+        result = reset_encrypted_families(
+            family_keys=["proxmox_api"],
+            confirmation=RESET_CONFIRMATION_PHRASE,
+            audit_actor=self.operator,
+            audit_request_id=uuid.uuid4(),
+        )
+
+        self.assertEqual(result.rows_matched, 1)
+        self.proxmox.refresh_from_db()
+        healthy.refresh_from_db()
+        self.assertEqual(self.proxmox.password_enc, "")
+        self.assertEqual(self.proxmox.token_value_enc, original_token)
+        self.assertFalse(self.proxmox.enabled)
+        self.assertEqual(self.proxmox.pushed_credential_fingerprint, "")
+        self.assertEqual(healthy.password_enc, healthy_password)
+        self.assertEqual(healthy.token_value_enc, healthy_token)
+        self.assertTrue(healthy.enabled)
+        self.assertEqual(healthy.pushed_credential_fingerprint, "healthy-push-receipt")
+
     def test_explicit_credential_reentry_after_reset_is_allowed(self) -> None:
+        ProxmoxEndpoint.objects.filter(pk=self.proxmox.pk).update(
+            password_enc="corrupt-password-for-reentry"
+        )
         reset_encrypted_families(
             family_keys=["proxmox_api"],
             confirmation=RESET_CONFIRMATION_PHRASE,
@@ -939,6 +1008,9 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.assertFalse(endpoint.enabled)
 
     def test_cloud_init_api_reentry_after_reset_uses_guarded_setter(self) -> None:
+        ProxmoxVMCloudInit.objects.filter(pk=self.cloud_init.pk).update(
+            sshkeys_enc="corrupt-cloud-init-key-bundle"
+        )
         reset_encrypted_families(
             family_keys=["cloud_init_ssh_keys"],
             confirmation=RESET_CONFIRMATION_PHRASE,
@@ -1108,6 +1180,10 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.proxmox.refresh_from_db()
         self.assertNotEqual(self.proxmox.password_enc, "")
 
+        ProxmoxEndpoint.objects.filter(pk=self.proxmox.pk).update(
+            password_enc="corrupt-password-for-permissioned-reset"
+        )
+
         permission = Permission.objects.get(
             content_type__app_label="netbox_proxbox",
             codename="reset_encrypted_secrets",
@@ -1171,6 +1247,176 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
     """Prove the PostgreSQL recovery lock excludes a concurrent secret write."""
 
     reset_sequences = True
+
+    def _pause_reset_before_commit(
+        self,
+        *,
+        family_key: str,
+        actor: object,
+        reset_paused: threading.Event,
+        allow_commit: threading.Event,
+        errors: list[BaseException],
+    ) -> threading.Thread:
+        def pause_event(**_kwargs: object) -> None:
+            reset_paused.set()
+            if not allow_commit.wait(timeout=5):
+                raise RuntimeError("timed out waiting to finish recovery reset")
+
+        def run_reset() -> None:
+            try:
+                connections["default"].close()
+                with patch(
+                    "netbox_proxbox.services.encryption_recovery."
+                    "record_encryption_recovery_event",
+                    side_effect=pause_event,
+                ):
+                    reset_encrypted_families(
+                        family_keys=[family_key],
+                        confirmation=RESET_CONFIRMATION_PHRASE,
+                        audit_actor=actor,
+                        audit_request_id=uuid.uuid4(),
+                    )
+            except BaseException as exc:  # pragma: no cover - reported in main thread
+                errors.append(exc)
+            finally:
+                connections["default"].close()
+
+        reset_thread = threading.Thread(target=run_reset, daemon=True)
+        reset_thread.start()
+        return reset_thread
+
+    def test_partial_save_started_during_reset_cannot_reenable_endpoint(self) -> None:
+        if connection.vendor != "postgresql":
+            self.skipTest("The production recovery lock is PostgreSQL-specific.")
+
+        old_key = Fernet.generate_key().decode("ascii")
+        settings_obj = ProxboxPluginSettings.get_solo()
+        ProxboxPluginSettings.objects.filter(pk=settings_obj.pk).update(
+            encryption_key=old_key
+        )
+        endpoint = ProxmoxEndpoint(
+            name="partial-save-reset-pve",
+            domain="partial-save-reset-pve.example.test",
+            enabled=True,
+            password_enc="corrupt-partial-save-ciphertext",
+        )
+        ProxmoxEndpoint.objects.bulk_create([endpoint])
+        stale_endpoint = ProxmoxEndpoint.objects.get(pk=endpoint.pk)
+        actor = get_user_model().objects.create_user(username="partial-save-reset")
+        reset_paused = threading.Event()
+        allow_commit = threading.Event()
+        reset_errors: list[BaseException] = []
+        writer_started = threading.Event()
+        writer_finished = threading.Event()
+        writer_errors: list[BaseException] = []
+
+        reset_thread = self._pause_reset_before_commit(
+            family_key="proxmox_api",
+            actor=actor,
+            reset_paused=reset_paused,
+            allow_commit=allow_commit,
+            errors=reset_errors,
+        )
+        self.assertTrue(reset_paused.wait(timeout=5))
+
+        def save_enabled() -> None:
+            try:
+                connections["default"].close()
+                writer_started.set()
+                stale_endpoint.enabled = True
+                stale_endpoint.save(update_fields=["enabled"])
+            except BaseException as exc:  # pragma: no cover - asserted below
+                writer_errors.append(exc)
+            finally:
+                writer_finished.set()
+                connections["default"].close()
+
+        writer = threading.Thread(target=save_enabled, daemon=True)
+        writer.start()
+        self.assertTrue(writer_started.wait(timeout=2))
+        self.assertFalse(writer_finished.wait(timeout=0.25))
+        allow_commit.set()
+        reset_thread.join(timeout=5)
+        writer.join(timeout=5)
+
+        self.assertFalse(reset_thread.is_alive())
+        self.assertFalse(writer.is_alive())
+        self.assertEqual(reset_errors, [])
+        self.assertEqual(len(writer_errors), 1)
+        self.assertIsInstance(writer_errors[0], ValidationError)
+        endpoint.refresh_from_db()
+        self.assertEqual(endpoint.password_enc, "")
+        self.assertFalse(endpoint.enabled)
+
+    def test_queryset_update_started_during_reset_cannot_restore_host_online(
+        self,
+    ) -> None:
+        if connection.vendor != "postgresql":
+            self.skipTest("The production recovery lock is PostgreSQL-specific.")
+
+        old_key = Fernet.generate_key().decode("ascii")
+        settings_obj = ProxboxPluginSettings.get_solo()
+        ProxboxPluginSettings.objects.filter(pk=settings_obj.pk).update(
+            encryption_key=old_key
+        )
+        pool = FirecrackerHostPool.objects.create(
+            name="Concurrent recovery pool", slug="concurrent-recovery-pool"
+        )
+        host = FirecrackerHost(
+            pool=pool,
+            name="concurrent-recovery-host",
+            agent_base_url="https://concurrent-firecracker.example.test",
+            agent_token_enc="corrupt-concurrent-firecracker-token",
+            status="ready",
+        )
+        FirecrackerHost.objects.bulk_create([host])
+        actor = get_user_model().objects.create_user(username="bulk-status-reset")
+        reset_paused = threading.Event()
+        allow_commit = threading.Event()
+        reset_errors: list[BaseException] = []
+        writer_started = threading.Event()
+        writer_finished = threading.Event()
+        writer_errors: list[BaseException] = []
+        updated_counts: list[int] = []
+
+        reset_thread = self._pause_reset_before_commit(
+            family_key="firecracker_agent",
+            actor=actor,
+            reset_paused=reset_paused,
+            allow_commit=allow_commit,
+            errors=reset_errors,
+        )
+        self.assertTrue(reset_paused.wait(timeout=5))
+
+        def mark_ready() -> None:
+            try:
+                connections["default"].close()
+                writer_started.set()
+                updated_counts.append(
+                    FirecrackerHost.objects.filter(pk=host.pk).update(status="ready")
+                )
+            except BaseException as exc:  # pragma: no cover - asserted below
+                writer_errors.append(exc)
+            finally:
+                writer_finished.set()
+                connections["default"].close()
+
+        writer = threading.Thread(target=mark_ready, daemon=True)
+        writer.start()
+        self.assertTrue(writer_started.wait(timeout=2))
+        self.assertFalse(writer_finished.wait(timeout=0.25))
+        allow_commit.set()
+        reset_thread.join(timeout=5)
+        writer.join(timeout=5)
+
+        self.assertFalse(reset_thread.is_alive())
+        self.assertFalse(writer.is_alive())
+        self.assertEqual(reset_errors, [])
+        self.assertEqual(writer_errors, [])
+        self.assertEqual(updated_counts, [0])
+        host.refresh_from_db()
+        self.assertEqual(host.agent_token_enc, "")
+        self.assertEqual(host.status, "offline")
 
     def test_table_lock_blocks_concurrent_ciphertext_writer(self) -> None:
         if connection.vendor != "postgresql":

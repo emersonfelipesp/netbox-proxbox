@@ -157,10 +157,14 @@ contract and issue #454 for the bug history.
   field, uses the migration connection alias plus bounded 500-row bulk batches,
   creates a sidecar when needed, never overwrites an existing typed value, and
   leaves legacy data intact for rollback compatibility.
-- **0079_encrypted_secret_reset_permission**: updates
+- **encrypted_secret_reset_permission** (currently numbered 0079): updates
   `ProxboxPluginSettings.Meta.permissions` with the separate
   `reset_encrypted_secrets` destructive-recovery permission. It changes no
-  ciphertext and performs no data migration.
+  ciphertext and performs no data migration. Issue #298 shares this migration
+  sequence with the parallel #295/#297 branches: do not renumber it before
+  those branches land, but after rebasing for merge rename it to the next free
+  sequence and point its dependency at the then-current plugin leaf. Tests find
+  this migration by operation content rather than its temporary number.
 
 ## Notes
 

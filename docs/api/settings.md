@@ -208,11 +208,14 @@ proxbox-api releases retain a permission-gated runtime fallback for existing
 deployments; migrate the backend to local key configuration before that
 compatibility path is removed.
 
-Verified plugin-key rotation additionally requires every configured backend to
-serve the paired version-1 `/admin/encryption/status` attestation: it must report
-the active cached key source as `env` or `local` and confirm that the active key
-decrypts every encrypted backend credential. The current legacy source-only
-response is intentionally insufficient, even when it reports `env` or `local`.
+Verified plugin-key rotation additionally requires every enabled, adopted,
+operational backend to serve the paired version-1
+`/admin/encryption/status` attestation: it must report the active cached key
+source as `env` or `local` and confirm that the active key decrypts every
+encrypted backend credential. Disabled, pending, retired, or trust-drifted rows
+are never contacted; their ciphertext rotates locally. The current legacy
+source-only response is intentionally insufficient for an operational backend,
+even when it reports `env` or `local`.
 
 ### Logging
 

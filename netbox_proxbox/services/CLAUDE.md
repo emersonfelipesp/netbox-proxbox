@@ -26,18 +26,26 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
   `install_encrypted_writer_guards()` wraps every registered model's `save()`
   (including optional netbox-pbs) so key selection/validation and persistence
   serialize on the settings row and an expected-ciphertext snapshot rejects
-  instances made stale by rotation/reset. The optional companion's public setter
+  instances made stale by rotation/reset, including partial saves of trust and
+  operational-reset fields. Its guarded `QuerySet.update()` path snapshots all
+  recovery fields before taking that lock and makes each delayed trust/operational
+  write conditional on the snapshot, so a reset-winning row updates zero times.
+  The optional companion's public setter
   may transfer its one-use tagged ciphertext from a validation probe into the
   persisted instance; the tag is stripped after save. Direct queryset/bulk
   encrypted-field writes are forbidden. Recovery locks all registered and
   dormant-known PostgreSQL tables in deterministic order. Rotation authenticates
-  every configured proxbox-api target's versioned `/admin/encryption/status`
-  response and proceeds only when the active cached `env`/`local` key has
-  verified every encrypted backend credential. Legacy source-only responses are
-  blocked. Fingerprint validation and the authenticated request share one
+  every enabled, adopted, operational proxbox-api target's versioned
+  `/admin/encryption/status` response and proceeds only when the active cached
+  `env`/`local` key has verified every encrypted backend credential. Disabled,
+  pending, retired, and trust-drifted rows are rotated locally without network
+  access. Legacy source-only responses from operational targets are blocked.
+  Fingerprint validation and the authenticated request share one
   immutable target capture, preventing linked-IP rebinding from redirecting the
   backend API key;
-  reset also disables affected endpoints or marks Firecracker hosts offline,
+  reset decrypt-checks each selected value, clears only failed fields, preserves
+  healthy fields/rows, and disables only affected endpoints or marks affected
+  Firecracker hosts offline,
   and success is recorded transactionally as a secret-free NetBox ObjectChange.
   UI failures record a separate secret-free failure event. Every
   new `*_enc` field protected by the shared key must join this registry and its

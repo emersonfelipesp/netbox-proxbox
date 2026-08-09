@@ -711,8 +711,10 @@ renews the lease independently from provider work, and persists the selected
 lease duration on the operation run.
 
 Plugin-at-rest key recovery is owned by
-`services/encryption_recovery.py`, the settings forms/views, and migration
-0079's separate destructive-reset permission. Its central registry is
+`services/encryption_recovery.py`, the settings forms/views, and the
+`encrypted_secret_reset_permission` migration (temporarily numbered 0079 until
+the #295/#297 sibling migrations land and the branch is renumbered against the
+new leaf). Its central registry is
 exhaustive across all plugin `*_enc` model fields and conditionally includes
 netbox-pbs `PBSPluginSettings.proxbox_api_key_enc` when that Django app is
 installed. Only genuine app absence is skipped; installed-but-unresolved

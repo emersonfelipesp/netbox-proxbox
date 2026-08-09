@@ -9,6 +9,21 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 MODELS = ROOT / "netbox_proxbox" / "models"
 RECOVERY = ROOT / "netbox_proxbox" / "services" / "encryption_recovery.py"
+MIGRATIONS = ROOT / "netbox_proxbox" / "migrations"
+
+
+def _migration_containing(operation_fragment: str) -> str:
+    """Find a migration by operation content, independent of its sequence name."""
+
+    matches = [
+        path
+        for path in MIGRATIONS.glob("[0-9][0-9][0-9][0-9]_*.py")
+        if operation_fragment in path.read_text()
+    ]
+    assert len(matches) == 1, (
+        f"expected one migration containing {operation_fragment!r}, found {matches}"
+    )
+    return matches[0].read_text()
 
 
 def _encrypted_model_fields() -> set[tuple[str, str]]:
@@ -183,6 +198,9 @@ def test_key_mutations_use_one_postgresql_table_lock_protocol() -> None:
     assert ".select_for_update()" in settings_model
     assert "install_encrypted_writer_guards()" in app_config
     assert "Encrypted values were prepared with a stale" in source
+    assert "_install_recovery_queryset_update_guard(model)" in source
+    assert "conditional_queryset" in source
+    assert "snapshot = dict(zip(recovery_fields" in source
     reset = source[source.index("def reset_encrypted_families") :]
     assert reset.index("select_for_update()") < reset.index(
         "lock_encrypted_field_tables()"
@@ -218,7 +236,8 @@ def test_destructive_reset_is_confirmed_atomic_and_non_signaling() -> None:
     )
     assert "confirmation != RESET_CONFIRMATION_PHRASE" in reset
     assert "with transaction.atomic():" in reset
-    assert "queryset.update(**clear_values)" in reset
+    assert ".update(**clear_values)" in reset
+    assert "enc_helpers.decrypt(" in reset
     assert "operational_reset_values" in reset
     assert ".save(" not in reset
 
@@ -263,12 +282,9 @@ def test_recovery_surfaces_never_render_keys_and_runtime_stays_permissioned() ->
 
 def test_permission_routes_and_signal_fail_closed_boundaries_are_wired() -> None:
     model = (MODELS / "plugin_settings.py").read_text()
-    migration = (
-        ROOT
-        / "netbox_proxbox"
-        / "migrations"
-        / "0079_encrypted_secret_reset_permission.py"
-    ).read_text()
+    migration = _migration_containing(
+        "Can destructively reset Proxbox encrypted secrets"
+    )
     urls = (ROOT / "netbox_proxbox" / "urls.py").read_text()
     signals = (ROOT / "netbox_proxbox" / "signals.py").read_text()
 

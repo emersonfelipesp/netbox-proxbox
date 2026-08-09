@@ -348,18 +348,25 @@ plugin key rotation** instead:
    registered ciphertext with the current key. Registered model saves,
    including the optional netbox-pbs settings model, lock the settings row and
    validate their ciphertext and expected pre-write database snapshot under
-   that key before the SQL write. A writer
-   which prepared old-key ciphertext before rotation is rejected after waiting;
-   it cannot commit stale ciphertext under the replacement key. Direct
+   that key before the SQL write. This also covers partial saves of trust and
+   operational fields such as `enabled`/Firecracker status. Bulk updates of
+   those fields capture the same recovery-field snapshot and condition each SQL
+   update on it still matching after the settings lock is acquired. A writer
+   which prepared old-key ciphertext before rotation or reset is rejected or
+   updates zero rows after waiting; it cannot commit stale ciphertext or restore
+   operational state. Direct
    `QuerySet.update()`/bulk writes to encrypted fields are forbidden outside the
    recovery service's locked updates.
-   Before changing the key, every configured proxbox-api target must also return
+   Before changing the key, every enabled, adopted, operational proxbox-api
+   target must also return
    a successful authenticated, versioned `GET /admin/encryption/status`
    attestation. Version 1 must atomically report the active cached key source as
    independent (`env` or `local`) and confirm that the active key decrypts every
    encrypted backend credential. Legacy source-only responses, a failed
-   credential scan, an unreachable backend, or an invalid response block
-   rotation. Configure `PROXBOX_ENCRYPTION_KEY`, migrate/re-encrypt the backend
+   credential scan, an unreachable operational backend, or an invalid response
+   block rotation. Disabled, retired, pending, and trust-drifted rows receive a
+   local ciphertext rotation with no network access. Configure
+   `PROXBOX_ENCRYPTION_KEY`, migrate/re-encrypt the backend
    database, and deploy the paired attestation contract before rotating the
    plugin key. Current source-only proxbox-api responses deliberately remain
    blocked.
@@ -376,16 +383,21 @@ plugin key rotation** instead:
 If the old key is unavailable, a user with the separate
 `netbox_proxbox.reset_encrypted_secrets` permission may use **Destructive
 encrypted-secret reset**. Select only the affected families, acknowledge data
-loss, and type `RESET PROXBOX ENCRYPTED SECRETS` exactly. The operation clears
-the selected ciphertext and its associated trust fingerprints with non-signaling
-database updates. The same update disables affected Proxmox, proxbox-api, PBS,
-and PDM endpoints and marks affected Firecracker hosts offline; per-node SSH,
-cloud-init, and optional netbox-pbs fallback rows become explicitly
-unconfigured by their empty credential. Re-enter credentials and explicitly
-re-enable or restore the affected service before running sync.
+loss, and type `RESET PROXBOX ENCRYPTED SECRETS` exactly. While holding the
+recovery locks, the operation tests every non-empty ciphertext in each selected
+family against the configured key. It clears only values that fail decryption;
+healthy fields on the same row and every healthy row survive unchanged. For a
+row with at least one failed value it also clears that family's trust state and,
+with non-signaling database updates, disables the affected Proxmox, proxbox-api,
+PBS, or PDM endpoint or marks the affected Firecracker host offline. Affected
+per-node SSH, cloud-init, and optional netbox-pbs fallback rows become
+unconfigured only for the failed fields. Re-enter those credentials and
+explicitly re-enable or restore the affected service before running sync.
 The reset takes the settings-row lock before table locks, and the writer guard
 rejects any stale instance whose expected ciphertext no longer matches the
-cleared row, so a queued full save cannot resurrect credentials or `enabled`.
+cleared row. Partial saves and conditional bulk updates use the same snapshot,
+so queued writers cannot resurrect credentials, trust, `enabled`, or online
+host status.
 
 This path is destructive: it cannot recover plaintext and does not change
 unselected families.

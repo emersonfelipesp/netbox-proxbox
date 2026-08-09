@@ -187,6 +187,8 @@ ENCRYPTED_FIELD_FAMILIES: Final = (
 
 _FAMILY_BY_KEY: Final = {family.key: family for family in ENCRYPTED_FIELD_FAMILIES}
 _EXPLICIT_WRITE_MARKER: Final = "_proxbox_encryption_expected_ciphertexts"
+_RECOVERY_FIELDS_BY_MODEL: dict[type, tuple[str, ...]] = {}
+_PROTECTED_RECOVERY_FIELDS_BY_MODEL: dict[type, frozenset[str]] = {}
 
 
 class _SetterProducedCiphertext(str):
@@ -330,11 +332,11 @@ def _available_family_models() -> tuple[tuple[EncryptedFieldFamily, type], ...]:
 
 
 def install_encrypted_writer_guards() -> None:
-    """Serialize every registered model save with key selection and rotation."""
+    """Serialize registered recovery-sensitive writes with key recovery."""
 
     from netbox_proxbox.models import ProxboxPluginSettings
 
-    fields_by_model: dict[type, set[str]] = {}
+    families_by_model: dict[type, list[EncryptedFieldFamily]] = {}
     for family in ENCRYPTED_FIELD_FAMILIES:
         try:
             model = _model_for(family)
@@ -349,13 +351,44 @@ def install_encrypted_writer_guards() -> None:
             continue
         if model is None:
             continue
-        fields_by_model.setdefault(model, set()).update(family.encrypted_fields)
+        families_by_model.setdefault(model, []).append(family)
 
-    for model, field_names in fields_by_model.items():
+    for model, model_families in families_by_model.items():
+        encrypted_fields = tuple(
+            sorted(
+                {
+                    field_name
+                    for family in model_families
+                    for field_name in family.encrypted_fields
+                }
+            )
+        )
+        recovery_fields = tuple(
+            sorted(
+                set(encrypted_fields)
+                | {
+                    field_name
+                    for family in model_families
+                    for field_name in family.trust_fields
+                }
+                | {
+                    field_name
+                    for family in model_families
+                    for field_name, _value in family.operational_reset_values
+                }
+            )
+        )
+        protected_recovery_fields = frozenset(recovery_fields) - frozenset(
+            encrypted_fields
+        )
+        _RECOVERY_FIELDS_BY_MODEL[model] = recovery_fields
+        _PROTECTED_RECOVERY_FIELDS_BY_MODEL[model] = protected_recovery_fields
+        if protected_recovery_fields:
+            _install_recovery_queryset_update_guard(model)
+
         if getattr(model, "_proxbox_encryption_writer_guard_installed", False):
             continue
         original_save = model.save
-        encrypted_fields = frozenset(field_names)
 
         optional_secret_setter = getattr(model, "set_proxbox_api_key", None)
         if callable(optional_secret_setter) and not getattr(
@@ -393,7 +426,8 @@ def install_encrypted_writer_guards() -> None:
             instance: object,
             *args: object,
             _original_save: object = original_save,
-            _encrypted_fields: frozenset[str] = encrypted_fields,
+            _encrypted_fields: tuple[str, ...] = encrypted_fields,
+            _recovery_fields: tuple[str, ...] = recovery_fields,
             **kwargs: object,
         ) -> object:
             update_fields = kwargs.get("update_fields")
@@ -402,7 +436,7 @@ def install_encrypted_writer_guards() -> None:
                     str(field_name) for field_name in update_fields
                 )
                 kwargs["update_fields"] = normalized_update_fields
-                if _encrypted_fields.isdisjoint(normalized_update_fields):
+                if set(_recovery_fields).isdisjoint(normalized_update_fields):
                     return _original_save(instance, *args, **kwargs)  # type: ignore[operator]
 
             ciphertexts = tuple(
@@ -488,6 +522,61 @@ def install_encrypted_writer_guards() -> None:
 
         model.save = guarded_save
         model._proxbox_encryption_writer_guard_installed = True
+
+
+def _install_recovery_queryset_update_guard(model: type) -> None:
+    """Make bulk operational/trust writes conditional on one row snapshot.
+
+    A plain ``QuerySet.update()`` does not call ``save()``. Capture the recovery
+    fields before waiting for the settings-row lock, then add that snapshot to
+    every eventual update. If a reset wins the lock and clears a credential,
+    trust receipt, or operational flag, PostgreSQL rechecks these predicates
+    after the wait and the delayed writer updates zero rows.
+    """
+
+    queryset_type = type(model._default_manager.all())
+    if getattr(queryset_type, "_proxbox_recovery_update_guard_installed", False):
+        return
+    original_update = queryset_type.update
+
+    @wraps(original_update)
+    def guarded_update(queryset: object, **updates: object) -> int:
+        queryset_model = getattr(queryset, "model", None)
+        protected_fields = _PROTECTED_RECOVERY_FIELDS_BY_MODEL.get(queryset_model)
+        if not protected_fields or protected_fields.isdisjoint(updates):
+            return original_update(queryset, **updates)
+
+        recovery_fields = _RECOVERY_FIELDS_BY_MODEL[queryset_model]
+        # Match Django's own ``QuerySet.update()`` routing before the snapshot;
+        # otherwise a multi-database installation could read recovery state from
+        # a replica and write through a different connection.
+        queryset._for_write = True  # type: ignore[attr-defined]
+        using = str(getattr(queryset, "db", "default") or "default")
+        snapshots = tuple(
+            queryset.values_list("pk", *recovery_fields)  # type: ignore[attr-defined]
+        )
+        if not snapshots:
+            return 0
+
+        from netbox_proxbox.models import ProxboxPluginSettings
+
+        updated = 0
+        with transaction.atomic(using=using):
+            ProxboxPluginSettings.objects.using(using).select_for_update().filter(
+                singleton_key="default"
+            ).first()
+            for values in snapshots:
+                pk, *snapshot_values = values
+                snapshot = dict(zip(recovery_fields, snapshot_values, strict=True))
+                conditional_queryset = queryset.filter(  # type: ignore[attr-defined]
+                    pk=pk,
+                    **snapshot,
+                )
+                updated += original_update(conditional_queryset, **updates)
+        return updated
+
+    queryset_type.update = guarded_update
+    queryset_type._proxbox_recovery_update_guard_installed = True
 
 
 def lock_encrypted_field_tables(
@@ -682,7 +771,7 @@ def encrypted_family_statuses(
 def _assert_backends_use_independent_encryption(
     *, old_key: str, using: str = "default"
 ) -> None:
-    """Require every configured proxbox-api to provide the versioned key proof."""
+    """Require every enabled, adopted proxbox-api to provide the key proof."""
 
     from netbox_proxbox.models import FastAPIEndpoint
     from netbox_proxbox.services.backend_key_adoption import (
@@ -691,7 +780,13 @@ def _assert_backends_use_independent_encryption(
         backend_key_target_fingerprint,
     )
 
-    endpoints = FastAPIEndpoint.objects.using(using).all().order_by("pk")
+    endpoints = (
+        FastAPIEndpoint.objects.using(using)
+        .filter(enabled=True)
+        .exclude(token_enc="")
+        .exclude(backend_key_target_fingerprint="")
+        .order_by("pk")
+    )
     for endpoint in endpoints:
         ip_resolver = getattr(endpoint, "backend_key_ip_address_for_trust", None)
         ip_address = (
@@ -719,18 +814,15 @@ def _assert_backends_use_independent_encryption(
         )
         try:
             captured_fingerprint = backend_key_target_fingerprint(target)
-        except BackendKeyAdoptionError as exc:
-            raise BackendEncryptionDependencyError(
-                "Plugin-key rotation could not resolve every configured proxbox-api "
-                "target for encryption-source attestation."
-            ) from exc
+        except BackendKeyAdoptionError:
+            # Invalid targets are already non-operational because runtime trust
+            # validation rejects them. Rotate their ciphertext locally without
+            # sending a retired or unadopted target any credential.
+            continue
         if len(stored_fingerprint) != 64 or not compare_digest(
             stored_fingerprint, captured_fingerprint
         ):
-            raise BackendEncryptionDependencyError(
-                "Plugin-key rotation requires every configured proxbox-api target "
-                "to have a current trusted identity binding."
-            )
+            continue
         try:
             # Both fingerprint comparison and request URL derive from this one
             # captured object. A concurrent IPAddress update cannot rebind the
@@ -940,6 +1032,7 @@ def rotate_encryption_key(
     )
 
 
+@sensitive_variables("configured_key")
 def reset_encrypted_families(
     *,
     family_keys: list[str] | tuple[str, ...],
@@ -947,7 +1040,7 @@ def reset_encrypted_families(
     audit_actor: object,
     audit_request_id: UUID,
 ) -> ResetResult:
-    """Destructively clear selected ciphertext/trust fields without save signals."""
+    """Clear only undecryptable selected ciphertext without save signals."""
 
     from netbox_proxbox.models import ProxboxPluginSettings
 
@@ -964,12 +1057,14 @@ def reset_encrypted_families(
 
     matched_rows: set[tuple[str, object]] = set()
     reset_families: list[str] = []
+    ciphertext_values_reset = 0
     settings_obj = ProxboxPluginSettings.get_solo()
     try:
         with transaction.atomic():
             locked_settings = ProxboxPluginSettings.objects.select_for_update().get(
                 pk=settings_obj.pk
             )
+            configured_key = str(locked_settings.encryption_key or "").strip()
             family_models = {
                 family.key: (family, model)
                 for family, model in lock_encrypted_field_tables()
@@ -980,21 +1075,37 @@ def reset_encrypted_families(
                 if resolved is None:
                     continue
                 _resolved_family, model = resolved
-                queryset = model.objects.select_for_update().filter(
-                    _ciphertext_query(family)
+                rows = (
+                    model.objects.select_for_update()
+                    .filter(_ciphertext_query(family))
+                    .values_list("pk", *family.encrypted_fields)
+                    .order_by("pk")
                 )
-                matched_rows.update(
-                    (family.model_label, pk)
-                    for pk in queryset.values_list("pk", flat=True)
-                )
-                clear_values = {
-                    field_name: "" for field_name in family.encrypted_fields
-                }
-                for field_name in family.trust_fields:
-                    model_field = model._meta.get_field(field_name)
-                    clear_values[field_name] = None if model_field.null else ""
-                clear_values.update(dict(family.operational_reset_values))
-                queryset.update(**clear_values)
+                for values in rows.iterator(chunk_size=200):
+                    pk, *ciphertexts = values
+                    clear_values: dict[str, object] = {}
+                    for field_name, ciphertext in zip(
+                        family.encrypted_fields, ciphertexts, strict=True
+                    ):
+                        if not ciphertext:
+                            continue
+                        try:
+                            enc_helpers.decrypt(
+                                str(ciphertext),
+                                key=configured_key,
+                            )
+                        except enc_helpers.EncryptionError:
+                            clear_values[field_name] = ""
+                    if not clear_values:
+                        continue
+
+                    matched_rows.add((family.model_label, pk))
+                    ciphertext_values_reset += len(clear_values)
+                    for field_name in family.trust_fields:
+                        model_field = model._meta.get_field(field_name)
+                        clear_values[field_name] = None if model_field.null else ""
+                    clear_values.update(dict(family.operational_reset_values))
+                    model.objects.filter(pk=pk).update(**clear_values)
                 reset_families.append(key)
             record_encryption_recovery_event(
                 settings_obj=locked_settings,
@@ -1004,6 +1115,7 @@ def reset_encrypted_families(
                 outcome="succeeded",
                 family_keys=tuple(reset_families),
                 rows_affected=len(matched_rows),
+                ciphertext_values_affected=ciphertext_values_reset,
             )
     except DatabaseError as exc:
         raise EncryptionRecoveryConfigurationError(

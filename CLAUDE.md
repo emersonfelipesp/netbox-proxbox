@@ -216,15 +216,19 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   the supplied old key and repairs the setting during rotation; with no ciphertext,
   the supplied old key must still match the stored value. Lost-key reset
   is separately permissioned (`reset_encrypted_secrets`), explicitly confirmed,
-  selective, disables affected endpoints (or marks Firecracker hosts offline),
-  and uses `QuerySet.update()` so endpoint save signals do not fire. Rotation
-  also requires every configured proxbox-api target to authenticate and return
+  selective at the individual failed-ciphertext level, preserves healthy fields
+  and rows, disables only affected endpoints (or marks affected Firecracker hosts
+  offline), and uses `QuerySet.update()` so endpoint save signals do not fire.
+  Partial saves and direct trust/operational bulk updates use recovery snapshots
+  so delayed writers cannot restore reset state. Rotation also requires every
+  enabled, adopted, operational proxbox-api target to authenticate and return
   the versioned attestation that its active cached key is independent
   (`env`/`local`) and decrypts every stored backend credential; the legacy
   source-only response, plugin-key fallback, unreachable target, or invalid
-  response blocks it. The target URL and trust fingerprint come from one
-  immutable capture so a related-IP update cannot rebind the credentialed
-  request. Recovery
+  response blocks it. Disabled, pending, retired, and trust-drifted backend rows
+  rotate locally with zero network access. The target URL and trust fingerprint
+  come from one immutable capture so a related-IP update cannot rebind the
+  credentialed request. Recovery
   POST values are exception-reporter-sensitive and each attempt emits a
   secret-free NetBox changelog event.
   Keep this plugin-at-rest key separate from proxbox-api's own database
