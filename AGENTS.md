@@ -191,6 +191,28 @@ into `develop`. Never `twine --skip-existing` — fix forward with the next
 
 ## CI/CD Workflows
 
+### Authenticated Django matrix bootstrap (not enabled)
+
+Issue #300 adds the reviewed target-branch waiter at
+`scripts/wait_for_github_django_matrix.py` and pins
+`.github/workflows/django-tests.yml` by Git blob identity. The public matrix is
+still **non-security evidence** because candidate code owns the installed
+package and tests. Do not add or enable a Gitea consumer as part of this
+bootstrap and do not describe its result as trusted evidence.
+
+A future **base-pinned external supervisor** must execute the waiter from an
+immutable reviewed base checkout, bind the trusted candidate branch to its full
+SHA and `push` workflow `path@branch`, and reject other-branch and tag runs.
+Only after that supervisor and its isolation are reviewed may a separate change
+enable a consumer. Its base-owned `GH_MATRIX_READ_TOKEN` must remain outside
+every candidate checkout, environment, process, hook, and log. The waiter
+accepts only a base-owner GitHub App user access token (`ghu_…`) whose app
+installation selects only the exact Emerson repository with `Actions: read`
+and `Contents: read`; never weaken its fixed GitHub API allowlist, ambient-proxy
+and redirect refusal, shared deadline, response cap, or request budget. See
+`docs/developer/ci-e2e-workflows.md` for the bootstrap order and full trust
+boundary.
+
 ### End-to-end release pipeline (Gitea-first)
 
 The official release pipeline runs in this order:
