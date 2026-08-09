@@ -467,9 +467,13 @@ def test_influxdb_metrics_secret_ref_regex_uses_strict_uuid_shape() -> None:
 
 def test_influxdb_metrics_enabled_state_is_database_constrained_after_scrub() -> None:
     model = _read("netbox_proxbox/models/proxmox_metrics.py")
-    migration = _read(
-        "netbox_proxbox/migrations/0079_metrics_influxdb_secret_ref_constraints.py"
+    migration_matches = sorted(
+        (ROOT / "netbox_proxbox" / "migrations").glob(
+            "0*_metrics_influxdb_secret_ref_constraints.py"
+        )
     )
+    assert len(migration_matches) == 1, migration_matches
+    migration = migration_matches[0].read_text(encoding="utf-8")
 
     for source in (model, migration):
         assert 'models.Q(enabled=False, query_token_secret_ref="")' in source

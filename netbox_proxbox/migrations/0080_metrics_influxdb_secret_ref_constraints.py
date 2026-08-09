@@ -226,7 +226,7 @@ def _scrub_non_conforming_values(apps, schema_editor) -> None:
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("netbox_proxbox", "0078_sync_state_last_synced_role"),
+        ("netbox_proxbox", "0079_storage_nodes_text"),
     ]
 
     operations = [
