@@ -157,6 +157,16 @@ contract and issue #454 for the bug history.
   field, uses the migration connection alias plus bounded 500-row bulk batches,
   creates a sidecar when needed, never overwrites an existing typed value, and
   leaves legacy data intact for rollback compatibility.
+- **0079_storage_nodes_text**: widens `ProxmoxStorage.nodes` from a
+  255-character column to `TextField` so a complete comma-separated membership
+  list survives large Proxmox estates. The database operation is expand-only:
+  reversing restores historical Django state but deliberately leaves the
+  PostgreSQL `text` column in place, because narrowing after a long value exists
+  would block rollback or require destructive truncation. Forward, rollback,
+  and reapply preserve existing and newly long values. This number can collide
+  with sibling feature branches and is intentionally renumbered only at merge;
+  its real-Django test discovers the sole current plugin leaf and that leaf's
+  direct plugin parent dynamically instead of pinning a numbered edge.
 
 ## Notes
 

@@ -90,6 +90,7 @@ jobs:
             tests/test_job_stream_django.py \
             tests/test_ceph_runtime_settings_django.py \
             tests/test_node_ssh_credential_form_django.py \
+            tests/test_storage_nodes_capacity_django.py \
             --ds=netbox.settings --reuse-db --create-db -v --no-header \
             --cov=netbox_proxbox.services.endpoint_autoconfiguration \
             --cov-branch --cov-report=term-missing --cov-fail-under=85

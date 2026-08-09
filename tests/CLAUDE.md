@@ -67,7 +67,27 @@ This directory contains the plugin's pytest test suite.
 - `test_services_sync_datacenter.py`: behavior tests for `sync_datacenter` scoping against a stubbed module loader (mirroring the `sync_firewall` harness): a CPU-model response row for an endpoint outside the run's resolved scope is refused — neither upserted nor included in stale marking — pinning the local half of the endpoint scope that query-param forwarding cannot enforce against a backend that ignores `proxmox_endpoint_ids`. Also pins that a cluster name claimed by two endpoints resolves to nobody (`_resolve_endpoint_by_cluster_name` returns `None` instead of `.first()`-guessing), the same rule the firewall harness pins on its side together with the single-claimant case still resolving.
 - `test_services_backend_context.py`: AST contract for `get_fastapi_request_context` / `get_fastapi_endpoint_with_token` signatures and the three endpoint-resolution branches in `services/backend_context.py`.
 - `test_views_vm_config.py`: AST contract for `ProxmoxVMConfigTabView` — `register_model_view` path/name, `ObjectView` base, `ViewTab` label/permission, and the helper extractors.
-- `test_views_storage.py`: AST contract for the eight `ProxmoxStorage*` view classes — `__all__` membership, list-view `path=""` registration, child-tab paths/labels/permissions, and the detail view's short `request_timeout`.
+- `test_views_storage.py`: AST contract for the eight `ProxmoxStorage*` view classes — `__all__` membership, list-view `path=""` registration, child-tab paths/labels/permissions, the detail view's short `request_timeout`, and the explicit `MultiValueCharFilter` preserving `nodes` query/OpenAPI behavior after its `TextField` migration.
+- `test_storage_content_fetch.py`: pure adversarial coverage for the storage
+  content process-wide pool and streamed fetcher. Repeated page-deadline calls
+  whose fake HTTP work keeps trickling prove that live workers and occupied
+  slots never exceed four; separate cases pin graceful partial notices when all
+  slots are occupied, active wall-clock abort of a trickling response, and the
+  decoded response-size ceiling. It path-loads `views/storage_content.py` so the
+  mocked suite exercises these resource-lifetime rules without NetBox/Django.
+- `test_storage_nodes_capacity_django.py`: real NetBox/Django coverage proving
+  storage node membership longer than 255 characters passes the model, form,
+  serializer, filterset, REST list/bulk, and database boundaries unchanged. Its
+  migration case asserts there is exactly one plugin leaf, discovers that
+  leaf's parent dynamically, and exercises expand-only rollback/reapply without
+  pinning a collision-prone migration number. Its no-database cases prove the
+  live-content fan-out stays at four workers, issues no more than 64
+  authenticated calls for a 5,000-node membership, respects one absolute
+  deadline even when a call ignores its socket timeout, bounds late-refill HTTP
+  timeouts to the remaining budget, rejects real malformed/error envelopes
+  without mocked validation, and
+  reports partial/truncated results explicitly in every usage-data template
+  branch.
 - `test_proxmox_endpoint_settings_view.py`: AST contract for the Proxmox endpoint Settings tab registration, permissions, form usage, and context wiring.
 - `test_endpoint_templates_tab.py`: AST/source + behavior contracts for the endpoint **Templates** tab. Covers `ProxmoxEndpointTemplatesTabView` structure (`ObjectView` base, `__all__`, `template_name`, `ViewTab` label/permission/weight, `path="templates"`, `get_extra_context` + classification helpers, wiring into `views/__init__.py`), the live-fetch source contract (`/cloud/vm/templates` with `cloud_init_only=false` + `/cloud/lxc/templates`, `get_fastapi_request_context`/`resolve_backend_endpoint_id`, cloud-init derived from `cloud_init_drives`/`cicustom`, graceful `backend_error` degradation), the `integrations/packer.py` detection + guarded add-URL helpers, template contracts (three `data-category` groups, category filter, packer create button disabled **with a working tooltip** when netbox-packer is absent), and mirrored behavior tests for cloud-init classification / byte→GiB / LXC name derivation. Pure AST/source based — no NetBox bootstrap.
 - `test_endpoint_create_instance.py`: AST/source + local-stub behavior contracts for the Templates-tab **Create new instance** wizard. Covers the registered `create-instance` view, POST-only permission gate, `allow_writes` early exit, direct proxbox-api QEMU/LXC payload builders, cloud-init validation, VMID collision retry, actor/idempotency headers, verbatim backend 403 surfacing, template Actions columns, disabled-button tooltip, wizard steps, CSRF/fetch contract, and unsafe-JS exclusions. No real provisioning is performed.
@@ -80,7 +100,7 @@ This directory contains the plugin's pytest test suite.
   missing-field fallback, and `update_fields` membership.
 - `test_cloud_customer_network_settings.py`: source contracts for the five `ProxboxPluginSettings` cloud-customer network fields, migration 0059, form/API/template/view/docs wiring, and estate-agnostic migration defaults.
 - `test_ceph_runtime_settings.py`: source contracts for migration 0077, bounded model/form fields, serializer/view/template wiring, documentation, environment override names, and the immutable cross-service timing contract.
-- `test_ceph_runtime_settings_django.py`: real Django/DRF validation checks proving the model, form, and settings serializer accept the documented bounds, reject polling greater than timeout (including partial API updates), and apply migration 0077 to an existing row with the documented defaults.
+- `test_ceph_runtime_settings_django.py`: real Django/DRF validation checks proving the model, form, and settings serializer accept the documented bounds, reject polling greater than timeout (including partial API updates), and apply migration 0077 to an existing row with the documented defaults. Its migration test restores the current graph leaf, never a hard-coded historical target, so later matrix modules run against the final schema.
 - `test_settings_view_ceph_runtime.py`: stubbed SettingsView GET/POST behavior proving all three Ceph timing values populate the form, persist on the singleton, and are included in `update_fields`.
 - `test_node_ssh_credential_model.py`: `normalize_fingerprint` accept/reject behavior, Fernet-backed `set_password` / `get_password` and `set_private_key` / `get_private_key` round-trips, `EncryptionKeyMissing` and `DecryptionFailed` exits, and AST contract on `models/ssh_credential.py` (NetBoxModel base, required fields, `OneToOneField(ProxmoxNode)`, auth-method choices, `clean()` calling `normalize_fingerprint`).
 - `test_node_ssh_credential_api.py`: `_NetBoxTokenCanViewNodeSSHCredential.has_permission()` NetBox-token permission checks, `_credential_for_node_identifier()` ProxmoxNode/NetBox-device lookup compatibility, `_metadata_payload()` redaction, AST contract on the by-node viewset (`_ProxboxDashboardPermission` for metadata, NetBox-token permission for secrets, HTTPS-required guard in non-DEBUG, 503 on missing encryption key), and `api/urls.py` route registration. Also **behavioral** coverage of `NodeHostKeyFingerprintAPIView.get` (the Terminal-tab node host-key scan) via the stub loader: `ssh_access_enabled` 403 gate, no-IP 422, no-backend 503, success forwards `host`/`port` to proxbox-api and returns the fingerprint, invalid `?port=` defaults to 22, and old-backend 404→503 downgrade.
