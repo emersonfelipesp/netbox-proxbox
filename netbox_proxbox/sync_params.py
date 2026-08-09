@@ -467,6 +467,11 @@ def _resolve_vm_node(vm: VirtualMachine) -> str:
 
 def _resolve_known_vm_type(vm: VirtualMachine) -> str:
     """Derive a backend-supported VM type without guessing a default."""
+    sync_state = getattr(vm, "proxbox_sync_state", None)
+    typed_type = str(getattr(sync_state, "proxmox_vm_type", None) or "").strip().lower()
+    if typed_type in {"qemu", "lxc"}:
+        return typed_type
+
     vm_type_obj = getattr(vm, "virtual_machine_type", None)
     if vm_type_obj and hasattr(vm_type_obj, "slug"):
         slug = str(vm_type_obj.slug).strip().lower()
@@ -492,6 +497,11 @@ def _resolve_vm_type(vm: VirtualMachine) -> str:
 
 
 def _resolve_vm_vmid(vm: VirtualMachine) -> str:
+    sync_state = getattr(vm, "proxbox_sync_state", None)
+    typed_vmid = getattr(sync_state, "proxmox_vm_id", None)
+    if typed_vmid:
+        return str(typed_vmid)
+
     custom_field_data = getattr(vm, "custom_field_data", None) or {}
     vmid = custom_field_data.get("proxmox_vm_id") or custom_field_data.get(
         "cf_proxmox_vm_id"
@@ -572,11 +582,16 @@ def _resolve_vm_snapshot_batch_params(snapshot: VMSnapshot) -> dict[str, object]
 
     cluster_name = _resolve_vm_cluster_name(vm_obj)
     node = str(getattr(snapshot, "node", None) or _resolve_vm_node(vm_obj) or "")
-    vm_type = _resolve_vm_type(vm_obj)
+    snapshot_subtype = str(getattr(snapshot, "subtype", None) or "").strip().lower()
+    vm_type = (
+        snapshot_subtype
+        if snapshot_subtype in {"qemu", "lxc"}
+        else _resolve_known_vm_type(vm_obj)
+    )
     vmid = str(getattr(snapshot, "vmid", None) or _resolve_vm_vmid(vm_obj) or "")
     snapshot_name = str(getattr(snapshot, "name", None) or "")
 
-    if not cluster_name or not node or not vmid or not snapshot_name:
+    if not cluster_name or not node or not vm_type or not vmid or not snapshot_name:
         return {"error": "Missing snapshot sync context.", "status": 422}
 
     query_params: dict[str, object] = {
@@ -625,7 +640,7 @@ def _resolve_task_history_batch_params(
         if stored_vm_type in {"qemu", "lxc"}
         else _resolve_known_vm_type(vm_obj)
     )
-    vmid = str(getattr(task_history, "vmid", None) or _resolve_vm_vmid(vm_obj) or "")
+    vmid = _resolve_vm_vmid(vm_obj)
     upid = str(getattr(task_history, "upid", None) or "")
     cluster_name = _resolve_vm_cluster_name(vm_obj)
 

@@ -333,6 +333,19 @@ def _load_real_task_history_resolver(monkeypatch):
     return _load_real_sync_params()._resolve_task_history_batch_params
 
 
+def _load_real_snapshot_resolver(monkeypatch):
+    _install_action_stubs(
+        monkeypatch,
+        resolver_name="_resolve_vm_snapshot_batch_params",
+        resolver_result={"unused": True},
+    )
+    load_plugin_module(
+        "netbox_proxbox.views.sync_now.snapshot",
+        monkeypatch=monkeypatch,
+    )
+    return _load_real_sync_params()._resolve_vm_snapshot_batch_params
+
+
 def test_task_history_action_sends_exact_individual_query_contract(monkeypatch):
     """The registered action must use the backend's exact ``type`` contract."""
     captured = _install_action_stubs(
@@ -357,14 +370,17 @@ def test_task_history_action_sends_exact_individual_query_contract(monkeypatch):
         cluster_id=cluster.pk,
         device=SimpleNamespace(name="pve-a"),
         virtual_machine_type=SimpleNamespace(slug="qemu"),
-        custom_field_data={"proxmox_vm_id": 100},
+        proxbox_sync_state=SimpleNamespace(
+            proxmox_vm_id=100,
+            proxmox_vm_type="qemu",
+        ),
+        custom_field_data={},
     )
     task_history = SimpleNamespace(
         pk=17,
         virtual_machine=vm,
         node="pve-a",
         vm_type="qemu",
-        vmid=100,
         upid="UPID:pve-a:100",
         get_absolute_url=lambda: "/plugins/proxbox/task-history/17/",
     )
@@ -391,6 +407,62 @@ def test_task_history_action_sends_exact_individual_query_contract(monkeypatch):
             "proxmox_endpoint_ids": "71",
         },
     )
+
+
+def test_task_history_real_resolver_prefers_typed_vm_sync_state_vmid(monkeypatch):
+    resolver = _load_real_task_history_resolver(monkeypatch)
+    cluster = SimpleNamespace(pk=41, name="shared-cluster")
+    vm = SimpleNamespace(
+        cluster=cluster,
+        cluster_id=cluster.pk,
+        device=SimpleNamespace(name="pve-a"),
+        proxbox_sync_state=SimpleNamespace(
+            proxmox_vm_id=100,
+            proxmox_vm_type="qemu",
+        ),
+        custom_field_data={"proxmox_vm_id": 999},
+    )
+    task_history = SimpleNamespace(
+        pk=17,
+        virtual_machine=vm,
+        node="pve-a",
+        vm_type="qemu",
+        upid="UPID:pve-a:100",
+    )
+
+    assert resolver(task_history) == {
+        "path": "sync/individual/task-history",
+        "query_params": {
+            "node": "pve-a",
+            "type": "qemu",
+            "vmid": "100",
+            "upid": "UPID:pve-a:100",
+            "cluster_name": "shared-cluster",
+        },
+    }
+
+
+def test_task_history_real_resolver_refuses_missing_vmid(monkeypatch):
+    resolver = _load_real_task_history_resolver(monkeypatch)
+    cluster = SimpleNamespace(pk=41, name="shared-cluster")
+    task_history = SimpleNamespace(
+        pk=17,
+        virtual_machine=SimpleNamespace(
+            cluster=cluster,
+            cluster_id=cluster.pk,
+            device=SimpleNamespace(name="pve-a"),
+            proxbox_sync_state=SimpleNamespace(proxmox_vm_id=None),
+            custom_field_data={},
+        ),
+        node="pve-a",
+        vm_type="qemu",
+        upid="UPID:pve-a:100",
+    )
+
+    assert resolver(task_history) == {
+        "error": "Missing task-history sync context.",
+        "status": 422,
+    }
 
 
 @pytest.mark.parametrize(
@@ -428,7 +500,6 @@ def test_task_history_real_resolver_derives_supported_type_for_legacy_rows(
         virtual_machine=vm,
         node="pve-a",
         vm_type=stored_vm_type,
-        vmid=100,
         upid="UPID:pve-a:100",
     )
 
@@ -459,7 +530,6 @@ def test_task_history_real_resolver_refuses_underivable_legacy_type(monkeypatch)
         virtual_machine=vm,
         node="pve-a",
         vm_type="legacy-openvz",
-        vmid=100,
         upid="UPID:pve-a:100",
     )
 
@@ -499,7 +569,6 @@ def test_task_history_action_refuses_underivable_type_without_syncing(monkeypatc
         ),
         node="pve-a",
         vm_type="legacy-openvz",
-        vmid=100,
         upid="UPID:pve-a:100",
         get_absolute_url=lambda: "/plugins/proxbox/task-history/17/",
     )
@@ -515,6 +584,123 @@ def test_task_history_action_refuses_underivable_type_without_syncing(monkeypatc
     assert response.url == "/plugins/proxbox/task-history/17/"
     assert "sync" not in captured
     assert "legacy-openvz" in module._messages_stub.calls[-1][1]
+
+
+def test_snapshot_action_sends_authoritative_lxc_subtype(monkeypatch):
+    captured = _install_action_stubs(
+        monkeypatch,
+        resolver_name="_resolve_vm_snapshot_batch_params",
+        resolver_result={"unused": True},
+    )
+    module = load_plugin_module(
+        "netbox_proxbox.views.sync_now.snapshot",
+        monkeypatch=monkeypatch,
+    )
+    monkeypatch.setattr(
+        module,
+        "_resolve_vm_snapshot_batch_params",
+        _load_real_sync_params()._resolve_vm_snapshot_batch_params,
+    )
+
+    cluster = SimpleNamespace(pk=41, name="shared-cluster")
+    snapshot = SimpleNamespace(
+        pk=17,
+        virtual_machine=SimpleNamespace(
+            cluster=cluster,
+            cluster_id=cluster.pk,
+            custom_field_data={},
+        ),
+        proxmox_storage=SimpleNamespace(name="local-lvm"),
+        node="pve-a",
+        subtype="lxc",
+        vmid=100,
+        name="before-upgrade",
+        get_absolute_url=lambda: "/plugins/proxbox/snapshot/17/",
+    )
+    monkeypatch.setattr(module, "get_object_or_404", lambda *args, **kwargs: snapshot)
+
+    response = module.VMSnapshotSyncNowView().post(
+        SimpleNamespace(user=SimpleNamespace(username="operator")),
+        pk=17,
+    )
+
+    assert response.url == "/plugins/proxbox/snapshot/17/"
+    assert captured["sync"] == (
+        "sync/individual/snapshot",
+        {
+            "cluster_name": "shared-cluster",
+            "node": "pve-a",
+            "type": "lxc",
+            "vmid": "100",
+            "snapshot_name": "before-upgrade",
+            "storage_name": "local-lvm",
+        },
+        {
+            "netbox_branch_schema_id": "branch-schema",
+            "fastapi_endpoint_id": 7,
+            "proxmox_endpoint_ids": "71",
+        },
+    )
+
+
+@pytest.mark.parametrize(
+    ("typed_vm_type", "native_vm_type_slug", "expected_type"),
+    (
+        ("lxc", "qemu-virtual-machine", "lxc"),
+        ("", "lxc-container", "lxc"),
+    ),
+)
+def test_snapshot_real_resolver_falls_back_to_typed_then_native_vm_type(
+    monkeypatch,
+    typed_vm_type,
+    native_vm_type_slug,
+    expected_type,
+):
+    resolver = _load_real_snapshot_resolver(monkeypatch)
+    cluster = SimpleNamespace(pk=41, name="shared-cluster")
+    snapshot = SimpleNamespace(
+        pk=17,
+        virtual_machine=SimpleNamespace(
+            cluster=cluster,
+            cluster_id=cluster.pk,
+            virtual_machine_type=SimpleNamespace(slug=native_vm_type_slug),
+            proxbox_sync_state=SimpleNamespace(proxmox_vm_type=typed_vm_type),
+            custom_field_data={},
+        ),
+        node="pve-a",
+        subtype="unknown",
+        vmid=100,
+        name="before-upgrade",
+    )
+
+    assert resolver(snapshot)["query_params"]["type"] == expected_type
+
+
+@pytest.mark.parametrize("subtype", (None, "openvz"))
+def test_snapshot_real_resolver_refuses_unknown_type_without_vm_fallback(
+    monkeypatch,
+    subtype,
+):
+    resolver = _load_real_snapshot_resolver(monkeypatch)
+    cluster = SimpleNamespace(pk=41, name="shared-cluster")
+    snapshot = SimpleNamespace(
+        pk=17,
+        virtual_machine=SimpleNamespace(
+            cluster=cluster,
+            cluster_id=cluster.pk,
+            proxbox_sync_state=SimpleNamespace(proxmox_vm_type=""),
+            custom_field_data={},
+        ),
+        node="pve-a",
+        subtype=subtype,
+        vmid=100,
+        name="before-upgrade",
+    )
+
+    assert resolver(snapshot) == {
+        "error": "Missing snapshot sync context.",
+        "status": 422,
+    }
 
 
 class _TrackingQuerySet:
