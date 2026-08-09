@@ -33,6 +33,10 @@ This directory defines `django_tables2` and NetBox tables for plugin list and ta
 
 - Default columns here shape the primary NetBox list views for the plugin.
 - `ProxmoxEndpointTable` must include `enabled` in `Meta.default_columns` so operators can see endpoint participation state on `/plugins/proxbox/endpoints/proxmox/` without table customization.
+- `ProxmoxMetricsInfluxDBTable` must resolve `influx_url` through the model's
+  fail-closed `influx_url_display` property in both `render_influx_url()` and
+  `value_influx_url()`, keeping malformed or credential-bearing legacy values
+  out of list-page HTML and CSV/export output.
 - Table changes often imply matching updates to filter forms, list views, and sometimes templates.
 
 ## Links

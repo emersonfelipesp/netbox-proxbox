@@ -18,6 +18,14 @@ class ProxmoxMetricsInfluxDBTable(NetBoxTable):
     verify_tls = BooleanColumn()
     enabled = BooleanColumn()
 
+    def render_influx_url(self, record) -> str:
+        """Render only a credential-free InfluxDB base URL; mask anything else."""
+        return record.influx_url_display
+
+    def value_influx_url(self, record) -> str:
+        """Export the same fail-closed value the list page renders."""
+        return record.influx_url_display
+
     class Meta(NetBoxTable.Meta):
         model = ProxmoxMetricsInfluxDB
         fields = (

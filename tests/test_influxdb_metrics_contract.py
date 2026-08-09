@@ -217,6 +217,53 @@ def _load_proxmox_metrics_serializer(
     return module
 
 
+def _load_proxmox_metrics_table(
+    monkeypatch: pytest.MonkeyPatch,
+    model_module,
+):
+    """Load the real table against a minimal django-tables2/NetBox harness."""
+    django_tables2 = types.ModuleType("django_tables2")
+
+    class Column:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    django_tables2.Column = Column
+
+    netbox_tables = types.ModuleType("netbox.tables")
+
+    class NetBoxTable:
+        class Meta:
+            pass
+
+    netbox_tables.NetBoxTable = NetBoxTable
+
+    netbox_table_columns = types.ModuleType("netbox.tables.columns")
+    netbox_table_columns.BooleanColumn = Column
+
+    proxbox_models = types.ModuleType("netbox_proxbox.models")
+    proxbox_models.ProxmoxMetricsInfluxDB = model_module.ProxmoxMetricsInfluxDB
+
+    for name, module in {
+        "django_tables2": django_tables2,
+        "netbox.tables": netbox_tables,
+        "netbox.tables.columns": netbox_table_columns,
+        "netbox_proxbox.models": proxbox_models,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, module)
+
+    module_name = "_test_proxmox_metrics_table"
+    spec = importlib.util.spec_from_file_location(
+        module_name,
+        ROOT / "netbox_proxbox/tables/proxmox_metrics.py",
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, module_name, module)
+    spec.loader.exec_module(module)
+    return module
+
+
 @pytest.mark.parametrize(
     ("stored_value", "expected"),
     [
@@ -320,6 +367,29 @@ def test_metrics_serializer_uses_fail_closed_influx_url_display(
     )
 
     assert rendered["influx_url"] == "********"
+
+
+@pytest.mark.parametrize(
+    "table_method",
+    [
+        pytest.param("render_influx_url", id="list-render"),
+        pytest.param("value_influx_url", id="export-value"),
+    ],
+)
+def test_metrics_table_masks_nonconforming_influx_url_on_every_output_path(
+    monkeypatch: pytest.MonkeyPatch,
+    table_method: str,
+) -> None:
+    model_module = _load_proxmox_metrics_model(monkeypatch)
+    table_module = _load_proxmox_metrics_table(monkeypatch, model_module)
+    row = model_module.ProxmoxMetricsInfluxDB()
+    row.influx_url = "raw-non-url-must-not-render"
+    table = table_module.ProxmoxMetricsInfluxDBTable()
+
+    rendered = getattr(table, table_method)(row)
+
+    assert rendered == model_module.MASKED_INFLUX_URL
+    assert row.influx_url not in rendered
 
 
 def test_influxdb_metrics_model_uses_secret_references_not_plaintext_tokens() -> None:
