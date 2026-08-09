@@ -42,6 +42,21 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             raise serializers.ValidationError(
                 {"ceph_task_poll_interval": CEPH_POLL_INTERVAL_TIMEOUT_ERROR}
             )
+        if "encryption_key" in validated and self.instance is not None:
+            from netbox_proxbox.services.encryption_recovery import (
+                EncryptionRecoveryError,
+                assert_ordinary_key_mutation_allowed,
+            )
+
+            try:
+                assert_ordinary_key_mutation_allowed(
+                    str(getattr(self.instance, "encryption_key", "") or ""),
+                    str(validated.get("encryption_key") or ""),
+                )
+            except EncryptionRecoveryError as exc:
+                raise serializers.ValidationError(
+                    {"encryption_key": str(exc)}
+                ) from None
         return validated
 
     class Meta:

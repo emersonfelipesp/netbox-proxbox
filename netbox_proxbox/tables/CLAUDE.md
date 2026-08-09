@@ -33,6 +33,10 @@ This directory defines `django_tables2` and NetBox tables for plugin list and ta
 
 - Default columns here shape the primary NetBox list views for the plugin.
 - `ProxmoxEndpointTable` must include `enabled` in `Meta.default_columns` so operators can see endpoint participation state on `/plugins/proxbox/endpoints/proxmox/` without table customization.
+- Endpoint/SSH credential tables expose only a secret-free
+  `credential_state` column. Never use decrypted virtual properties such as
+  `FastAPIEndpoint.token` as table accessors; corrupt/wrong-key ciphertext must
+  render `Recovery required` instead of raising or exposing values.
 - Table changes often imply matching updates to filter forms, list views, and sometimes templates.
 
 ## Links

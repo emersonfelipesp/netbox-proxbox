@@ -157,6 +157,10 @@ contract and issue #454 for the bug history.
   field, uses the migration connection alias plus bounded 500-row bulk batches,
   creates a sidecar when needed, never overwrites an existing typed value, and
   leaves legacy data intact for rollback compatibility.
+- **0079_encrypted_secret_reset_permission**: updates
+  `ProxboxPluginSettings.Meta.permissions` with the separate
+  `reset_encrypted_secrets` destructive-recovery permission. It changes no
+  ciphertext and performs no data migration.
 
 ## Notes
 

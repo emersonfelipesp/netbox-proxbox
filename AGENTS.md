@@ -252,6 +252,36 @@ Key architectural invariants to keep in mind:
 
 - **`NetBoxEndpoint` and `FastAPIEndpoint` are singleton-shaped.** The backend proxy (`services/backend_proxy.py`) and dashboard views resolve the first enabled backend row. Import views enforce the singleton constraint — if a record exists, the user is prompted to confirm the override before the existing record is deleted and replaced.
 - **Primary endpoint secrets are encrypted at rest.** `ProxmoxEndpoint.password`, `ProxmoxEndpoint.token_value`, `FastAPIEndpoint.token`, `PBSEndpoint.token_secret`, and `PDMEndpoint.token_secret` are public Python properties backed by Fernet-encrypted `*_enc` model fields. Runtime setters use `ProxboxPluginSettings.encryption_key` and create one when storing a primary secret if it is blank; do not reintroduce plaintext model fields for those secrets.
+- **Plugin encryption recovery is registry-driven and atomic.**
+  `services/encryption_recovery.py::ENCRYPTED_FIELD_FAMILIES` must contain every
+  plugin model `*_enc` field plus the optional netbox-pbs
+  `PBSPluginSettings.proxbox_api_key_enc` field and the trust fingerprints
+  invalidated by a destructive reset. An optional app is omitted only when both
+  its Django registration and known table are absent; dormant ciphertext and
+  installed owners with unresolved models/tables fail closed.
+  Ordinary key mutation is blocked while ciphertext exists. Registered model
+  saves (including optional netbox-pbs) lock the settings row, validate their
+  ciphertext under that key, and persist within that transaction; direct
+  queryset/bulk encrypted-field writes are forbidden. Rotation uses the same
+  settings-row order followed by deterministic PostgreSQL table locks before
+  verifying all ciphertext and performing one transactional rewrite. Complete
+  ciphertext verification may recover a drifted stored setting; when no
+  ciphertext exists, the supplied old key must match the stored value. Rotation
+  also requires every configured proxbox-api target to authenticate and return
+  the versioned attestation that its active cached key is independent
+  (`env`/`local`) and decrypts every backend ciphertext. Legacy source-only,
+  unavailable, or invalid attestations block rotation. The credentialed request
+  dials the same immutable target capture whose trust fingerprint was checked.
+  Lost-key reset is separately permissioned, explicitly confirmed, selective,
+  disables
+  affected endpoints (or marks Firecracker hosts offline), and uses
+  non-signaling queryset updates. Recovery POST values are exception-reporter
+  sensitive and each attempt emits a secret-free NetBox changelog event. Keep
+  the plugin-at-rest key separate from
+  proxbox-api database encryption and FastAPI request authentication. Ordinary
+  settings serializers withhold it; the backend-only runtime route retains its
+  existing permission-gated compatibility response until a paired proxbox-api
+  migration removes that fallback.
 - **Backend API-key adoption is fail-closed.** `FastAPIEndpoint.save()` and
   every UI/import/API persistence path share
   `services.backend_key_adoption.adopt_rotated_backend_key()`. Keys are never

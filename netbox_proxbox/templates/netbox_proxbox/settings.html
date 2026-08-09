@@ -315,19 +315,58 @@
             <div class="card mb-3">
                 <h5 class="card-header">
                     <i class="mdi mdi-lock"></i>
-                    {% trans "Encryption" %}
+                    {% trans "Plugin database encryption" %}
                 </h5>
                 <div class="card-body">
-                    <p class="text-muted">
+                    <p>
                         {% blocktrans trimmed %}
-                        Configure credential encryption for proxbox-api. When enabled, sensitive
-                        credentials are encrypted at rest using the key below. The encryption key
-                        can also be set via the PROXBOX_ENCRYPTION_KEY environment variable on the
-                        proxbox-api host.
+                        This key protects only netbox-proxbox ciphertext stored in the NetBox
+                        database. It is separate from proxbox-api's PROXBOX_ENCRYPTION_KEY and
+                        separate from the FastAPI endpoint key used to authenticate API requests.
                         {% endblocktrans %}
                     </p>
+                    {% if encryption_recovery_required %}
+                        <div class="alert alert-danger" role="alert">
+                            <strong>{% trans "Encrypted data recovery required." %}</strong>
+                            {% trans "At least one stored value cannot be decrypted with the configured plugin key. Synchronization that needs that credential is blocked until it is rotated, replaced, or explicitly reset." %}
+                        </div>
+                    {% elif encryption_payloads_exist %}
+                        <div class="alert alert-info" role="status">
+                            {% trans "The key is protected because encrypted values exist. Use verified rotation below to change it." %}
+                        </div>
+                    {% endif %}
                     {% render_field form.encryption_enabled %}
                     {% render_field form.encryption_key %}
+                    {% if encryption_family_statuses %}
+                        <div class="table-responsive mt-3">
+                            <table class="table table-sm table-hover" aria-label="{% trans 'Plugin encryption family status' %}">
+                                <thead>
+                                    <tr>
+                                        <th scope="col">{% trans "Encrypted family" %}</th>
+                                        <th scope="col">{% trans "Rows" %}</th>
+                                        <th scope="col">{% trans "State" %}</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for status in encryption_family_statuses %}
+                                        <tr data-encryption-family="{{ status.key }}">
+                                            <td>{{ status.label }}</td>
+                                            <td>{{ status.rows_with_ciphertext }}</td>
+                                            <td>
+                                                {% if status.recovery_required %}
+                                                    <span class="badge text-bg-danger">{% trans "Recovery required" %}</span>
+                                                {% elif status.rows_with_ciphertext %}
+                                                    <span class="badge text-bg-success">{% trans "Configured" %}</span>
+                                                {% else %}
+                                                    <span class="badge text-bg-secondary">{% trans "Not configured" %}</span>
+                                                {% endif %}
+                                            </td>
+                                        </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                        </div>
+                    {% endif %}
                 </div>
             </div>
             <div class="mb-3">
@@ -337,6 +376,54 @@
                 </button>
             </div>
         </form>
+
+        {% if encryption_rotation_form %}
+        <div class="card border-warning mb-3">
+            <h5 class="card-header">
+                <i class="mdi mdi-key-change"></i>
+                {% trans "Verified plugin key rotation" %}
+            </h5>
+            <div class="card-body">
+                <p class="text-muted">
+                    {% trans "Rotation first verifies every registered ciphertext with the current key. It then re-encrypts every value and updates the key in one database transaction. Any wrong key or corrupt row aborts without partial writes." %}
+                </p>
+                <form method="post" action="{% url 'plugins:netbox_proxbox:encryption_key_rotate' %}" autocomplete="off">
+                    {% csrf_token %}
+                    {% render_field encryption_rotation_form.old_key %}
+                    {% render_field encryption_rotation_form.new_key %}
+                    {% render_field encryption_rotation_form.confirm_new_key %}
+                    <button type="submit" class="btn btn-warning">
+                        <i class="mdi mdi-key-change"></i>
+                        {% trans "Verify and rotate key" %}
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
+
+        {% if can_reset_encrypted_secrets and encrypted_secret_reset_form %}
+        <div class="card border-danger mb-3">
+            <h5 class="card-header text-bg-danger">
+                <i class="mdi mdi-alert-octagon"></i>
+                {% trans "Destructive encrypted-secret reset" %}
+            </h5>
+            <div class="card-body">
+                <p>
+                    {% trans "Use only when the old key is unavailable. The selected ciphertext and associated trust fingerprints are permanently cleared using non-signaling database updates. Endpoint synchronization remains blocked until credentials are re-entered." %}
+                </p>
+                <form method="post" action="{% url 'plugins:netbox_proxbox:encrypted_secret_reset' %}" autocomplete="off">
+                    {% csrf_token %}
+                    {% render_field encrypted_secret_reset_form.families %}
+                    {% render_field encrypted_secret_reset_form.acknowledge_data_loss %}
+                    {% render_field encrypted_secret_reset_form.confirmation %}
+                    <button type="submit" class="btn btn-danger">
+                        <i class="mdi mdi-delete-alert"></i>
+                        {% trans "Permanently reset selected encrypted data" %}
+                    </button>
+                </form>
+            </div>
+        </div>
+        {% endif %}
     </div>
 </div>
 {% endblock %}

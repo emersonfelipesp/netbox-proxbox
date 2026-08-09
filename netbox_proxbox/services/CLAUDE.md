@@ -15,6 +15,33 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
 
 ## Files And Ownership
 
+- [`encryption_recovery.py`](./encryption_recovery.py): exhaustive registry of
+  plugin-owned encrypted model fields, the optional netbox-pbs fallback API-key
+  ciphertext, and trust receipts; secret-free family status; ordinary
+  key-mutation guard; verify-all-before-write atomic rotation; and separately
+  confirmed selective reset through non-signaling queryset updates. Optional
+  ownership is skipped only when its Django app and known table are both absent;
+  dormant optional-owner ciphertext and installed owners whose model or table
+  cannot be resolved fail closed. Every
+  `install_encrypted_writer_guards()` wraps every registered model's `save()`
+  (including optional netbox-pbs) so key selection/validation and persistence
+  serialize on the settings row and an expected-ciphertext snapshot rejects
+  instances made stale by rotation/reset. The optional companion's public setter
+  may transfer its one-use tagged ciphertext from a validation probe into the
+  persisted instance; the tag is stripped after save. Direct queryset/bulk
+  encrypted-field writes are forbidden. Recovery locks all registered and
+  dormant-known PostgreSQL tables in deterministic order. Rotation authenticates
+  every configured proxbox-api target's versioned `/admin/encryption/status`
+  response and proceeds only when the active cached `env`/`local` key has
+  verified every encrypted backend credential. Legacy source-only responses are
+  blocked. Fingerprint validation and the authenticated request share one
+  immutable target capture, preventing linked-IP rebinding from redirecting the
+  backend API key;
+  reset also disables affected endpoints or marks Firecracker hosts offline,
+  and success is recorded transactionally as a secret-free NetBox ObjectChange.
+  UI failures record a separate secret-free failure event. Every
+  new `*_enc` field protected by the shared key must join this registry and its
+  exhaustive source/real-Django tests, even when another plugin owns the model.
 - [`__init__.py`](./__init__.py): lazily re-exports key service functions
   (`get_fastapi_request_context`, `iter_backend_sse_lines`, `run_sync_stream`,
   `sse_error_frames`, `sync_full_update_resource`, `sync_resource`,

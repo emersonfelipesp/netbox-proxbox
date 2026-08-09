@@ -795,6 +795,44 @@ class BackendKeyPersistenceTests(TransactionTestCase):
             )
         )
 
+    def test_explicit_replacement_recovers_corrupt_stored_ciphertext(self) -> None:
+        endpoint = self._create_enabled("corrupt-replacement")
+        FastAPIEndpoint.objects.filter(pk=endpoint.pk).update(
+            token_enc="corrupt-backend-key-ciphertext"
+        )
+        endpoint = FastAPIEndpoint.objects.get(pk=endpoint.pk)
+        self.backend.accepted_keys.add(NEW_KEY)
+        self.backend.clear()
+
+        endpoint.token = NEW_KEY
+        endpoint.save()
+
+        endpoint.refresh_from_db()
+        self.assertEqual(endpoint.token, NEW_KEY)
+        self.assertTrue(backend_key_runtime_is_trusted(endpoint))
+        self.assertEqual(
+            [method for method, _url, _kwargs in self.backend.calls],
+            ["GET", "GET"],
+        )
+        self.assertFalse(
+            any(method == "POST" for method, _url, _kwargs in self.backend.calls)
+        )
+
+    def test_corrupt_stored_ciphertext_requires_explicit_replacement(self) -> None:
+        endpoint = self._create_enabled("corrupt-no-replacement")
+        FastAPIEndpoint.objects.filter(pk=endpoint.pk).update(
+            token_enc="corrupt-backend-key-ciphertext"
+        )
+        endpoint = FastAPIEndpoint.objects.get(pk=endpoint.pk)
+        self.backend.clear()
+
+        with self.assertRaises(ValidationError) as raised:
+            endpoint.save()
+
+        self.assertIn("explicit replacement", str(raised.exception))
+        self.assertNotIn("corrupt-backend-key-ciphertext", str(raised.exception))
+        self.assertEqual(self.backend.calls, [])
+
     def test_invalid_rotation_preserves_exact_ciphertext(self) -> None:
         endpoint = self._create_enabled("invalid-rotation")
         endpoint.refresh_from_db()

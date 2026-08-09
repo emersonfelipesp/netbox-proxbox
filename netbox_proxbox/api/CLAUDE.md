@@ -59,7 +59,7 @@ These follow the standard `NetBoxModelViewSet` + `NetBoxRouter` pattern:
 | `ProxmoxVMCloudInitViewSet` | `vm-cloudinit/` | Full CRUD; reflection fields + create-time intent; `sshkeys_intent` write-only (encrypted → `sshkeys_enc`), `has_sshkeys` read-only |
 | `ProxmoxVMTemplateViewSet` | `vm-templates/` | Full CRUD |
 | `Proxbox*SyncStateViewSet` | `sync-state/.../` | Full CRUD typed sidecars for the legacy custom-field payload; additive until proxbox-api switches writers/readers |
-| `ProxboxPluginSettingsViewSet` | `settings/` | GET+PATCH only (singleton) |
+| `ProxboxPluginSettingsViewSet` | `settings/` | GET+PATCH only (singleton); `encryption_key` is write-only on ordinary serializers, ordinary key mutation is rejected while ciphertext exists, and `/runtime/` retains the existing permission-gated key response for current proxbox-api compatibility plus `encryption_key_configured`. Remove the fallback only with a paired backend migration. |
 | `NodeSSHCredentialViewSet` | `ssh-credentials/` | Full CRUD |
 | `ProxmoxFirewallSecurityGroupViewSet` | `firewall/security-groups/` | Full CRUD |
 | `ProxmoxFirewallRuleViewSet` | `firewall/rules/` | Full CRUD |

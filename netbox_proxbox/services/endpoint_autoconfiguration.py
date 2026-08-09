@@ -401,22 +401,27 @@ def autoconfigure_fastapi_endpoint(
     generated_now = False
     if not candidate:
         candidate = secrets.token_urlsafe(48)
-        encrypted_candidate = encrypt_primary_secret(candidate)
-        stored = FastAPIEndpoint.objects.filter(
-            pk=current.pk,
-            token_enc=current.token_enc,
-            backend_key_target_fingerprint=current.backend_key_target_fingerprint,
-            enabled=current.enabled,
-            domain=current.domain,
-            ip_address_id=current.ip_address_id,
-            port=current.port,
-            use_https=current.use_https,
-            verify_ssl=current.verify_ssl,
-            use_websocket=current.use_websocket,
-            websocket_domain=current.websocket_domain,
-            websocket_port=current.websocket_port,
-            server_side_websocket=current.server_side_websocket,
-        ).update(token_enc=encrypted_candidate)
+        from netbox_proxbox.models import ProxboxPluginSettings
+
+        settings_obj = ProxboxPluginSettings.get_solo()
+        with transaction.atomic():
+            ProxboxPluginSettings.objects.select_for_update().get(pk=settings_obj.pk)
+            encrypted_candidate = encrypt_primary_secret(candidate)
+            stored = FastAPIEndpoint.objects.filter(
+                pk=current.pk,
+                token_enc=current.token_enc,
+                backend_key_target_fingerprint=current.backend_key_target_fingerprint,
+                enabled=current.enabled,
+                domain=current.domain,
+                ip_address_id=current.ip_address_id,
+                port=current.port,
+                use_https=current.use_https,
+                verify_ssl=current.verify_ssl,
+                use_websocket=current.use_websocket,
+                websocket_domain=current.websocket_domain,
+                websocket_port=current.websocket_port,
+                server_side_websocket=current.server_side_websocket,
+            ).update(token_enc=encrypted_candidate)
         if stored != 1:
             return EndpointAutoConfigurationResult(
                 "pending",

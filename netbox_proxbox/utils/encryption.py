@@ -15,8 +15,18 @@ from __future__ import annotations
 
 import base64
 import binascii
+import hmac
 
 from cryptography.fernet import Fernet, InvalidToken
+
+try:
+    from django.views.decorators.debug import sensitive_variables
+except ModuleNotFoundError:  # pragma: no cover - isolated non-Django unit harnesses
+
+    def sensitive_variables(*_variables: str):
+        """Return an identity decorator only when Django is genuinely unavailable."""
+
+        return lambda function: function
 
 
 class EncryptionError(Exception):
@@ -35,6 +45,7 @@ class DecryptionFailed(EncryptionError):
     """Raised when ciphertext could not be decrypted with the current key."""
 
 
+@sensitive_variables()
 def _coerce_fernet_key(raw: str) -> bytes:
     """Return a 44-byte url-safe base64 Fernet key derived from ``raw``.
 
@@ -59,10 +70,19 @@ def _coerce_fernet_key(raw: str) -> bytes:
     return encoded
 
 
+@sensitive_variables()
 def _fernet(key: str) -> Fernet:
     return Fernet(_coerce_fernet_key(key))
 
 
+@sensitive_variables()
+def keys_match(left: str, right: str) -> bool:
+    """Return whether two accepted key spellings resolve to the same Fernet key."""
+
+    return hmac.compare_digest(_coerce_fernet_key(left), _coerce_fernet_key(right))
+
+
+@sensitive_variables()
 def encrypt(plaintext: str, *, key: str) -> str:
     """Encrypt ``plaintext`` and return a url-safe Fernet token (str)."""
     if plaintext == "":
@@ -71,16 +91,24 @@ def encrypt(plaintext: str, *, key: str) -> str:
     return token.decode("ascii")
 
 
+@sensitive_variables()
 def decrypt(ciphertext: str, *, key: str) -> str:
     """Decrypt a Fernet token and return the plaintext string."""
     if ciphertext == "":
         return ""
     try:
         plaintext = _fernet(key).decrypt(ciphertext.encode("ascii"))
-    except InvalidToken as exc:
+        return plaintext.decode("utf-8")
+    except (
+        InvalidToken,
+        UnicodeDecodeError,
+        UnicodeEncodeError,
+        ValueError,
+        TypeError,
+        binascii.Error,
+    ) as exc:
         raise DecryptionFailed(
             "Stored credential could not be decrypted with the current "
             "ProxboxPluginSettings.encryption_key. The key may have been "
             "rotated since this row was saved."
         ) from exc
-    return plaintext.decode("utf-8")

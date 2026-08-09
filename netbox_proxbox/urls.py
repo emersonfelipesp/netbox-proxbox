@@ -470,6 +470,16 @@ urlpatterns = [
     path("sync/schedule/", views.ScheduleSyncView.as_view(), name="schedule_sync"),
     path("settings/", views.SettingsView.as_view(), name="settings"),
     path(
+        "settings/encryption/rotate/",
+        views.EncryptionKeyRotateView.as_view(),
+        name="encryption_key_rotate",
+    ),
+    path(
+        "settings/encryption/reset/",
+        views.EncryptedSecretResetView.as_view(),
+        name="encrypted_secret_reset",
+    ),
+    path(
         "sync-state/bootstrap-status/",
         views.BootstrapStatusView.as_view(),
         name="bootstrap_status",

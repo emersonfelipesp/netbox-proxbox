@@ -56,6 +56,23 @@ class NodeSSHCredentialForm(NetBoxModelForm):
             "tags",
         )
 
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        """Surface undecryptable stored values without pre-filling secrets."""
+
+        super().__init__(*args, **kwargs)
+        instance = getattr(self, "instance", None)
+        if (
+            instance
+            and getattr(instance, "pk", None)
+            and instance.credential_encryption_state == "Recovery required"
+        ):
+            warning = (
+                " Recovery required: at least one stored SSH secret cannot be "
+                "decrypted. Enter a replacement secret or use destructive recovery."
+            )
+            self.fields["password"].help_text += warning
+            self.fields["private_key"].help_text += warning
+
     def clean_known_host_fingerprint(self) -> str:
         """Normalize host-key fingerprints at form level for user feedback."""
         value = self.cleaned_data["known_host_fingerprint"]
@@ -76,10 +93,16 @@ class NodeSSHCredentialForm(NetBoxModelForm):
         if not password and not private_key:
             return
         key = self._encryption_key()
+        from netbox_proxbox.services.encryption_recovery import (
+            mark_encrypted_fields_for_write,
+        )
+
         try:
             if password:
+                mark_encrypted_fields_for_write(self.instance, "password_enc")
                 self.instance.password_enc = enc_helpers.encrypt(password, key=key)
             if private_key:
+                mark_encrypted_fields_for_write(self.instance, "private_key_enc")
                 self.instance.private_key_enc = enc_helpers.encrypt(
                     private_key, key=key
                 )

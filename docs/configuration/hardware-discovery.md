@@ -75,6 +75,11 @@ SSH credentials and `proxbox-api` refuses to fetch them.
    raw 32-byte secret — the plugin will base64-encode it).
 3. Save.
 
+This is the plugin-at-rest key for ciphertext in NetBox. It is separate from
+proxbox-api's own database-encryption key and from the FastAPI endpoint API key.
+Once any plugin ciphertext exists, ordinary settings saves cannot clear or
+replace it; use the verified rotation workflow on the same page.
+
 ### 2. Enable the feature flag
 
 In **Plugins → Proxbox → Settings**, tick
@@ -263,8 +268,10 @@ succeeds when run as the discovery user on the node.
 `/api/plugins/proxbox/ssh-credentials/by-node/<id>/credentials/`
 returns `503 Service Unavailable` when
 `ProxboxPluginSettings.encryption_key` is empty or the row is
-encrypted with a now-rotated key. Re-pin the key (and re-save the
-affected credentials) before the next sync.
+not decryptable with the configured key. Open **Plugins → Proxbox → Settings**:
+use verified rotation when the old key is available, or have a separately
+authorized operator destructively reset only the affected SSH family when it
+is not. Re-enter reset credentials before the next sync.
 
 ### 403 from the secrets endpoint
 

@@ -185,6 +185,9 @@ class ProxboxConfig(PluginConfig):
                 "Skipping ProxBox job and view registration because Pydantic is not installed."
             )
             return
+        from .services.encryption_recovery import install_encrypted_writer_guards
+
+        install_encrypted_writer_guards()
         from . import jobs  # noqa: F401 — registers ProxboxSyncJob with the NetBox job system
         from .views import job_cancel, job_run  # noqa: F401 — core Job: proxbox-run / proxbox-cancel
         from . import signals  # noqa: F401 — enforces read-only key checks before backend sync

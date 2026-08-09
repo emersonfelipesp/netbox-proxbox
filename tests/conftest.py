@@ -261,6 +261,9 @@ def load_plugin_module(
     django_views.View = View
 
     django_views_decorators = types.ModuleType("django.views.decorators")
+    django_views_debug = types.ModuleType("django.views.decorators.debug")
+    django_views_debug.sensitive_post_parameters = lambda *_params: lambda func: func
+    django_views_debug.sensitive_variables = lambda *_params: lambda func: func
     django_views_http = types.ModuleType("django.views.decorators.http")
     django_views_http.require_GET = lambda func: func
     django_views_http.require_http_methods = lambda methods: lambda func: func
@@ -273,6 +276,10 @@ def load_plugin_module(
     django_contrib.messages = django_messages
 
     django_utils = types.ModuleType("django.utils")
+    django_utils_decorators = types.ModuleType("django.utils.decorators")
+    django_utils_decorators.method_decorator = lambda _decorator, **_kwargs: (
+        lambda value: value
+    )
     django_utils_html = types.ModuleType("django.utils.html")
 
     def _format_html(*args, **kwargs):
@@ -531,9 +538,11 @@ def load_plugin_module(
         "django.shortcuts": django_shortcuts,
         "django.views": django_views,
         "django.views.decorators": django_views_decorators,
+        "django.views.decorators.debug": django_views_debug,
         "django.views.decorators.http": django_views_http,
         "django.urls": django_urls,
         "django.utils": django_utils,
+        "django.utils.decorators": django_utils_decorators,
         "django.utils.html": django_utils_html,
         "django.utils.text": django_utils_text,
         "django.utils.timezone": django_utils_timezone,

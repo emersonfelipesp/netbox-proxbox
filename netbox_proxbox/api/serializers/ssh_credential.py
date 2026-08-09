@@ -85,9 +85,15 @@ class NodeSSHCredentialSerializer(NetBoxModelSerializer):
         if not password and not private_key:
             return
         key = self._resolve_encryption_key()
+        from netbox_proxbox.services.encryption_recovery import (
+            mark_encrypted_fields_for_write,
+        )
+
         if password:
+            mark_encrypted_fields_for_write(instance, "password_enc")
             instance.password_enc = enc_helpers.encrypt(password, key=key)
         if private_key:
+            mark_encrypted_fields_for_write(instance, "private_key_enc")
             instance.private_key_enc = enc_helpers.encrypt(private_key, key=key)
 
     def create(self, validated_data: dict) -> NodeSSHCredential:

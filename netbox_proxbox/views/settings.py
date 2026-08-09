@@ -5,7 +5,9 @@ import json
 from django.contrib import messages
 from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
+from django.utils.decorators import method_decorator
 from django.views import View
+from django.views.decorators.debug import sensitive_post_parameters, sensitive_variables
 
 from netbox_proxbox.constants import (
     OVERWRITE_FIELD_GROUPS,
@@ -29,17 +31,60 @@ from utilities.views import (
 def _settings_template_context(
     request: HttpRequest,
     form: ProxboxPluginSettingsForm,
+    *,
+    encryption_statuses: tuple[object, ...] = (),
 ) -> dict[str, object]:
     """Build shared template context for settings GET and invalid POST renders."""
+    try:
+        from netbox_proxbox.forms.settings import (
+            EncryptedSecretResetForm,
+            EncryptionKeyRotationForm,
+        )
+
+        rotation_form: object | None = EncryptionKeyRotationForm()
+        reset_form: object | None = EncryptedSecretResetForm()
+    except ImportError:  # Compatibility for the isolated mocked-view harness.
+        rotation_form = None
+        reset_form = None
     return {
         "form": form,
         "netbox_bgp_status": netbox_bgp_status(),
         "overwrite_field_groups": OVERWRITE_FIELD_GROUPS,
         "sync_mode_field_groups": SYNC_MODE_FIELD_GROUPS,
+        "encryption_family_statuses": encryption_statuses,
+        "encryption_payloads_exist": any(
+            bool(getattr(status, "rows_with_ciphertext", 0))
+            for status in encryption_statuses
+        ),
+        "encryption_recovery_required": any(
+            bool(getattr(status, "recovery_required", False))
+            for status in encryption_statuses
+        ),
+        "encryption_rotation_form": rotation_form,
+        "encrypted_secret_reset_form": reset_form,
+        "can_reset_encrypted_secrets": request.user.has_perm(
+            "netbox_proxbox.reset_encrypted_secrets"
+        ),
         **build_bootstrap_status_context(request, surface="settings"),
     }
 
 
+@sensitive_variables()
+def _encrypted_family_statuses(
+    settings_obj: ProxboxPluginSettings,
+) -> tuple[object, ...]:
+    """Load secret-free registry state, tolerating only unavailable test scaffolding."""
+
+    try:
+        from netbox_proxbox.services.encryption_recovery import (
+            encrypted_family_statuses,
+        )
+    except ImportError:
+        return ()
+    return encrypted_family_statuses(key=str(settings_obj.encryption_key or ""))
+
+
+@method_decorator(sensitive_post_parameters("encryption_key"), name="dispatch")
 class SettingsView(
     TokenConditionalLoginRequiredMixin,
     ContentTypePermissionRequiredMixin,
@@ -56,6 +101,7 @@ class SettingsView(
     def get(self, request: HttpRequest) -> HttpResponse:
         """Handle get."""
         settings_obj = ProxboxPluginSettings.get_solo()
+        encryption_statuses = _encrypted_family_statuses(settings_obj)
         initial = {
             "use_guest_agent_interface_name": settings_obj.use_guest_agent_interface_name,
             "vm_interface_sync_strategy": getattr(
@@ -185,17 +231,35 @@ class SettingsView(
             initial[name] = getattr(settings_obj, name, "always")
         for name in OVERWRITE_FIELDS:
             initial[name] = getattr(settings_obj, name)
-        form = ProxboxPluginSettingsForm(initial=initial)
+        form = ProxboxPluginSettingsForm(
+            initial=initial,
+            encryption_key_configured=bool(settings_obj.encryption_key),
+            encryption_key_locked=any(
+                bool(getattr(status, "rows_with_ciphertext", 0))
+                for status in encryption_statuses
+            ),
+        )
         return render(
             request,
             self.template_name,
-            _settings_template_context(request, form),
+            _settings_template_context(
+                request, form, encryption_statuses=encryption_statuses
+            ),
         )
 
+    @sensitive_variables()
     def post(self, request: HttpRequest) -> HttpResponse:
         """Handle post."""
         settings_obj = ProxboxPluginSettings.get_solo()
-        form = ProxboxPluginSettingsForm(request.POST)
+        encryption_statuses = _encrypted_family_statuses(settings_obj)
+        form = ProxboxPluginSettingsForm(
+            request.POST,
+            encryption_key_configured=bool(settings_obj.encryption_key),
+            encryption_key_locked=any(
+                bool(getattr(status, "rows_with_ciphertext", 0))
+                for status in encryption_statuses
+            ),
+        )
         if form.is_valid():
             settings_obj.use_guest_agent_interface_name = form.cleaned_data[
                 "use_guest_agent_interface_name"
@@ -469,5 +533,163 @@ class SettingsView(
         return render(
             request,
             self.template_name,
-            _settings_template_context(request, form),
+            _settings_template_context(
+                request, form, encryption_statuses=encryption_statuses
+            ),
         )
+
+
+@method_decorator(
+    sensitive_post_parameters("old_key", "new_key", "confirm_new_key"),
+    name="dispatch",
+)
+class EncryptionKeyRotateView(
+    TokenConditionalLoginRequiredMixin,
+    ContentTypePermissionRequiredMixin,
+    View,
+):
+    """Rotate all plugin ciphertext only after complete old-key verification."""
+
+    http_method_names = ("post",)
+
+    def get_required_permission(self) -> str:
+        """Require ordinary settings change permission for non-destructive rotation."""
+
+        return permission_change_proxbox_plugin_settings()
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        """Run the atomic registry-wide rotation and return to settings."""
+
+        from netbox_proxbox.forms.settings import EncryptionKeyRotationForm
+        from netbox_proxbox.services.encryption_recovery import (
+            EncryptionRecoveryError,
+            record_encryption_recovery_event,
+            rotate_encryption_key,
+        )
+
+        form = EncryptionKeyRotationForm(request.POST)
+        if not form.is_valid():
+            record_encryption_recovery_event(
+                settings_obj=ProxboxPluginSettings.get_solo(),
+                actor=request.user,
+                request_id=request.id,
+                operation="rotate",
+                outcome="rejected",
+                family_keys=("all_registered",),
+            )
+            messages.error(request, "Encryption key rotation was not submitted.")
+            return redirect("plugins:netbox_proxbox:settings")
+        try:
+            result = rotate_encryption_key(
+                old_key=str(form.cleaned_data["old_key"]),
+                new_key=str(form.cleaned_data["new_key"]),
+                audit_actor=request.user,
+                audit_request_id=request.id,
+            )
+        except EncryptionRecoveryError as exc:
+            record_encryption_recovery_event(
+                settings_obj=ProxboxPluginSettings.get_solo(),
+                actor=request.user,
+                request_id=request.id,
+                operation="rotate",
+                outcome="failed",
+                family_keys=("all_registered",),
+            )
+            messages.error(request, str(exc))
+            return redirect("plugins:netbox_proxbox:settings")
+        except Exception:  # noqa: BLE001 - audit then preserve unexpected traceback
+            record_encryption_recovery_event(
+                settings_obj=ProxboxPluginSettings.get_solo(),
+                actor=request.user,
+                request_id=request.id,
+                operation="rotate",
+                outcome="failed",
+                family_keys=("all_registered",),
+            )
+            raise
+        messages.success(
+            request,
+            "Plugin encryption key rotated atomically across "
+            f"{result.ciphertext_values_rotated} encrypted value(s).",
+        )
+        return redirect("plugins:netbox_proxbox:settings")
+
+
+class EncryptedSecretResetView(
+    TokenConditionalLoginRequiredMixin,
+    ContentTypePermissionRequiredMixin,
+    View,
+):
+    """Destructively clear selected ciphertext under a separate permission."""
+
+    http_method_names = ("post",)
+
+    def get_required_permission(self) -> str:
+        """Require the dedicated destructive-recovery permission."""
+
+        from netbox_proxbox.views.proxbox_access import (
+            permission_reset_encrypted_secrets,
+        )
+
+        return permission_reset_encrypted_secrets()
+
+    def post(self, request: HttpRequest) -> HttpResponse:
+        """Validate explicit confirmation then clear through non-signaling updates."""
+
+        from netbox_proxbox.forms.settings import EncryptedSecretResetForm
+        from netbox_proxbox.services.encryption_recovery import (
+            EncryptionRecoveryError,
+            record_encryption_recovery_event,
+            reset_encrypted_families,
+        )
+
+        form = EncryptedSecretResetForm(request.POST)
+        if not form.is_valid():
+            record_encryption_recovery_event(
+                settings_obj=ProxboxPluginSettings.get_solo(),
+                actor=request.user,
+                request_id=request.id,
+                operation="reset",
+                outcome="rejected",
+                family_keys=(),
+            )
+            messages.error(
+                request,
+                "Encrypted-secret reset was rejected; review the selection and "
+                "exact confirmation phrase.",
+            )
+            return redirect("plugins:netbox_proxbox:settings")
+        try:
+            result = reset_encrypted_families(
+                family_keys=list(form.cleaned_data["families"]),
+                confirmation=str(form.cleaned_data["confirmation"]),
+                audit_actor=request.user,
+                audit_request_id=request.id,
+            )
+        except EncryptionRecoveryError as exc:
+            record_encryption_recovery_event(
+                settings_obj=ProxboxPluginSettings.get_solo(),
+                actor=request.user,
+                request_id=request.id,
+                operation="reset",
+                outcome="failed",
+                family_keys=tuple(form.cleaned_data["families"]),
+            )
+            messages.error(request, str(exc))
+            return redirect("plugins:netbox_proxbox:settings")
+        except Exception:  # noqa: BLE001 - audit then preserve unexpected traceback
+            record_encryption_recovery_event(
+                settings_obj=ProxboxPluginSettings.get_solo(),
+                actor=request.user,
+                request_id=request.id,
+                operation="reset",
+                outcome="failed",
+                family_keys=tuple(form.cleaned_data["families"]),
+            )
+            raise
+        messages.warning(
+            request,
+            "Destructive recovery cleared selected encrypted data from "
+            f"{result.rows_matched} row(s). Re-enter credentials before sync.",
+        )
+        return redirect("plugins:netbox_proxbox:settings")

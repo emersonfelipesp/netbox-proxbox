@@ -316,7 +316,7 @@ def test_overwrite_fields_exposed_in_endpoint_and_settings_serializers():
 
 
 def test_settings_runtime_action_preserves_secret_gate():
-    """Backend runtime settings must not expose secrets through the normal list serializer."""
+    """Backend runtime settings retain their explicit permission boundary."""
     views_contents = VIEWS_PATH.read_text()
     serializers_contents = _serializers_package_source_text()
 
@@ -330,6 +330,7 @@ def test_settings_runtime_action_preserves_secret_gate():
         'get_permission_for_model(models.ProxboxPluginSettings, "change")'
         in views_contents
     )
+    assert "return [IsAuthenticated()]" in views_contents
 
     assert '"encryption_key": {"write_only": True}' in serializers_contents
 

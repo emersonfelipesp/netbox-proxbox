@@ -165,6 +165,22 @@ class NodeSSHCredential(NetBoxModel):
         """Return whether a private-key ciphertext is stored."""
         return bool(self.private_key_enc)
 
+    @property
+    def credential_encryption_state(self) -> str:
+        """Return a secret-free aggregate state for list and edit recovery UX."""
+
+        from netbox_proxbox.services.encryption_recovery import ciphertext_state
+
+        states = (
+            ciphertext_state(self.password_enc),
+            ciphertext_state(self.private_key_enc),
+        )
+        if "recovery_required" in states:
+            return "Recovery required"
+        if "configured" in states:
+            return "Configured"
+        return "Not configured"
+
     def get_absolute_url(self) -> str:
         """Plugin UI URL for this credential's detail view."""
         return reverse("plugins:netbox_proxbox:nodesshcredential", args=[self.pk])
@@ -173,6 +189,11 @@ class NodeSSHCredential(NetBoxModel):
 
     def set_password(self, plaintext: str, *, key: str) -> None:
         """Encrypt and store the SSH password with the supplied Fernet key."""
+        from netbox_proxbox.services.encryption_recovery import (
+            mark_encrypted_fields_for_write,
+        )
+
+        mark_encrypted_fields_for_write(self, "password_enc")
         self.password_enc = enc_helpers.encrypt(plaintext, key=key)
 
     def get_password(self, *, key: str) -> str:
@@ -181,6 +202,11 @@ class NodeSSHCredential(NetBoxModel):
 
     def set_private_key(self, plaintext: str, *, key: str) -> None:
         """Encrypt and store the SSH private key PEM with the supplied key."""
+        from netbox_proxbox.services.encryption_recovery import (
+            mark_encrypted_fields_for_write,
+        )
+
+        mark_encrypted_fields_for_write(self, "private_key_enc")
         self.private_key_enc = enc_helpers.encrypt(plaintext, key=key)
 
     def get_private_key(self, *, key: str) -> str:

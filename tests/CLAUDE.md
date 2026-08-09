@@ -74,6 +74,33 @@ This directory contains the plugin's pytest test suite.
 - `test_overwrite_flags_contract.py`, `test_overwrite_vm_type_contract.py`, `test_sync_params_flag_flattening.py`: contract coverage for the overwrite flag field set, VM type overwrite behavior, and sync query parameter flattening.
 - `test_vm_sync_device_flag_enforcement.py`: pins PR #342. Asserts the six `overwrite_device_*` fields are in `OVERWRITE_FIELDS` and that `_build_base_query_params` serializes per-endpoint device-flag values into the SSE query string.
 - `test_settings_view_encryption.py`: tests Settings view encryption-key handling and sensitive-field behavior.
+- `test_encryption_key_recovery.py`: fast AST/source/security contracts proving
+  the central recovery registry exactly matches every plugin model `*_enc`
+  field plus the optional netbox-pbs fallback API key, trust receipts are
+  complete, dormant optional tables are recognized, rotation orders all
+  verification before writes, registered writers
+  share the settings-row protocol and recovery uses one quoted PostgreSQL
+  table-lock protocol, reset is
+  confirmed/atomic/non-signaling and operationally disables affected rows,
+  audit payloads are secret-free, key material is withheld, and
+  signal/list/dashboard recovery surfaces stay fail-closed.
+- `test_encryption_key_recovery_django.py`: real-NetBox coverage for the eight
+  always-installed families and eleven local ciphertext fields: successful rotation,
+  wrong-old-key refusal, drifted-setting repair, corrupt-value full rollback,
+  proxbox-api versioned active-key/full-credential attestation and immutable
+  target capture, model/API/form mutation
+  guards, exact reset confirmation, separate permission enforcement, selective
+  trust-state clearing with no save signals, usable secret-free UI, and
+  encryption-error signal boundaries. A PostgreSQL `TransactionTestCase` proves
+  the table lock excludes a concurrent ciphertext writer and that a writer which
+  captured old-key ciphertext cannot save after rotation; stale full saves cannot
+  resurrect reset credentials, while explicit post-reset re-entry remains allowed.
+  It also proves the optional netbox-pbs family is omitted only when the app and
+  table are genuinely absent, dormant ciphertext blocks rotation, an installed
+  but unresolved model/schema/table fails closed, cloud-init/terminal/PBS writer
+  compatibility survives the guard, and settings/status/terminal exception
+  reports remain secret-free. It verifies secret-free ObjectChange
+  attribution/counts and is included in the Django matrix.
 - `test_settings_view_hardware_discovery.py`: GET/POST handling of the
   `hardware_discovery_enabled` master flag and the separate default-off
   `hardware_discovery_sync_nic_macs` opt-in — initial population, save paths,

@@ -423,6 +423,7 @@ def test_endpoint_metadata_payload_uses_reuse_effective_username(monkeypatch):
         ssh_auth_method="key",
         ssh_known_host_fingerprint="SHA256:" + "A" * 43,
         password="endpoint-secret",
+        password_enc="ciphertext-endpoint-password",
         ssh_password_enc="ciphertext-password",
         ssh_private_key_enc="ciphertext-key",
     )
@@ -469,6 +470,7 @@ def test_endpoint_secrets_view_reuse_returns_endpoint_password(monkeypatch):
         ssh_auth_method="key",
         ssh_known_host_fingerprint="SHA256:" + "A" * 43,
         password="endpoint-secret",
+        password_enc="ciphertext-endpoint-password",
         ssh_password_enc="",
         ssh_private_key_enc="",
         has_ssh_terminal_credentials=True,
