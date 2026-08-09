@@ -15,6 +15,9 @@ What is locked here:
   ``snapshots`` and have a ``ViewTab`` with the right permission.
 * The detail view's ``request_timeout`` stays at 8 seconds (template asserts
   this is short enough to render even with backend latency).
+* ``ProxmoxStorageFilterSet.nodes`` is declared explicitly as NetBox's
+  ``MultiValueCharFilter`` so widening the model field to ``TextField`` cannot
+  change repeated-query or OpenAPI behavior.
 """
 
 from __future__ import annotations
@@ -24,6 +27,9 @@ from pathlib import Path
 
 STORAGE_PATH = (
     Path(__file__).resolve().parents[1] / "netbox_proxbox" / "views" / "storage.py"
+)
+FILTERSETS_PATH = (
+    Path(__file__).resolve().parents[1] / "netbox_proxbox" / "filtersets.py"
 )
 
 
@@ -176,3 +182,31 @@ def test_detail_view_request_timeout_is_short_enough():
         "ProxmoxStorageView.request_timeout must stay short — the storage detail "
         "page renders inline and a slow backend should not block the request"
     )
+
+
+def test_storage_nodes_filter_explicitly_preserves_multi_value_semantics():
+    module = ast.parse(FILTERSETS_PATH.read_text(encoding="utf-8"))
+    imported_filter_names = {
+        alias.name
+        for node in module.body
+        if isinstance(node, ast.ImportFrom) and node.module == "utilities.filters"
+        for alias in node.names
+    }
+    assert "MultiValueCharFilter" in imported_filter_names
+
+    cls = _find_class(module, "ProxmoxStorageFilterSet")
+    nodes_filter = next(
+        (
+            node.value
+            for node in cls.body
+            if isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name) and target.id == "nodes"
+                for target in node.targets
+            )
+        ),
+        None,
+    )
+    assert isinstance(nodes_filter, ast.Call)
+    assert isinstance(nodes_filter.func, ast.Name)
+    assert nodes_filter.func.id == "MultiValueCharFilter"

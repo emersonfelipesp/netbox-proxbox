@@ -67,17 +67,20 @@ This directory contains the plugin's pytest test suite.
 - `test_services_sync_datacenter.py`: behavior tests for `sync_datacenter` scoping against a stubbed module loader (mirroring the `sync_firewall` harness): a CPU-model response row for an endpoint outside the run's resolved scope is refused — neither upserted nor included in stale marking — pinning the local half of the endpoint scope that query-param forwarding cannot enforce against a backend that ignores `proxmox_endpoint_ids`. Also pins that a cluster name claimed by two endpoints resolves to nobody (`_resolve_endpoint_by_cluster_name` returns `None` instead of `.first()`-guessing), the same rule the firewall harness pins on its side together with the single-claimant case still resolving.
 - `test_services_backend_context.py`: AST contract for `get_fastapi_request_context` / `get_fastapi_endpoint_with_token` signatures and the three endpoint-resolution branches in `services/backend_context.py`.
 - `test_views_vm_config.py`: AST contract for `ProxmoxVMConfigTabView` — `register_model_view` path/name, `ObjectView` base, `ViewTab` label/permission, and the helper extractors.
-- `test_views_storage.py`: AST contract for the eight `ProxmoxStorage*` view classes — `__all__` membership, list-view `path=""` registration, child-tab paths/labels/permissions, and the detail view's short `request_timeout`.
+- `test_views_storage.py`: AST contract for the eight `ProxmoxStorage*` view classes — `__all__` membership, list-view `path=""` registration, child-tab paths/labels/permissions, the detail view's short `request_timeout`, and the explicit `MultiValueCharFilter` preserving `nodes` query/OpenAPI behavior after its `TextField` migration.
 - `test_storage_nodes_capacity_django.py`: real NetBox/Django coverage proving
   storage node membership longer than 255 characters passes the model, form,
-  serializer, and database boundaries unchanged. Its migration case exercises
-  0078→0079 preservation plus expand-only rollback/reapply after long values
-  exist; its no-database cases prove an 80-node live-content fan-out stays at
-  four workers with no larger queued-future window, respects one absolute
-  deadline even for a 5,000-node input, bounds late-refill HTTP timeouts to the
-  remaining budget, joins all worker threads, rejects real malformed/error
-  envelopes without mocked validation, and reports partial results explicitly
-  in every usage-data template branch.
+  serializer, filterset, REST list/bulk, and database boundaries unchanged. Its
+  migration case asserts there is exactly one plugin leaf, discovers that
+  leaf's parent dynamically, and exercises expand-only rollback/reapply without
+  pinning a collision-prone migration number. Its no-database cases prove the
+  live-content fan-out stays at four workers, issues no more than 64
+  authenticated calls for a 5,000-node membership, respects one absolute
+  deadline even when a call ignores its socket timeout, bounds late-refill HTTP
+  timeouts to the remaining budget, uses non-blocking executor shutdown,
+  rejects real malformed/error envelopes without mocked validation, and
+  reports partial/truncated results explicitly in every usage-data template
+  branch.
 - `test_proxmox_endpoint_settings_view.py`: AST contract for the Proxmox endpoint Settings tab registration, permissions, form usage, and context wiring.
 - `test_endpoint_templates_tab.py`: AST/source + behavior contracts for the endpoint **Templates** tab. Covers `ProxmoxEndpointTemplatesTabView` structure (`ObjectView` base, `__all__`, `template_name`, `ViewTab` label/permission/weight, `path="templates"`, `get_extra_context` + classification helpers, wiring into `views/__init__.py`), the live-fetch source contract (`/cloud/vm/templates` with `cloud_init_only=false` + `/cloud/lxc/templates`, `get_fastapi_request_context`/`resolve_backend_endpoint_id`, cloud-init derived from `cloud_init_drives`/`cicustom`, graceful `backend_error` degradation), the `integrations/packer.py` detection + guarded add-URL helpers, template contracts (three `data-category` groups, category filter, packer create button disabled **with a working tooltip** when netbox-packer is absent), and mirrored behavior tests for cloud-init classification / byte→GiB / LXC name derivation. Pure AST/source based — no NetBox bootstrap.
 - `test_endpoint_create_instance.py`: AST/source + local-stub behavior contracts for the Templates-tab **Create new instance** wizard. Covers the registered `create-instance` view, POST-only permission gate, `allow_writes` early exit, direct proxbox-api QEMU/LXC payload builders, cloud-init validation, VMID collision retry, actor/idempotency headers, verbatim backend 403 surfacing, template Actions columns, disabled-button tooltip, wizard steps, CSRF/fetch contract, and unsafe-JS exclusions. No real provisioning is performed.

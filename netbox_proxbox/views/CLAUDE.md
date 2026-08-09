@@ -15,15 +15,18 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
 
 The storage detail page bounds live per-node content discovery to four worker
 threads, at most four queued/in-flight futures, and one absolute eight-second
-fan-out deadline that starts before submission. It refills that sliding window
-only as calls finish and caps each HTTP timeout to the absolute budget remaining
-at submission. `finally` cancels queued work and joins every running worker, so
-degraded backends cannot leak request threads beyond the response. A node counts
-as successful only when the outer payload is a list/object and every flattened
-content record has a non-empty `volid`; error envelopes and permissive-schema
-dictionaries are partial failures. Large storage memberships must produce
-explicit partial-result context rather than serially occupying a web worker for
-`node_count * request_timeout` seconds or allocating one future per node.
+fan-out deadline that starts before submission. It fetches at most 64 membership
+nodes per page load, refills the sliding window only as calls finish, and caps
+each HTTP timeout to the absolute budget remaining at submission. At the
+deadline it cancels queued work and shuts the executor down with
+`wait=False, cancel_futures=True`; a running slow-trickle response may finish in
+the background but can never hold the NetBox request past the deadline. A node
+counts as successful only when the outer payload is a list/object and every
+flattened content record has a non-empty `volid`; error envelopes and
+permissive-schema dictionaries are partial failures. Large storage memberships
+must produce explicit partial/truncation context rather than serially occupying
+a web worker for `node_count * request_timeout` seconds, allocating one future
+per node, or issuing an authenticated request for every membership entry.
 
 ## Files And Ownership
 

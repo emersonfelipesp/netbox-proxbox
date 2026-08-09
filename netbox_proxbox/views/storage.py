@@ -47,6 +47,8 @@ __all__ = (
     "ProxmoxStorageSnapshotsTabView",
 )
 
+MAX_CONTENT_NODES = 64
+
 
 @register_model_view(ProxmoxStorage, "list", path="", detail=False)
 class ProxmoxStorageListView(generic.ObjectListView):
@@ -72,6 +74,7 @@ class ProxmoxStorageView(generic.ObjectView):
     request_timeout = 8
     content_request_workers = 4
     content_request_deadline = 8.0
+    max_content_nodes = MAX_CONTENT_NODES
 
     @staticmethod
     def _parse_nodes(value: str | None) -> list[str]:
@@ -117,7 +120,13 @@ class ProxmoxStorageView(generic.ObjectView):
         if not nodes:
             return [], None
 
-        worker_count = max(1, min(self.content_request_workers, len(nodes)))
+        total_node_count = len(nodes)
+        request_limit = max(1, int(self.max_content_nodes))
+        selected_nodes = nodes[:request_limit]
+        worker_count = max(
+            1,
+            min(self.content_request_workers, len(selected_nodes)),
+        )
         deadline_at = time.monotonic() + self.content_request_deadline
         executor = ThreadPoolExecutor(
             max_workers=worker_count,
@@ -131,9 +140,9 @@ class ProxmoxStorageView(generic.ObjectView):
         def submit_one() -> bool:
             nonlocal next_node_index
             remaining_budget = deadline_at - time.monotonic()
-            if next_node_index >= len(nodes) or remaining_budget <= 0:
+            if next_node_index >= len(selected_nodes) or remaining_budget <= 0:
                 return False
-            node = nodes[next_node_index]
+            node = selected_nodes[next_node_index]
             next_node_index += 1
             future = executor.submit(
                 self._fetch_backend_json,
@@ -197,19 +206,27 @@ class ProxmoxStorageView(generic.ObjectView):
         finally:
             for future in futures:
                 future.cancel()
-            # Running futures cannot be cancelled. Each request is submitted
-            # with no more than the absolute deadline's remaining budget, then
-            # joined here so degraded backends cannot leave per-request worker
-            # threads accumulating after the response has returned.
-            executor.shutdown(wait=True, cancel_futures=True)
+            # A socket timeout only measures inactivity, so a slow-trickling
+            # response may outlive the absolute page deadline. Do not join
+            # those running calls; they finish in the background without
+            # holding the NetBox request open.
+            executor.shutdown(wait=False, cancel_futures=True)
 
-        if successful_nodes == len(nodes):
-            return records, None
-        return records, (
-            "Storage content is partial: "
-            f"{successful_nodes} of {len(nodes)} node requests completed within "
-            f"the {self.content_request_deadline:g}-second deadline."
-        )
+        details = []
+        if successful_nodes != len(selected_nodes):
+            details.append(
+                "Storage content is partial: "
+                f"{successful_nodes} of {len(selected_nodes)} node requests "
+                f"completed within the {self.content_request_deadline:g}-second "
+                "deadline."
+            )
+        if total_node_count > len(selected_nodes):
+            details.append(
+                "Storage content is truncated to the first "
+                f"{len(selected_nodes)} of {total_node_count} nodes (per-page "
+                f"request limit {request_limit})."
+            )
+        return records, " ".join(details) or None
 
     def get_extra_context(
         self, request: HttpRequest, instance: ProxmoxStorage
