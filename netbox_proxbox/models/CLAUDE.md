@@ -54,7 +54,9 @@ This directory defines the plugin's persisted data model.
   `ObservabilitySecret` objects, never plaintext credentials or encrypted token
   blobs in this plugin. Its UI/API display properties return only exact secret
   references and credential-free HTTP(S) URLs; malformed legacy values are
-  masked instead of rendered.
+  masked instead of rendered. Its `serialize_object()` override applies those
+  same rules before NetBox stores pre/post `ObjectChange` snapshots; never remove
+  that hook or expose the raw fields through a parallel audit/event serializer.
 - `ProxmoxStorage`: stores Proxmox storage inventory synchronized from the backend.
 - `ProxmoxStorageVirtualDisk`: links storage rows to virtual disks.
 - `GuestVMInterface`: stores guest-agent OS interface names (for example `ens18`) for a NetBox `VirtualMachine`, mapped **one-to-one** (`OneToOneField`, `SET_NULL`) to the canonical core `VMInterface` (for example `net0`) by MAC. `SET_NULL` (not `CASCADE`) so deleting/recreating the core interface during churn preserves the guest OS inventory row and only clears the link; `vm_interface` is nullable for agent-only interfaces with no matching Proxmox NIC.

@@ -157,6 +157,14 @@ contract and issue #454 for the bug history.
   field, uses the migration connection alias plus bounded 500-row bulk batches,
   creates a sidecar when needed, never overwrites an existing typed value, and
   leaves legacy data intact for rollback compatibility.
+- The current metrics-security leaf blanks non-conforming InfluxDB URL/token
+  metadata, disables rows missing a safe URL or required query-token reference,
+  appends a persistent remediation marker to comments, and masks matching fields
+  in historical `core.ObjectChange` snapshots. The destructive scrub,
+  quarantine, marker, and audit masking are intentionally not reversed; rollback
+  removes only the database token-reference constraints. Its real-Django test
+  discovers the plugin leaf and its sole in-app parent from the migration graph,
+  so a merge-time renumber changes only the migration file.
 
 ## Notes
 

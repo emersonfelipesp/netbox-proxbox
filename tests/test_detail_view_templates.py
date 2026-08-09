@@ -133,3 +133,10 @@ def test_metrics_detail_template_uses_only_fail_closed_displays() -> None:
     assert "influx_url" not in object_attributes
     assert "query_token_secret_ref" not in object_attributes
     assert "writer_token_secret_ref" not in object_attributes
+
+
+def test_pdm_endpoint_detail_restricts_discovered_remotes() -> None:
+    source = (VIEWS_ROOT / "endpoints" / "pdm.py").read_text()
+
+    assert 'PDMRemote.objects.restrict(request.user, "view")' in source
+    assert ".filter(pdm_endpoint=instance)" in source

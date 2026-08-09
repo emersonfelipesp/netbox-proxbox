@@ -178,6 +178,27 @@ class ProxmoxMetricsInfluxDB(NetBoxModel):
     def __str__(self) -> str:
         return f"{self.name} -> {self.proxmox_cluster}"
 
+    def serialize_object(self, exclude=None):
+        """Mask non-conforming metadata in NetBox change-log snapshots.
+
+        NetBox's change logger, event queue, ObjectChange REST serializer, and
+        GraphQL changelog field all ultimately consume this model hook. Keep it
+        aligned with the fail-closed UI/API display properties so a legacy or
+        bypass-written credential can never be copied into a new audit snapshot.
+        """
+        data = super().serialize_object(exclude=exclude)
+        if "influx_url" in data:
+            data["influx_url"] = masked_influx_url(data["influx_url"])
+        if "query_token_secret_ref" in data:
+            data["query_token_secret_ref"] = masked_secret_ref(
+                data["query_token_secret_ref"]
+            )
+        if "writer_token_secret_ref" in data:
+            data["writer_token_secret_ref"] = masked_secret_ref(
+                data["writer_token_secret_ref"]
+            )
+        return data
+
     @property
     def influx_url_display(self) -> str:
         """Fail-closed rendering value for :attr:`influx_url`."""

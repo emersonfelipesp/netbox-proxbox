@@ -133,6 +133,18 @@ def _load_proxmox_metrics_model(monkeypatch: pytest.MonkeyPatch):
         def clean(self) -> None:
             pass
 
+        def serialize_object(self, exclude=None):
+            excluded = set(exclude or ())
+            return {
+                field_name: getattr(self, field_name, None)
+                for field_name in (
+                    "influx_url",
+                    "query_token_secret_ref",
+                    "writer_token_secret_ref",
+                )
+                if field_name not in excluded
+            }
+
     netbox_models.NetBoxModel = NetBoxModel
 
     for name, module in {
@@ -303,6 +315,40 @@ def test_metrics_display_properties_never_return_plaintext_tokens(
     assert row.writer_token_secret_ref_display == model_module.MASKED_SECRET_REF
 
 
+def test_metrics_changelog_serialization_masks_all_nonconforming_fields(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model_module = _load_proxmox_metrics_model(monkeypatch)
+    row = model_module.ProxmoxMetricsInfluxDB()
+    row.influx_url = "https://user:secret@influxdb.example.test:8086"
+    row.query_token_secret_ref = "query-token-must-not-reach-objectchange"
+    row.writer_token_secret_ref = "writer-token-must-not-reach-objectchange"
+
+    serialized = row.serialize_object()
+
+    assert serialized == {
+        "influx_url": model_module.MASKED_INFLUX_URL,
+        "query_token_secret_ref": model_module.MASKED_SECRET_REF,
+        "writer_token_secret_ref": model_module.MASKED_SECRET_REF,
+    }
+
+
+def test_metrics_changelog_serialization_preserves_exclusions(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model_module = _load_proxmox_metrics_model(monkeypatch)
+    row = model_module.ProxmoxMetricsInfluxDB()
+    row.influx_url = "unsafe"
+    row.query_token_secret_ref = "unsafe"
+    row.writer_token_secret_ref = "unsafe"
+
+    serialized = row.serialize_object(exclude=("influx_url",))
+
+    assert "influx_url" not in serialized
+    assert serialized["query_token_secret_ref"] == model_module.MASKED_SECRET_REF
+    assert serialized["writer_token_secret_ref"] == model_module.MASKED_SECRET_REF
+
+
 @pytest.mark.parametrize(
     ("stored_value", "expected"),
     [
@@ -454,6 +500,18 @@ def test_influxdb_metrics_filterset_and_migration_are_wired() -> None:
     assert not (
         ROOT / "netbox_proxbox/migrations/0067_proxmox_metrics_influxdb.py"
     ).exists()
+
+
+def test_influxdb_metrics_free_text_search_excludes_raw_url() -> None:
+    filtersets = _read("netbox_proxbox/filtersets.py")
+    metrics_filterset = filtersets.split("class ProxmoxMetricsInfluxDBFilterSet", 1)[
+        1
+    ].split("@register_filterset", 1)[0]
+
+    assert "influx_url__icontains" not in metrics_filterset
+    assert "name__icontains" in metrics_filterset
+    assert "org__icontains" in metrics_filterset
+    assert "bucket__icontains" in metrics_filterset
 
 
 def test_influxdb_metrics_ui_surface_is_registered() -> None:
