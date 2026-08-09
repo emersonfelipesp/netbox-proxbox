@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 import importlib.util
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 import sys
-from threading import Event, Lock, enumerate as enumerate_threads
+from threading import Event, Lock, Thread, enumerate as enumerate_threads
 import time
-from unittest.mock import patch
 
 import pytest
 import requests
@@ -32,6 +32,70 @@ def _load_module():
 
 
 storage_content = _load_module()
+
+
+class _DeadlineTestHandler(BaseHTTPRequestHandler):
+    """Serve real socket stalls that inactivity timeouts cannot stop."""
+
+    protocol_version = "HTTP/1.1"
+    slow_body_started = Event()
+    slow_headers_started = Event()
+
+    def log_message(self, format: str, *args: object) -> None:
+        del format, args
+
+    def _send_piece(self, piece: bytes) -> bool:
+        try:
+            self.connection.sendall(piece)
+        except OSError:
+            return False
+        return True
+
+    def do_GET(self) -> None:
+        if self.path == "/slow-body":
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.slow_body_started.set()
+            while self._send_piece(b" "):
+                time.sleep(0.01)
+            return
+
+        if self.path == "/slow-headers":
+            self.slow_headers_started.set()
+            if not self._send_piece(b"HTTP/1.1 200 OK\r\nX-Slow-Header: "):
+                return
+            while self._send_piece(b"x"):
+                time.sleep(0.01)
+            return
+
+        if self.path == "/oversized":
+            body = b'{"volid":"' + (b"x" * 32) + b'"}'
+        else:
+            body = b'[{"volid":"local:iso/debian.iso"}]'
+        self.send_response(200)
+        self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Connection", "close")
+        self.end_headers()
+        self.wfile.write(body)
+
+
+@pytest.fixture(scope="module")
+def deadline_test_server() -> str:
+    server = ThreadingHTTPServer(("127.0.0.1", 0), _DeadlineTestHandler)
+    server.daemon_threads = True
+    host, port = server.server_address
+    assert host == "127.0.0.1"
+    thread = Thread(target=server.serve_forever, daemon=True)
+    thread.start()
+    try:
+        yield f"http://127.0.0.1:{port}"
+    finally:
+        server.shutdown()
+        server.server_close()
+        thread.join(timeout=1)
 
 
 def _wait_until(predicate, *, timeout: float = 1.0) -> None:
@@ -169,55 +233,78 @@ def test_slot_exhaustion_degrades_to_the_existing_partial_notice() -> None:
         _wait_until(lambda: pool.slots_in_use == 0)
 
 
-class _FakeStreamingResponse:
-    def __init__(self, chunks) -> None:
-        self._chunks = chunks
-        self.closed = False
-        self.headers: dict[str, str] = {}
+@pytest.mark.parametrize(
+    ("route", "started_event"),
+    [
+        ("/slow-body", _DeadlineTestHandler.slow_body_started),
+        ("/slow-headers", _DeadlineTestHandler.slow_headers_started),
+    ],
+)
+def test_real_socket_stalls_release_every_slot_and_allow_recovery(
+    deadline_test_server: str,
+    route: str,
+    started_event: Event,
+) -> None:
+    """A body or header trickle must not outlive one absolute page deadline."""
+    pool = storage_content._CONTENT_FETCH_POOL
+    _wait_until(lambda: pool.slots_in_use == 0)
+    started_event.clear()
+    deadline_seconds = 0.25
 
-    def raise_for_status(self) -> None:
-        return None
-
-    def iter_content(self, chunk_size: int):
-        assert chunk_size > 0
-        yield from self._chunks(self)
-
-    def close(self) -> None:
-        self.closed = True
-
-
-def test_streaming_fetch_aborts_a_slow_trickle_at_the_wall_deadline() -> None:
-    yielded_chunks = 0
-
-    def trickle(response: _FakeStreamingResponse):
-        nonlocal yielded_chunks
-        while not response.closed:
-            time.sleep(0.002)
-            yielded_chunks += 1
-            yield b" "
-
-    response = _FakeStreamingResponse(trickle)
-    started_at = time.monotonic()
-    with (
-        patch.object(storage_content.requests, "get", return_value=response) as get,
-        pytest.raises(requests.exceptions.Timeout),
-    ):
-        storage_content.fetch_json_with_limits(
-            url="https://backend.example.test/proxmox/nodes/pve/storage/local/content",
-            query_params={"proxmox_endpoint_ids": "11"},
+    def fetch_stalled(_node: object, deadline_at: float) -> object:
+        return storage_content.fetch_json_with_limits(
+            url=f"{deadline_test_server}{route}",
+            query_params=None,
             auth_headers={"X-Proxbox-API-Key": "redacted-test-value"},
             verify_ssl=True,
             request_timeout=1,
-            deadline_at=started_at + 0.03,
+            deadline_at=deadline_at,
             max_response_bytes=1024,
         )
+
+    started_at = time.monotonic()
+    completed, total_count, selected_count = (
+        storage_content.collect_completed_before_deadline(
+            [f"pve-{index}" for index in range(storage_content.CONTENT_FETCH_WORKERS)],
+            fetch_stalled,
+            deadline_seconds=deadline_seconds,
+            max_items=64,
+            per_request_workers=storage_content.CONTENT_FETCH_WORKERS,
+        )
+    )
     elapsed = time.monotonic() - started_at
 
-    assert elapsed < 0.2
-    assert yielded_chunks > 1
-    assert response.closed is True
-    assert get.call_args.kwargs["stream"] is True
-    assert get.call_args.kwargs["allow_redirects"] is False
+    assert started_event.is_set()
+    assert total_count == selected_count == storage_content.CONTENT_FETCH_WORKERS
+    assert all(future.exception() is not None for future in completed)
+    assert deadline_seconds * 0.7 <= elapsed < deadline_seconds + 0.75
+    _wait_until(lambda: pool.slots_in_use == 0, timeout=1)
+
+    def fetch_healthy(_node: object, deadline_at: float) -> object:
+        return storage_content.fetch_json_with_limits(
+            url=f"{deadline_test_server}/success",
+            query_params=None,
+            auth_headers={"X-Proxbox-API-Key": "redacted-test-value"},
+            verify_ssl=True,
+            request_timeout=1,
+            deadline_at=deadline_at,
+            max_response_bytes=1024,
+        )
+
+    recovered, recovery_total, recovery_selected = (
+        storage_content.collect_completed_before_deadline(
+            ["pve-recovered"],
+            fetch_healthy,
+            deadline_seconds=1,
+            max_items=64,
+            per_request_workers=storage_content.CONTENT_FETCH_WORKERS,
+        )
+    )
+    assert recovery_total == recovery_selected == 1
+    assert len(recovered) == 1
+    assert recovered[0].result() == [{"volid": "local:iso/debian.iso"}]
+    assert pool.slots_in_use == 0
+
     deadline_threads = [
         thread
         for thread in enumerate_threads()
@@ -226,19 +313,12 @@ def test_streaming_fetch_aborts_a_slow_trickle_at_the_wall_deadline() -> None:
     assert len(deadline_threads) == 1
 
 
-def test_streaming_fetch_rejects_an_oversized_response_and_closes_it() -> None:
-    def oversized(_response: _FakeStreamingResponse):
-        yield b'{"volid":"'
-        yield b"x" * 32
-        yield b'"}'
-
-    response = _FakeStreamingResponse(oversized)
-    with (
-        patch.object(storage_content.requests, "get", return_value=response),
-        pytest.raises(ValueError, match="exceeds the 16-byte limit"),
-    ):
+def test_streaming_fetch_rejects_an_oversized_response(
+    deadline_test_server: str,
+) -> None:
+    with pytest.raises(ValueError, match="exceeds the 16-byte limit"):
         storage_content.fetch_json_with_limits(
-            url="https://backend.example.test/proxmox/nodes/pve/storage/local/content",
+            url=f"{deadline_test_server}/oversized",
             query_params=None,
             auth_headers={"X-Proxbox-API-Key": "redacted-test-value"},
             verify_ssl=True,
@@ -247,25 +327,18 @@ def test_streaming_fetch_rejects_an_oversized_response_and_closes_it() -> None:
             max_response_bytes=16,
         )
 
-    assert response.closed is True
 
-
-def test_streaming_fetch_preserves_the_json_payload_shape() -> None:
-    def valid_json(_response: _FakeStreamingResponse):
-        yield b'[{"volid":'
-        yield b'"local:iso/debian.iso"}]'
-
-    response = _FakeStreamingResponse(valid_json)
-    with patch.object(storage_content.requests, "get", return_value=response):
-        payload = storage_content.fetch_json_with_limits(
-            url="https://backend.example.test/proxmox/nodes/pve/storage/local/content",
-            query_params={"proxmox_endpoint_ids": "11"},
-            auth_headers={"X-Proxbox-API-Key": "redacted-test-value"},
-            verify_ssl=True,
-            request_timeout=1,
-            deadline_at=time.monotonic() + 1,
-            max_response_bytes=1024,
-        )
+def test_streaming_fetch_preserves_the_json_payload_shape(
+    deadline_test_server: str,
+) -> None:
+    payload = storage_content.fetch_json_with_limits(
+        url=f"{deadline_test_server}/success",
+        query_params={"proxmox_endpoint_ids": "11"},
+        auth_headers={"X-Proxbox-API-Key": "redacted-test-value"},
+        verify_ssl=True,
+        request_timeout=1,
+        deadline_at=time.monotonic() + 1,
+        max_response_bytes=1024,
+    )
 
     assert payload == [{"volid": "local:iso/debian.iso"}]
-    assert response.closed is True

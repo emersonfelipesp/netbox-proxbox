@@ -5,10 +5,18 @@ from __future__ import annotations
 from collections.abc import Callable, Sequence
 from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 import json
+import socket
+import ssl
 from threading import BoundedSemaphore, Condition, Event, Lock, Thread
 import time
+from urllib.parse import urlsplit, urlunsplit
 
 import requests
+from urllib3 import HTTPConnectionPool, HTTPSConnectionPool
+from urllib3.connection import HTTPConnection, HTTPSConnection
+from urllib3.exceptions import HTTPError as Urllib3HTTPError
+from urllib3.response import HTTPResponse
+from urllib3.util import Timeout
 
 
 CONTENT_FETCH_WORKERS = 4
@@ -83,21 +91,124 @@ class _BoundedContentFetchPool:
 _CONTENT_FETCH_POOL = _BoundedContentFetchPool(CONTENT_FETCH_WORKERS)
 
 
-class _ResponseDeadlineCloser:
-    """Close every active response from one process-wide watchdog thread."""
+def _shutdown_socket(cancel_socket: socket.socket) -> None:
+    """Interrupt socket I/O using only non-buffered transport operations."""
+    try:
+        cancel_socket.shutdown(socket.SHUT_RDWR)
+    except OSError:
+        pass
+    try:
+        cancel_socket.close()
+    except OSError:
+        pass
+
+
+class _DeadlineCancellation:
+    """Own a duplicate socket that can cancel one in-flight request."""
+
+    def __init__(self) -> None:
+        self.expired = Event()
+        self._lock = Lock()
+        self._cancel_socket: socket.socket | None = None
+
+    def attach_socket(self, connected_socket: socket.socket) -> None:
+        """Retain a duplicate before urllib3 starts TLS or reads headers."""
+        try:
+            cancel_socket = connected_socket.dup()
+        except OSError:
+            _shutdown_socket(connected_socket)
+            raise
+
+        shutdown_now = False
+        previous_socket = None
+        with self._lock:
+            if self.expired.is_set():
+                shutdown_now = True
+            else:
+                previous_socket = self._cancel_socket
+                self._cancel_socket = cancel_socket
+        if previous_socket is not None:
+            previous_socket.close()
+        if shutdown_now:
+            _shutdown_socket(cancel_socket)
+
+    def expire(self) -> None:
+        """Interrupt the transport without touching buffered response objects."""
+        self.expired.set()
+        with self._lock:
+            cancel_socket = self._cancel_socket
+            self._cancel_socket = None
+        if cancel_socket is not None:
+            _shutdown_socket(cancel_socket)
+
+    def release(self) -> None:
+        """Discard the duplicate without disturbing a completed request."""
+        with self._lock:
+            cancel_socket = self._cancel_socket
+            self._cancel_socket = None
+        if cancel_socket is not None:
+            cancel_socket.close()
+
+
+class _DeadlineHTTPConnection(HTTPConnection):
+    """Expose a connected HTTP socket before response headers are read."""
+
+    def __init__(
+        self,
+        *args: object,
+        deadline_cancellation: _DeadlineCancellation,
+        **kwargs: object,
+    ) -> None:
+        self._deadline_cancellation = deadline_cancellation
+        super().__init__(*args, **kwargs)
+
+    def _new_conn(self) -> socket.socket:
+        connected_socket = super()._new_conn()
+        self._deadline_cancellation.attach_socket(connected_socket)
+        return connected_socket
+
+
+class _DeadlineHTTPSConnection(HTTPSConnection):
+    """Expose the TCP socket before TLS and response-header reads."""
+
+    def __init__(
+        self,
+        *args: object,
+        deadline_cancellation: _DeadlineCancellation,
+        **kwargs: object,
+    ) -> None:
+        self._deadline_cancellation = deadline_cancellation
+        super().__init__(*args, **kwargs)
+
+    def _new_conn(self) -> socket.socket:
+        connected_socket = super()._new_conn()
+        self._deadline_cancellation.attach_socket(connected_socket)
+        return connected_socket
+
+
+class _DeadlineHTTPConnectionPool(HTTPConnectionPool):
+    ConnectionCls = _DeadlineHTTPConnection
+
+
+class _DeadlineHTTPSConnectionPool(HTTPSConnectionPool):
+    ConnectionCls = _DeadlineHTTPSConnection
+
+
+class _SocketDeadlineWatchdog:
+    """Expire every active transport from one process-wide watchdog thread."""
 
     def __init__(self) -> None:
         self._condition = Condition()
-        self._entries: dict[int, tuple[float, object, Event]] = {}
+        self._entries: dict[int, tuple[float, _DeadlineCancellation]] = {}
         self._next_token = 0
         self._thread: Thread | None = None
 
-    def register(self, response: object, deadline_at: float) -> tuple[int, Event]:
-        expired = Event()
+    def register(self, deadline_at: float) -> tuple[int, _DeadlineCancellation]:
+        cancellation = _DeadlineCancellation()
         with self._condition:
             token = self._next_token
             self._next_token += 1
-            self._entries[token] = (deadline_at, response, expired)
+            self._entries[token] = (deadline_at, cancellation)
             if self._thread is None:
                 self._thread = Thread(
                     target=self._run,
@@ -106,19 +217,22 @@ class _ResponseDeadlineCloser:
                 )
                 self._thread.start()
             self._condition.notify()
-        return token, expired
+        return token, cancellation
 
     def unregister(self, token: int) -> None:
         with self._condition:
-            self._entries.pop(token, None)
+            entry = self._entries.pop(token, None)
             self._condition.notify()
+        if entry is not None:
+            _deadline_at, cancellation = entry
+            cancellation.release()
 
     def _run(self) -> None:
         while True:
             with self._condition:
                 while not self._entries:
                     self._condition.wait()
-                token, (deadline_at, response, expired) = min(
+                token, (deadline_at, cancellation) = min(
                     self._entries.items(),
                     key=lambda item: item[1][0],
                 )
@@ -128,14 +242,10 @@ class _ResponseDeadlineCloser:
                     continue
                 self._entries.pop(token, None)
 
-            expired.set()
-            try:
-                response.close()
-            except Exception:
-                continue
+            cancellation.expire()
 
 
-_RESPONSE_DEADLINE_CLOSER = _ResponseDeadlineCloser()
+_SOCKET_DEADLINE_WATCHDOG = _SocketDeadlineWatchdog()
 
 
 def collect_completed_before_deadline(
@@ -239,6 +349,61 @@ def format_content_detail(
     return " ".join(details) or None
 
 
+def _prepare_deadline_pool(
+    *,
+    url: str,
+    query_params: dict[str, str] | None,
+    auth_headers: dict[str, str],
+    verify_ssl: bool,
+    socket_timeout: float,
+    cancellation: _DeadlineCancellation,
+) -> tuple[
+    HTTPConnectionPool | HTTPSConnectionPool,
+    str,
+    dict[str, str],
+    str,
+]:
+    """Build a one-request pool whose connection exposes its live socket."""
+    prepared = requests.Request(
+        method="GET",
+        url=url,
+        params=query_params or None,
+        headers=auth_headers,
+    ).prepare()
+    if prepared.url is None:
+        raise requests.exceptions.InvalidURL("storage content URL is missing")
+
+    try:
+        parsed = urlsplit(prepared.url)
+        port = parsed.port
+    except ValueError as exc:
+        raise requests.exceptions.InvalidURL("storage content URL is invalid") from exc
+    scheme = parsed.scheme.lower()
+    if scheme not in {"http", "https"} or parsed.hostname is None:
+        raise requests.exceptions.InvalidURL("storage content URL is invalid")
+
+    timeout = Timeout(connect=socket_timeout, read=socket_timeout)
+    common_options = {
+        "host": parsed.hostname,
+        "port": port,
+        "timeout": timeout,
+        "maxsize": 1,
+        "block": True,
+        "deadline_cancellation": cancellation,
+    }
+    if scheme == "https":
+        pool: HTTPConnectionPool | HTTPSConnectionPool = _DeadlineHTTPSConnectionPool(
+            **common_options,
+            cert_reqs=ssl.CERT_REQUIRED if verify_ssl else ssl.CERT_NONE,
+            ca_certs=requests.certs.where() if verify_ssl else None,
+        )
+    else:
+        pool = _DeadlineHTTPConnectionPool(**common_options)
+
+    request_target = urlunsplit(("", "", parsed.path or "/", parsed.query, ""))
+    return pool, request_target, dict(prepared.headers), prepared.url
+
+
 def fetch_json_with_limits(
     *,
     url: str,
@@ -254,30 +419,46 @@ def fetch_json_with_limits(
     if remaining <= 0:
         raise requests.exceptions.Timeout("storage content deadline expired")
     socket_timeout = max(0.001, min(float(request_timeout), remaining))
-    response = requests.get(
-        url,
-        params=query_params or None,
-        headers=auth_headers,
-        verify=verify_ssl,
-        timeout=socket_timeout,
-        stream=True,
-        allow_redirects=False,
-    )
-    remaining = deadline_at - time.monotonic()
-    if remaining <= 0:
-        response.close()
-        raise requests.exceptions.Timeout("storage content deadline expired")
-    deadline_token, expired = _RESPONSE_DEADLINE_CLOSER.register(
-        response,
-        deadline_at,
-    )
-
-    response_limit = max(1, int(max_response_bytes))
-    body = bytearray()
+    deadline_token, cancellation = _SOCKET_DEADLINE_WATCHDOG.register(deadline_at)
+    pool: HTTPConnectionPool | HTTPSConnectionPool | None = None
+    response: HTTPResponse | None = None
     try:
-        response.raise_for_status()
-        for chunk in response.iter_content(chunk_size=CONTENT_STREAM_CHUNK_BYTES):
-            if expired.is_set() or time.monotonic() >= deadline_at:
+        pool, request_target, prepared_headers, prepared_url = _prepare_deadline_pool(
+            url=url,
+            query_params=query_params,
+            auth_headers=auth_headers,
+            verify_ssl=verify_ssl,
+            socket_timeout=socket_timeout,
+            cancellation=cancellation,
+        )
+        response = pool.urlopen(
+            "GET",
+            request_target,
+            headers=prepared_headers,
+            retries=False,
+            redirect=False,
+            timeout=pool.timeout,
+            preload_content=False,
+            decode_content=False,
+            release_conn=False,
+        )
+        if cancellation.expired.is_set() or time.monotonic() >= deadline_at:
+            raise requests.exceptions.Timeout(
+                "storage content wall-clock deadline expired"
+            )
+        if 400 <= response.status:
+            raise requests.exceptions.HTTPError(
+                f"storage content request returned HTTP {response.status}",
+                request=requests.Request("GET", prepared_url).prepare(),
+            )
+
+        response_limit = max(1, int(max_response_bytes))
+        body = bytearray()
+        for chunk in response.stream(
+            CONTENT_STREAM_CHUNK_BYTES,
+            decode_content=True,
+        ):
+            if cancellation.expired.is_set() or time.monotonic() >= deadline_at:
                 raise requests.exceptions.Timeout(
                     "storage content wall-clock deadline expired"
                 )
@@ -290,7 +471,7 @@ def fetch_json_with_limits(
                 )
             body.extend(chunk)
 
-        if expired.is_set() or time.monotonic() >= deadline_at:
+        if cancellation.expired.is_set() or time.monotonic() >= deadline_at:
             raise requests.exceptions.Timeout(
                 "storage content wall-clock deadline expired"
             )
@@ -298,6 +479,19 @@ def fetch_json_with_limits(
             return json.loads(body)
         except (json.JSONDecodeError, UnicodeDecodeError) as exc:
             raise ValueError("storage content response is not valid JSON") from exc
+    except requests.exceptions.RequestException:
+        raise
+    except (Urllib3HTTPError, OSError) as exc:
+        if cancellation.expired.is_set() or time.monotonic() >= deadline_at:
+            raise requests.exceptions.Timeout(
+                "storage content wall-clock deadline expired"
+            ) from exc
+        raise requests.exceptions.ConnectionError(
+            "storage content request failed"
+        ) from exc
     finally:
-        _RESPONSE_DEADLINE_CLOSER.unregister(deadline_token)
-        response.close()
+        _SOCKET_DEADLINE_WATCHDOG.unregister(deadline_token)
+        if response is not None:
+            response.close()
+        if pool is not None:
+            pool.close()

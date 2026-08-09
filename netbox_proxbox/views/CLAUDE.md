@@ -20,15 +20,22 @@ call actually exits, so page deadlines never turn abandoned requests into an
 unbounded collection of authenticated sockets or threads. A page waits only
 until its absolute eight-second deadline; if the shared pool remains full, the
 unstarted nodes use the existing partial-result notice. Each node response is
-streamed under the same absolute deadline, actively closed by one process-wide
-deadline-watchdog thread, and capped at 1 MiB of decoded bytes before JSON
-parsing. The page still fetches at most 64 membership nodes, and a node counts as
-successful only when the outer payload is a list/object and every flattened
-content record has a non-empty `volid`; error envelopes and permissive-schema
-dictionaries are partial failures. Large storage memberships must produce
-explicit partial/truncation context rather than serially occupying a web worker
-for `node_count * request_timeout` seconds, allocating one future per node, or
-issuing an authenticated request for every membership entry.
+streamed under the same absolute deadline and capped at 1 MiB of decoded bytes
+before JSON parsing. The deadline watchdog never closes a Requests/urllib3
+response object: buffered response closure can wait behind the read it is meant
+to cancel. Each request instead owns a dedicated urllib3 pool whose connection
+hook duplicates the TCP socket immediately after connect, before TLS and
+response-header reads. At the deadline the watchdog performs only raw
+`socket.shutdown(SHUT_RDWR)` plus `socket.close()` on that duplicate, which
+interrupts header and body reads without letting one cancellation block later
+deadlines. The worker closes the response and pool only after the interrupted
+read returns. The page still fetches at most 64 membership nodes, and a node
+counts as successful only when the outer payload is a list/object and every
+flattened content record has a non-empty `volid`; error envelopes and
+permissive-schema dictionaries are partial failures. Large storage memberships
+must produce explicit partial/truncation context rather than serially occupying
+a web worker for `node_count * request_timeout` seconds, allocating one future
+per node, or issuing an authenticated request for every membership entry.
 
 ## Files And Ownership
 
