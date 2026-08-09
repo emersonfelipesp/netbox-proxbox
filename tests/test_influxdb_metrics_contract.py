@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import os
 import importlib.util
+import os
 import sys
 import types
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import pytest
 
@@ -72,7 +73,21 @@ def _load_proxmox_metrics_model(monkeypatch: pytest.MonkeyPatch):
         def __init__(self, *args, **kwargs):
             pass
 
+    class URLValidator:
+        def __init__(self, *, schemes):
+            self.schemes = schemes
+
+        def __call__(self, value):
+            parsed_url = urlsplit(value)
+            if (
+                parsed_url.scheme not in self.schemes
+                or not parsed_url.netloc
+                or any(character.isspace() for character in value)
+            ):
+                raise exceptions.ValidationError()
+
     validators.RegexValidator = RegexValidator
+    validators.URLValidator = URLValidator
 
     models = types.ModuleType("django.db.models")
 
@@ -143,6 +158,65 @@ def _load_proxmox_metrics_model(monkeypatch: pytest.MonkeyPatch):
     return module
 
 
+def _load_proxmox_metrics_serializer(
+    monkeypatch: pytest.MonkeyPatch,
+    model_module,
+):
+    """Load the real serializer against a minimal DRF/NetBox harness."""
+    netbox_api_serializers = types.ModuleType("netbox.api.serializers")
+
+    class NetBoxModelSerializer:
+        def to_representation(self, instance):
+            return {
+                field_name: getattr(instance, field_name, None)
+                for field_name in self.Meta.fields
+            }
+
+    netbox_api_serializers.NetBoxModelSerializer = NetBoxModelSerializer
+
+    rest_framework = types.ModuleType("rest_framework")
+    serializers = types.ModuleType("rest_framework.serializers")
+
+    class HyperlinkedIdentityField:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    serializers.HyperlinkedIdentityField = HyperlinkedIdentityField
+    rest_framework.serializers = serializers
+
+    cluster_serializers = types.ModuleType("netbox_proxbox.api.serializers.cluster")
+
+    class NestedSerializer:
+        def __init__(self, *args, **kwargs):
+            pass
+
+    cluster_serializers.NestedProxmoxClusterSerializer = NestedSerializer
+    cluster_serializers.NestedProxmoxEndpointSerializer = NestedSerializer
+
+    proxbox_models = types.ModuleType("netbox_proxbox.models")
+    proxbox_models.ProxmoxMetricsInfluxDB = model_module.ProxmoxMetricsInfluxDB
+
+    for name, module in {
+        "netbox.api.serializers": netbox_api_serializers,
+        "rest_framework": rest_framework,
+        "rest_framework.serializers": serializers,
+        "netbox_proxbox.api.serializers.cluster": cluster_serializers,
+        "netbox_proxbox.models": proxbox_models,
+    }.items():
+        monkeypatch.setitem(sys.modules, name, module)
+
+    module_name = "_test_proxmox_metrics_serializer"
+    spec = importlib.util.spec_from_file_location(
+        module_name,
+        ROOT / "netbox_proxbox/api/serializers/proxmox_metrics.py",
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    monkeypatch.setitem(sys.modules, module_name, module)
+    spec.loader.exec_module(module)
+    return module
+
+
 @pytest.mark.parametrize(
     ("stored_value", "expected"),
     [
@@ -180,6 +254,72 @@ def test_metrics_display_properties_never_return_plaintext_tokens(
 
     assert row.query_token_secret_ref_display == model_module.MASKED_SECRET_REF
     assert row.writer_token_secret_ref_display == model_module.MASKED_SECRET_REF
+
+
+@pytest.mark.parametrize(
+    ("stored_value", "expected"),
+    [
+        ("influx-token-plaintext", "********"),
+        (VALID_SECRET_REF, VALID_SECRET_REF),
+        ("", ""),
+    ],
+)
+def test_metrics_serializer_uses_fail_closed_secret_ref_displays(
+    monkeypatch: pytest.MonkeyPatch,
+    stored_value: str,
+    expected: str,
+) -> None:
+    model_module = _load_proxmox_metrics_model(monkeypatch)
+    serializer_module = _load_proxmox_metrics_serializer(monkeypatch, model_module)
+    row = model_module.ProxmoxMetricsInfluxDB()
+    row.influx_url = "https://influxdb.example.test:8086"
+    row.query_token_secret_ref = stored_value
+    row.writer_token_secret_ref = stored_value
+
+    rendered = serializer_module.ProxmoxMetricsInfluxDBSerializer().to_representation(
+        row
+    )
+
+    assert rendered["query_token_secret_ref"] == expected
+    assert rendered["writer_token_secret_ref"] == expected
+
+
+@pytest.mark.parametrize(
+    ("stored_value", "expected"),
+    [
+        ("https://influxdb.example.test:8086", "https://influxdb.example.test:8086"),
+        ("http://192.0.2.10:8086/metrics", "http://192.0.2.10:8086/metrics"),
+        ("not-an-influxdb-url", "********"),
+        ("", "********"),
+    ],
+)
+def test_influx_url_display_only_returns_valid_http_urls(
+    monkeypatch: pytest.MonkeyPatch,
+    stored_value: str,
+    expected: str,
+) -> None:
+    model_module = _load_proxmox_metrics_model(monkeypatch)
+    row = model_module.ProxmoxMetricsInfluxDB()
+    row.influx_url = stored_value
+
+    assert row.influx_url_display == expected
+
+
+def test_metrics_serializer_uses_fail_closed_influx_url_display(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    model_module = _load_proxmox_metrics_model(monkeypatch)
+    serializer_module = _load_proxmox_metrics_serializer(monkeypatch, model_module)
+    row = model_module.ProxmoxMetricsInfluxDB()
+    row.influx_url = "raw-non-url-must-not-render"
+    row.query_token_secret_ref = VALID_SECRET_REF
+    row.writer_token_secret_ref = ""
+
+    rendered = serializer_module.ProxmoxMetricsInfluxDBSerializer().to_representation(
+        row
+    )
+
+    assert rendered["influx_url"] == "********"
 
 
 def test_influxdb_metrics_model_uses_secret_references_not_plaintext_tokens() -> None:

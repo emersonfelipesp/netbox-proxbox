@@ -108,7 +108,7 @@ class ProxmoxMetricsInfluxDBMigrationTest(TransactionTestCase):
                 name="scrubbed",
                 endpoint=endpoint,
                 proxmox_cluster=cluster,
-                influx_url="https://influx.example.test:8086",
+                influx_url="raw-influx-url-must-be-scrubbed",
                 query_token_secret_ref="plaintext-query-token",
                 writer_token_secret_ref="nms-secret:partial",
             )
@@ -130,6 +130,10 @@ class ProxmoxMetricsInfluxDBMigrationTest(TransactionTestCase):
 
             self.assertEqual(scrubbed_0079.query_token_secret_ref, "")
             self.assertEqual(scrubbed_0079.writer_token_secret_ref, "")
+            self.assertEqual(scrubbed_0079.influx_url, "")
+            self.assertEqual(
+                preserved_0079.influx_url, "https://influx.example.test:8086"
+            )
             self.assertEqual(preserved_0079.query_token_secret_ref, VALID_SECRET_REF)
             self.assertEqual(preserved_0079.writer_token_secret_ref, "")
 
@@ -156,6 +160,7 @@ class ProxmoxMetricsInfluxDBMigrationTest(TransactionTestCase):
 
             self.assertEqual(still_scrubbed.query_token_secret_ref, "")
             self.assertEqual(still_scrubbed.writer_token_secret_ref, "")
+            self.assertEqual(still_scrubbed.influx_url, "")
             reversed_constraints = self._check_constraint_names(table_name)
             self.assertNotIn(QUERY_CONSTRAINT, reversed_constraints)
             self.assertNotIn(WRITER_CONSTRAINT, reversed_constraints)

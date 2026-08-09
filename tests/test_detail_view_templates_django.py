@@ -108,6 +108,7 @@ from netbox_proxbox.models.proxmox_metrics import MASKED_SECRET_REF  # noqa: E40
 
 
 _PLUGIN_VIEW_MODULE_PREFIX = "netbox_proxbox.views"
+_METRICS_INFLUX_URL_MARKER = "raw-influx-url-must-not-render"
 _REQUIRED_OBJECT_VIEW_REGISTRY = {
     "netbox_proxbox.backuproutine:backuproutine": "netbox_proxbox.views.backup_routine.BackupRoutineView",
     "netbox_proxbox.cloudimagetemplate:cloudimagetemplate": "netbox_proxbox.views.cloud_image_templates.CloudImageTemplateView",
@@ -483,6 +484,7 @@ class MissingDetailTemplateRenderTest(TestCase):
         self.assertNotContains(response, _SSH_PRIVATE_KEY_MARKER)
 
     def test_metrics_render_uses_fail_closed_display_properties(self) -> None:
+        self.metrics.influx_url = _METRICS_INFLUX_URL_MARKER
         self.metrics.query_token_secret_ref = _METRICS_QUERY_TOKEN_MARKER
         self.metrics.writer_token_secret_ref = _METRICS_WRITER_TOKEN_MARKER
         url = reverse(
@@ -497,10 +499,12 @@ class MissingDetailTemplateRenderTest(TestCase):
             response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200, response.content)
+        self.assertNotContains(response, _METRICS_INFLUX_URL_MARKER)
         self.assertNotContains(response, _METRICS_QUERY_TOKEN_MARKER)
         self.assertNotContains(response, _METRICS_WRITER_TOKEN_MARKER)
-        self.assertContains(response, MASKED_SECRET_REF, count=2)
+        self.assertContains(response, MASKED_SECRET_REF, count=3)
         rendered_object = response.context["object"]
+        self.assertEqual(rendered_object.influx_url_display, MASKED_SECRET_REF)
         self.assertEqual(
             rendered_object.query_token_secret_ref_display, MASKED_SECRET_REF
         )

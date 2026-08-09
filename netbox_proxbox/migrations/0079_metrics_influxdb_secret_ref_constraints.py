@@ -1,4 +1,4 @@
-"""Constrain InfluxDB metrics token columns to ``nms-secret:<uuid>`` references.
+"""Scrub unsafe InfluxDB metadata and constrain token reference columns.
 
 ``ProxmoxMetricsInfluxDB.query_token_secret_ref`` and
 ``writer_token_secret_ref`` are documented to hold a netbox-nms
@@ -10,9 +10,10 @@ rendered verbatim on the detail page.
 
 Forwards runs in two steps:
 
-1. **Scrub.** Any stored value that is not an exact reference is blanked, with
-   the affected primary keys logged. This has to happen first: ``AddConstraint``
-   validates existing rows, so a single non-conforming row would abort the whole
+1. **Scrub.** Any token that is not an exact reference and any InfluxDB URL
+   that is not a credential-free HTTP(S) URL is blanked, with the affected
+   primary keys logged. This has to happen first: ``AddConstraint`` validates
+   existing token rows, so a single non-conforming row would abort the whole
    upgrade.
 2. **Constrain.** Two ``CheckConstraint``\\ s pin both columns to
    ``'' OR <reference>``. The empty branch keeps required-ness a form concern
@@ -28,7 +29,10 @@ from __future__ import annotations
 
 import logging
 import re
+from urllib.parse import urlsplit
 
+from django.core.exceptions import ValidationError
+from django.core.validators import URLValidator
 from django.db import migrations, models
 
 
@@ -43,15 +47,28 @@ _NMS_SECRET_REF_RE = (
 )
 
 _TOKEN_FIELDS = ("query_token_secret_ref", "writer_token_secret_ref")
+_INFLUX_URL_VALIDATOR = URLValidator(schemes=("http", "https"))
 
 
-def _scrub_non_reference_token_values(apps, schema_editor) -> None:
-    """Blank any token column that does not hold an exact reference."""
+def _is_safe_influx_url(value: str | None) -> bool:
+    """Return whether ``value`` is a credential-free HTTP(S) base URL."""
+    if not isinstance(value, str) or not value:
+        return False
+    try:
+        _INFLUX_URL_VALIDATOR(value)
+        parsed_url = urlsplit(value)
+    except (ValidationError, ValueError):
+        return False
+    return not ("@" in parsed_url.netloc or parsed_url.query or parsed_url.fragment)
+
+
+def _scrub_non_conforming_values(apps, schema_editor) -> None:
+    """Blank unsafe URL and token values before constraints are installed."""
     model = apps.get_model("netbox_proxbox", "ProxmoxMetricsInfluxDB")
     pattern = re.compile(_NMS_SECRET_REF_RE)
 
     for row in model.objects.using(schema_editor.connection.alias).only(
-        "pk", *_TOKEN_FIELDS
+        "pk", "influx_url", *_TOKEN_FIELDS
     ):
         updates = {
             field_name: ""
@@ -59,6 +76,8 @@ def _scrub_non_reference_token_values(apps, schema_editor) -> None:
             if (getattr(row, field_name) or "")
             and not pattern.fullmatch(getattr(row, field_name))
         }
+        if not _is_safe_influx_url(getattr(row, "influx_url", "")):
+            updates["influx_url"] = ""
         if not updates:
             continue
         model.objects.using(schema_editor.connection.alias).filter(pk=row.pk).update(
@@ -67,9 +86,9 @@ def _scrub_non_reference_token_values(apps, schema_editor) -> None:
         # The discarded value is never logged -- it may be the credential this
         # migration exists to remove.
         logger.warning(
-            "netbox-proxbox: cleared non-reference value(s) in %s on "
-            "ProxmoxMetricsInfluxDB pk=%s; re-enter the netbox-nms "
-            "nms-secret:<uuid> reference for that row.",
+            "netbox-proxbox: cleared non-conforming value(s) in %s on "
+            "ProxmoxMetricsInfluxDB pk=%s; re-enter valid InfluxDB metadata "
+            "for that row.",
             ", ".join(sorted(updates)),
             row.pk,
         )
@@ -82,7 +101,7 @@ class Migration(migrations.Migration):
 
     operations = [
         migrations.RunPython(
-            _scrub_non_reference_token_values,
+            _scrub_non_conforming_values,
             migrations.RunPython.noop,
         ),
         migrations.AddConstraint(

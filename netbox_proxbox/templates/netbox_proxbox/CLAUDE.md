@@ -28,7 +28,9 @@ This is the main Django template namespace for the plugin.
   `proxmoxfirewallipsetentry.html`, `proxmoxfirewallalias.html`, and
   `proxmoxfirewalloptions.html`.
 - Supporting detail pages: `proxmoxdatacentercpumodel.html`,
-  `proxmoxmetricsinfluxdb.html`, and `nodesshcredential.html`.
+  `proxmoxmetricsinfluxdb.html`, and `nodesshcredential.html`. The metrics page
+  renders its URL and token references only through fail-closed model display
+  properties so malformed stored values never reach HTML.
 - Shared fragments and includes: `footer.html`, the `inc/` snippets for job buttons, runtime panels, live poll alerts, schedule form fields, and VM sync actions, plus `widgets/` helpers for custom checkbox controls.
 - Operator bootstrap/status fragment:
   `partials/bootstrap_status_card.html` is included by `home.html` and

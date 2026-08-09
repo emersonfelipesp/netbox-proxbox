@@ -70,7 +70,8 @@ This directory contains the plugin's pytest test suite.
 - `test_views_storage.py`: AST contract for the eight `ProxmoxStorage*` view classes — `__all__` membership, list-view `path=""` registration, child-tab paths/labels/permissions, and the detail view's short `request_timeout`.
 - `test_detail_view_templates.py`: fast AST/filesystem contract for every
   plugin `ObjectView` registered with `register_model_view`; validates explicit
-  and default template paths without bootstrapping Django.
+  and default template paths without bootstrapping Django. It also pins that
+  the InfluxDB detail page uses only fail-closed URL/token display properties.
 - `test_detail_view_templates_django.py`: real-NetBox complement in the
   supported-version matrix. It imports the complete plugin URL surface, walks
   NetBox's populated runtime view registry, requires exact registry identifier

@@ -71,7 +71,7 @@ These follow the standard `NetBoxModelViewSet` + `NetBoxRouter` pattern:
 | `ProxmoxSdnRouteMapViewSet` | `sdn-route-maps/` | Full CRUD |
 | `ProxmoxSdnPrefixListViewSet` | `sdn-prefix-lists/` | Full CRUD |
 | `ProxmoxDatacenterCpuModelViewSet` | `datacenter-cpu-models/` | Full CRUD |
-| `ProxmoxMetricsInfluxDBViewSet` | `metrics-influxdb/` | Full CRUD; stores InfluxDB token references only (`nms-secret:<uuid>`) |
+| `ProxmoxMetricsInfluxDBViewSet` | `metrics-influxdb/` | Full CRUD; stores InfluxDB token references only (`nms-secret:<uuid>`) and masks non-conforming stored token/URL values on output |
 | `PDMRemoteViewSet` | `pdm-remotes/` | Full CRUD; FK to PDMEndpoint |
 | `DeletionRequestViewSet` | `deletion-requests/` | **GET/HEAD/OPTIONS only** — write paths go through UI approval workflow |
 | `ProxmoxApplyJobViewSet` | `apply-jobs/` | **GET/HEAD/OPTIONS only** — jobs created by intent branch-merge workflow |

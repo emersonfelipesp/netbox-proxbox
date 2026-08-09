@@ -6,7 +6,7 @@ import re
 from urllib.parse import urlsplit
 
 from django.core.exceptions import ValidationError
-from django.core.validators import RegexValidator
+from django.core.validators import RegexValidator, URLValidator
 from django.db import models
 from django.urls import NoReverseMatch, reverse
 from django.utils.translation import gettext_lazy as _
@@ -23,6 +23,13 @@ NMS_SECRET_REF_RE = (
 #: renders as NetBox's "not set" placeholder, which would read as *no token
 #: configured* rather than *a value is stored and is being withheld*.
 MASKED_SECRET_REF = "********"
+
+#: Rendered in place of an InfluxDB URL that is not a valid HTTP(S) base URL.
+#: Reuse the secret-reference placeholder because a malformed legacy URL may
+#: contain a credential in userinfo, a query string, or a fragment.
+MASKED_INFLUX_URL = MASKED_SECRET_REF
+
+_INFLUX_URL_VALIDATOR = URLValidator(schemes=("http", "https"))
 
 
 def masked_secret_ref(value: str | None) -> str:
@@ -46,6 +53,25 @@ def masked_secret_ref(value: str | None) -> str:
     if re.fullmatch(NMS_SECRET_REF_RE, value):
         return value
     return MASKED_SECRET_REF
+
+
+def masked_influx_url(value: str | None) -> str:
+    """Return only a valid credential-free HTTP(S) InfluxDB base URL.
+
+    Invalid, blank, or otherwise non-conforming stored values are masked so a
+    row written around model validation cannot disclose embedded credentials
+    through a UI or API representation.
+    """
+    if not isinstance(value, str) or not value:
+        return MASKED_INFLUX_URL
+    try:
+        _INFLUX_URL_VALIDATOR(value)
+        parsed_url = urlsplit(value)
+    except (ValidationError, ValueError):
+        return MASKED_INFLUX_URL
+    if "@" in parsed_url.netloc or parsed_url.query or parsed_url.fragment:
+        return MASKED_INFLUX_URL
+    return value
 
 
 class ProxmoxMetricsInfluxDB(NetBoxModel):
@@ -151,6 +177,11 @@ class ProxmoxMetricsInfluxDB(NetBoxModel):
 
     def __str__(self) -> str:
         return f"{self.name} -> {self.proxmox_cluster}"
+
+    @property
+    def influx_url_display(self) -> str:
+        """Fail-closed rendering value for :attr:`influx_url`."""
+        return masked_influx_url(self.influx_url)
 
     @property
     def query_token_secret_ref_display(self) -> str:

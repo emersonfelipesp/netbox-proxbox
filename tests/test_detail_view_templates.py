@@ -121,13 +121,15 @@ def test_node_ssh_credential_detail_template_never_references_secrets() -> None:
         assert forbidden_name not in template
 
 
-def test_metrics_detail_template_uses_only_fail_closed_token_displays() -> None:
+def test_metrics_detail_template_uses_only_fail_closed_displays() -> None:
     template = (
         TEMPLATES_ROOT / "netbox_proxbox" / "proxmoxmetricsinfluxdb.html"
     ).read_text()
     object_attributes = set(re.findall(r"\bobject\.([A-Za-z_]\w*)", template))
 
+    assert "influx_url_display" in object_attributes
     assert "query_token_secret_ref_display" in object_attributes
     assert "writer_token_secret_ref_display" in object_attributes
+    assert "influx_url" not in object_attributes
     assert "query_token_secret_ref" not in object_attributes
     assert "writer_token_secret_ref" not in object_attributes

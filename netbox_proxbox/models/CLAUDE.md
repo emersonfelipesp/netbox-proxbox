@@ -52,7 +52,9 @@ This directory defines the plugin's persisted data model.
   flag, enabled state, and query/writer token secret references for a Proxmox
   cluster. Token fields are `nms-secret:<uuid>` references to netbox-nms
   `ObservabilitySecret` objects, never plaintext credentials or encrypted token
-  blobs in this plugin.
+  blobs in this plugin. Its UI/API display properties return only exact secret
+  references and credential-free HTTP(S) URLs; malformed legacy values are
+  masked instead of rendered.
 - `ProxmoxStorage`: stores Proxmox storage inventory synchronized from the backend.
 - `ProxmoxStorageVirtualDisk`: links storage rows to virtual disks.
 - `GuestVMInterface`: stores guest-agent OS interface names (for example `ens18`) for a NetBox `VirtualMachine`, mapped **one-to-one** (`OneToOneField`, `SET_NULL`) to the canonical core `VMInterface` (for example `net0`) by MAC. `SET_NULL` (not `CASCADE`) so deleting/recreating the core interface during churn preserves the guest OS inventory row and only clears the link; `vm_interface` is nullable for agent-only interfaces with no matching Proxmox NIC.
