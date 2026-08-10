@@ -241,6 +241,81 @@ def _effective_lower_bound(specifier: SpecifierSet) -> Version | None:
     return max(bounds) if bounds else None
 
 
+def _supported_python_versions() -> tuple[str, ...]:
+    """Python versions to evaluate markers against, from ``requires-python``.
+
+    Derived rather than hardcoded so the matrix cannot drift out of step with
+    the project's own floor: if ``requires-python`` were ever lowered, a
+    hardcoded list would stop testing the newly supported interpreters and a
+    marker that is inert on them would pass unnoticed.
+
+    Three minor versions past the floor are included so a marker that holds only
+    on today's interpreters -- and would silently lapse on the next one -- is
+    still caught.
+    """
+    data = _load_pyproject()
+    raw = data.get("project", {}).get("requires-python")
+    if not isinstance(raw, str) or not raw.strip():
+        pytest.fail(
+            "pyproject.toml declares no requires-python, so the set of "
+            "supported interpreters cannot be derived and markers cannot be "
+            "checked against it."
+        )
+    lower = _effective_lower_bound(SpecifierSet(raw))
+    if lower is None:
+        pytest.fail(f"requires-python {raw!r} establishes no lower bound")
+    major, minor = lower.release[0], (lower.release[1] if len(lower.release) > 1 else 0)
+    return tuple(f"{major}.{minor + offset}" for offset in range(4))
+
+
+# Environments a declaration must hold in to count as a floor: every supported
+# interpreter crossed with the platform axes a marker can legally branch on.
+def _supported_environments() -> tuple[dict[str, str], ...]:
+    return tuple(
+        {
+            "python_version": py,
+            "python_full_version": f"{py}.0",
+            "implementation_name": "cpython",
+            "implementation_version": f"{py}.0",
+            "sys_platform": sys_platform,
+            "os_name": "nt" if sys_platform == "win32" else "posix",
+            "platform_system": {
+                "linux": "Linux",
+                "darwin": "Darwin",
+                "win32": "Windows",
+            }[sys_platform],
+            "platform_machine": machine,
+        }
+        for py in _supported_python_versions()
+        for sys_platform in ("linux", "darwin", "win32")
+        for machine in ("x86_64", "aarch64")
+    )
+
+
+def _inactive_environment(requirement: Requirement) -> dict[str, str] | None:
+    """Return a supported environment where this declaration does not apply.
+
+    A requirement carrying an environment marker only constrains the
+    environments its marker selects. A marker that is false somewhere -- or
+    everywhere, as in ``pymdown-extensions>=11.0.1; python_version < "3"`` --
+    leaves the floor inert there, and whatever a transitive dependency asks for
+    governs instead. So a marker is acceptable only when it holds across every
+    supported environment; otherwise this returns the first counterexample.
+    """
+    marker = requirement.marker
+    if marker is None:
+        return None
+
+    for environment in _supported_environments():
+        try:
+            active = marker.evaluate(environment)
+        except Exception:  # noqa: BLE001 - an unevaluable marker must fail
+            return environment
+        if not active:
+            return environment
+    return None
+
+
 def _requirement_from(specs: list[str], package: str, origin: str) -> Requirement:
     """Return the single requirement for ``package``, failing closed."""
     matches = []
@@ -287,6 +362,17 @@ def test_declared_floor_establishes_a_safe_lower_bound(
     floor = SECURITY_FLOORS[package]
     required = Version(floor.floor)
     requirement = _requirement_from(_SPEC_SOURCES[location](), package, location)
+
+    # A declaration guarded by a marker that is false somewhere is not a floor
+    # there, so check that before believing the specifier.
+    inactive = _inactive_environment(requirement)
+    assert inactive is None, (
+        f"{location}: {requirement} carries an environment marker that is not "
+        f"active for {floor.name} on Python {inactive['python_version']} / "  # type: ignore[index]
+        f"{inactive['sys_platform']} / {inactive['platform_machine']}, so the "  # type: ignore[index]
+        f"floor is inert there and whatever a transitive dependency asks for "
+        f"governs instead. Declare the floor unconditionally."
+    )
 
     lower = _effective_lower_bound(requirement.specifier)
     assert lower is not None, (
@@ -397,6 +483,41 @@ def test_effective_lower_bound_reads_specifiers_correctly(
     """
     bound = _effective_lower_bound(SpecifierSet(specifier))
     assert bound == (None if expected is None else Version(expected))
+
+
+@pytest.mark.parametrize(
+    ("requirement", "always_active"),
+    [
+        # No marker at all: unconditionally active.
+        ("aiohttp>=3.14.3", True),
+        # True across every supported environment, so still a real floor. These
+        # are deliberately true for *any* plausible matrix rather than only for
+        # today's requires-python, so this table tests the predicate and does not
+        # quietly become a second assertion about the project's Python floor.
+        ('aiohttp>=3.14.3; python_version >= "3"', True),
+        ('aiohttp>=3.14.3; implementation_name == "cpython"', True),
+        # The reproduced bypass: never true on any supported interpreter.
+        ('pymdown-extensions>=11.0.1; python_version < "3"', False),
+        # Subtler: true today but false on a supported future interpreter, so
+        # the floor would silently lapse.
+        ('aiohttp>=3.14.3; python_version < "3.14"', False),
+        # Platform-conditional floors are inert on the other platforms.
+        ('aiohttp>=3.14.3; sys_platform == "linux"', False),
+        ('aiohttp>=3.14.3; platform_machine == "x86_64"', False),
+        ('aiohttp>=3.14.3; os_name == "posix"', False),
+    ],
+)
+def test_inactive_environment_markers_are_detected(
+    requirement: str, always_active: bool
+) -> None:
+    """A floor only counts where its marker applies.
+
+    Regression test for a guard fail-open: ``_requirement_from()`` used to
+    accept a matching declaration without evaluating its marker, so an inert
+    ``; python_version < "3"`` floor passed both assertions while the weaker
+    transitive requirement actually governed.
+    """
+    assert (_inactive_environment(Requirement(requirement)) is None) is always_active
 
 
 def test_exclusion_only_specifier_is_rejected_even_though_it_dodges_the_samples() -> (
