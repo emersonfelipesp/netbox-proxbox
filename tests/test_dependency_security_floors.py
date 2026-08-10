@@ -26,6 +26,7 @@ Design notes, deliberate:
 
 from __future__ import annotations
 
+import re
 import tomllib
 from pathlib import Path
 
@@ -94,6 +95,17 @@ def _load_pyproject() -> dict:
         pytest.fail(f"pyproject.toml is not valid TOML: {exc}")
 
 
+def _canonical(name: str) -> str:
+    """Normalise a distribution name per PEP 503.
+
+    Every comparison in this module goes through here. ``aiohttp`` is spelled
+    the same either way, but a future entry such as ``pymdown-extensions`` can
+    legitimately appear as ``pymdown_extensions``, and two call sites that
+    normalise differently would silently stop matching.
+    """
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
 def _requirement_from(specs: list[str], package: str, origin: str) -> Requirement:
     """Return the single requirement for ``package``, failing closed."""
     matches = []
@@ -102,7 +114,7 @@ def _requirement_from(specs: list[str], package: str, origin: str) -> Requiremen
             requirement = Requirement(raw)
         except Exception as exc:  # noqa: BLE001 - any parse failure must fail
             pytest.fail(f"{origin}: cannot parse requirement {raw!r}: {exc}")
-        if requirement.name.lower().replace("_", "-") == package:
+        if _canonical(requirement.name) == _canonical(package):
             matches.append(requirement)
 
     if not matches:
@@ -131,15 +143,41 @@ def _cli_extra_specs() -> list[str]:
     return specs
 
 
+# pip requirement-file directives that pull in requirements this parser cannot
+# see. If one appears, the guard can no longer prove anything about the full
+# install set, so it must fail rather than report success on the subset it can
+# read -- a vulnerable pin could live in the included file.
+_OPAQUE_INCLUDE_PREFIXES = ("-r", "-c", "--requirement", "--constraint")
+
+
 def _docs_specs() -> list[str]:
     if not REQUIREMENTS_DOCS.is_file():
         pytest.fail(f"requirements-docs.txt is missing at {REQUIREMENTS_DOCS}")
+
+    raw_text = REQUIREMENTS_DOCS.read_text(encoding="utf-8")
+    # Join backslash continuations so a requirement split across lines is not
+    # read as two unparseable fragments.
+    raw_text = raw_text.replace("\\\n", " ")
+
     specs = []
-    for line in REQUIREMENTS_DOCS.read_text(encoding="utf-8").splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith(("#", "-")):
+    for line in raw_text.splitlines():
+        stripped = line.split("#", 1)[0].strip()
+        if not stripped:
+            continue
+        if stripped.startswith(_OPAQUE_INCLUDE_PREFIXES):
+            pytest.fail(
+                f"requirements-docs.txt now uses an include directive "
+                f"({stripped!r}). This guard only reads requirements declared "
+                f"directly in the file, so it can no longer prove the full "
+                f"install set is safe. Extend it to resolve includes before "
+                f"adding one."
+            )
+        if stripped.startswith("-"):
+            # Another option line (e.g. --index-url). It declares no
+            # requirement, so it is genuinely irrelevant to a floor check.
             continue
         specs.append(stripped)
+
     if not specs:
         pytest.fail("requirements-docs.txt contains no requirements to check")
     return specs
@@ -183,7 +221,9 @@ def test_requirements_docs_refuses_affected_versions(package: str) -> None:
     """
     floor = SECURITY_FLOORS[package]
     specs = _docs_specs()
-    if not any(Requirement(raw).name.lower() == floor.name for raw in specs):
+    if not any(
+        _canonical(Requirement(raw).name) == _canonical(floor.name) for raw in specs
+    ):
         # Legitimately absent: this manifest simply does not install the package.
         # That is a property that does not apply, so skipping is correct here --
         # unlike an inability to parse, which fails above.
@@ -192,37 +232,25 @@ def test_requirements_docs_refuses_affected_versions(package: str) -> None:
     _assert_floor(requirement, floor, "requirements-docs.txt")
 
 
-@pytest.mark.parametrize("package", sorted(SECURITY_FLOORS))
-def test_cli_extra_and_docs_floors_agree(package: str) -> None:
-    """The two manifests must not drift apart on a security floor.
-
-    They previously disagreed (``>=3.14.1`` in the extra versus ``>=3.12.15`` in
-    the docs requirements), which is how the stale docs floor survived a bump of
-    the extra.
-    """
-    floor = SECURITY_FLOORS[package]
-    docs_specs = _docs_specs()
-    if not any(Requirement(raw).name.lower() == floor.name for raw in docs_specs):
-        pytest.skip(f"requirements-docs.txt does not install {floor.name}")
-
-    cli_requirement = _requirement_from(
-        _cli_extra_specs(),
-        package,
-        "pyproject.toml [project.optional-dependencies].cli",
-    )
-    docs_requirement = _requirement_from(docs_specs, package, "requirements-docs.txt")
-
-    assert str(cli_requirement.specifier) == str(docs_requirement.specifier), (
-        f"{floor.name} floor drifted: 'cli' extra says "
-        f"{cli_requirement.specifier} but requirements-docs.txt says "
-        f"{docs_requirement.specifier}."
-    )
+# There is deliberately no "the two manifests declare identical specifiers"
+# test. The historical drift (``>=3.14.1`` in the extra versus ``>=3.12.15`` in
+# the docs requirements) is already caught, and caught better, by checking each
+# manifest independently against the same fixed matrix above: raising
+# :data:`SECURITY_FLOORS` fails *both* manifest tests until *both* files are
+# bumped, and it catches an unsafe floor in either file whether or not they
+# happen to match.
+#
+# A string comparison would additionally reject safe, legitimate differences --
+# ``aiohttp==3.14.3`` or ``aiohttp~=3.14.3`` in one file against ``>=3.14.3`` in
+# the other -- so it would fail CI on a manifest that is not vulnerable. A guard
+# that fires on safe input creates pressure to weaken it, which is how guards
+# get deleted.
 
 
 def test_locked_versions_satisfy_the_declared_floors() -> None:
     """``uv.lock`` must resolve to a version the declared floor accepts.
 
-    Catches the inverse mistake of the one above: raising a floor while leaving
+    Catches the inverse mistake: raising a declared floor while leaving
     the lock pinned below it, which makes ``uv sync --locked`` inconsistent.
     """
     lock_path = ROOT / "uv.lock"
