@@ -155,4 +155,10 @@ dev = [
     "mkdocs-material>=9.7.6",
     "mkdocstrings>=1.0.3",
     "mkdocstrings-python>=2.0.3",
+    # Security floor: 11.0.1 is the first release fixing the backtracking ReDoS
+    # in the inline processors (GHSA-gm37-52c6-37mw) and the b64 path traversal
+    # (GHSA-9xwg-3r6f-jcx2). Otherwise transitive, and mkdocs-material asks only
+    # for >=10.2, which admits both ranges.
+    # tests/test_dependency_security_floors.py enforces this.
+    "pymdown-extensions>=11.0.1",
 ]

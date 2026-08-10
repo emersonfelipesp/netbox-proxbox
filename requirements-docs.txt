@@ -8,6 +8,11 @@ mkdocs-material>=9.7.6
 mkdocs-material-extensions>=1.3.1
 mkdocstrings>=1.0.3
 mkdocstrings-python>=2.0.3
+# Transitive via mkdocs-material/mkdocstrings, but both ask only for a floor
+# that still admits GHSA-gm37-52c6-37mw (<=11.0.0) and GHSA-9xwg-3r6f-jcx2
+# (<=10.21.3). This file is installed with a plain `pip install -r`, which reads
+# no lockfile, so the floor has to be declared here.
+pymdown-extensions>=11.0.1
 ghp-import>=2.1.0
 pydantic>=2.11.7
 PyYAML>=6.0.3
