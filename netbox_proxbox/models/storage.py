@@ -46,7 +46,11 @@ class ProxmoxStorage(NetBoxModel):
     storage_type = models.CharField(max_length=100, null=True, blank=True)
     content = models.CharField(max_length=255, null=True, blank=True)
     path = models.CharField(max_length=255, null=True, blank=True)
-    nodes = models.CharField(max_length=255, null=True, blank=True)
+    nodes = models.TextField(
+        null=True,
+        blank=True,
+        help_text="Comma-separated Proxmox node membership without a length limit.",
+    )
     shared = models.BooleanField(default=False)
     enabled = models.BooleanField(default=True)
 

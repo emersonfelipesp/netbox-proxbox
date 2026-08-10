@@ -1,0 +1,81 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "SDN Fabric" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Proxmox Endpoint" %}</th>
+            <td>{{ object.endpoint|linkify|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Cluster" %}</th>
+            <td>{{ object.cluster_name }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Fabric" %}</th>
+            <td>{{ object.fabric_name }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Type" %}</th>
+            <td>{{ object.get_fabric_type_display }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Status" %}</th>
+            <td>{{ object.get_status_display }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Routing" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "ASN" %}</th>
+            <td>{{ object.asn|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Advertise Subnets" %}</th>
+            <td>{{ object.advertise_subnets|yesno:"Yes,No" }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Disable ARP/ND Suppression" %}</th>
+            <td>{{ object.disable_arp_nd_suppression|yesno:"Yes,No" }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "VRF VXLAN ID" %}</th>
+            <td>{{ object.vrf_vxlan|placeholder }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Peers" %}</h5>
+      <div class="card-body">
+        <pre class="mb-0"><code>{{ object.peers }}</code></pre>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Raw Configuration" %}</h5>
+      <div class="card-body">
+        <pre class="mb-0"><code>{{ object.raw_config }}</code></pre>
+      </div>
+    </div>
+
+    {% include 'inc/panels/tags.html' %}
+    {% include 'inc/panels/custom_fields.html' %}
+    {% include 'inc/panels/comments.html' %}
+  </div>
+</div>
+{% endblock %}

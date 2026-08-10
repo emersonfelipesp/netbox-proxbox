@@ -9,7 +9,7 @@ from ipam.models import IPAddress, VLAN
 from netbox.filtersets import NetBoxModelFilterSet
 from tenancy.models import Tenant
 from utilities.filtersets import register_filterset
-from utilities.filters import MultiValueNumberFilter
+from utilities.filters import MultiValueCharFilter, MultiValueNumberFilter
 from virtualization.models import (
     Cluster,
     ClusterGroup,
@@ -624,6 +624,8 @@ class ProxmoxVMCloudInitFilterSet(ProxboxModelFilterSet):
 @register_filterset
 class ProxmoxStorageFilterSet(ProxboxModelFilterSet):
     """Filter Proxmox storage rows synced by the plugin."""
+
+    nodes = MultiValueCharFilter()
 
     class Meta:
         model = ProxmoxStorage
@@ -1400,12 +1402,11 @@ class ProxmoxMetricsInfluxDBFilterSet(ProxboxModelFilterSet):
         fields = ("id", "endpoint", "proxmox_cluster", "enabled", "name")
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
-        """Match metrics endpoint name, InfluxDB URL, organization, or bucket."""
+        """Match non-sensitive metrics endpoint metadata."""
         if not value.strip():
             return queryset
         return queryset.filter(
             Q(name__icontains=value)
-            | Q(influx_url__icontains=value)
             | Q(org__icontains=value)
             | Q(bucket__icontains=value)
         )

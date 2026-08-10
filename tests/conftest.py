@@ -271,6 +271,11 @@ def load_plugin_module(
     django_urls = types.ModuleType("django.urls")
     django_urls.reverse = lambda *args, **kwargs: "/dummy/"
 
+    class NoReverseMatch(Exception):
+        pass
+
+    django_urls.NoReverseMatch = NoReverseMatch
+
     django_contrib = types.ModuleType("django.contrib")
     django_messages = MessagesStub()
     django_contrib.messages = django_messages
@@ -397,6 +402,20 @@ def load_plugin_module(
 
         return decorator
 
+    def get_viewname(model, action=None, rest_api=False):
+        # Mirrors NetBox semantics: plugin models reverse under
+        # ``plugins:<app_label>:``, core models under ``<app_label>:``.
+        meta = getattr(model, "_meta", None)
+        app_label = getattr(meta, "app_label", "netbox_proxbox")
+        model_name = getattr(meta, "model_name", "stub")
+        viewname = f"{app_label}:{model_name}"
+        if app_label == "netbox_proxbox":
+            viewname = f"plugins:{viewname}"
+        if action:
+            viewname = f"{viewname}_{action}"
+        return viewname
+
+    utilities_views.get_viewname = get_viewname
     utilities_views.ConditionalLoginRequiredMixin = ConditionalLoginRequiredMixin
     utilities_views.TokenConditionalLoginRequiredMixin = (
         TokenConditionalLoginRequiredMixin
@@ -460,6 +479,7 @@ def load_plugin_module(
     models_module.Replication = _make_model_class("Replication")
     models_module.VMBackup = _make_model_class("VMBackup")
     models_module.VMSnapshot = _make_model_class("VMSnapshot")
+    models_module.VMTaskHistory = _make_model_class("VMTaskHistory")
 
     if proxbox_settings is None:
         proxbox_settings = SimpleNamespace(

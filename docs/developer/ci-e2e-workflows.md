@@ -9,7 +9,7 @@ the staged TestPyPI/PyPI release pipeline.
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `.github/workflows/ci.yml` | Push and pull request | Runs lint, type checks, compile checks, and the mocked pytest suite. NetBox-dependent Django tests skip here. |
-| `.github/workflows/django-tests.yml` | Push and pull request | Provisions a real NetBox source tree (matrixed over the supported 4.5.x and 4.6.x lines) plus PostgreSQL and Redis, installs the plugin `test` extra (`pytest-django` included), and runs the NetBox-backed Django TestCase suite for sync-state and endpoint auto-configuration. It hard-fails a missing harness and enforces at least 85% branch coverage for `services.endpoint_autoconfiguration`. |
+| `.github/workflows/django-tests.yml` | Push, tag, and pull request | Provisions a real NetBox source tree (matrixed over the supported 4.5.x and 4.6.x lines) plus PostgreSQL and Redis, installs the plugin `test` extra (`pytest-django` included), and runs the NetBox-backed Django TestCase suite for sync-state and endpoint auto-configuration. A fifth 4.6.x cell installs a pinned supported `netbox-pdm` checkout and enables it so the optional registry override is exercised. It hard-fails a missing harness and enforces at least 85% branch coverage for `services.endpoint_autoconfiguration`. |
 | `.github/workflows/e2e-docker.yml` | Manual, scheduled, reusable workflow call | Builds a real NetBox stack with the plugin, rqworker, `proxbox-api`, PostgreSQL, Redis, and a mocked Proxmox API. |
 | `.github/workflows/publish-testpypi.yml` | `v*rc*` tag push (TestPyPI), GitHub release published (PyPI), manual dispatch | Publishes immutable package versions through TestPyPI, PyPI release candidates, final PyPI releases, and post-release fixes. Official PyPI releases are cut from `develop` via `gh release create`; plain non-rc tag pushes do not trigger publishing. |
 | `.github/workflows/docs.yml` | Docs changes on main / PR | Builds and publishes the MkDocs site. |
@@ -21,6 +21,10 @@ the staged TestPyPI/PyPI release pipeline.
 `django-tests.yml` relies on the hardcoded `matrix.netbox` allowlist for the
 NetBox checkout ref. Do not replace that with event input or any other untrusted
 value.
+
+The optional PDM cell pins a
+revision that already registers its own `PDMEndpointView`, proves that identity,
+then proves the Proxbox detail override replaces and renders it.
 
 The job sets `DJANGO_SETTINGS_MODULE=netbox.settings` and
 `NETBOX_CONFIGURATION=tests.netbox_test_configuration`, then runs pytest with

@@ -465,23 +465,43 @@ def _resolve_vm_node(vm: VirtualMachine) -> str:
     return str(node or "")
 
 
-def _resolve_vm_type(vm: VirtualMachine) -> str:
+def _resolve_known_vm_type(vm: VirtualMachine) -> str:
+    """Derive a backend-supported VM type without guessing a default."""
+    sync_state = getattr(vm, "proxbox_sync_state", None)
+    typed_type = str(getattr(sync_state, "proxmox_vm_type", None) or "").strip().lower()
+    if typed_type in {"qemu", "lxc"}:
+        return typed_type
+
     vm_type_obj = getattr(vm, "virtual_machine_type", None)
     if vm_type_obj and hasattr(vm_type_obj, "slug"):
-        slug = str(vm_type_obj.slug)
+        slug = str(vm_type_obj.slug).strip().lower()
         if "lxc" in slug:
             return "lxc"
         if "qemu" in slug:
             return "qemu"
     custom_field_data = getattr(vm, "custom_field_data", None) or {}
-    return str(
-        custom_field_data.get("proxmox_vm_type")
-        or custom_field_data.get("cf_proxmox_vm_type")
-        or "qemu"
+    legacy_type = (
+        str(
+            custom_field_data.get("proxmox_vm_type")
+            or custom_field_data.get("cf_proxmox_vm_type")
+            or ""
+        )
+        .strip()
+        .lower()
     )
+    return legacy_type if legacy_type in {"qemu", "lxc"} else ""
+
+
+def _resolve_vm_type(vm: VirtualMachine) -> str:
+    return _resolve_known_vm_type(vm) or "qemu"
 
 
 def _resolve_vm_vmid(vm: VirtualMachine) -> str:
+    sync_state = getattr(vm, "proxbox_sync_state", None)
+    typed_vmid = getattr(sync_state, "proxmox_vm_id", None)
+    if typed_vmid:
+        return str(typed_vmid)
+
     custom_field_data = getattr(vm, "custom_field_data", None) or {}
     vmid = custom_field_data.get("proxmox_vm_id") or custom_field_data.get(
         "cf_proxmox_vm_id"
@@ -562,11 +582,16 @@ def _resolve_vm_snapshot_batch_params(snapshot: VMSnapshot) -> dict[str, object]
 
     cluster_name = _resolve_vm_cluster_name(vm_obj)
     node = str(getattr(snapshot, "node", None) or _resolve_vm_node(vm_obj) or "")
-    vm_type = _resolve_vm_type(vm_obj)
+    snapshot_subtype = str(getattr(snapshot, "subtype", None) or "").strip().lower()
+    vm_type = (
+        snapshot_subtype
+        if snapshot_subtype in {"qemu", "lxc"}
+        else _resolve_known_vm_type(vm_obj)
+    )
     vmid = str(getattr(snapshot, "vmid", None) or _resolve_vm_vmid(vm_obj) or "")
     snapshot_name = str(getattr(snapshot, "name", None) or "")
 
-    if not cluster_name or not node or not vmid or not snapshot_name:
+    if not cluster_name or not node or not vm_type or not vmid or not snapshot_name:
         return {"error": "Missing snapshot sync context.", "status": 422}
 
     query_params: dict[str, object] = {
@@ -609,19 +634,34 @@ def _resolve_task_history_batch_params(
         return {"error": "Missing task-history sync context.", "status": 422}
 
     node = str(getattr(task_history, "node", None) or _resolve_vm_node(vm_obj) or "")
-    vm_type = str(
-        getattr(task_history, "vm_type", None) or _resolve_vm_type(vm_obj) or "qemu"
+    stored_vm_type = str(getattr(task_history, "vm_type", None) or "").strip().lower()
+    vm_type = (
+        stored_vm_type
+        if stored_vm_type in {"qemu", "lxc"}
+        else _resolve_known_vm_type(vm_obj)
     )
-    vmid = str(getattr(task_history, "vmid", None) or _resolve_vm_vmid(vm_obj) or "")
+    vmid = _resolve_vm_vmid(vm_obj)
     upid = str(getattr(task_history, "upid", None) or "")
     cluster_name = _resolve_vm_cluster_name(vm_obj)
+
+    if not vm_type:
+        task_context = upid or str(getattr(task_history, "pk", None) or "unknown")
+        stored_context = repr(getattr(task_history, "vm_type", None))
+        return {
+            "error": (
+                f"Task history '{task_context}' has unsupported stored VM type "
+                f"{stored_context}; expected qemu or lxc, and no valid type could "
+                "be derived from its linked virtual machine."
+            ),
+            "status": 422,
+        }
 
     if not node or not vmid:
         return {"error": "Missing task-history sync context.", "status": 422}
 
     query_params: dict[str, object] = {
         "node": node,
-        "vm_type": vm_type,
+        "type": vm_type,
         "vmid": vmid,
     }
     if upid:

@@ -180,7 +180,6 @@ def test_vm_sync_now_view_fails_fast_without_cluster(monkeypatch):
     monkeypatch.setitem(
         sys.modules, "netbox_proxbox.services.individual_sync", service_stub
     )
-
     module = load_plugin_module(
         "netbox_proxbox.views.sync_now.vm",
         monkeypatch=monkeypatch,
@@ -226,6 +225,19 @@ def test_storage_sync_now_view_fails_fast_without_cluster(monkeypatch):
     )
     monkeypatch.setitem(
         sys.modules, "netbox_proxbox.services.individual_sync", service_stub
+    )
+    endpoint_scope_stub = types.ModuleType(
+        "netbox_proxbox.views.sync_now.endpoint_scope"
+    )
+    endpoint_scope_stub.resolve_target_proxmox_endpoint_scope = lambda *args, **kwargs: (
+        None,
+        None,
+        "unresolved",
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.views.sync_now.endpoint_scope",
+        endpoint_scope_stub,
     )
 
     module = load_plugin_module(

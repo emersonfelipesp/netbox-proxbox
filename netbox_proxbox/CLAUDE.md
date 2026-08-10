@@ -536,7 +536,7 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 - [`sync_ownership.py`](./sync_ownership.py): helpers that claim and release RQ job ownership to prevent concurrent duplicate runs.
 - [`schedule_hints.py`](./schedule_hints.py): quick-schedule heuristics and UI defaults for the home dashboard.
 - [`github.py`](./github.py): fetches markdown content from GitHub for the contributing page.
-- [`template_content.py`](./template_content.py): plugin template extensions for Job and VirtualMachine buttons/panels. `ProxboxJobTemplateExtension.buttons()` also renders a **Bug report** button on core Job detail pages for Proxbox sync jobs that ended in an error/unknown state (see `bug_report.py`).
+- [`template_content.py`](./template_content.py): plugin template extensions for Job, VirtualMachine, and reflected-resource buttons/panels. Sync Now buttons resolve the target model's registered `proxbox_sync_now` action with NetBox `get_viewname()` plus Django `reverse()`; core Cluster/Device pages target their linked plugin tracking row, while plugin storage/backup/snapshot/task rows and core VMs target themselves. `ProxboxJobTemplateExtension.buttons()` also renders a **Bug report** button on core Job detail pages for Proxbox sync jobs that ended in an error/unknown state (see `bug_report.py`).
 - [`bug_report.py`](./bug_report.py): pure, read-only helper that assembles the failed-job **Bug report** modal context — plugin/NetBox versions, job metadata, formatted `log_entries`, a copy-to-clipboard `report_text`, and a prefilled netbox-proxbox GitHub *new issue* URL. Gated by `is_reportable_status(status)` (errored/failed or any unknown status).
 - [`type_defs.py`](./type_defs.py): shared type aliases and lightweight protocol helpers used across the package.
 - [`utils.py`](./utils.py): URL and host helpers, especially for the FastAPI backend and mkcert-aware local TLS handling.
@@ -712,9 +712,9 @@ lease duration on the operation run.
 
 Plugin-at-rest key recovery is owned by
 `services/encryption_recovery.py`, the settings forms/views, and the
-`encrypted_secret_reset_permission` migration (temporarily numbered 0079 until
-the #295/#297 sibling migrations land and the branch is renumbered against the
-new leaf). Its central registry is
+`0081_encrypted_secret_reset_permission` migration (developed in parallel with
+the #295/#297 sibling migrations as a colliding 0079 and renumbered to 0081 at
+merge time). Its central registry is
 exhaustive across all plugin `*_enc` model fields and conditionally includes
 netbox-pbs `PBSPluginSettings.proxbox_api_key_enc` when that Django app is
 installed. Only genuine app absence is skipped; installed-but-unresolved

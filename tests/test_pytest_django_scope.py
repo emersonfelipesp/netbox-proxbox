@@ -103,6 +103,14 @@ def test_real_django_workflow_enforces_autoconfiguration_branch_coverage():
     assert "--cov-fail-under=85" in workflow
 
 
+def test_real_django_workflow_runs_pdm_object_permission_regression():
+    """The PDM queryset restriction needs a PDM-enabled real-Django gate."""
+    workflow = DJANGO_WORKFLOW.read_text()
+
+    assert "tests/test_pdm_endpoint_permissions_django.py" in workflow
+    assert "pdm: true" in workflow
+
+
 def test_endpoint_autoconfiguration_traceability_is_published():
     """The security state machine and evidence must stay in the docs surface."""
     document = TRACEABILITY_DOC.read_text()

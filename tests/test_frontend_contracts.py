@@ -205,7 +205,11 @@ def test_vm_detail_sync_now_button_contract():
 
     assert "virtualization.virtualmachine" in extension_contents
     assert "vm_sync_now_button.html" in extension_contents
-    assert "proxbox-sync-now/" in extension_contents
+    # Issue #294: the action URL must come from the registered route via
+    # get_viewname + reverse, never from get_absolute_url() concatenation.
+    assert "_sync_now_action_url" in extension_contents
+    assert 'get_viewname(target, "proxbox_sync_now")' in extension_contents
+    assert "proxbox-sync-now/" not in extension_contents
     assert 'method="post"' in button_contents
     assert "{% csrf_token %}" in button_contents
     assert "Sync Now" in button_contents

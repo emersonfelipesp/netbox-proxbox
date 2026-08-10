@@ -12,10 +12,12 @@ rendered
 Sync-Now template extension calls ``get_absolute_url()`` on every core Cluster
 (and Device) detail page, which is what surfaced the crash to the reporter.
 
-These are pure source contracts -- the plugin test suite runs against a stubbed
-Django, so the URLconf cannot be resolved for real here. They parse ``urls.py``
-and the model modules and assert the two sets agree, which is enough to catch
-the whole class of defect (a model reversing a name nobody mounted).
+The Sync Now extension now resolves the tracking row's registered action
+directly (issue #294), but that action is still mounted by the same model URL
+include. These are pure source contracts -- the plugin test suite runs against
+a stubbed Django, so the URLconf cannot be resolved for real here. They parse
+``urls.py`` and the model/view modules to catch both an unmounted model reverse
+and an action module whose registration side effect never ran.
 """
 
 from __future__ import annotations
@@ -113,7 +115,10 @@ def test_cluster_and_node_detail_routes_are_mounted(model_name):
     """Regression for #618: these two must stay mounted.
 
     They back the Sync Now button on core Cluster/Device detail pages, whose
-    action URL is built as ``f"{obj.get_absolute_url()}proxbox-sync-now/"``.
+    action URL now resolves through ``get_viewname(target, "proxbox_sync_now")``
+    + ``reverse()`` (issue #294) — the detail route must exist for the
+    ``get_model_urls`` include to mount the ``proxbox_sync_now`` action beside
+    it.
     """
     assert model_name in _mounted_url_names(), (
         f"{model_name} detail route is not mounted in urls.py; "
@@ -177,9 +182,40 @@ def test_sync_now_action_views_are_imported_so_they_register():
         ):
             imported.update(alias.name for alias in node.names)
 
-    for module in ("cluster", "node", "storage"):
+    for module in (
+        "backup",
+        "cluster",
+        "node",
+        "snapshot",
+        "storage",
+        "task_history",
+    ):
         assert module in imported, (
             f"urls.py must import netbox_proxbox.views.sync_now.{module} so its "
             "@register_model_view decorator executes; otherwise the Sync Now "
             "action for that model registers no URL"
         )
+
+
+@pytest.mark.parametrize(
+    ("module_name", "model_name"),
+    [
+        ("backup", "VMBackup"),
+        ("cluster", "ProxmoxCluster"),
+        ("node", "ProxmoxNode"),
+        ("snapshot", "VMSnapshot"),
+        ("storage", "ProxmoxStorage"),
+        ("task_history", "VMTaskHistory"),
+    ],
+)
+def test_plugin_sync_now_targets_have_registered_model_actions(
+    module_name,
+    model_name,
+):
+    """Every plugin target reversed by the button helper must own the action."""
+    source = (PLUGIN_ROOT / "views" / "sync_now" / f"{module_name}.py").read_text()
+
+    assert (
+        f'@register_model_view({model_name}, "proxbox_sync_now", '
+        'path="proxbox-sync-now")' in source
+    )

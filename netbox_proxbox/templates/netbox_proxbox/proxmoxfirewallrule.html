@@ -1,0 +1,138 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Scope" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Proxmox Endpoint" %}</th>
+            <td>{{ object.endpoint|linkify|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Zone" %}</th>
+            <td>{{ object.get_zone_display }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Proxmox Node" %}</th>
+            <td>{{ object.proxmox_node|linkify|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Virtual Machine" %}</th>
+            <td>{{ object.virtual_machine|linkify|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Security Group" %}</th>
+            <td>{{ object.security_group|linkify|placeholder }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Rule" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Position" %}</th>
+            <td>{{ object.pos }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Type" %}</th>
+            <td>{{ object.get_rule_type_display }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Action" %}</th>
+            <td>{{ object.action }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Enabled" %}</th>
+            <td>{{ object.enable|yesno:"Yes,No" }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Macro" %}</th>
+            <td>{{ object.macro|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Interface" %}</th>
+            <td>{{ object.iface|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Comment" %}</th>
+            <td>{{ object.comment|placeholder }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Match" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Source" %}</th>
+            <td>{{ object.source|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Destination" %}</th>
+            <td>{{ object.dest|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Protocol" %}</th>
+            <td>{{ object.proto|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Destination Ports" %}</th>
+            <td>{{ object.dport|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Source Ports" %}</th>
+            <td>{{ object.sport|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Log Level" %}</th>
+            <td>{{ object.get_log_display|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "ICMP Type" %}</th>
+            <td>{{ object.icmp_type|placeholder }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Sync Metadata" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Digest" %}</th>
+            <td>{{ object.digest|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Status" %}</th>
+            <td>{{ object.get_status_display }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Raw Configuration" %}</h5>
+      <div class="card-body">
+        <pre class="mb-0"><code>{{ object.raw_config }}</code></pre>
+      </div>
+    </div>
+
+    {% include 'inc/panels/tags.html' %}
+    {% include 'inc/panels/custom_fields.html' %}
+    {% include 'inc/panels/comments.html' %}
+  </div>
+</div>
+{% endblock %}

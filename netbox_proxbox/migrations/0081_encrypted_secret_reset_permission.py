@@ -3,7 +3,7 @@ from django.db import migrations
 
 class Migration(migrations.Migration):
     dependencies = [
-        ("netbox_proxbox", "0078_sync_state_last_synced_role"),
+        ("netbox_proxbox", "0080_metrics_influxdb_secret_ref_constraints"),
     ]
 
     operations = [

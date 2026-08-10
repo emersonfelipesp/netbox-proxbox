@@ -38,6 +38,23 @@ def _add_sync_now_stubs(monkeypatch, individual_sync_response=None):
         branch_lifecycle_mod,
     )
 
+    endpoint_scope_mod = types.ModuleType(
+        "netbox_proxbox.views.sync_now.endpoint_scope"
+    )
+    endpoint_scope_mod.resolve_target_proxmox_endpoint_scope = lambda *args, **kwargs: (
+        {
+            "fastapi_endpoint_id": 7,
+            "proxmox_endpoint_ids": "71",
+        },
+        "pve-cluster",
+        None,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.views.sync_now.endpoint_scope",
+        endpoint_scope_mod,
+    )
+
     sync_now_pkg = types.ModuleType("netbox_proxbox.views.sync_now")
     sync_now_pkg.__path__ = []
 
@@ -77,6 +94,11 @@ def test_cluster_sync_now_redirects_to_cluster_url(monkeypatch):
     assert response.url == "/plugins/proxbox/clusters/7/"
     assert captured["endpoint"] == "sync/individual/cluster"
     assert captured["params"]["cluster_name"] == "pve-cluster"
+    assert captured["kwargs"] == {
+        "netbox_branch_schema_id": None,
+        "fastapi_endpoint_id": 7,
+        "proxmox_endpoint_ids": "71",
+    }
 
 
 def test_cluster_sync_now_passes_error_status(monkeypatch):
@@ -128,6 +150,11 @@ def test_node_sync_now_redirects_to_node_url(monkeypatch):
     assert captured["endpoint"] == "sync/individual/node"
     assert captured["params"]["node_name"] == "pve-node1"
     assert captured["params"]["cluster_name"] == "pve-cluster"
+    assert captured["kwargs"] == {
+        "netbox_branch_schema_id": None,
+        "fastapi_endpoint_id": 7,
+        "proxmox_endpoint_ids": "71",
+    }
 
 
 def test_node_sync_now_no_cluster_redirects_with_error(monkeypatch):

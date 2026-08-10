@@ -25,7 +25,10 @@ DELETE /api/plugins/proxbox/metrics-influxdb/{id}/
 The token fields are secret references, not token material:
 `query_token_secret_ref` and `writer_token_secret_ref` accept
 `nms-secret:<uuid>` values that point to netbox-nms `ObservabilitySecret`
-records. Use filters `endpoint`, `proxmox_cluster`, `enabled`, and `name` to
+records. Database check constraints pin both columns to an empty string or
+an exact reference, and the detail page renders through a fail-closed mask,
+so a value that is not a reference is never stored by unvalidated writes nor
+displayed if it predates the constraints. Use filters `endpoint`, `proxmox_cluster`, `enabled`, and `name` to
 select mappings for a cluster or endpoint.
 
 ---
