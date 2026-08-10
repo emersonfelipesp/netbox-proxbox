@@ -45,7 +45,6 @@ WORKFLOW_PATH = ".github/workflows/django-tests.yml"
 WORKFLOW_NAME = "django-tests.yml"
 WORKFLOW_API_PATH = f"{REPOSITORY_PREFIX}/actions/workflows/{WORKFLOW_NAME}"
 WORKFLOW_CONTENT_PATH = f"{REPOSITORY_PREFIX}/contents/{WORKFLOW_PATH}"
-WORKFLOW_RUNS_PATH = f"{WORKFLOW_API_PATH}/runs"
 
 # Git blob identity of django-tests.yml at the reviewed target-branch commit.
 # A workflow edit must update this only in a separately reviewed base artifact.
@@ -65,7 +64,6 @@ MIN_STARTING_RATE_REMAINING = (
 MAX_INSTALLATION_PAGES = 10
 MAX_REPOSITORY_PAGES = 10
 REPOSITORIES_PER_PAGE = 100
-RUNS_PER_PAGE = 10
 MAX_SETUP_REQUESTS = 1 + MAX_INSTALLATION_PAGES + MAX_REPOSITORY_PAGES + 2
 MAX_JSON_BYTES = 1024 * 1024
 MAX_IO_SLICE_SECONDS = 10.0
@@ -88,7 +86,6 @@ _ALLOWED_API_PATHS = frozenset(
         "/user/installations",
         WORKFLOW_API_PATH,
         WORKFLOW_CONTENT_PATH,
-        WORKFLOW_RUNS_PATH,
     }
 )
 _INSTALLATION_REPOSITORIES_PATH = re.compile(
@@ -119,6 +116,10 @@ class AuthenticationError(WaiterError):
 
 class ApiProtocolError(WaiterError):
     """GitHub returned an unexpected or malformed response."""
+
+
+class ApiNotFound(ApiProtocolError):
+    """An allowlisted GitHub API resource is not visible yet."""
 
 
 class ResponseTooLarge(ApiProtocolError):
@@ -495,6 +496,8 @@ class GitHubApiClient:
             return
         if status in {301, 302, 303, 307, 308}:
             raise ApiProtocolError("GitHub API redirects are not allowed")
+        if status == 404:
+            raise ApiNotFound("GitHub API resource not found")
         raise ApiProtocolError(f"GitHub API returned HTTP {status}")
 
     def get_json(
@@ -789,68 +792,6 @@ class MatrixWaiter:
             error_type=RunIdentityError,
         )
 
-    def _select_expected_run_attempt(
-        self,
-        runs: Sequence[Mapping[str, object]],
-        *,
-        expected_run_id: int,
-        expected_run_attempt: int,
-        not_before: datetime | None,
-    ) -> Mapping[str, object] | None:
-        eligible: list[Mapping[str, object]] = []
-        for run in runs:
-            run_id = _positive_int(run.get("id"))
-            if run_id is None:
-                raise RunIdentityError("workflow run has an invalid id")
-            run_attempt = _positive_int(run.get("run_attempt"))
-            if run_attempt is None:
-                raise RunIdentityError("workflow run has an invalid attempt")
-            if run_id != expected_run_id or run_attempt != expected_run_attempt:
-                continue
-            eligible.append(run)
-
-        if len(eligible) > 1:
-            raise ApiProtocolError("GitHub returned a duplicate workflow run attempt")
-        if not eligible:
-            return None
-        selected = eligible[0]
-        if not_before is not None and self._run_created_at(selected) < not_before:
-            raise RunIdentityError(
-                "expected workflow run predates the not-before bound"
-            )
-        return selected
-
-    def _matching_runs(
-        self,
-        branch: str,
-        sha: str,
-        workflow: WorkflowIdentity,
-    ) -> Sequence[Mapping[str, object]]:
-        response = self.client.get_json(
-            WORKFLOW_RUNS_PATH,
-            query={
-                "branch": branch,
-                "event": "push",
-                "head_sha": sha,
-                "per_page": RUNS_PER_PAGE,
-            },
-        )
-        payload = _mapping(response.payload, "workflow run list")
-        runs = payload.get("workflow_runs")
-        if not isinstance(runs, list):
-            raise ApiProtocolError("GitHub returned invalid workflow runs")
-        total_count = payload.get("total_count")
-        if (
-            isinstance(total_count, bool)
-            or not isinstance(total_count, int)
-            or total_count < len(runs)
-        ):
-            raise ApiProtocolError("GitHub returned invalid workflow run count")
-        return [
-            self._validate_run(run, branch=branch, sha=sha, workflow=workflow)
-            for run in runs
-        ]
-
     def _exact_run_attempt(
         self,
         *,
@@ -860,12 +801,15 @@ class MatrixWaiter:
         sha: str,
         workflow: WorkflowIdentity,
         not_before: datetime | None,
-    ) -> Mapping[str, object]:
+    ) -> Mapping[str, object] | None:
         path = (
             f"{REPOSITORY_PREFIX}/actions/runs/{expected_run_id}/"
             f"attempts/{expected_run_attempt}"
         )
-        response = self.client.get_json(path)
+        try:
+            response = self.client.get_json(path)
+        except ApiNotFound:
+            return None
         run = self._validate_run(
             response.payload,
             branch=branch,
@@ -906,24 +850,7 @@ class MatrixWaiter:
         workflow = self._workflow_identity()
         self._verify_workflow_blob(sha)
 
-        pinned_pair_visible = False
         while True:
-            if not pinned_pair_visible:
-                runs = self._matching_runs(branch, sha, workflow)
-                selected = self._select_expected_run_attempt(
-                    runs,
-                    expected_run_id=pinned_run_id,
-                    expected_run_attempt=pinned_run_attempt,
-                    not_before=normalized_not_before,
-                )
-                if selected is None:
-                    self.deadline.sleep_for(
-                        self.poll_interval,
-                        "workflow polling",
-                    )
-                    continue
-                pinned_pair_visible = True
-
             run = self._exact_run_attempt(
                 expected_run_id=pinned_run_id,
                 expected_run_attempt=pinned_run_attempt,
@@ -932,6 +859,12 @@ class MatrixWaiter:
                 workflow=workflow,
                 not_before=normalized_not_before,
             )
+            if run is None:
+                self.deadline.sleep_for(
+                    self.poll_interval,
+                    "workflow polling",
+                )
+                continue
             status = run.get("status")
             conclusion = run.get("conclusion")
             if status == "completed":

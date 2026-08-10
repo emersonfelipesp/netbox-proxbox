@@ -122,6 +122,26 @@ class StubClient:
         return response
 
 
+class RunFloodClient(StubClient):
+    """Expose a crowded first list page if discovery ever consults it."""
+
+    def __init__(self, first_page: waiter.ApiResponse, *responses: object) -> None:
+        super().__init__(*responses)
+        self.first_page = first_page
+
+    def get_json(
+        self,
+        path: str,
+        *,
+        query: dict[str, object] | None = None,
+        max_bytes: int = waiter.MAX_JSON_BYTES,
+    ) -> waiter.ApiResponse:
+        if path == f"{waiter.WORKFLOW_API_PATH}/runs":
+            self.calls.append((path, query))
+            return self.first_page
+        return super().get_json(path, query=query, max_bytes=max_bytes)
+
+
 def api_response(payload: object, headers: dict[str, str] | None = None):
     return waiter.ApiResponse(
         payload=payload,
@@ -228,6 +248,35 @@ def ready_client(*run_responses: object) -> StubClient:
         api_response(content_payload()),
         *run_responses,
     )
+
+
+def ready_run_flood_client(
+    first_page: waiter.ApiResponse,
+    *run_responses: object,
+) -> RunFloodClient:
+    return RunFloodClient(
+        first_page,
+        api_response(user_payload()),
+        api_response(installations_payload(installation_payload())),
+        api_response(repositories_payload(waiter.REPOSITORY)),
+        api_response(workflow_payload()),
+        api_response(content_payload()),
+        *run_responses,
+    )
+
+
+def crowded_run_page(*, total_count: int) -> waiter.ApiResponse:
+    runs = [
+        run_payload(
+            id=1_000 + offset,
+            url=(
+                f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/"
+                f"{1_000 + offset}"
+            ),
+        )
+        for offset in range(10)
+    ]
+    return api_response({"total_count": total_count, "workflow_runs": runs})
 
 
 def build_waiter(client: StubClient, clock: FakeClock | None = None):
@@ -549,10 +598,7 @@ def test_reviewed_workflow_pin_matches_the_committed_git_blob():
 
 
 def test_success_requires_auth_blob_pin_and_exact_push_run_identity():
-    client = ready_client(
-        api_response({"total_count": 1, "workflow_runs": [run_payload()]}),
-        api_response(run_payload()),
-    )
+    client = ready_client(api_response(run_payload()))
     matrix_waiter, _clock = build_waiter(client)
 
     run = matrix_waiter.wait_for_success(
@@ -563,15 +609,6 @@ def test_success_requires_auth_blob_pin_and_exact_push_run_identity():
     )
 
     assert run["id"] == 99
-    assert client.calls[-2] == (
-        waiter.WORKFLOW_RUNS_PATH,
-        {
-            "branch": BRANCH,
-            "event": "push",
-            "head_sha": SHA,
-            "per_page": waiter.RUNS_PER_PAGE,
-        },
-    )
     assert client.calls[-1] == (
         f"{waiter.REPOSITORY_PREFIX}/actions/runs/99/attempts/1",
         None,
@@ -581,7 +618,7 @@ def test_success_requires_auth_blob_pin_and_exact_push_run_identity():
 def test_recorded_github_run_shape_with_bare_workflow_path_is_accepted():
     # Sanitized from the live repository response captured during review.  The
     # identity values use this hermetic test's constants, while the field set
-    # and the bare ``path`` preserve GitHub's actual workflow-runs payload.
+    # and bare ``path`` preserve GitHub's actual workflow-run attempt payload.
     recorded_run = run_payload(
         name="Django Tests",
         node_id="WFR_kwLORecordedPayload",
@@ -612,10 +649,7 @@ def test_recorded_github_run_shape_with_bare_workflow_path_is_accepted():
         previous_attempt_url=None,
         path=waiter.WORKFLOW_PATH,
     )
-    client = ready_client(
-        api_response({"total_count": 1, "workflow_runs": [recorded_run]}),
-        api_response(recorded_run),
-    )
+    client = ready_client(api_response(recorded_run))
     matrix_waiter, _clock = build_waiter(client)
 
     run = matrix_waiter.wait_for_success(
@@ -647,7 +681,7 @@ def test_candidate_workflow_blob_mismatch_fails_before_polling():
             **DEFAULT_RUN_SELECTOR,
         )
 
-    assert all(path != waiter.WORKFLOW_RUNS_PATH for path, _query in client.calls)
+    assert all("/actions/runs/" not in path for path, _query in client.calls)
 
 
 @pytest.mark.parametrize(
@@ -674,9 +708,7 @@ def test_candidate_workflow_blob_mismatch_fails_before_polling():
     ],
 )
 def test_same_sha_or_similar_run_with_wrong_identity_is_rejected(overrides, message):
-    client = ready_client(
-        api_response({"total_count": 1, "workflow_runs": [run_payload(**overrides)]})
-    )
+    client = ready_client(api_response(run_payload(**overrides)))
     matrix_waiter, _clock = build_waiter(client)
 
     with pytest.raises(waiter.RunIdentityError, match=message):
@@ -690,15 +722,7 @@ def test_same_sha_or_similar_run_with_wrong_identity_is_rejected(overrides, mess
 
 @pytest.mark.parametrize("conclusion", ["failure", "cancelled", "timed_out", "skipped"])
 def test_terminal_non_success_conclusion_fails_immediately(conclusion):
-    client = ready_client(
-        api_response(
-            {
-                "total_count": 1,
-                "workflow_runs": [run_payload(conclusion=conclusion)],
-            }
-        ),
-        api_response(run_payload(conclusion=conclusion)),
-    )
+    client = ready_client(api_response(run_payload(conclusion=conclusion)))
     matrix_waiter, clock = build_waiter(client)
 
     with pytest.raises(waiter.WorkflowRunFailed, match=conclusion):
@@ -714,12 +738,6 @@ def test_terminal_non_success_conclusion_fails_immediately(conclusion):
 
 def test_queued_run_polls_then_accepts_completed_success():
     client = ready_client(
-        api_response(
-            {
-                "total_count": 1,
-                "workflow_runs": [run_payload(status="queued", conclusion=None)],
-            }
-        ),
         api_response(run_payload(status="queued", conclusion=None)),
         api_response(run_payload()),
     )
@@ -737,7 +755,29 @@ def test_queued_run_polls_then_accepts_completed_success():
     assert clock.sleeps == [waiter.DEFAULT_POLL_INTERVAL_SECONDS]
 
 
-def test_expected_run_is_pinned_and_other_successes_are_never_accepted():
+def test_later_page_pair_is_found_when_total_count_exceeds_first_page():
+    first_page = crowded_run_page(total_count=11)
+    client = ready_run_flood_client(first_page, api_response(run_payload()))
+    matrix_waiter, clock = build_waiter(client)
+
+    run = matrix_waiter.wait_for_success(
+        BRANCH,
+        SHA,
+        not_before=NOT_BEFORE,
+        **DEFAULT_RUN_SELECTOR,
+    )
+
+    assert first_page.payload["total_count"] > len(first_page.payload["workflow_runs"])
+    assert run["id"] == 99
+    assert client.calls[-1] == (
+        f"{waiter.REPOSITORY_PREFIX}/actions/runs/99/attempts/1",
+        None,
+    )
+    assert all(path != f"{waiter.WORKFLOW_API_PATH}/runs" for path, _ in client.calls)
+    assert clock.sleeps == []
+
+
+def test_run_flood_cannot_displace_the_supervisor_pinned_pair():
     newer_created_at = "2026-08-09T20:02:00Z"
     newer_queued = run_payload(
         id=100,
@@ -746,7 +786,6 @@ def test_expected_run_is_pinned_and_other_successes_are_never_accepted():
         conclusion=None,
         created_at=newer_created_at,
     )
-    older_success = run_payload(created_at=RUN_CREATED_AT)
     newer_in_progress = {
         **newer_queued,
         "status": "in_progress",
@@ -756,13 +795,8 @@ def test_expected_run_is_pinned_and_other_successes_are_never_accepted():
         "status": "completed",
         "conclusion": "success",
     }
-    client = ready_client(
-        api_response(
-            {
-                "total_count": 2,
-                "workflow_runs": [newer_queued, older_success],
-            }
-        ),
+    client = ready_run_flood_client(
+        crowded_run_page(total_count=10_000),
         api_response(newer_in_progress),
         api_response(newer_success),
     )
@@ -777,43 +811,30 @@ def test_expected_run_is_pinned_and_other_successes_are_never_accepted():
     )
 
     assert run["id"] == 100
+    attempt_path = f"{waiter.REPOSITORY_PREFIX}/actions/runs/100/attempts/1"
+    assert client.calls[-2:] == [(attempt_path, None), (attempt_path, None)]
+    assert all(path != f"{waiter.WORKFLOW_API_PATH}/runs" for path, _ in client.calls)
     assert clock.sleeps == [
         waiter.DEFAULT_POLL_INTERVAL_SECONDS,
     ]
 
 
-def test_not_before_ignores_an_old_success_until_a_fresh_run_exists():
+def test_pinned_run_before_not_before_is_rejected():
     old_success = run_payload(
-        id=98,
-        url=f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/98",
         created_at="2026-08-09T19:59:59Z",
     )
-    client = ready_client(
-        api_response(
-            {
-                "total_count": 1,
-                "workflow_runs": [old_success],
-            }
-        ),
-        api_response(
-            {
-                "total_count": 2,
-                "workflow_runs": [run_payload(), old_success],
-            }
-        ),
-        api_response(run_payload()),
-    )
+    client = ready_client(api_response(old_success))
     matrix_waiter, clock = build_waiter(client)
 
-    run = matrix_waiter.wait_for_success(
-        BRANCH,
-        SHA,
-        not_before=NOT_BEFORE,
-        **DEFAULT_RUN_SELECTOR,
-    )
+    with pytest.raises(waiter.RunIdentityError, match="predates"):
+        matrix_waiter.wait_for_success(
+            BRANCH,
+            SHA,
+            not_before=NOT_BEFORE,
+            **DEFAULT_RUN_SELECTOR,
+        )
 
-    assert run["id"] == 99
-    assert clock.sleeps == [waiter.DEFAULT_POLL_INTERVAL_SECONDS]
+    assert clock.sleeps == []
 
 
 def test_not_before_is_never_a_standalone_run_selector():
@@ -840,12 +861,6 @@ def test_expected_run_id_waits_for_only_the_supervisor_selected_run():
         "conclusion": "success",
     }
     client = ready_client(
-        api_response(
-            {
-                "total_count": 2,
-                "workflow_runs": [expected_queued, run_payload()],
-            }
-        ),
         api_response(expected_queued),
         api_response(expected_success),
     )
@@ -862,12 +877,7 @@ def test_expected_run_id_waits_for_only_the_supervisor_selected_run():
     assert clock.sleeps == [waiter.DEFAULT_POLL_INTERVAL_SECONDS]
 
 
-def test_stale_post_floor_success_never_attests_before_pinned_pair_appears():
-    stale_success = run_payload(
-        id=98,
-        url=f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/98",
-        created_at="2026-08-09T20:00:30Z",
-    )
+def test_exact_attempt_404_waits_until_the_pinned_pair_is_visible():
     pinned_running = run_payload(
         id=100,
         url=f"{waiter.API_ROOT}{waiter.REPOSITORY_PREFIX}/actions/runs/100",
@@ -881,13 +891,7 @@ def test_stale_post_floor_success_never_attests_before_pinned_pair_appears():
         "conclusion": "success",
     }
     client = ready_client(
-        api_response({"total_count": 1, "workflow_runs": [stale_success]}),
-        api_response(
-            {
-                "total_count": 2,
-                "workflow_runs": [pinned_running, stale_success],
-            }
-        ),
+        waiter.ApiNotFound("GitHub API resource is not yet visible"),
         api_response(pinned_running),
         api_response(pinned_success),
     )
@@ -909,7 +913,6 @@ def test_stale_post_floor_success_never_attests_before_pinned_pair_appears():
 
 
 def test_prior_success_for_same_run_id_cannot_satisfy_newer_pinned_attempt():
-    prior_success = run_payload(run_attempt=1)
     pinned_running = run_payload(
         run_attempt=2,
         status="in_progress",
@@ -921,8 +924,7 @@ def test_prior_success_for_same_run_id_cannot_satisfy_newer_pinned_attempt():
         "conclusion": "success",
     }
     client = ready_client(
-        api_response({"total_count": 1, "workflow_runs": [prior_success]}),
-        api_response({"total_count": 1, "workflow_runs": [pinned_running]}),
+        waiter.ApiNotFound("GitHub API resource is not yet visible"),
         api_response(pinned_running),
         api_response(pinned_success),
     )
@@ -936,6 +938,12 @@ def test_prior_success_for_same_run_id_cannot_satisfy_newer_pinned_attempt():
     )
 
     assert (run["id"], run["run_attempt"]) == (99, 2)
+    attempt_path = f"{waiter.REPOSITORY_PREFIX}/actions/runs/99/attempts/2"
+    assert client.calls[-3:] == [
+        (attempt_path, None),
+        (attempt_path, None),
+        (attempt_path, None),
+    ]
     assert clock.sleeps == [
         waiter.DEFAULT_POLL_INTERVAL_SECONDS,
         waiter.DEFAULT_POLL_INTERVAL_SECONDS,
@@ -943,11 +951,7 @@ def test_prior_success_for_same_run_id_cannot_satisfy_newer_pinned_attempt():
 
 
 def test_exact_attempt_endpoint_rejects_a_mismatched_attempt():
-    pinned_attempt = run_payload(run_attempt=2)
-    client = ready_client(
-        api_response({"total_count": 1, "workflow_runs": [pinned_attempt]}),
-        api_response(run_payload(run_attempt=1)),
-    )
+    client = ready_client(api_response(run_payload(run_attempt=1)))
     matrix_waiter, _clock = build_waiter(client)
 
     with pytest.raises(waiter.RunIdentityError, match="attempt"):
@@ -1079,6 +1083,21 @@ def test_invalid_401_credential_is_never_retried():
     assert clock.sleeps == []
 
 
+def test_api_client_surfaces_404_without_retry_for_bounded_attempt_discovery():
+    opener = FakeOpener(
+        make_http_error(404),
+        FakeResponse({"must": "not run"}),
+    )
+    api, clock = build_api(opener)
+    attempt_path = f"{waiter.REPOSITORY_PREFIX}/actions/runs/99/attempts/1"
+
+    with pytest.raises(waiter.ApiNotFound, match="not found"):
+        api.get_json(attempt_path)
+
+    assert len(opener.calls) == 1
+    assert clock.sleeps == []
+
+
 @pytest.mark.parametrize(
     "headers",
     [
@@ -1154,14 +1173,6 @@ def test_one_deadline_also_bounds_retry_rate_limit_and_poll_sleeps():
     )
     matrix_waiter = waiter.MatrixWaiter(
         client=ready_client(
-            api_response(
-                {
-                    "total_count": 1,
-                    "workflow_runs": [
-                        run_payload(status="in_progress", conclusion=None)
-                    ],
-                }
-            ),
             api_response(run_payload(status="in_progress", conclusion=None)),
         ),
         deadline=deadline,

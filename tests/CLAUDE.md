@@ -26,7 +26,8 @@ This directory contains the plugin's pytest test suite.
   installation/single-repository selection (including paginated over-scope
   rejection), branch/SHA/workflow/run identity (including GitHub's bare
   workflow path, other-branch and tag rejection), workflow Git-blob pinning,
-  mandatory expected-run-ID/attempt discovery, exact-attempt polling,
+  mandatory expected-run-ID/attempt discovery directly through the exact-attempt
+  endpoint, bounded 404 visibility polling, first-page/run-flood isolation,
   optional not-before bounds, stale-run and prior-attempt rejection, terminal failures,
   response byte ceilings, one shared connection/read/parse/retry/poll deadline,
   403 rate-limit evidence, the hard request cap, four-gate hourly budget, and

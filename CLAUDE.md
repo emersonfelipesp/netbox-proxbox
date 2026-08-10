@@ -495,11 +495,12 @@ pins `.github/workflows/django-tests.yml` by Git blob identity, and accepts only
 the successful `push` attempt matching the trusted candidate branch, full SHA,
 repository, GitHub's bare workflow path, and required expected run-ID/attempt
 pair. A UTC not-before time is only an optional additional bound. Discovery
-ignores every other run or attempt; after the exact pair appears, polling uses
-only its `/actions/runs/{run_id}/attempts/{attempt}` endpoint. Branch provenance
-is independently bound by `head_branch` and the exact run-name ref. All API
-I/O, parsing, retries, rate-limit handling, and polling share one deadline and
-a hard request budget.
+polls only `/actions/runs/{run_id}/attempts/{attempt}` from the outset and
+treats 404 as a bounded not-yet-visible state, so workflow-run list ordering or
+flooding cannot displace the trusted pair. Branch provenance is independently
+bound by `head_branch` and the exact run-name ref. All API I/O, parsing,
+retries, rate-limit handling, and polling share one deadline and a hard request
+budget.
 
 Environment fallback ingress cannot erase the token from the process's
 original environment block: same-runner processes with proc access can still

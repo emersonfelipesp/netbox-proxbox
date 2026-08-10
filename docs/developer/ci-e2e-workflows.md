@@ -42,7 +42,7 @@ pair are mandatory. A UTC `YYYY-MM-DDTHH:MM:SSZ` creation-time floor via
 The waiter accepts only a completed successful `push` attempt whose
 repository, head repository, branch, SHA, head-commit ID, workflow ID, workflow
 API URL, and exact bare workflow path `.github/workflows/django-tests.yml` all
-match. GitHub's workflow-runs API returns that path without a branch suffix, so
+match. GitHub's workflow-run response returns that path without a branch suffix, so
 branch provenance is deliberately bound through the separately checked
 `head_branch` and run name. The pinned workflow's GitHub-generated run name
 must contain the exact `refs/heads/<branch>` and SHA, removing the ambiguity
@@ -52,13 +52,14 @@ Before polling, the waiter reads
 `.github/workflows/django-tests.yml` at that exact SHA and requires GitHub's Git
 blob identity to equal the reviewed `PINNED_WORKFLOW_BLOB_SHA` constant.
 
-Discovery ignores every entry whose run ID or `run_attempt` differs from the
-trusted pair, even if it is a post-floor success. Once the exact pair is
-visible, the waiter polls only
-`/repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt}` and validates
-the returned ID and attempt on every response. A prior successful attempt of
-the same run cannot satisfy a newer pinned attempt, and status from the
-workflow-run list is never accepted as the attestation verdict.
+Discovery polls only
+`/repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt}` from the
+outset. HTTP 404 is treated as a not-yet-visible state and retried only within
+the shared deadline and request cap. The waiter never lists filtered workflow
+runs, so a crowded first page or a run flood cannot displace the trusted pair.
+Every returned response must match the pinned ID and attempt before its status
+is considered. A prior successful attempt of the same run cannot satisfy a
+newer pinned attempt.
 
 ### Credential and network boundary
 
