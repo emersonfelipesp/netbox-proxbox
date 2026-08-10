@@ -109,7 +109,24 @@ class PBSEndpoint(EndpointBase):
 
     @token_secret.setter
     def token_secret(self, value: object | None) -> None:
+        from netbox_proxbox.services.encryption_recovery import (
+            mark_encrypted_fields_for_write,
+        )
+
+        mark_encrypted_fields_for_write(self, "token_secret_enc")
         self.token_secret_enc = encrypt_primary_secret(value)
+
+    @property
+    def credential_encryption_state(self) -> str:
+        """Return a secret-free state for dashboards and companion tables."""
+
+        from netbox_proxbox.services.encryption_recovery import ciphertext_state
+
+        state = ciphertext_state(self.token_secret_enc)
+        return {
+            "configured": "Configured",
+            "recovery_required": "Recovery required",
+        }.get(state, "Not configured")
 
     @property
     def host(self) -> str:

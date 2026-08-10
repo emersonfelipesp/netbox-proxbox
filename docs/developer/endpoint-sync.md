@@ -898,15 +898,20 @@ flowchart LR
     E --> F["netbox-sdk session"]
 ```
 
-The encryption key is resolved using the following priority chain:
+proxbox-api's SQLite encryption is a separate security domain from the plugin's
+PostgreSQL at-rest encryption. Configure it with
+**`PROXBOX_ENCRYPTION_KEY`** (or proxbox-api's separately administered local key).
+For upgrade compatibility, the plugin's dedicated runtime endpoint still
+returns `ProxboxPluginSettings.encryption_key` only to a superuser or caller
+with plugin-settings change permission; ordinary settings responses withhold
+it. Current proxbox-api releases may use that permission-gated value as a
+deprecated fallback until the paired backend migration removes the dependency.
+This key is also distinct from the `FastAPIEndpoint` API key, which authenticates
+requests but does not encrypt either database.
 
-1. **`PROXBOX_ENCRYPTION_KEY` environment variable** — set on the proxbox-api host (highest priority).
-2. **`ProxboxPluginSettings.encryption_key`** — fetched from the NetBox plugin API via `settings_client.get_settings()` and configurable on the plugin settings page under **Encryption**.
-3. **None** — credentials stored in plaintext; a `CRITICAL` warning is logged.
-
-The raw key (from either source) is hashed with SHA-256 to derive exactly 32 bytes,
-then base64url-encoded to form a valid Fernet key. If neither source is set, credentials
-are stored in plaintext with a dev-mode warning logged.
+Migrate proxbox-api to its own configured Fernet key before the compatibility
+fallback is removed. New integrations must not copy or expose the plugin-at-rest
+key as their backend encryption source.
 
 ### Token version support
 

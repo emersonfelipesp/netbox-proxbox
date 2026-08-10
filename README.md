@@ -54,7 +54,10 @@ its Django app. Proxbox registers branching signals and PDM URL overrides only
 when `netbox_branching` or `netbox_pdm`, respectively, is listed in `PLUGINS`;
 installed-but-disabled companions therefore remain inert. Once a companion is
 enabled, its imports are mandatory and startup fails if the installation is
-broken; Proxbox never silently runs with only part of the configured integration.
+broken. Encryption recovery is the one fail-closed maintenance exception:
+netbox-pbs older than `0.0.1.post1` may start so its migrations can run, but
+recovery and key mutation remain blocked until its encrypted-field schema is
+upgraded.
 
 | Package | NetBox plugin | What it adds |
 |---------|---------------|--------------|
@@ -69,7 +72,7 @@ install the packages you want:
 
 ```bash
 source /opt/netbox/venv/bin/activate
-pip install netbox-pbs netbox-pdm netbox-ceph netbox-packer
+pip install 'netbox-pbs>=0.0.1.post1' netbox-pdm netbox-ceph netbox-packer
 ```
 
 Enable the selected plugins in `netbox/netbox/configuration.py`. Keep
@@ -180,6 +183,24 @@ other tenants.
   existing values and creates `ProxboxPluginSettings.encryption_key` if it was
   blank, so new endpoint saves do not persist those primary secrets in
   plaintext columns.
+- **Encryption-key recovery is atomic and companion-aware.** The Settings page
+  verifies every registered ciphertext before rotating the shared plugin key,
+  or lets separately authorized operators selectively clear unrecoverable
+  families after explicit destructive confirmation. When netbox-pbs is
+  installed, its encrypted fallback proxbox-api key participates in the same
+  rotation and reset; an unloaded companion's dormant table ciphertext plus
+  missing installed companion models/tables block recovery rather than silently
+  orphaning ciphertext. Registered model saves lock the
+  settings row before validating ciphertext and persistence, while recovery
+  locks all registered PostgreSQL tables; together these reject a writer that
+  prepared ciphertext with the superseded key. Rotation also requires every
+  configured proxbox-api target to return the paired versioned attestation that
+  its active independent key decrypts every backend ciphertext; legacy
+  source-only responses stay blocked so the plugin-key fallback cannot strand
+  backend SQLite credentials. Every attempt writes a
+  secret-free NetBox changelog event, and reset disables affected endpoints (or
+  marks Firecracker hosts offline) until credentials are re-entered and the
+  operator explicitly restores service.
 - **Dual VM interface sync.** The plugin model surface supports the new
   `guest_os_model` strategy: keep Proxmox-side NICs as core
   `virtualization.VMInterface` rows named `net0`/`net1`, and store guest-agent

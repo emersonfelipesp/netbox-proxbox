@@ -102,10 +102,31 @@ Singleton settings row editable from **PBS → Plugin Settings**.
 | Field | Default | Description |
 |---|---|---|
 | `proxbox_api_url` | `""` | Fallback URL used when `FastAPIEndpoint` resolution is unavailable |
-| `proxbox_api_key` | `""` | Optional bearer token for the standalone URL |
+| `proxbox_api_key` | `""` | Write-only optional bearer token for the standalone URL; stored in `proxbox_api_key_enc` under the shared netbox-proxbox Fernet key |
 | `branching_enabled` | `false` | Create a `netbox-branching` branch per sync run |
 | `branch_name_prefix` | `"pbs-sync"` | Prefix for auto-created branch names |
 | `branch_on_conflict` | `abort` | `abort` (leave branch open) or `overwrite` (merge despite conflicts) |
+
+Because the fallback API key shares
+`ProxboxPluginSettings.encryption_key`, netbox-proxbox includes
+`PBSPluginSettings.proxbox_api_key_enc` in its verified rotation and selective
+destructive-reset registry whenever netbox-pbs is installed. A missing
+netbox-pbs app is safely omitted only when its database table is also absent.
+If the app is unloaded but its known settings table survives, netbox-proxbox
+locks and inspects the table and blocks key mutation while any fallback-key
+ciphertext remains. Re-enable and migrate netbox-pbs before rotating or resetting
+that family. An installed app whose expected model or database table cannot be
+resolved likewise blocks recovery. netbox-proxbox installs the same settings-row
+writer guard on both companion default/base-manager queryset classes at app
+startup; a fallback ciphertext
+prepared under the old key is rejected if rotation wins the lock. Recovery also
+takes the companion PostgreSQL table lock. Direct queryset/bulk writes to
+`proxbox_api_key_enc` are rejected before SQL; only the private one-call
+rotation/reset update may write it after taking the shared settings lock and
+validating a non-empty outgoing value under the current key. Bulk writes have no
+bypass. A destructive fallback-key reset leaves the setting
+explicitly unconfigured; re-enter the key before relying on the standalone
+fallback URL again.
 
 ## Sync Flow
 
@@ -211,6 +232,12 @@ No `PLUGINS_CONFIG` entries are required. All runtime options are stored in the 
 
 | netbox-pbs | NetBox |
 |---|---|
-| `0.0.1+` | 4.5.8 – 4.6.x |
+| `0.0.1.post1+` | 4.5.8 – 4.6.x |
 
 `netbox-proxbox` must be installed at the same NetBox compatibility level.
+Upgrade and migrate netbox-pbs to `0.0.1.post1` or newer before enabling
+netbox-proxbox encryption recovery. An older enabled companion is allowed to
+start so `manage.py migrate netbox_pbs` remains available, but recovery/key
+mutation fails closed until `PBSPluginSettings.proxbox_api_key_enc` and its
+database column exist. Upgrade netbox-pbs first, run its migrations, then
+upgrade netbox-proxbox.

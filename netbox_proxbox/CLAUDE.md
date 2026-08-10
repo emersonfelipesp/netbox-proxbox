@@ -548,6 +548,9 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
   `services.endpoint_autoconfiguration`, which treats the exact
   UI-persisted target as its allowlist and may generate/persist a key only for a
   confirmed first-key bootstrap.
+  Every boundary that reads plugin ciphertext catches the
+  `utils.encryption.EncryptionError` hierarchy, logs only identifiers and a
+  fixed recovery state, and skips downstream synchronization.
 - [`schemas/`](./schemas): Pydantic models and formatters for backend payloads, normalized sync context, and OpenAPI helpers.
 - [`services/`](./services): backend proxy, schema caching, service status, and sync coordination helpers.
 - [`management/`](./management): Django management commands package.
@@ -706,6 +709,21 @@ bounds, including polling interval <= task timeout. proxbox-api snapshots the
 three values once per adapter request, normalizes environment-derived polling,
 renews the lease independently from provider work, and persists the selected
 lease duration on the operation run.
+
+Plugin-at-rest key recovery is owned by
+`services/encryption_recovery.py`, the settings forms/views, and the
+`0081_encrypted_secret_reset_permission` migration (developed in parallel with
+the #295/#297 sibling migrations as a colliding 0079 and renumbered to 0081 at
+merge time). Its central registry is
+exhaustive across all plugin `*_enc` model fields and conditionally includes
+netbox-pbs `PBSPluginSettings.proxbox_api_key_enc` when that Django app is
+installed. Only genuine app absence is skipped; installed-but-unresolved
+models or tables fail closed. Ordinary serializers never expose the plugin
+key. The backend-only runtime action temporarily retains its existing
+superuser/settings-change permission gate because current proxbox-api releases
+still use it as their final at-rest-key fallback; remove that path only with a
+paired backend migration. Prefer independent plugin-at-rest,
+backend-at-rest, and FastAPI request-authentication keys.
 
 Tenant assignment for Proxmox-synced NetBox `VirtualMachine` rows is plugin-side
 post-sync behavior. Regex assignment is controlled by

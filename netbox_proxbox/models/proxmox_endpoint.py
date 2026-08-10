@@ -727,7 +727,20 @@ class ProxmoxEndpoint(EndpointBase):
 
     @password.setter
     def password(self, value: object | None) -> None:
+        from netbox_proxbox.services.encryption_recovery import (
+            mark_encrypted_fields_for_write,
+        )
+
+        mark_encrypted_fields_for_write(self, "password_enc")
         self.password_enc = encrypt_primary_secret(value)
+
+    @property
+    def password_encryption_state(self) -> str:
+        """Return a secret-free state for forms, dashboards, and list views."""
+
+        from netbox_proxbox.services.encryption_recovery import ciphertext_state
+
+        return ciphertext_state(self.password_enc)
 
     @property
     def token_value(self) -> str:
@@ -736,7 +749,34 @@ class ProxmoxEndpoint(EndpointBase):
 
     @token_value.setter
     def token_value(self, value: object | None) -> None:
+        from netbox_proxbox.services.encryption_recovery import (
+            mark_encrypted_fields_for_write,
+        )
+
+        mark_encrypted_fields_for_write(self, "token_value_enc")
         self.token_value_enc = encrypt_primary_secret(value)
+
+    @property
+    def token_value_encryption_state(self) -> str:
+        """Return a secret-free state for the stored API-token value."""
+
+        from netbox_proxbox.services.encryption_recovery import ciphertext_state
+
+        return ciphertext_state(self.token_value_enc)
+
+    @property
+    def credential_encryption_state(self) -> str:
+        """Return the worst primary-credential state without returning plaintext."""
+
+        states = (
+            self.password_encryption_state,
+            self.token_value_encryption_state,
+        )
+        if "recovery_required" in states:
+            return "Recovery required"
+        if "configured" in states:
+            return "Configured"
+        return "Not configured"
 
     @property
     def ssh_host(self) -> str:
@@ -774,11 +814,15 @@ class ProxmoxEndpoint(EndpointBase):
     def has_ssh_terminal_credentials(self) -> bool:
         """Return whether endpoint fallback SSH is complete enough to use."""
         if self.ssh_credential_source == SSH_CRED_SOURCE_REUSE:
+            try:
+                password = self.password
+            except enc_helpers.EncryptionError:
+                return False
             return bool(
                 self.ssh_host
                 and self.ssh_known_host_fingerprint
                 and self.effective_ssh_username
-                and self.password
+                and password
             )
         has_secret = (
             self.has_ssh_private_key
@@ -818,6 +862,11 @@ class ProxmoxEndpoint(EndpointBase):
 
     def set_ssh_password(self, plaintext: str, *, key: str) -> None:
         """Encrypt and store the endpoint fallback SSH password."""
+        from netbox_proxbox.services.encryption_recovery import (
+            mark_encrypted_fields_for_write,
+        )
+
+        mark_encrypted_fields_for_write(self, "ssh_password_enc")
         self.ssh_password_enc = enc_helpers.encrypt(plaintext, key=key)
 
     def get_ssh_password(self, *, key: str) -> str:
@@ -826,6 +875,11 @@ class ProxmoxEndpoint(EndpointBase):
 
     def set_ssh_private_key(self, plaintext: str, *, key: str) -> None:
         """Encrypt and store the endpoint fallback SSH private key."""
+        from netbox_proxbox.services.encryption_recovery import (
+            mark_encrypted_fields_for_write,
+        )
+
+        mark_encrypted_fields_for_write(self, "ssh_private_key_enc")
         self.ssh_private_key_enc = enc_helpers.encrypt(plaintext, key=key)
 
     def get_ssh_private_key(self, *, key: str) -> str:
@@ -854,7 +908,15 @@ class ProxmoxEndpoint(EndpointBase):
                 )
         if self.ssh_credential_source == SSH_CRED_SOURCE_REUSE:
             errors: dict[str, str] = {}
-            if not self.password:
+            try:
+                password_available = bool(self.password)
+            except enc_helpers.EncryptionError:
+                password_available = False
+                errors["ssh_credential_source"] = (
+                    "The stored endpoint password cannot be decrypted. Enter a "
+                    "replacement password or use encrypted-secret recovery."
+                )
+            if not password_available and "ssh_credential_source" not in errors:
                 errors["ssh_credential_source"] = (
                     "Reusing endpoint credentials for SSH requires a stored "
                     "endpoint password; token-only endpoints cannot be reused."

@@ -148,7 +148,13 @@ per node, or issuing an authenticated request for every membership entry.
 - [`logs.py`](./logs.py): backend log aggregation page and related rendering helpers.
 - [`replication.py`](./replication.py): list/detail/edit/delete views and VM-related tab views for `Replication`.
 - [`schedule_sync.py`](./schedule_sync.py): recurring/one-shot scheduler UI and quick-schedule flow from the home dashboard. Also exports `handle_endpoint_sync_routine_post(request, endpoint, post_data)` — the NetBox-independent core of the per-endpoint Sync Jobs tab "Create Sync Job" modal (permission gate → disabled-endpoint refusal → `ScheduleSyncForm` validation → **hard endpoint scoping** → enqueue → flash), returning an `(outcome, form)` tuple the tab view maps to a response. Kept here (not in the heavy `endpoints/proxmox.py`) so it is unit-loadable via the stubbed test harness.
-- [`settings.py`](./settings.py): plugin settings page for runtime feature toggles.
+- [`settings.py`](./settings.py): plugin settings page for runtime feature
+  toggles plus secret-free encrypted-family status, atomic verified key
+  rotation, and a separately permissioned selective destructive reset. Rotation
+  requires normal settings-change permission; reset requires
+  `netbox_proxbox.reset_encrypted_secrets` and is POST-only. Rotation marks all
+  three submitted key fields sensitive for Django exception reports; both views
+  provide actor/request metadata to the secret-free recovery audit trail.
 - [`sync_state_repair.py`](./sync_state_repair.py): operator recovery surface
   for missing Proxbox bootstrap/custom-field setup. It builds the shared
   Home/Settings repair-card context without blocking page render, gates the

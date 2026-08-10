@@ -30,6 +30,7 @@ __all__ = (
     "permission_intent_update_lxc",
     "permission_intent_update_vm",
     "permission_open_ssh_terminal",
+    "permission_reset_encrypted_secrets",
     "permission_run_proxmox_action",
     "permission_view_fastapi_endpoint",
     "user_may_access_proxbox_dashboard",
@@ -61,6 +62,12 @@ def permission_change_fastapi_endpoint() -> str:
 def permission_change_proxbox_plugin_settings() -> str:
     """Required to manage ProxBox plugin behavior settings."""
     return get_permission_for_model(ProxboxPluginSettings, "change")
+
+
+def permission_reset_encrypted_secrets() -> str:
+    """Required for the destructive encrypted-secret recovery workflow."""
+
+    return f"{ProxboxPluginSettings._meta.app_label}.reset_encrypted_secrets"
 
 
 def permission_enqueue_proxbox_sync() -> str:

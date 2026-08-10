@@ -123,6 +123,17 @@ class FastAPIEndpointForm(BackendKeyAdoptionFormMixin, NetBoxModelForm):
         """Pre-fill loopback IP input when the add view is launched with a default."""
         super().__init__(*args, **kwargs)
 
+        instance = getattr(self, "instance", None)
+        if (
+            instance
+            and getattr(instance, "pk", None)
+            and instance.credential_encryption_state == "Recovery required"
+        ):
+            self.fields["token"].help_text = _(
+                "Recovery required: the stored backend API key cannot be decrypted. "
+                "Submit an explicit replacement key or use destructive recovery."
+            )
+
         ip_address = resolve_ip_address_initial(self.initial.get("ip_address"))
         if ip_address is not None:
             self.initial["ip_address"] = ip_address

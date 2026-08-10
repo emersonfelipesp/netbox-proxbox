@@ -107,6 +107,7 @@ jobs:
         run: |
           pytest tests/test_sync_state_models.py tests/test_sync_state_contracts.py \
             tests/test_backend_key_adoption_django.py \
+            tests/test_encryption_key_recovery_django.py \
             tests/test_job_stream_django.py \
             tests/test_ceph_runtime_settings_django.py \
             tests/test_influxdb_metrics_django.py \

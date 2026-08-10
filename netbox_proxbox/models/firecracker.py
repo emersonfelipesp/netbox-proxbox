@@ -177,6 +177,18 @@ class FirecrackerHost(NetBoxModel):
         return bool(self.agent_token_enc)
 
     @property
+    def credential_encryption_state(self) -> str:
+        """Return a secret-free state for the encrypted host-agent token."""
+
+        from netbox_proxbox.services.encryption_recovery import ciphertext_state
+
+        state = ciphertext_state(self.agent_token_enc)
+        return {
+            "configured": "Configured",
+            "recovery_required": "Recovery required",
+        }.get(state, "Not configured")
+
+    @property
     def available_vcpus(self) -> int:
         return max(self.capacity_vcpus - self.allocated_vcpus, 0)
 
@@ -189,6 +201,11 @@ class FirecrackerHost(NetBoxModel):
         return max(self.capacity_disk_mib - self.allocated_disk_mib, 0)
 
     def set_agent_token(self, plaintext: str, *, key: str) -> None:
+        from netbox_proxbox.services.encryption_recovery import (
+            mark_encrypted_fields_for_write,
+        )
+
+        mark_encrypted_fields_for_write(self, "agent_token_enc")
         self.agent_token_enc = enc_helpers.encrypt(plaintext, key=key)
 
     def get_agent_token(self, *, key: str) -> str:

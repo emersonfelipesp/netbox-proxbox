@@ -19,6 +19,7 @@ from netbox_proxbox.models.primary_secrets import (
     decrypt_primary_secret,
     encrypt_primary_secret,
 )
+from netbox_proxbox.utils.encryption import EncryptionError
 
 logger = logging.getLogger(__name__)
 
@@ -185,8 +186,26 @@ class FastAPIEndpoint(EndpointBase):
 
     @token.setter
     def token(self, value: object | None) -> None:
+        from netbox_proxbox.services.encryption_recovery import (
+            mark_encrypted_fields_for_write,
+        )
+
+        mark_encrypted_fields_for_write(self, "token_enc")
         self._backend_key_token_explicitly_assigned = True
         self.token_enc = encrypt_primary_secret(value)
+
+    @property
+    def credential_encryption_state(self) -> str:
+        """Return a secret-free list/dashboard state for the stored backend key."""
+
+        from netbox_proxbox.services.encryption_recovery import ciphertext_state
+
+        state = ciphertext_state(str(self.token_enc or ""))
+        return {
+            "missing": "Not configured",
+            "configured": "Configured",
+            "recovery_required": "Recovery required",
+        }[state]
 
     @property
     def url(self) -> str:
@@ -321,7 +340,18 @@ class FastAPIEndpoint(EndpointBase):
         if loaded_signature is not None:
             loaded_ciphertext = str(loaded_signature[-1] or "")
             if explicitly_assigned:
-                previous_token = decrypt_primary_secret(loaded_ciphertext).strip()
+                try:
+                    previous_token = decrypt_primary_secret(loaded_ciphertext).strip()
+                except EncryptionError:
+                    raise ValidationError(
+                        {
+                            "update_fields": (
+                                "The stored backend key cannot be decrypted. Include "
+                                "token_enc in update_fields and submit an explicit "
+                                "replacement key, or use destructive recovery."
+                            )
+                        }
+                    ) from None
                 candidate = (self.token or "").strip()
                 if candidate != previous_token:
                     raise ValidationError(
@@ -517,7 +547,6 @@ class FastAPIEndpoint(EndpointBase):
                     }
                 )
 
-        previous_token = (previous.token or "").strip() if previous else ""
         candidate_was_supplied = candidate is not None or bool(
             getattr(self, "_backend_key_token_explicitly_assigned", False)
         )
@@ -528,6 +557,20 @@ class FastAPIEndpoint(EndpointBase):
             if candidate_was_supplied
             else ""
         )
+        try:
+            previous_token = (previous.token or "").strip() if previous else ""
+        except EncryptionError:
+            if not candidate_was_supplied or not explicit_candidate:
+                raise ValidationError(
+                    {
+                        "token": (
+                            "The stored backend key cannot be decrypted. Submit an "
+                            "explicit replacement key for this exact enabled target, "
+                            "or use destructive recovery."
+                        )
+                    }
+                ) from None
+            previous_token = ""
         if (
             previous is not None
             and not candidate_was_supplied

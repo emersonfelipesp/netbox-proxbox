@@ -15,6 +15,52 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
 
 ## Files And Ownership
 
+- [`encryption_recovery.py`](./encryption_recovery.py): exhaustive registry of
+  plugin-owned encrypted model fields, the optional netbox-pbs fallback API-key
+  ciphertext, and trust receipts; secret-free family status; ordinary
+  key-mutation guard; verify-all-before-write atomic rotation; and separately
+  confirmed selective reset through non-signaling queryset updates. Optional
+  ownership is skipped only when its Django app and known table are both absent;
+  dormant optional-owner ciphertext and installed owners whose model or table
+  cannot be resolved fail closed. Every
+  `install_encrypted_writer_guards()` wraps every registered model's `save()`
+  (including optional netbox-pbs) so key selection/validation and persistence
+  serialize on the settings row and an expected-ciphertext snapshot rejects
+  instances made stale by rotation/reset, including partial saves of trust and
+  operational-reset fields. Guards are installed on every distinct queryset
+  class reachable from both `_default_manager` and `_base_manager`, not merely
+  the NetBox restricted default manager. Its guarded `QuerySet.update()` path
+  snapshots all recovery fields before taking that lock and makes each delayed
+  trust/operational write conditional on the snapshot, so a reset-winning row
+  updates zero times.
+  The optional companion's public setter
+  may transfer its one-use tagged ciphertext from a validation probe into the
+  persisted instance; the tag is stripped after save. Direct queryset/bulk
+  encrypted-field writes and direct queryset/bulk settings-key changes are
+  rejected before SQL. Verified rotation alone holds the exact-value
+  settings-key permit. Conflict-upsert `update_fields` may not include reset
+  trust/operational fields unless the exact call uses the private
+  settings-locked internal permit. A private context-local permit
+  exists only for one exact rotation/reset/adoption `QuerySet.update()`: its helper
+  holds the settings-row lock and decrypt-validates each outgoing non-empty value
+  under the key currently stored there. Encrypted-field `bulk_create()` and
+  `bulk_update()` have no internal bypass. Recovery locks all registered and
+  dormant-known PostgreSQL tables in deterministic order. Rotation authenticates
+  every enabled, adopted, operational proxbox-api target's versioned
+  `/admin/encryption/status` response and proceeds only when the active cached
+  `env`/`local` key has verified every encrypted backend credential. Disabled,
+  pending, retired, and trust-drifted rows are rotated locally without network
+  access. Legacy source-only responses from operational targets are blocked.
+  Fingerprint validation and the authenticated request share one
+  immutable target capture, preventing linked-IP rebinding from redirecting the
+  backend API key;
+  reset decrypt-checks each selected value, clears only failed fields, preserves
+  healthy fields/rows, and disables only affected endpoints or marks affected
+  Firecracker hosts offline,
+  and success is recorded transactionally as a secret-free NetBox ObjectChange.
+  UI failures record a separate secret-free failure event. Every
+  new `*_enc` field protected by the shared key must join this registry and its
+  exhaustive source/real-Django tests, even when another plugin owns the model.
 - [`__init__.py`](./__init__.py): lazily re-exports key service functions
   (`get_fastapi_request_context`, `iter_backend_sse_lines`, `run_sync_stream`,
   `sse_error_frames`, `sync_full_update_resource`, `sync_resource`,

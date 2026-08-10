@@ -762,7 +762,10 @@ def parser_module(monkeypatch):
     forms_mod.IntegerField = _Field
     forms_mod.DecimalField = _Field
     forms_mod.ChoiceField = _Field
+    forms_mod.MultipleChoiceField = _Field
     forms_mod.PasswordInput = _Field
+    forms_mod.CheckboxSelectMultiple = _Field
+    forms_mod.TextInput = _Field
     forms_mod.NullBooleanField = _Field
     forms_mod.NullBooleanSelect = _Field
 

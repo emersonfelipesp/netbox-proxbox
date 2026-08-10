@@ -180,7 +180,7 @@ from .resource_list_views import (
     VirtualMachinesView as _VirtualMachinesView,
 )
 from .schedule_sync import QuickScheduleSyncFromHomeView, ScheduleSyncView
-from .settings import SettingsView
+from .settings import EncryptedSecretResetView, EncryptionKeyRotateView, SettingsView
 from .sync_state_repair import BootstrapStatusView, RepairSyncStateView
 from .ssh_credential import (
     NodeSSHCredentialBulkDeleteView,

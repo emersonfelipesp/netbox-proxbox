@@ -33,7 +33,7 @@ This directory contains NetBox generic model views for the three endpoint models
   `PDMRemote.objects.restrict(request.user, "view")`; permission to view the
   parent endpoint never implies permission to view all child remotes, and
   object-level remote constraints must remain effective.
-- [`ssh_terminal_credential.py`](./ssh_terminal_credential.py): pure, NetBox-free helpers for the Terminal-tab SSH credential modal — `validate_terminal_credential()` (normalizes the operator-entered credential: username/port/auth-method/secret/fingerprint, with a mandatory host-key fingerprint) and `one_shot_payload()` (builds the proxbox-api `one_shot_credential` body). `proxmox.py`'s `ProxmoxEndpointSSHTerminalSessionView` imports these; they are unit-tested in `tests/test_ssh_terminal_credential.py` without bootstrapping NetBox.
+- [`ssh_terminal_credential.py`](./ssh_terminal_credential.py): pure, NetBox-free helpers for the Terminal-tab SSH credential modal — `validate_terminal_credential()` (normalizes the operator-entered credential: username/port/auth-method/secret/fingerprint, with a mandatory host-key fingerprint) and `one_shot_payload()` (builds the proxbox-api `one_shot_credential` body). `proxmox.py`'s `ProxmoxEndpointSSHTerminalSessionView` imports these; its POST and stored-credential helper mark all reporter locals sensitive, convert expected encryption failures into a secret-free 503, and let unexpected database failures propagate only through redacted frames. The pure helpers are unit-tested in `tests/test_ssh_terminal_credential.py`; the reporter boundary is covered by the real-Django encryption-recovery suite.
 - [`__init__.py`](./__init__.py): re-exports endpoint view classes.
 
 ## Export Views

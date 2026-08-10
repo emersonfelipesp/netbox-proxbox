@@ -105,6 +105,11 @@ class ProxmoxEndpointTable(NetBoxTable):
     ssh_credential_source = ChoiceFieldColumn()
     verify_ssl = BooleanColumn()
     enabled = BooleanColumn()
+    credential_state = tables.Column(
+        accessor="credential_encryption_state",
+        verbose_name=_("Credential state"),
+        orderable=False,
+    )
     status = tables.TemplateColumn(
         template_code=PROXMOX_STATUS_BADGE_TEMPLATE,
         verbose_name=_("Status"),
@@ -129,6 +134,7 @@ class ProxmoxEndpointTable(NetBoxTable):
             "ssh_credential_source",
             "verify_ssl",
             "enabled",
+            "credential_state",
             "timeout",
             "max_retries",
             "retry_backoff",
@@ -150,6 +156,7 @@ class ProxmoxEndpointTable(NetBoxTable):
             "status",
             "verify_ssl",
             "enabled",
+            "credential_state",
         )
 
 
@@ -202,6 +209,11 @@ class FastAPIEndpointTable(NetBoxTable):
     use_https = BooleanColumn()
     verify_ssl = BooleanColumn()
     enabled = BooleanColumn()
+    credential_state = tables.Column(
+        accessor="credential_encryption_state",
+        verbose_name=_("Credential state"),
+        orderable=False,
+    )
     status = tables.TemplateColumn(
         template_code=STATUS_BADGE_TEMPLATE.replace("{{ service }}", "fastapi"),
         verbose_name=_("Status"),
@@ -224,7 +236,7 @@ class FastAPIEndpointTable(NetBoxTable):
             "websocket_domain",
             "websocket_port",
             "server_side_websocket",
-            "token",
+            "credential_state",
             "status",
             "actions",
         )
@@ -239,6 +251,7 @@ class FastAPIEndpointTable(NetBoxTable):
             "verify_ssl",
             "use_websocket",
             "websocket_domain",
+            "credential_state",
         )
 
 
@@ -250,6 +263,11 @@ class NodeSSHCredentialTable(NetBoxTable):
     sudo_required = BooleanColumn()
     has_password = BooleanColumn(verbose_name=_("Password stored"))
     has_private_key = BooleanColumn(verbose_name=_("Private key stored"))
+    credential_state = tables.Column(
+        accessor="credential_encryption_state",
+        verbose_name=_("Credential state"),
+        orderable=False,
+    )
 
     class Meta(NetBoxTable.Meta):
         model = NodeSSHCredential
@@ -264,6 +282,7 @@ class NodeSSHCredentialTable(NetBoxTable):
             "sudo_required",
             "has_password",
             "has_private_key",
+            "credential_state",
             "actions",
         )
         default_columns = (
@@ -275,4 +294,5 @@ class NodeSSHCredentialTable(NetBoxTable):
             "sudo_required",
             "has_password",
             "has_private_key",
+            "credential_state",
         )

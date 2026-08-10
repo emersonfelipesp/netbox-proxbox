@@ -85,7 +85,9 @@ def test_serializer_sshkeys_intent_is_write_only_encrypted() -> None:
     assert "sshkeys_intent = serializers.CharField(" in ser
     assert "write_only=True" in ser
     assert "has_sshkeys = serializers.BooleanField(read_only=True)" in ser
-    assert 'data["sshkeys_enc"] = encrypt_primary_secret(sshkeys_intent)' in ser
+    assert "instance.set_sshkeys(str(sshkeys_intent))" in ser
+    assert 'instance.save(update_fields=("sshkeys_enc",))' in ser
+    assert "with transaction.atomic():" in ser
     # The raw encrypted column is never exposed as a readable serializer field.
     fields_block = ser.split("fields = (", 1)[1].split("brief_fields", 1)[0]
     assert '"sshkeys_enc"' not in fields_block

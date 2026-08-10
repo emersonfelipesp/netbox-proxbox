@@ -1,5 +1,6 @@
 """API serializer for ProxboxPluginSettings."""
 
+from django.views.decorators.debug import sensitive_variables
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 
@@ -14,6 +15,13 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
     Provides full CRUD via API for settings that proxbox-api reads.
     """
 
+    @sensitive_variables()
+    def run_validation(self, data: object = serializers.empty) -> object:
+        """Validate settings without exposing write-only input in parent frames."""
+
+        return super().run_validation(data)
+
+    @sensitive_variables()
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """Validate timing relationships for full and partial API updates."""
 
@@ -42,7 +50,44 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             raise serializers.ValidationError(
                 {"ceph_task_poll_interval": CEPH_POLL_INTERVAL_TIMEOUT_ERROR}
             )
+        if "encryption_key" in validated and self.instance is not None:
+            from netbox_proxbox.services.encryption_recovery import (
+                EncryptionRecoveryError,
+                assert_ordinary_key_mutation_allowed,
+            )
+
+            try:
+                assert_ordinary_key_mutation_allowed(
+                    str(getattr(self.instance, "encryption_key", "") or ""),
+                    str(validated.get("encryption_key") or ""),
+                )
+            except EncryptionRecoveryError as exc:
+                raise serializers.ValidationError(
+                    {"encryption_key": str(exc)}
+                ) from None
         return validated
+
+    @sensitive_variables()
+    def create(self, validated_data: dict[str, object]) -> ProxboxPluginSettings:
+        """Create settings without exposing write-only values in error reports."""
+
+        return super().create(validated_data)
+
+    @sensitive_variables()
+    def update(
+        self,
+        instance: ProxboxPluginSettings,
+        validated_data: dict[str, object],
+    ) -> ProxboxPluginSettings:
+        """Update settings without exposing write-only values in error reports."""
+
+        return super().update(instance, validated_data)
+
+    @sensitive_variables()
+    def save(self, **kwargs: object) -> ProxboxPluginSettings:
+        """Persist settings without exposing merged validated data in reports."""
+
+        return super().save(**kwargs)
 
     class Meta:
         model = ProxboxPluginSettings

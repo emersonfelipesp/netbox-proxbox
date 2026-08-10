@@ -22,6 +22,11 @@ This directory contains Django templates bundled with the plugin.
 - Template names in Python views resolve into this namespaced subtree.
 - Most behavior-rich pages pair templates here with JS under `static/netbox_proxbox/js/`.
 - The namespaced subtree includes shared layout templates, page fragments, table snippets, test pages, and widget partials.
+- `netbox_proxbox/settings.html` renders only encrypted-family labels, counts,
+  and secret-free states. Rotation password inputs never render submitted or
+  stored values. The destructive reset form is omitted unless the user holds
+  the separate reset permission; keep all recovery rendering free of dynamic
+  `innerHTML` and ciphertext/key material.
 
 ## Links
 

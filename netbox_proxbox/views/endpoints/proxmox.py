@@ -15,6 +15,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from django.views import View
+from django.views.decorators.debug import sensitive_variables
 from netbox.api.authentication import TokenAuthentication
 from netbox.views import generic
 import requests
@@ -64,6 +65,7 @@ from netbox_proxbox.services.backend_context import (
     get_fastapi_endpoint_with_token,
 )
 from netbox_proxbox.tables import ProxmoxEndpointTable
+from netbox_proxbox.utils import encryption as enc_helpers
 from netbox_proxbox.views.proxbox_access import permission_open_ssh_terminal
 from netbox_proxbox.views.endpoints.proxmox_export import (
     _proxmox_export_fieldnames,
@@ -667,6 +669,7 @@ class ProxmoxEndpointSSHTerminalView(generic.ObjectView):
 class ProxmoxEndpointSSHTerminalSessionView(View):
     """Create proxbox-api SSH terminal tickets without exposing backend API keys."""
 
+    @sensitive_variables()
     def post(self, request: HttpRequest, pk: int) -> JsonResponse:
         if not request.user.is_authenticated:
             return JsonResponse({"error": "Authentication required."}, status=401)
@@ -833,6 +836,7 @@ class ProxmoxEndpointSSHTerminalSessionView(View):
 
         return JsonResponse({"error": last_error}, status=502)
 
+    @sensitive_variables()
     def _apply_node_credential(
         self,
         request: HttpRequest,
@@ -892,15 +896,31 @@ class ProxmoxEndpointSSHTerminalSessionView(View):
         cred.port = data["port"]
         cred.auth_method = data["auth_method"]
         cred.known_host_fingerprint = data["known_host_fingerprint"]
-        if data["auth_method"] == AUTH_METHOD_KEY:
-            cred.set_private_key(data["private_key"], key=key)
-            cred.password_enc = ""
-        else:
-            cred.set_password(data["password"], key=key)
-            cred.private_key_enc = ""
+        from netbox_proxbox.services.encryption_recovery import (
+            mark_encrypted_fields_for_write,
+        )
+
         try:
+            if data["auth_method"] == AUTH_METHOD_KEY:
+                cred.set_private_key(data["private_key"], key=key)
+                mark_encrypted_fields_for_write(cred, "password_enc")
+                cred.password_enc = ""
+            else:
+                cred.set_password(data["password"], key=key)
+                mark_encrypted_fields_for_write(cred, "private_key_enc")
+                cred.private_key_enc = ""
             cred.full_clean()
             cred.save()
+        except enc_helpers.EncryptionError:
+            return JsonResponse(
+                {
+                    "error": (
+                        "Cannot store credentials because plugin encryption is "
+                        "unavailable. Repair the encryption key and try again."
+                    )
+                },
+                status=503,
+            )
         except ValidationError as exc:
             return JsonResponse(
                 {"error": "; ".join(exc.messages) or "Invalid SSH credential."},

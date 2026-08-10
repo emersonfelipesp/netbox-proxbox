@@ -88,13 +88,20 @@ curl -X PATCH \
   "allow_private_ips": true,
   "additional_allowed_ip_ranges": "",
   "explicitly_blocked_ip_ranges": "",
-  "encryption_key": "",
   "tags": [],
   "custom_fields": {},
   "created": "2026-01-01T00:00:00Z",
   "last_updated": "2026-04-01T00:00:00Z"
 }
 ```
+
+The ordinary list/detail serializer omits `encryption_key` because it is
+write-only. `GET /api/plugins/proxbox/settings/runtime/` additionally returns
+`"encryption_key_configured": true|false`. For compatibility with current
+proxbox-api releases, that backend-only runtime route returns the key only to a
+superuser or caller with plugin-settings change permission; every other caller
+receives `"encryption_key": ""`. Provision proxbox-api's own local encryption
+key before this deprecated compatibility fallback is removed.
 
 ---
 
@@ -192,7 +199,23 @@ hardcoded estate values.
 
 | Field | Type | Description |
 |---|---|---|
-| `encryption_key` | string | Key used for encrypting sensitive values stored in the database |
+| `encryption_key` | string | Write-only Fernet key for plugin-owned ciphertext in the NetBox database. Ordinary GET responses omit it; the backend-only `/runtime/` compatibility route returns it only to a superuser or caller with plugin-settings change permission. Use `encryption_key_configured` to test presence. Ordinary PATCH cannot clear or replace the key while registered ciphertext exists; use the UI's verified rotation or separately permissioned destructive reset workflow. |
+
+The plugin key should be a different security domain from proxbox-api's
+`PROXBOX_ENCRYPTION_KEY` (which protects proxbox-api's own database) and from
+the `FastAPIEndpoint` API key (which authenticates requests). Current
+proxbox-api releases retain a permission-gated runtime fallback for existing
+deployments; migrate the backend to local key configuration before that
+compatibility path is removed.
+
+Verified plugin-key rotation additionally requires every enabled, adopted,
+operational backend to serve the paired version-1
+`/admin/encryption/status` attestation: it must report the active cached key
+source as `env` or `local` and confirm that the active key decrypts every
+encrypted backend credential. Disabled, pending, retired, or trust-drifted rows
+are never contacted; their ciphertext rotates locally. The current legacy
+source-only response is intentionally insufficient for an operational backend,
+even when it reports `env` or `local`.
 
 ### Logging
 
