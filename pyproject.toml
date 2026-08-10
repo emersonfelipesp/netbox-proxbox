@@ -41,7 +41,12 @@ Issues = "https://github.com/emersonfelipesp/netbox-proxbox/issues"
 
 [project.optional-dependencies]
 cli = [
-    "aiohttp>=3.14.1",
+    # Security floor: 3.14.3 is the first release fixing the out-of-bounds heap
+    # read in the C HTTP response parser (GHSA-cq5v-8q36-5273), which
+    # ProxboxApiClient reaches when parsing a malformed chunked response from an
+    # operator-configured backend. Do not lower without raising it elsewhere;
+    # tests/test_dependency_security_floors.py enforces this.
+    "aiohttp>=3.14.3",
     "click>=8.3.0",
     "PyYAML>=6.0.3",
     "rich>=14.1.0",
@@ -150,4 +155,10 @@ dev = [
     "mkdocs-material>=9.7.6",
     "mkdocstrings>=1.0.3",
     "mkdocstrings-python>=2.0.3",
+    # Security floor: 11.0.1 is the first release fixing the backtracking ReDoS
+    # in the inline processors (GHSA-gm37-52c6-37mw) and the b64 path traversal
+    # (GHSA-9xwg-3r6f-jcx2). Otherwise transitive, and mkdocs-material asks only
+    # for >=10.2, which admits both ranges.
+    # tests/test_dependency_security_floors.py enforces this.
+    "pymdown-extensions>=11.0.1",
 ]

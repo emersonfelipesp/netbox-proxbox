@@ -16,7 +16,7 @@ This directory contains Django schema migrations for the plugin models.
 ## Idempotent additive operations (post-0036)
 
 Additive schema operations in the post-``0036_add_overwrite_vm_type`` chain,
-including current migration ``0078``, are wrapped through the helpers in
+including current migration ``0081``, are wrapped through the helpers in
 [`_idempotent_ops.py`](./_idempotent_ops.py) — ``add_field_idempotent()``
 for ``AddField`` and ``create_model_idempotent()`` for ``CreateModel``.
 Each helper returns a ``SeparateDatabaseAndState`` whose ``database_operations``
