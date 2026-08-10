@@ -16,6 +16,124 @@ the staged TestPyPI/PyPI release pipeline.
 | `.github/workflows/docs-screenshots.yml` | Manual dispatch | Refreshes committed UI screenshots used by the docs site. |
 | `.github/workflows/nightly-contracts.yml` | Schedule / manual dispatch | Checks cross-repo contracts that must stay aligned with `proxbox-api`. |
 
+## Authenticated Exact-Commit Matrix Bootstrap
+
+Issue #300 adds `scripts/wait_for_github_django_matrix.py` as a reviewed
+target-branch artifact. This bootstrap must not enable a Gitea consumer. No
+private pre-merge or deployment workflow calls it yet, and its presence does
+not promote the public Django matrix to trusted evidence.
+
+### Trust boundary
+
+The public matrix is **non-security evidence** while the candidate commit owns
+the installed plugin package and its tests. Pinning the workflow prevents a
+candidate from replacing `django-tests.yml` with a no-op success, but it cannot
+prevent candidate package or test code from changing its own behavior. A
+future **base-pinned external supervisor** is required before a matrix result
+can become security-critical evidence. That supervisor must execute the waiter
+from an immutable reviewed target-branch checkout, never from the candidate
+checkout.
+
+The supervisor supplies the expected short candidate branch, full lowercase
+40-character SHA, positive GitHub run ID via `--expected-run-id`, and positive
+run-attempt number via `--expected-run-attempt`. Both members of that trusted
+pair are mandatory. A UTC `YYYY-MM-DDTHH:MM:SSZ` creation-time floor via
+`--not-before` is an optional additional bound, never a standalone selector.
+The waiter accepts only a completed successful `push` attempt whose
+repository, head repository, branch, SHA, head-commit ID, workflow ID, workflow
+API URL, and exact bare workflow path `.github/workflows/django-tests.yml` all
+match. GitHub's workflow-run response returns that path without a branch suffix, so
+branch provenance is deliberately bound through the separately checked
+`head_branch` and run name. The pinned workflow's GitHub-generated run name
+must contain the exact `refs/heads/<branch>` and SHA, removing the ambiguity
+when a tag shares a branch name and commit. A tag push, pull-request run,
+same-SHA run from another branch, or run of another workflow is rejected.
+Before polling, the waiter reads
+`.github/workflows/django-tests.yml` at that exact SHA and requires GitHub's Git
+blob identity to equal the reviewed `PINNED_WORKFLOW_BLOB_SHA` constant.
+
+Discovery polls only
+`/repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt}` from the
+outset. HTTP 404 is treated as a not-yet-visible state and retried only within
+the shared deadline and request cap. The waiter never lists filtered workflow
+runs, so a crowded first page or a run flood cannot displace the trusted pair.
+Every returned response must match the pinned ID and attempt before its status
+is considered. A prior successful attempt of the same run cannot satisfy a
+newer pinned attempt.
+
+### Credential and network boundary
+
+The credential must be a short-lived, base-owned GitHub App user access token
+(`ghu_…`). Preferred ingress is `GH_MATRIX_READ_TOKEN_FILE`, set to a regular
+file that denies all group and other permissions (for example mode `0600` or
+`0400`) and is readable only by the waiter. The waiter reads and strips that
+file without placing the token value into `os.environ`. `GH_MATRIX_READ_TOKEN`
+remains a fallback and the file wins when both variables are set. The
+authenticated user must be the repository owner, and the token must expose
+exactly one accessible app installation. The waiter exhausts installation
+pagination before accepting it; any second installation, including one for an
+unrelated private owner, is over-scope and is rejected. The sole installation
+must belong to the repository owner and select only
+`emersonfelipesp/netbox-proxbox` with exact repository `Actions: read`,
+`Contents: read`, and the implicit `Metadata: read` permission. This token form
+is deliberate: its authenticated-user installation response exposes the app's
+permissions, allowing the waiter to reject an under- or over-scoped token
+instead of treating public anonymous API access as proof of authorization.
+
+Environment fallback has a narrower guarantee. Removing
+`GH_MATRIX_READ_TOKEN` from `os.environ` cannot erase the process's original
+environment block: same-runner processes with proc access may still read the
+token from `/proc/<pid>/environ`, and Python startup hooks run before the waiter
+can remove it. File ingress avoids those environment exposures because only the
+file path enters the initial environment and `main()` verifies isolated mode
+before reading the file. The executable shebang enables Python isolated mode;
+an explicit caller must likewise invoke a reviewed interpreter with `python
+-I`.
+
+The waiter does not spawn or shell out to another process, disables ambient
+proxies and redirects, and sends requests only to its fixed
+`https://api.github.com` endpoint allowlist. The waiter cannot enforce
+UID/PID-namespace, same-runner process, or core-dump isolation. Those remain
+external-supervisor obligations.
+Its authentication preflight verifies the authenticated owner, exactly one
+accessible unsuspended app installation, exact read permissions, single exact
+repository selection, and authenticated rate-limit headers. Missing,
+malformed, invalid, suspended, under-scoped, over-scoped, or wrong-repository
+credentials fail before candidate verification begins.
+
+The secret-injection boundary—not candidate convention—is what protects the
+credential. The future supervisor must keep the token file and either ingress
+variable outside every candidate checkout, container, environment, hook,
+subprocess, and log. Candidate code must never run in the waiter's process, and
+the waiter must never run with a candidate-controlled Python path or startup
+customization.
+
+Connection attempts, response reads, JSON parsing, transient retries,
+rate-limit waits, and workflow polling all consume one 45-minute monotonic
+deadline. JSON responses have a one-MiB ceiling. A 403 is retried only when
+GitHub supplies `Retry-After` or an exhausted primary-rate-limit header pair;
+other 403 responses fail as invalid or under-scoped authentication. Each gate
+has a hard 200-request cap. Four concurrent default gates therefore reserve at
+most 800 requests plus a 200-request safety margin, below the authenticated
+5,000-request hourly floor; authentication refuses to start below that shared
+1,000-request remaining budget.
+
+### Bootstrap order
+
+1. Land and review the waiter, unit contracts, workflow blob pin, and this
+   trust-boundary documentation on the target branch. This is the only step in
+   issue #300.
+2. Build a base-pinned external supervisor that obtains branch/SHA provenance
+   plus the expected GitHub run-ID/attempt pair and any optional not-before
+   creation time from the trusted control plane, then invokes the waiter from
+   reviewed base code. Prefer provisioning the GitHub App token through a
+   waiter-only private file and keep it outside every candidate process.
+3. Validate the supervisor and secret boundary independently. Until this is
+   complete, public matrix results remain non-security evidence.
+4. Only then enable a Gitea pre-merge or deployment consumer in a separate,
+   reviewed change. The consumer may rely only on the supervisor's exact-run
+   verdict, never directly on a candidate-controlled workflow success.
+
 ## Django Test Database
 
 `django-tests.yml` relies on the hardcoded `matrix.netbox` allowlist for the

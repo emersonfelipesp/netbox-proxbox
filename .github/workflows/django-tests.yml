@@ -1,4 +1,5 @@
 name: Django Tests
+run-name: Django Tests (${{ github.event_name }} ${{ github.ref }} @ ${{ github.sha }})
 
 # Runs the NetBox-backed Django suites for sync-state models, form/M2M
 # persistence, the fail-closed backend-key boundary, and runtime view/template

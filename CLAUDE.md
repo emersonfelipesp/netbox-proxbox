@@ -531,6 +531,42 @@ The `bootstrap-only` tag (slug `bootstrap-only`) is auto-created by `netbox_prox
 
 ## CI/CD Workflows
 
+### Authenticated Django matrix bootstrap (issue #300; no consumer)
+
+`scripts/wait_for_github_django_matrix.py` is a reviewed target-branch artifact
+for a future **base-pinned external supervisor**. Prefer base-owned credential
+ingress through `GH_MATRIX_READ_TOKEN_FILE`, naming a private file readable only
+by the waiter; `GH_MATRIX_READ_TOKEN` remains a fallback. The waiter verifies
+that the base-owner GitHub App user access token exposes exactly one app
+installation with the expected owner, exact read permissions, and
+single-repository selection,
+pins `.github/workflows/django-tests.yml` by Git blob identity, and accepts only
+the successful `push` attempt matching the trusted candidate branch, full SHA,
+repository, GitHub's bare workflow path, and required expected run-ID/attempt
+pair. A UTC not-before time is only an optional additional bound. Discovery
+polls only `/actions/runs/{run_id}/attempts/{attempt}` from the outset and
+treats 404 as a bounded not-yet-visible state, so workflow-run list ordering or
+flooding cannot displace the trusted pair. Branch provenance is independently
+bound by `head_branch` and the exact run-name ref. All API I/O, parsing,
+retries, rate-limit handling, and polling share one deadline and a hard request
+budget.
+
+Environment fallback ingress cannot erase the token from the process's
+original environment block: same-runner processes with proc access can still
+read it from `/proc/<pid>/environ`, and Python startup hooks run before the
+waiter can remove it. File ingress avoids those environment exposures. Process
+and namespace isolation are external-supervisor obligations that this waiter
+cannot enforce.
+
+This commit intentionally has no Gitea caller. The public matrix remains
+**non-security evidence** because candidate code owns the installed package and
+tests; the workflow pin alone does not change that boundary. A consumer may be
+enabled only in a later reviewed change after the external supervisor is
+base-pinned and the token is proven to remain outside every candidate checkout,
+environment, process, and log. Keep the architecture and bootstrap order in
+[`docs/developer/ci-e2e-workflows.md`](./docs/developer/ci-e2e-workflows.md)
+aligned with the script and tests.
+
 ### Gitea-to-GitHub mirror (`.gitea/workflows/mirror-github.yml`)
 
 Gitea is the source of truth for normal branch work. The mirror workflow runs
