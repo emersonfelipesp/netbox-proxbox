@@ -41,7 +41,7 @@ This directory contains the plugin's pytest test suite.
 - `test_preflight_diagnosis.py`: regression suite for netbox-proxbox issue #624 — a fresh install whose sync died on stage `devices` with an opaque `Error ensuring Proxbox tag`. Pins the three behaviors that turn that into a diagnosable failure: `list_backend_netbox_endpoints()`'s three-way `(rows, None)` / `(None, error)` contract, the named readiness budgets in `services/backend_auth.py` plus one-shot authentication budgets in `services/backend_key_adoption.py`, and `_is_retryable_stage_failure()` plus `preflight_hint` attribution in `sync_stages.py`. Reads both modules' constants with `ast.literal_eval` rather than importing the Django-backed authentication module and asserts the adoption state machine's bootstrap-status, authenticated-key-list, and register-key call sites use named constants via an AST walk, so a future inline literal cannot silently reintroduce a too-tight budget. `TestRetryableStageFailure` additionally pins the two marker-matching mistakes the classifier must not make: a **false positive** (HTTP 400 `"timeout must be between 1 and 300"` is a validation rejection, not a transport failure — which is why no bare single-word marker may be added) and a **false negative** (a transport cause nested in a FastAPI `detail` **list** must still retry), plus the invariant that the echoed `input` field is never scanned and that cyclic/over-deep payloads terminate on `_CAUSE_RECURSION_LIMIT`. `test_real_transport_failure_texts_are_matched` parametrizes the *verbatim* strings the transport layer emits (nginx's hyphenated `504 Gateway Time-out` body, urllib3's `HTTPConnectionPool … Read timed out`, `[Errno 111] Connection refused`, httpx's `Server disconnected without sending a response.`, glibc `EAI_AGAIN`/`EAI_NONAME` and BSD resolver errors, and an `ssl` `EOF occurred in violation of protocol`) so a marker can never be reduced to a shape that matches only the paraphrase — four of those eight were genuine misses before this test existed.
 - `test_endpoint_scope.py`: behavior tests for `services/endpoint_scope.py::enabled_backend_endpoint_scope`, loaded by file path against a capturing manager and resolver stub. Pins the `endpoint_ids` narrowing contract the firewall/datacenter pre-SSE passes rely on: `None` keeps the historic all-enabled scope (no pk filter), a non-empty selection reaches the ORM as `pk__in` beside `enabled=True` and only the surviving endpoints are resolved to backend ids, and an **empty** selection — or one matching no enabled endpoint — returns `(None, {}, None)` before the ORM and the backend are consulted, because falling through would build the widest request proxbox-api accepts exactly when the caller asked for the narrowest.
 - `test_multi_endpoint_scoping.py`: behavior tests for `views/backend_sync.py`'s wire-id resolution, loaded by file path (`_load_backend_sync_module`) against hand-built stubs — no NetBox bootstrap and no HTTP. Pins `proxmox_backend_name()`'s `"<name> (nb:<pk>)"` shape, the disabled-endpoint short circuits (both `sync_proxmox_endpoint_to_backend()` and `resolve_backend_endpoint_id()` return before any `requests.get`), the unregistered and list-error paths, and the batch omission behavior. Its largest group pins that **a located row must still be confirmed to dial the same service**: a row pointing at another host, one on a different port, one reporting no port at all, one matching only the *unused* stored address, and an endpoint that resolves no host itself are all refused, while an address change *under a configured domain* is correctly ignored — because a row with a domain never dials its address. `test_backend_holds_proxmox_endpoint_requires_the_row_to_be_current` states the soft-budget predicate as a table (current row held; retargeted / different port / user / transport / TLS / another endpoint all still pushed; empty **and** `None` both not-held, since a failed listing is *unknown* and unknown must never skip a push). "Current" now includes the **credentials**, which the backend row cannot report: the held case records a fingerprint through the real `proxmox_endpoint_credential_fingerprint()` first, and two further cases pin that a secret rotated in place after that recording, and a never-recorded fingerprint, both read as "push again" rather than "held". The loader's `disabled_endpoint_detail` stub takes `(endpoint, **kwargs)` — the real function's `kind=` / `action=` are keyword-only and the call site passes them, so a bare `lambda endpoint:` raises `TypeError` from inside the code under test.
-- `test_individual_sync_service.py`, `test_models_cluster.py`, `test_models_overwrites.py`, `test_openapi_schema_service.py`, `test_proxmox_export_view.py`, `test_schedule_hints.py`, `test_schedule_sync_view.py`, `test_schemas.py`, `test_sync.py`, `test_sync_cluster.py`, `test_sync_now_cluster_node.py`, `test_utils.py`: service, model, schema, sync, overwrite-field, and utility behavior. `test_individual_sync_service.py` and `test_sync_now_branch_bridge.py` both stub `get_first_fastapi_context` as `lambda **kwargs: …` and give their `fake_sync` explicit `fastapi_endpoint_id=None` **and `proxmox_endpoint_ids=None`** parameters — `sync_individual()` resolves its backend by **keyword** (`endpoint_id=`) and `sync_individual_with_dependencies()` forwards both the backend pin and the Proxmox scope recursively, so a positional-only stub silently drops them and a stub missing either parameter raises `TypeError` on the dependency call. **Every keyword `_sync_dependency()` forwards must be added to those two signatures**; the `fake_sync(*args, **kwargs)` stubs elsewhere in the same files absorb new keywords on their own.
+- `test_individual_sync_service.py`, `test_models_cluster.py`, `test_models_overwrites.py`, `test_openapi_schema_service.py`, `test_proxmox_export_view.py`, `test_schedule_hints.py`, `test_schedule_sync_view.py`, `test_schemas.py`, `test_sync.py`, `test_sync_cluster.py`, `test_sync_now_cluster_node.py`, `test_sync_now_direct_plugin.py`, `test_utils.py`: service, model, schema, sync, overwrite-field, and utility behavior. `test_sync_now_direct_plugin.py` covers all six registered direct actions (cluster/node/storage/backup/snapshot/task-history), including exact real-resolver query forwarding, typed-sidecar task-history VMID resolution, legacy task-history VM-type derivation/local refusal, authoritative snapshot-subtype handling and unknown-type refusal, active branch propagation, single-enabled-owner backend scoping, duplicate cluster names, disabled/ambiguous/missing ownership refusals, HTTP-200 error payload handling, and missing-context early exits. `test_individual_sync_service.py` and `test_sync_now_branch_bridge.py` both stub `get_first_fastapi_context` as `lambda **kwargs: …` and give their `fake_sync` explicit `fastapi_endpoint_id=None` **and `proxmox_endpoint_ids=None`** parameters — `sync_individual()` resolves its backend by **keyword** (`endpoint_id=`) and `sync_individual_with_dependencies()` forwards both the backend pin and the Proxmox scope recursively, so a positional-only stub silently drops them and a stub missing either parameter raises `TypeError` on the dependency call. **Every keyword `_sync_dependency()` forwards must be added to those two signatures**; the `fake_sync(*args, **kwargs)` stubs elsewhere in the same files absorb new keywords on their own.
 - `test_proxmox_endpoint_tuning.py`: isolated model behavior for endpoint/global timeout, retry, and back-off resolution, including an AST contract on the actual `5` / `0` / `0.50` model defaults plus all-inherited, mixed, and explicit zero retry/back-off cases. `test_backend_sync_placement.py` pins that backend registration consumes the resolved values; `test_multi_endpoint_scoping.py` requires public backend tuning values to match before a row is current; `test_jobs.py` proves stale inherited tuning remains push-required after the soft preflight budget; and `test_sync_mode_forwarding.py` pins that only the dedicated task-history stage owns task-history discovery.
 - `test_sdn_models.py`: source and migration contracts for `ProxmoxSdnFabric`, `ProxmoxSdnRouteMap`, and `ProxmoxSdnPrefixList` — model file existence, required/optional fields, `UniqueConstraint` presence, `NetBoxModel` base, `models/__init__` exports, `choices.py` `SdnFabricTypeChoices`, navigation items and URLs, views (list views, `register_model_view`), filtersets, tables, forms, and the `sync_sdn` service (`SdnSyncResult` dataclass, backend endpoint paths). References the consolidated squash migration `0039_squashed_0039_0042_pve_9_2_firewall_sdn.py`.
 - `test_datacenter_models.py`: source and migration contracts for `ProxmoxDatacenterCpuModel` — model file existence, required fields, `UniqueConstraint` presence, `NetBoxModel` base, `models/__init__` exports, navigation items and URLs, views, filtersets, tables, forms, and the `sync_datacenter` service. References the consolidated squash migration `0039_squashed_0039_0042_pve_9_2_firewall_sdn.py`.
@@ -81,20 +81,104 @@ This directory contains the plugin's pytest test suite.
 - `test_services_sync_datacenter.py`: behavior tests for `sync_datacenter` scoping against a stubbed module loader (mirroring the `sync_firewall` harness): a CPU-model response row for an endpoint outside the run's resolved scope is refused — neither upserted nor included in stale marking — pinning the local half of the endpoint scope that query-param forwarding cannot enforce against a backend that ignores `proxmox_endpoint_ids`. Also pins that a cluster name claimed by two endpoints resolves to nobody (`_resolve_endpoint_by_cluster_name` returns `None` instead of `.first()`-guessing), the same rule the firewall harness pins on its side together with the single-claimant case still resolving.
 - `test_services_backend_context.py`: AST contract for `get_fastapi_request_context` / `get_fastapi_endpoint_with_token` signatures and the three endpoint-resolution branches in `services/backend_context.py`.
 - `test_views_vm_config.py`: AST contract for `ProxmoxVMConfigTabView` — `register_model_view` path/name, `ObjectView` base, `ViewTab` label/permission, and the helper extractors.
-- `test_views_storage.py`: AST contract for the eight `ProxmoxStorage*` view classes — `__all__` membership, list-view `path=""` registration, child-tab paths/labels/permissions, and the detail view's short `request_timeout`.
+- `test_detail_view_templates.py`: fast AST/filesystem contract for every
+  plugin `ObjectView` registered with `register_model_view`; validates explicit
+  and default template paths without bootstrapping Django. It also pins that
+  the InfluxDB detail page uses only fail-closed URL/token display properties.
+- `test_detail_view_templates_django.py`: real-NetBox complement in the
+  supported-version matrix. It imports the complete plugin URL surface, walks
+  NetBox's populated runtime view registry, requires exact registry identifier
+  and qualified-class identity for all 53 mandatory views (plus the optional
+  netbox-pdm endpoint view), proves the pinned companion first registers its
+  own PDM detail view and the Proxbox integration deliberately replaces it,
+  resolves every plugin `ObjectView`'s actual
+  template through Django's loader, and uses an authenticated Client to
+  GET/render all 17 detail routes repaired by the missing-template bug. The SSH
+  credential smoke also proves stored ciphertext never reaches the response.
+- `test_influxdb_metrics_contract.py`: fast model/serializer/table contracts
+  for InfluxDB URL and token-reference validation and fail-closed output. Its
+  table harness pins both list rendering and CSV/export value extraction to
+  `influx_url_display`, so malformed legacy URLs cannot bypass masking through
+  the list surface. It also pins model-level change-log serialization and the
+  exclusion of raw URLs from free-text search.
+- `test_influxdb_metrics_django.py`: real-NetBox migration and security-surface
+  coverage for metrics metadata. It discovers the plugin migration leaf and its
+  parent dynamically, verifies row quarantine plus irreversible historical
+  `ObjectChange` masking, proves post-migration `objects.create()` and
+  `queryset.update()` cannot persist an invalid enabled URL/query-token state,
+  and exercises the changelog page, core ObjectChange REST representation,
+  bypass-written list search, and edit GET behavior.
+- `test_pdm_endpoint_permissions_django.py`: real-NetBox permission coverage for
+  the PDM detail override's discovered-remotes table, including a parent-only
+  viewer and an object-constrained `PDMRemote` grant.
+- `test_views_storage.py`: AST contract for the eight `ProxmoxStorage*` view classes — `__all__` membership, list-view `path=""` registration, child-tab paths/labels/permissions, the detail view's short `request_timeout`, and the explicit `MultiValueCharFilter` preserving `nodes` query/OpenAPI behavior after its `TextField` migration.
+- `test_storage_content_fetch.py`: pure adversarial coverage for the storage
+  content process-wide pool and streamed fetcher. Repeated page-deadline calls
+  whose fake HTTP work keeps trickling prove that live workers and occupied
+  slots never exceed four; separate cases pin graceful partial notices when all
+  slots are occupied, active wall-clock abort of a trickling response, and the
+  decoded response-size ceiling. It path-loads `views/storage_content.py` so the
+  mocked suite exercises these resource-lifetime rules without NetBox/Django.
+- `test_storage_nodes_capacity_django.py`: real NetBox/Django coverage proving
+  storage node membership longer than 255 characters passes the model, form,
+  serializer, filterset, REST list/bulk, and database boundaries unchanged. Its
+  migration case asserts there is exactly one plugin leaf, discovers that
+  leaf's parent dynamically, and exercises expand-only rollback/reapply without
+  pinning a collision-prone migration number. Its no-database cases prove the
+  live-content fan-out stays at four workers, issues no more than 64
+  authenticated calls for a 5,000-node membership, respects one absolute
+  deadline even when a call ignores its socket timeout, bounds late-refill HTTP
+  timeouts to the remaining budget, rejects real malformed/error envelopes
+  without mocked validation, and
+  reports partial/truncated results explicitly in every usage-data template
+  branch.
 - `test_proxmox_endpoint_settings_view.py`: AST contract for the Proxmox endpoint Settings tab registration, permissions, form usage, and context wiring.
 - `test_endpoint_templates_tab.py`: AST/source + behavior contracts for the endpoint **Templates** tab. Covers `ProxmoxEndpointTemplatesTabView` structure (`ObjectView` base, `__all__`, `template_name`, `ViewTab` label/permission/weight, `path="templates"`, `get_extra_context` + classification helpers, wiring into `views/__init__.py`), the live-fetch source contract (`/cloud/vm/templates` with `cloud_init_only=false` + `/cloud/lxc/templates`, `get_fastapi_request_context`/`resolve_backend_endpoint_id`, cloud-init derived from `cloud_init_drives`/`cicustom`, graceful `backend_error` degradation), the `integrations/packer.py` detection + guarded add-URL helpers, template contracts (three `data-category` groups, category filter, packer create button disabled **with a working tooltip** when netbox-packer is absent), and mirrored behavior tests for cloud-init classification / byte→GiB / LXC name derivation. Pure AST/source based — no NetBox bootstrap.
 - `test_endpoint_create_instance.py`: AST/source + local-stub behavior contracts for the Templates-tab **Create new instance** wizard. Covers the registered `create-instance` view, POST-only permission gate, `allow_writes` early exit, direct proxbox-api QEMU/LXC payload builders, cloud-init validation, VMID collision retry, actor/idempotency headers, verbatim backend 403 surfacing, template Actions columns, disabled-button tooltip, wizard steps, CSRF/fetch contract, and unsafe-JS exclusions. No real provisioning is performed.
 - `test_overwrite_flags_contract.py`, `test_overwrite_vm_type_contract.py`, `test_sync_params_flag_flattening.py`: contract coverage for the overwrite flag field set, VM type overwrite behavior, and sync query parameter flattening.
 - `test_vm_sync_device_flag_enforcement.py`: pins PR #342. Asserts the six `overwrite_device_*` fields are in `OVERWRITE_FIELDS` and that `_build_base_query_params` serializes per-endpoint device-flag values into the SSE query string.
 - `test_settings_view_encryption.py`: tests Settings view encryption-key handling and sensitive-field behavior.
+- `test_encryption_key_recovery.py`: fast AST/source/security contracts proving
+  the central recovery registry exactly matches every plugin model `*_enc`
+  field plus the optional netbox-pbs fallback API key, trust receipts are
+  complete, dormant optional tables are recognized, rotation orders all
+  verification before writes, registered writers
+  share the settings-row protocol and recovery uses one quoted PostgreSQL
+  table-lock protocol, reset is confirmed/atomic/non-signaling, clears only
+  undecryptable selected fields, preserves healthy fields/rows, and
+  operationally disables only affected rows,
+  audit payloads are secret-free, key material is withheld, and
+  signal/list/dashboard recovery surfaces stay fail-closed.
+- `test_encryption_key_recovery_django.py`: real-NetBox coverage for the eight
+  always-installed families and eleven local ciphertext fields: successful rotation,
+  wrong-old-key refusal, drifted-setting repair, corrupt-value full rollback,
+  proxbox-api versioned active-key/full-credential attestation, disabled-row
+  zero-network rotation, and immutable target capture, model/API/form mutation
+  guards, exact reset confirmation, separate permission enforcement, selective
+  trust-state clearing with no save signals, usable secret-free UI, and
+  encryption-error signal boundaries. It covers both default and base managers,
+  direct key update/bulk-update rejection, protected conflict-upsert rejection,
+  and the real key-bearing settings save frame's exception redaction. A
+  PostgreSQL `TransactionTestCase` proves the table lock excludes a concurrent
+  ciphertext writer and that a writer which captured old-key ciphertext cannot
+  save after rotation; stale full/partial
+  saves and conditional `QuerySet.update()` writers cannot resurrect reset
+  credentials, trust, enabled state, or Firecracker online status; a concurrent
+  conflict upsert likewise cannot undo reset quarantine, while explicit
+  post-reset credential re-entry remains allowed.
+  It also proves the optional netbox-pbs family is omitted only when the app and
+  table are genuinely absent, dormant ciphertext blocks rotation, an installed
+  but unresolved model/schema/table fails closed, cloud-init/terminal/PBS writer
+  compatibility survives the guard, and settings/status/terminal exception
+  reports remain secret-free. It verifies secret-free ObjectChange
+  attribution/counts and is included in the Django matrix.
 - `test_settings_view_hardware_discovery.py`: GET/POST handling of the
   `hardware_discovery_enabled` master flag and the separate default-off
   `hardware_discovery_sync_nic_macs` opt-in — initial population, save paths,
   missing-field fallback, and `update_fields` membership.
 - `test_cloud_customer_network_settings.py`: source contracts for the five `ProxboxPluginSettings` cloud-customer network fields, migration 0059, form/API/template/view/docs wiring, and estate-agnostic migration defaults.
 - `test_ceph_runtime_settings.py`: source contracts for migration 0077, bounded model/form fields, serializer/view/template wiring, documentation, environment override names, and the immutable cross-service timing contract.
-- `test_ceph_runtime_settings_django.py`: real Django/DRF validation checks proving the model, form, and settings serializer accept the documented bounds, reject polling greater than timeout (including partial API updates), and apply migration 0077 to an existing row with the documented defaults.
+- `test_ceph_runtime_settings_django.py`: real Django/DRF validation checks proving the model, form, and settings serializer accept the documented bounds, reject polling greater than timeout (including partial API updates), and apply migration 0077 to an existing row with the documented defaults. Its migration test restores the current graph leaf, never a hard-coded historical target, so later matrix modules run against the final schema.
 - `test_settings_view_ceph_runtime.py`: stubbed SettingsView GET/POST behavior proving all three Ceph timing values populate the form, persist on the singleton, and are included in `update_fields`.
 - `test_node_ssh_credential_model.py`: `normalize_fingerprint` accept/reject behavior, Fernet-backed `set_password` / `get_password` and `set_private_key` / `get_private_key` round-trips, `EncryptionKeyMissing` and `DecryptionFailed` exits, and AST contract on `models/ssh_credential.py` (NetBoxModel base, required fields, `OneToOneField(ProxmoxNode)`, auth-method choices, `clean()` calling `normalize_fingerprint`).
 - `test_node_ssh_credential_api.py`: `_NetBoxTokenCanViewNodeSSHCredential.has_permission()` NetBox-token permission checks, `_credential_for_node_identifier()` ProxmoxNode/NetBox-device lookup compatibility, `_metadata_payload()` redaction, AST contract on the by-node viewset (`_ProxboxDashboardPermission` for metadata, NetBox-token permission for secrets, HTTPS-required guard in non-DEBUG, 503 on missing encryption key), and `api/urls.py` route registration. Also **behavioral** coverage of `NodeHostKeyFingerprintAPIView.get` (the Terminal-tab node host-key scan) via the stub loader: `ssh_access_enabled` 403 gate, no-IP 422, no-backend 503, success forwards `host`/`port` to proxbox-api and returns the fingerprint, invalid `?port=` defaults to 22, and old-backend 404→503 downgrade.

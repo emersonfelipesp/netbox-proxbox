@@ -94,7 +94,7 @@ def _endpoint_metadata_payload(endpoint: ProxmoxEndpoint) -> dict:
         ),
         "known_host_fingerprint": endpoint.ssh_known_host_fingerprint,
         "has_password": (
-            bool(endpoint.password)
+            bool(endpoint.password_enc)
             if reuse_endpoint_credentials
             else bool(endpoint.ssh_password_enc)
         ),
@@ -231,9 +231,14 @@ class NodeSSHCredentialSecretsAPIView(APIView):
         try:
             password = cred.get_password(key=key) if cred.password_enc else ""
             private_key = cred.get_private_key(key=key) if cred.private_key_enc else ""
-        except enc_helpers.EncryptionError as exc:
+        except enc_helpers.EncryptionError:
             return Response(
-                {"detail": str(exc)},
+                {
+                    "detail": (
+                        "Stored SSH credential cannot be decrypted. Plugin "
+                        "encryption recovery is required."
+                    )
+                },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
@@ -270,20 +275,30 @@ class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
                 {"detail": _SSH_ACCESS_DISABLED},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        if (
-            endpoint.ssh_credential_source == SSH_CRED_SOURCE_REUSE
-            and not endpoint.password
-        ):
-            return Response(
-                {
-                    "detail": (
-                        "Endpoint SSH credential source is reuse_endpoint, but "
-                        "the endpoint has no stored password. Token-only "
-                        "endpoints cannot reuse SSH credentials."
-                    )
-                },
-                status=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            )
+        if endpoint.ssh_credential_source == SSH_CRED_SOURCE_REUSE:
+            try:
+                reused_password = endpoint.password
+            except enc_helpers.EncryptionError:
+                return Response(
+                    {
+                        "detail": (
+                            "Stored endpoint password cannot be decrypted. Plugin "
+                            "encryption recovery is required."
+                        )
+                    },
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            if not reused_password:
+                return Response(
+                    {
+                        "detail": (
+                            "Endpoint SSH credential source is reuse_endpoint, but "
+                            "the endpoint has no stored password. Token-only "
+                            "endpoints cannot reuse SSH credentials."
+                        )
+                    },
+                    status=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                )
         if not endpoint.has_ssh_terminal_credentials:
             return Response(
                 {"detail": "No endpoint SSH fallback credential configured."},
@@ -291,7 +306,7 @@ class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
             )
         if endpoint.ssh_credential_source == SSH_CRED_SOURCE_REUSE:
             payload = _endpoint_metadata_payload(endpoint)
-            payload["password"] = endpoint.password or ""
+            payload["password"] = reused_password or ""
             payload["private_key"] = ""
             return Response(payload)
 
@@ -312,9 +327,14 @@ class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
                 if endpoint.ssh_private_key_enc
                 else ""
             )
-        except enc_helpers.EncryptionError as exc:
+        except enc_helpers.EncryptionError:
             return Response(
-                {"detail": str(exc)},
+                {
+                    "detail": (
+                        "Stored endpoint SSH credential cannot be decrypted. Plugin "
+                        "encryption recovery is required."
+                    )
+                },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 

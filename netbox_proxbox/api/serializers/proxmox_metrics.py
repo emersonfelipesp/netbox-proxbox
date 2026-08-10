@@ -21,6 +21,18 @@ class ProxmoxMetricsInfluxDBSerializer(NetBoxModelSerializer):
     endpoint = NestedProxmoxEndpointSerializer()
     proxmox_cluster = NestedProxmoxClusterSerializer()
 
+    def to_representation(self, instance: ProxmoxMetricsInfluxDB):
+        """Mask non-conforming stored URLs and secret references on output."""
+        representation = super().to_representation(instance)
+        representation["influx_url"] = instance.influx_url_display
+        representation["query_token_secret_ref"] = (
+            instance.query_token_secret_ref_display
+        )
+        representation["writer_token_secret_ref"] = (
+            instance.writer_token_secret_ref_display
+        )
+        return representation
+
     class Meta:
         model = ProxmoxMetricsInfluxDB
         fields = (

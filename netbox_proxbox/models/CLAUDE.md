@@ -43,17 +43,41 @@ This directory defines the plugin's persisted data model.
   encrypted backend token plus the credential-free
   `backend_key_target_fingerprint` that durably binds the token to the exact
   canonical HTTP/fallback-IP/WebSocket/TLS target. Disabled new rows may remain
-  intentionally keyless.
+  intentionally keyless. If stored ciphertext is undecryptable, only an
+  explicitly assigned replacement may proceed; it must authenticate against the
+  exact enabled target through the normal adoption flow before persistence.
 - `PBSEndpoint`: stores Proxmox Backup Server connection settings and credentials for companion inventory/status paths.
 - `PDMEndpoint`: stores Proxmox Datacenter Manager connection settings plus declared PVE/PBS federation links.
+- `ProxboxPluginSettings`: owns the plugin-at-rest Fernet key. Its redact-all
+  `save()` rejects ordinary key clearing/replacement while any encrypted family
+  contains ciphertext using the same settings-row and deterministic PostgreSQL
+  table-lock protocol as verified rotation. Startup-installed guards also reject
+  key writes through both default/base-manager `QuerySet.update()`,
+  `bulk_update()`, and conflict-upsert paths. Its custom
+  `reset_encrypted_secrets` permission gates the separately destructive recovery
+  view. Verified rotation bypasses the queryset guard only through one exact
+  settings-locked internal permit.
 - `ProxmoxCluster`: stores synchronized cluster metadata and relationships to the source endpoint and NetBox cluster.
 - `ProxmoxNode`: stores synchronized hypervisor nodes and their relationships to the source endpoint and NetBox device.
 - `ProxmoxMetricsInfluxDB`: stores the InfluxDB URL, organization, bucket, TLS
   flag, enabled state, and query/writer token secret references for a Proxmox
   cluster. Token fields are `nms-secret:<uuid>` references to netbox-nms
   `ObservabilitySecret` objects, never plaintext credentials or encrypted token
-  blobs in this plugin.
-- `ProxmoxStorage`: stores Proxmox storage inventory synchronized from the backend.
+  blobs in this plugin. Its UI/API display properties return only exact secret
+  references and credential-free HTTP(S) URLs; malformed legacy values are
+  masked instead of rendered. Its `serialize_object()` override applies those
+  same rules before NetBox stores pre/post `ObjectChange` snapshots; never remove
+  that hook or expose the raw fields through a parallel audit/event serializer.
+  Database checks require every enabled row to retain both a credential-free
+  HTTP(S) URL and a nonempty exact query-token reference across validation-bypass
+  writes; the writer reference remains optional.
+- `ProxmoxStorage`: stores Proxmox storage inventory synchronized from the
+  backend. Its comma-separated `nodes` membership is a `TextField`; Proxmox
+  estates with many or long node names must never be truncated to 255
+  characters at the model, form, serializer, or database boundary. Because
+  NetBox auto-generates a plain `CharFilter` for `TextField`, `filtersets.py`
+  explicitly declares `nodes = MultiValueCharFilter()` to preserve the former
+  repeated-query and OpenAPI contract.
 - `ProxmoxStorageVirtualDisk`: links storage rows to virtual disks.
 - `GuestVMInterface`: stores guest-agent OS interface names (for example `ens18`) for a NetBox `VirtualMachine`, mapped **one-to-one** (`OneToOneField`, `SET_NULL`) to the canonical core `VMInterface` (for example `net0`) by MAC. `SET_NULL` (not `CASCADE`) so deleting/recreating the core interface during churn preserves the guest OS inventory row and only clears the link; `vm_interface` is nullable for agent-only interfaces with no matching Proxmox NIC.
 - `GuestVMInterfaceAddress`: links a guest OS interface to an existing core `ipam.IPAddress`; it never duplicates IP rows and protects referenced IPs from deletion. `clean()` enforces that the linked IP is the **same object** assigned to the mapped core `VMInterface` (or, for agent-only guests, at least on the same VM) so a bad ID/privileged user can never cross-link a foreign VM's IP.

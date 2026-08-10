@@ -22,10 +22,14 @@ This directory contains Django/NetBox forms for plugin models, plugin settings, 
 - [`backup_routine.py`](./backup_routine.py): create/edit and filter forms for `BackupRoutine`.
 - [`replication.py`](./replication.py): create/edit and filter forms for `Replication`.
 - [`schedule_sync.py`](./schedule_sync.py): scheduling form for `ProxboxSyncJob` and quick-schedule defaults.
-- [`settings.py`](./settings.py): plugin settings form (`ProxboxPluginSettings` singleton).
 - [`ssh_credential.py`](./ssh_credential.py): per-node SSH credential create/edit
   and filter forms, including write-only password/private-key inputs and
   encryption-before-model-validation handling.
+- [`settings.py`](./settings.py): plugin settings form
+  (`ProxboxPluginSettings` singleton), write-only verified key-rotation form,
+  and family-selective destructive-reset form with acknowledgement plus exact
+  typed confirmation. Ordinary encryption controls are disabled while
+  ciphertext exists.
 - [`storage.py`](./storage.py): create/edit and filter forms for `ProxmoxStorage`.
 - [`vm_backup.py`](./vm_backup.py): create/edit and filter forms for `VMBackup`.
 - [`vm_snapshot.py`](./vm_snapshot.py): create/edit and filter forms for `VMSnapshot`.
@@ -47,6 +51,10 @@ Each endpoint type has an `ImportForm` (e.g. `ProxmoxEndpointImportForm`, `NetBo
 
 ## Notes
 
+- Secret edit forms never decrypt a stored value merely to decide whether a
+  clear/replacement control should render. They use ciphertext presence and a
+  secret-free `Recovery required` state; an undecryptable existing value must
+  remain replaceable/clearable without a 500 or plaintext disclosure.
 - `NetBoxEndpointForm.clean()` mirrors the API serializer's credential validation and clears unused token fields depending on token version.
 - Endpoint forms use `DynamicModelChoiceField` for NetBox-managed related objects.
 - Both FastAPI create/edit and import forms use
@@ -60,6 +68,10 @@ Each endpoint type has an `ImportForm` (e.g. `ProxmoxEndpointImportForm`, `NetBo
   and enter bounded auto-configuration; a non-empty candidate remains required
   when the operator is deliberately rotating the key.
 - These forms define how plugin fields are presented in the NetBox UI; model constraints and the API serializers still remain the source of truth for persistence and credential rules.
+- `ProxmoxMetricsInfluxDBForm` clears the edit-page initial value whenever a
+  persisted InfluxDB URL fails the model's credential-free HTTP(S) display check.
+  Its warning asks the operator to replace the hidden value or delete the mapping;
+  never repopulate the input from the raw stored value.
 - Password and token_value fields on `ProxmoxEndpointForm` use `PasswordInput(render_value=False)` and are preserved from the stored instance when the user submits a blank value (edit-without-change UX).
 - `ProxmoxEndpointForm` exposes `allow_writes` in a dedicated **Write permission**
   fieldset so operators can opt a Proxmox endpoint into backend write verbs from

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from django.db import transaction
+from django.views.decorators.debug import sensitive_variables
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 from virtualization.api.serializers_.nested import NestedVirtualMachineSerializer
@@ -75,13 +77,28 @@ class ProxmoxVMCloudInitSerializer(NetBoxModelSerializer):
             "ciuser",
         )
 
-    def validate(self, data: dict) -> dict:
-        # ``sshkeys_intent`` is a write-only serializer field with no model
-        # counterpart; encrypt it into ``sshkeys_enc`` before the parent
-        # instantiates/saves the model. Empty/absent keeps the existing value.
-        sshkeys_intent = data.pop("sshkeys_intent", None)
-        if sshkeys_intent:
-            from netbox_proxbox.models.primary_secrets import encrypt_primary_secret
+    @sensitive_variables()
+    def create(self, validated_data: dict) -> ProxmoxVMCloudInit:
+        """Create a row and persist intent keys through the guarded model setter."""
+        sshkeys_intent = validated_data.pop("sshkeys_intent", None)
+        with transaction.atomic():
+            instance = super().create(validated_data)
+            if sshkeys_intent:
+                instance.set_sshkeys(str(sshkeys_intent))
+                instance.save(update_fields=("sshkeys_enc",))
+        return instance
 
-            data["sshkeys_enc"] = encrypt_primary_secret(sshkeys_intent)
-        return super().validate(data)
+    @sensitive_variables()
+    def update(
+        self,
+        instance: ProxmoxVMCloudInit,
+        validated_data: dict,
+    ) -> ProxmoxVMCloudInit:
+        """Update a row and persist intent keys through the guarded model setter."""
+        sshkeys_intent = validated_data.pop("sshkeys_intent", None)
+        with transaction.atomic():
+            instance = super().update(instance, validated_data)
+            if sshkeys_intent:
+                instance.set_sshkeys(str(sshkeys_intent))
+                instance.save(update_fields=("sshkeys_enc",))
+        return instance

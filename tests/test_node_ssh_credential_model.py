@@ -70,6 +70,10 @@ def _stub_django(monkeypatch):
 
     utils = types.ModuleType("django.utils")
     utils_translation = types.ModuleType("django.utils.translation")
+    views = types.ModuleType("django.views")
+    views_decorators = types.ModuleType("django.views.decorators")
+    views_debug = types.ModuleType("django.views.decorators.debug")
+    views_debug.sensitive_variables = lambda *_params: lambda func: func
     utils_translation.gettext_lazy = lambda x: x
     utils.translation = utils_translation
 
@@ -95,6 +99,9 @@ def _stub_django(monkeypatch):
         ("django.urls", urls),
         ("django.utils", utils),
         ("django.utils.translation", utils_translation),
+        ("django.views", views),
+        ("django.views.decorators", views_decorators),
+        ("django.views.decorators.debug", views_debug),
         ("netbox", netbox_pkg),
         ("netbox.models", netbox_models),
     ]:
@@ -119,9 +126,16 @@ def _load_ssh_credential(monkeypatch):
     np_utils_pkg = types.ModuleType("netbox_proxbox.utils")
     np_utils_pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox" / "utils")]
     np_utils_pkg.encryption = enc_mod
+    np_services_pkg = types.ModuleType("netbox_proxbox.services")
+    np_recovery = types.ModuleType("netbox_proxbox.services.encryption_recovery")
+    np_recovery.mark_encrypted_fields_for_write = lambda *_args: None
     monkeypatch.setitem(sys.modules, "netbox_proxbox", np_pkg)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.utils", np_utils_pkg)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.utils.encryption", enc_mod)
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", np_services_pkg)
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.services.encryption_recovery", np_recovery
+    )
 
     spec = importlib.util.spec_from_file_location(
         "_ssh_credential_under_test", MODEL_PATH

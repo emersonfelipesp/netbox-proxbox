@@ -1,13 +1,15 @@
 name: Django Tests
 run-name: Django Tests (${{ github.event_name }} ${{ github.ref }} @ ${{ github.sha }})
 
-# Runs the NetBox-backed Django TestCase suites for sync-state models, form/M2M
-# persistence, and the fail-closed backend-key boundary. The regular mocked
-# suite cannot prove ORM transactions, forms, imports, serializers, or signals.
+# Runs the NetBox-backed Django suites for sync-state models, form/M2M
+# persistence, the fail-closed backend-key boundary, and runtime view/template
+# rendering. The mocked suite cannot prove ORM transactions, real registry
+# wiring, Django template-loader behavior, forms, imports, serializers, or signals.
 
 on:
   push:
     branches: ['**']
+    tags: ['v*']
   pull_request:
     branches: ['**']
   workflow_dispatch:
@@ -20,8 +22,14 @@ jobs:
       matrix:
         # Declared support is NetBox 4.5.8 - 4.6.99. Gate the minimum,
         # the latest certified 4.5 patch, and both the 4.6 line floor/latest
-        # validated patch in step with netbox_proxbox/__init__.py.
+        # validated patch in step with netbox_proxbox/__init__.py. The extra
+        # 4.6.5 cell loads the supported PDM override so its registry identity
+        # contract cannot become a permanently skipped optional branch.
         netbox: ["v4.5.8", "v4.5.10", "v4.6.0", "v4.6.5"]
+        pdm: [false]
+        include:
+          - netbox: "v4.6.5"
+            pdm: true
 
     services:
       postgres:
@@ -60,6 +68,14 @@ jobs:
           ref: ${{ matrix.netbox }}
           path: netbox
 
+      - name: Checkout supported PDM registry override
+        if: matrix.pdm
+        uses: actions/checkout@v6
+        with:
+          repository: emersonfelipesp/netbox-pdm
+          ref: 3408441672bf849dfaf953d96d6e0ba1561cd576
+          path: netbox-pdm
+
       - name: Set up Python
         uses: actions/setup-python@v6
         with:
@@ -71,8 +87,11 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r netbox/requirements.txt
           pip install -e "netbox-proxbox[test]"
+          if [[ "${{ matrix.pdm }}" == "true" ]]; then
+            pip install -e netbox-pdm
+          fi
 
-      - name: Run NetBox-backed Django tests
+      - name: Run NetBox-backed model, view, and integration tests
         working-directory: netbox-proxbox
         env:
           # pytest-django and tests/test_sync_state_models.py both use these.
@@ -84,13 +103,19 @@ jobs:
           # Make a missing/broken NetBox harness a hard failure here instead of
           # a silent skip, so this job genuinely gates merges.
           NETBOX_PROXBOX_REQUIRE_DJANGO: "1"
+          NETBOX_PROXBOX_TEST_PDM: ${{ matrix.pdm && '1' || '0' }}
           PYTHONPATH: ${{ github.workspace }}/netbox/netbox:${{ github.workspace }}/netbox-proxbox
         run: |
           pytest tests/test_sync_state_models.py tests/test_sync_state_contracts.py \
             tests/test_backend_key_adoption_django.py \
+            tests/test_encryption_key_recovery_django.py \
             tests/test_job_stream_django.py \
             tests/test_ceph_runtime_settings_django.py \
+            tests/test_influxdb_metrics_django.py \
             tests/test_node_ssh_credential_form_django.py \
+            tests/test_detail_view_templates_django.py \
+            tests/test_pdm_endpoint_permissions_django.py \
+            tests/test_storage_nodes_capacity_django.py \
             --ds=netbox.settings --reuse-db --create-db -v --no-header \
             --cov=netbox_proxbox.services.endpoint_autoconfiguration \
             --cov-branch --cov-report=term-missing --cov-fail-under=85

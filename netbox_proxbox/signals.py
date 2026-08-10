@@ -14,10 +14,26 @@ from django.db import transaction
 from django.db.models.signals import post_save
 from django.dispatch import receiver
 
+from netbox_proxbox.utils.encryption import EncryptionError
+
 if TYPE_CHECKING:
     from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
 
 logger = logging.getLogger(__name__)
+
+
+def _stored_backend_token(endpoint: FastAPIEndpoint) -> str | None:
+    """Return the stored backend token or log a secret-safe recovery state."""
+
+    try:
+        return (getattr(endpoint, "token", "") or "").strip()
+    except EncryptionError:
+        logger.warning(
+            "FastAPIEndpoint %s has undecryptable ciphertext; synchronization is "
+            "blocked until plugin encryption recovery completes",
+            getattr(endpoint, "pk", None),
+        )
+        return None
 
 
 def _get_backend_url(endpoint: FastAPIEndpoint) -> str | None:
@@ -55,7 +71,9 @@ def _register_token_with_backend(endpoint: FastAPIEndpoint) -> bool:
         )
         return False
 
-    token = (getattr(endpoint, "token", "") or "").strip()
+    token = _stored_backend_token(endpoint)
+    if token is None:
+        return False
     if not token:
         logger.warning("FastAPIEndpoint %s has no stored API key", endpoint.pk)
         return False
@@ -99,7 +117,10 @@ def ensure_fastapi_endpoint_token(
             endpoint.pk,
         )
         return
-    if endpoint.token and backend_key_runtime_is_trusted(endpoint):
+    token = _stored_backend_token(endpoint)
+    if token is None:
+        return
+    if token and backend_key_runtime_is_trusted(endpoint):
         logger.debug(
             "FastAPIEndpoint %s key transition was handled before persistence",
             endpoint.pk,
@@ -151,7 +172,10 @@ def ensure_proxmox_endpoint_has_fastapi_token(
             fastapi_ep.pk,
         )
 
-    if not fastapi_ep.token:
+    fastapi_token = _stored_backend_token(fastapi_ep)
+    if fastapi_token is None:
+        return
+    if not fastapi_token:
         logger.warning(
             "FastAPIEndpoint %s has no API key; Proxmox endpoint sync is blocked",
             fastapi_ep.pk,
@@ -171,7 +195,15 @@ def ensure_proxmox_endpoint_has_fastapi_token(
     if base_url:
         from netbox_proxbox.utils import get_backend_auth_headers  # noqa: PLC0415
 
-        auth_headers = get_backend_auth_headers(fastapi_ep)
+        try:
+            auth_headers = get_backend_auth_headers(fastapi_ep)
+        except EncryptionError:
+            logger.warning(
+                "FastAPIEndpoint %s has undecryptable ciphertext; Proxmox "
+                "endpoint synchronization is blocked",
+                fastapi_ep.pk,
+            )
+            return
         if not auth_headers:
             logger.warning(
                 "FastAPIEndpoint %s has no trusted authentication context; "
@@ -181,12 +213,20 @@ def ensure_proxmox_endpoint_has_fastapi_token(
             return
         from netbox_proxbox.views.backend_sync import sync_proxmox_endpoint_to_backend  # noqa: PLC0415
 
-        ok, err, _ = sync_proxmox_endpoint_to_backend(
-            instance,
-            base_url=base_url,
-            auth_headers=auth_headers,
-            backend_verify_ssl=bool(fastapi_ep.verify_ssl),
-        )
+        try:
+            ok, err, _ = sync_proxmox_endpoint_to_backend(
+                instance,
+                base_url=base_url,
+                auth_headers=auth_headers,
+                backend_verify_ssl=bool(fastapi_ep.verify_ssl),
+            )
+        except EncryptionError:
+            logger.warning(
+                "ProxmoxEndpoint %s has undecryptable ciphertext; endpoint "
+                "synchronization is blocked until recovery completes",
+                getattr(instance, "pk", None),
+            )
+            return
         if ok:
             logger.info(
                 "Synced Proxmox endpoint '%s' to proxbox-api backend after save",
@@ -272,7 +312,15 @@ def sync_netbox_endpoint_to_backend(
 
     from netbox_proxbox.utils import get_backend_auth_headers  # noqa: PLC0415
 
-    auth_headers = get_backend_auth_headers(fastapi_ep)
+    try:
+        auth_headers = get_backend_auth_headers(fastapi_ep)
+    except EncryptionError:
+        logger.warning(
+            "FastAPIEndpoint %s has undecryptable ciphertext; NetBox endpoint "
+            "synchronization is blocked",
+            fastapi_ep.pk,
+        )
+        return
     if not auth_headers:
         logger.warning(
             "FastAPIEndpoint %s has no trusted authentication context; "

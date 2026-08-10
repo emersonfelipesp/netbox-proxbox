@@ -1,0 +1,74 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+<div class="row mb-3">
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "SDN Route Map" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Proxmox Endpoint" %}</th>
+            <td>{{ object.endpoint|linkify|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Cluster" %}</th>
+            <td>{{ object.cluster_name }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Name" %}</th>
+            <td>{{ object.name }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Order" %}</th>
+            <td>{{ object.order }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Action" %}</th>
+            <td>{{ object.action|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Status" %}</th>
+            <td>{{ object.get_status_display }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <div class="col col-md-6">
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Match and Set" %}</h5>
+      <div class="card-body">
+        <table class="table table-hover attr-table">
+          <tr>
+            <th scope="row">{% trans "Match Peer" %}</th>
+            <td>{{ object.match_peer|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Match IP" %}</th>
+            <td>{{ object.match_ip|placeholder }}</td>
+          </tr>
+          <tr>
+            <th scope="row">{% trans "Set Community" %}</th>
+            <td>{{ object.set_community|placeholder }}</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="card mb-3">
+      <h5 class="card-header">{% trans "Raw Configuration" %}</h5>
+      <div class="card-body">
+        <pre class="mb-0"><code>{{ object.raw_config }}</code></pre>
+      </div>
+    </div>
+
+    {% include 'inc/panels/tags.html' %}
+    {% include 'inc/panels/custom_fields.html' %}
+    {% include 'inc/panels/comments.html' %}
+  </div>
+</div>
+{% endblock %}

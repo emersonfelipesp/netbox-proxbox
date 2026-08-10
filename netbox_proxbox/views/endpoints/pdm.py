@@ -42,9 +42,13 @@ class PDMEndpointView(generic.ObjectView):
     def get_extra_context(self, request: HttpRequest, instance: PDMEndpoint) -> dict:
         from netbox_proxbox.tables.pdm_remote import PDMRemoteTable
 
-        remotes_qs = PDMRemote.objects.filter(pdm_endpoint=instance).select_related(
-            "linked_proxmox_endpoint",
-            "linked_pbs_endpoint",
+        remotes_qs = (
+            PDMRemote.objects.restrict(request.user, "view")
+            .filter(pdm_endpoint=instance)
+            .select_related(
+                "linked_proxmox_endpoint",
+                "linked_pbs_endpoint",
+            )
         )
         remotes_table = PDMRemoteTable(remotes_qs)
         remotes_table.configure(request)

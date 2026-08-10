@@ -33,6 +33,18 @@
                 {% if object.url %}<tr><th scope="row"><strong>HTTP URL</strong></th><td><a href="{{ object.url }}" target="_blank">{{ object.url }}</a></td></tr>{% endif %}
                 {% if fastapi_websocket_url and object.use_websocket %}<tr><th scope="row"><strong>WebSocket URL</strong></th><td><a href="{{ fastapi_websocket_url }}" target="_blank">{{ fastapi_websocket_url }}</a></td></tr>{% endif %}
                 <tr><th scope="row"><strong>Port</strong></th><td>{{ object.port }}</td></tr>
+                <tr>
+                    <th scope="row"><strong>API key</strong></th>
+                    <td>
+                        {% if object.credential_encryption_state == "Recovery required" %}
+                            <span class="badge text-bg-danger">Recovery required</span>
+                        {% elif object.credential_encryption_state == "Configured" %}
+                            <span class="badge text-bg-success">Configured</span>
+                        {% else %}
+                            <span class="badge text-bg-secondary">Not configured</span>
+                        {% endif %}
+                    </td>
+                </tr>
             </table>
             <div class="d-flex justify-content-between align-items-center p-2 mt-1">
                 <a

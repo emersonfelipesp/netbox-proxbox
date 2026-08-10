@@ -157,6 +157,34 @@ contract and issue #454 for the bug history.
   field, uses the migration connection alias plus bounded 500-row bulk batches,
   creates a sidecar when needed, never overwrites an existing typed value, and
   leaves legacy data intact for rollback compatibility.
+- **0079_storage_nodes_text**: widens `ProxmoxStorage.nodes` from a
+  255-character column to `TextField` so a complete comma-separated membership
+  list survives large Proxmox estates. The database operation is expand-only:
+  reversing restores historical Django state but deliberately leaves the
+  PostgreSQL `text` column in place, because narrowing after a long value exists
+  would block rollback or require destructive truncation. Forward, rollback,
+  and reapply preserve existing and newly long values. This number can collide
+  with sibling feature branches and is intentionally renumbered only at merge;
+  its real-Django test discovers the sole current plugin leaf and that leaf's
+  direct plugin parent dynamically instead of pinning a numbered edge.
+- **0080_metrics_influxdb_secret_ref_constraints** (the metrics-security leaf)
+  blanks non-conforming InfluxDB URL/token
+  metadata, disables rows missing a safe URL or required query-token reference,
+  appends a persistent remediation marker to comments, and masks matching fields
+  in historical `core.ObjectChange` snapshots before installing database checks.
+  Those checks durably require every enabled row to retain a credential-free
+  HTTP(S) URL and nonempty exact query-token reference while leaving the writer
+  reference optional. The destructive scrub, quarantine, marker, and audit
+  masking are intentionally not reversed; rollback removes only the checks. Its
+  real-Django test discovers the plugin leaf and its sole in-app parent from the
+  migration graph, so a merge-time renumber changes only the migration file.
+- **0081_encrypted_secret_reset_permission**: updates
+  `ProxboxPluginSettings.Meta.permissions` with the separate
+  `reset_encrypted_secrets` destructive-recovery permission. It changes no
+  ciphertext and performs no data migration. It was developed in parallel with
+  the #295/#297 branches as a colliding 0079 and renumbered to 0081 (dependency
+  `0080_metrics_influxdb_secret_ref_constraints`) at merge time. Tests find
+  this migration by operation content rather than its number.
 
 ## Notes
 

@@ -6,9 +6,10 @@ from decimal import Decimal
 
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
-from django.db import models
+from django.db import models, router, transaction
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.debug import sensitive_variables
 
 from netbox.models import NetBoxModel
 
@@ -462,9 +463,9 @@ class ProxboxPluginSettings(NetBoxModel):
         default="",
         verbose_name=_("Encryption key"),
         help_text=_(
-            "Base64-encoded or raw encryption key for proxbox-api credential encryption. "
-            "If set, proxbox-api will use this key instead of PROXBOX_ENCRYPTION_KEY env var. "
-            "Leave blank to use environment variable only."
+            "Fernet key used only for netbox-proxbox ciphertext stored in the "
+            "NetBox database. This is not proxbox-api's PROXBOX_ENCRYPTION_KEY "
+            "and is not the API authentication key."
         ),
     )
     proxmox_timeout = models.PositiveIntegerField(
@@ -948,6 +949,12 @@ class ProxboxPluginSettings(NetBoxModel):
     class Meta:
         verbose_name = _("Proxbox plugin settings")
         verbose_name_plural = _("Proxbox plugin settings")
+        permissions = (
+            (
+                "reset_encrypted_secrets",
+                _("Can destructively reset Proxbox encrypted secrets"),
+            ),
+        )
 
     def __str__(self) -> str:
         return "Proxbox plugin settings"
@@ -965,10 +972,51 @@ class ProxboxPluginSettings(NetBoxModel):
                 {"ceph_task_poll_interval": CEPH_POLL_INTERVAL_TIMEOUT_ERROR}
             )
 
+    @sensitive_variables()
     def save(self, *args: object, **kwargs: object) -> None:
-        """Handle save."""
+        """Preserve the singleton and block ordinary key changes over ciphertext."""
+
         self.singleton_key = "default"
-        super().save(*args, **kwargs)
+        update_fields = kwargs.get("update_fields")
+        checks_encryption_key = (
+            update_fields is None or "encryption_key" in update_fields
+        )
+        if not self.pk or not checks_encryption_key:
+            super().save(*args, **kwargs)
+            return
+
+        using_value = kwargs.get("using")
+        using = (
+            using_value
+            if isinstance(using_value, str)
+            else router.db_for_write(type(self), instance=self)
+        )
+        from netbox_proxbox.services.encryption_recovery import (
+            EncryptionRecoveryError,
+            assert_ordinary_key_mutation_allowed,
+            lock_encrypted_field_tables,
+        )
+
+        try:
+            with transaction.atomic(using=using):
+                previous_key = (
+                    type(self)
+                    .objects.using(using)
+                    .select_for_update()
+                    .filter(pk=self.pk)
+                    .values_list("encryption_key", flat=True)
+                    .first()
+                )
+                if previous_key is not None and str(previous_key or "") != str(
+                    self.encryption_key or ""
+                ):
+                    lock_encrypted_field_tables(using=using)
+                    assert_ordinary_key_mutation_allowed(
+                        str(previous_key or ""), str(self.encryption_key or "")
+                    )
+                super().save(*args, **kwargs)
+        except EncryptionRecoveryError as exc:
+            raise ValidationError({"encryption_key": str(exc)}) from None
 
     def get_absolute_url(self) -> str:
         """Return absolute url."""

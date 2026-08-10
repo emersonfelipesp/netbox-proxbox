@@ -283,20 +283,26 @@ These settings guard against Server-Side Request Forgery by validating endpoint 
 
 ## Encryption
 
-These settings control credential encryption for the proxbox-api backend. When enabled, sensitive credentials stored in the proxbox-api SQLite database (NetBox API tokens, Proxmox passwords and token values) are encrypted at rest using Fernet (AES-128-CBC with HMAC-SHA256).
+These settings control only the Fernet encryption of plugin-owned values stored
+in the **NetBox database**. They do not configure proxbox-api's SQLite
+encryption and they are not the FastAPI endpoint key used to authenticate HTTP
+requests.
 
 | Field | Default | Description |
 |---|---|---|
-| **Enable credential encryption** | `false` | Checkbox that controls whether the encryption key below is active. Unchecking clears the stored key. |
-| **Encryption key** | _(empty)_ | Secret key used by proxbox-api to encrypt credentials. The raw value is hashed with SHA-256 before use. Leave blank to use the `PROXBOX_ENCRYPTION_KEY` environment variable on the proxbox-api host instead. |
+| **Enable credential encryption** | `false` | Enables plugin-at-rest encryption. Once ciphertext exists, this control is locked until all ciphertext is removed through the recovery workflow. |
+| **Encryption key** | _(empty)_ | A canonical Fernet key or raw 32-byte secret for plugin-owned ciphertext in NetBox. Ordinary API serializers keep it write-only. The backend runtime route retains a permission-gated compatibility fallback for current proxbox-api releases. |
 
-### Key resolution order
+### Three separate security domains
 
-proxbox-api resolves the encryption key using the following priority:
+| Domain | Purpose | Configuration |
+|---|---|---|
+| **Plugin-at-rest Fernet key** | Protects encrypted model fields in the NetBox PostgreSQL database | This settings page and its verified rotation workflow |
+| **proxbox-api-at-rest encryption** | Protects credentials in proxbox-api's own SQLite database | Prefer `PROXBOX_ENCRYPTION_KEY` or proxbox-api's separately administered local key. Current releases can still read the plugin key from the permission-gated runtime route for upgrade compatibility; migrate before that fallback is removed. |
+| **FastAPI endpoint API key** | Authenticates NetBox/plugin HTTP requests to proxbox-api | The `FastAPIEndpoint` credential and backend-key adoption workflow; this is credential material protected by the plugin-at-rest key, not an encryption key itself |
 
-1. **`PROXBOX_ENCRYPTION_KEY` environment variable** — highest priority, set on the proxbox-api host.
-2. **Encryption key field here** — fetched from the NetBox plugin API at startup and cached for 5 minutes.
-3. **None** — credentials stored in plaintext; a `CRITICAL` warning is logged on every proxbox-api startup.
+Never copy one domain's key into another merely because all three are described
+as “keys.” Rotate and recover them independently.
 
 ### Generating a key
 
@@ -306,8 +312,120 @@ python -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().d
 
 Paste the output into the **Encryption key** field and check **Enable credential encryption**, then save.
 
+### Protected field inventory
+
+The settings page reports secret-free row counts and a
+**Configured / Recovery required / Not configured** state for every registered
+family:
+
+- Proxmox API credentials and endpoint SSH credentials;
+- proxbox-api authentication keys stored on `FastAPIEndpoint`;
+- PBS and PDM API token secrets;
+- the optional netbox-pbs standalone proxbox-api fallback key when that
+  companion plugin is installed;
+- per-node SSH credentials;
+- cloud-init SSH public-key intent bundles; and
+- Firecracker host-agent tokens.
+
+The registry is also the source of truth for rotation and selective reset, so
+new encrypted model fields must be added there before release. Optional
+companion families are omitted only when their Django app and database table are
+both genuinely absent. If an unloaded companion leaves its table behind, the
+plugin locks and inspects that known table; any surviving ciphertext blocks key
+mutation until the companion is re-enabled and migrated. An installed companion
+with an unresolved model or database table also blocks key mutation and recovery
+until its installation is repaired.
+
+### Verified rotation
+
+Ordinary form saves, model saves, and API PATCH requests cannot clear or
+replace the plugin key while any registered ciphertext exists. Direct key
+writes through either the default or base manager's `QuerySet.update()`,
+`bulk_update()`, or conflict-upsert path are always rejected; verified rotation
+has the sole exact-value settings-locked permit. Use **Verified plugin key
+rotation** instead:
+
+1. Enter the current key and the replacement key twice.
+2. The plugin locks the settings plus every registered ciphertext table in a
+   deterministic PostgreSQL lock order, then verifies **every** non-empty
+   registered ciphertext with the current key. Registered model saves,
+   including the optional netbox-pbs settings model, lock the settings row and
+   validate their ciphertext and expected pre-write database snapshot under
+   that key before the SQL write. This also covers partial saves of trust and
+   operational fields such as `enabled`/Firecracker status. Bulk updates of
+   those fields capture the same recovery-field snapshot and condition each SQL
+   update on it still matching after the settings lock is acquired. A writer
+   which prepared old-key ciphertext before rotation or reset is rejected or
+   updates zero rows after waiting; it cannot commit stale ciphertext or restore
+   operational state. Direct default- or base-manager
+   `QuerySet.update()`/`bulk_update()` writes to encrypted fields and non-empty
+   encrypted `bulk_create()` rows are rejected before SQL. Conflict-upsert
+   `update_fields` cannot contain the trust receipts, endpoint enablement flags,
+   or Firecracker status quarantined by reset unless the exact call uses the
+   private settings-locked internal permit. Rotation, reset, and
+   backend-key adoption share one private one-call raw-update helper; it holds the
+   settings-row lock and validates every outgoing non-empty ciphertext against
+   the key currently stored there. There is no bulk-write bypass.
+   Before changing the key, every enabled, adopted, operational proxbox-api
+   target must also return
+   a successful authenticated, versioned `GET /admin/encryption/status`
+   attestation. Version 1 must atomically report the active cached key source as
+   independent (`env` or `local`) and confirm that the active key decrypts every
+   encrypted backend credential. Legacy source-only responses, a failed
+   credential scan, an unreachable operational backend, or an invalid response
+   block rotation. Disabled, retired, pending, and trust-drifted rows receive a
+   local ciphertext rotation with no network access. Configure
+   `PROXBOX_ENCRYPTION_KEY`, migrate/re-encrypt the backend
+   database, and deploy the paired attestation contract before rotating the
+   plugin key. Current source-only proxbox-api responses deliberately remain
+   blocked.
+3. Only after all values verify does it re-encrypt all values and store the new
+   key in one transaction. Inside that uncommitted transaction the new key is
+   made current before each replacement ciphertext passes the locked raw-update
+   validation; any failure rolls back both key and ciphertext changes.
+4. A wrong current key or one corrupt row aborts the transaction without
+   changing any ciphertext or setting.
+5. The POST body is marked sensitive for Django exception reporting, and the
+   transaction writes a secret-free NetBox changelog record containing only
+   actor, request, operation, family names, outcome, and aggregate counts.
+
+### Lost-key destructive reset
+
+If the old key is unavailable, a user with the separate
+`netbox_proxbox.reset_encrypted_secrets` permission may use **Destructive
+encrypted-secret reset**. Select only the affected families, acknowledge data
+loss, and type `RESET PROXBOX ENCRYPTED SECRETS` exactly. While holding the
+recovery locks, the operation tests every non-empty ciphertext in each selected
+family against the configured key. It clears only values that fail decryption;
+healthy fields on the same row and every healthy row survive unchanged. For a
+row with at least one failed value it also clears that family's trust state and,
+with non-signaling database updates, disables the affected Proxmox, proxbox-api,
+PBS, or PDM endpoint or marks the affected Firecracker host offline. Affected
+per-node SSH, cloud-init, and optional netbox-pbs fallback rows become
+unconfigured only for the failed fields. Re-enter those credentials and
+explicitly re-enable or restore the affected service before running sync.
+The reset takes the settings-row lock before table locks. Its complete routine,
+the settings serializer mutation frames, and the settings-model save frame that
+loads the active key are marked redact-all for Django exception reports so keys,
+raw ciphertexts, legacy plaintext values, and nested row containers cannot
+appear in a technical 500 response. The writer guard
+rejects any stale instance whose expected ciphertext no longer matches the
+cleared row. Partial saves and conditional bulk updates use the same snapshot,
+so queued writers and conflict upserts cannot resurrect credentials, trust,
+`enabled`, or online host status.
+
+This path is destructive: it cannot recover plaintext and does not change
+unselected families.
+
 ### Important notes
 
-- Changing the key after credentials are already encrypted requires re-saving each endpoint with its credentials so they are re-encrypted under the new key.
-- The key is cached in proxbox-api for the session lifetime. Saving a new key in this page takes effect within 5 minutes (settings cache TTL) or after a proxbox-api restart.
-- Credentials stored before encryption was enabled remain plaintext until the endpoint is next saved.
+- A `Recovery required` state means ciphertext exists but cannot be decrypted
+  with the configured plugin key. Forms, lists, dashboards, SSH credential
+  endpoints, and save signals fail closed without rendering the stored value.
+- Rotation preserves trust fingerprints because the plaintext credential does
+  not change. Destructive reset clears the corresponding fingerprints because
+  the credential can no longer be vouched for.
+- An enabled FastAPI endpoint with undecryptable stored ciphertext accepts only
+  an explicit replacement key, authenticates it against that exact target, and
+  persists it through the normal adoption boundary. A save without an explicit
+  replacement remains blocked.

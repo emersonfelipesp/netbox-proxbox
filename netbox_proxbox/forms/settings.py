@@ -445,8 +445,8 @@ class ProxboxPluginSettingsForm(forms.Form):
         required=False,
         label="Enable credential encryption",
         help_text=(
-            "When enabled, proxbox-api will use the encryption key below to encrypt "
-            "credentials at rest. Disabling this clears the stored key."
+            "Enable netbox-proxbox encryption for plugin-owned credentials stored "
+            "in the NetBox database. This does not configure proxbox-api encryption."
         ),
     )
     encryption_key = forms.CharField(
@@ -455,9 +455,9 @@ class ProxboxPluginSettingsForm(forms.Form):
         widget=forms.PasswordInput(render_value=False),
         label="Encryption key",
         help_text=(
-            "Base64-encoded or raw encryption key for proxbox-api credential encryption. "
-            "If set, proxbox-api will use this key instead of PROXBOX_ENCRYPTION_KEY environment variable. "
-            "Leave blank to use environment variable only."
+            "Fernet key for plugin-owned ciphertext in NetBox. Once ciphertext "
+            "exists, use the verified rotation workflow below; ordinary settings "
+            "cannot clear or replace this key."
         ),
     )
 
@@ -734,7 +734,19 @@ class ProxboxPluginSettingsForm(forms.Form):
     )
 
     def __init__(self, *args: object, **kwargs: object) -> None:
+        encryption_key_configured = bool(kwargs.pop("encryption_key_configured", False))
+        encryption_key_locked = bool(kwargs.pop("encryption_key_locked", False))
         super().__init__(*args, **kwargs)
+        self._encryption_key_locked = encryption_key_locked
+        if encryption_key_locked:
+            self.fields["encryption_enabled"].disabled = True
+            self.fields["encryption_enabled"].help_text = (
+                "Protected while encrypted values exist. Use verified rotation or "
+                "the separately permissioned destructive reset workflow."
+            )
+            self.fields["encryption_key"].disabled = True
+            self.initial["encryption_enabled"] = encryption_key_configured
+            self.initial["encryption_key"] = ""
         sync_mode_labels = {
             "sync_mode_vm": "VM sync mode",
             "sync_mode_vm_template": "VM template sync mode",
@@ -846,3 +858,81 @@ class ProxboxPluginSettingsForm(forms.Form):
         else:
             self.cleaned_data["netbox_to_proxmox_typed_confirmation"] = ""
         return self.cleaned_data
+
+
+class EncryptionKeyRotationForm(forms.Form):
+    """Write-only inputs for verified all-or-nothing key rotation."""
+
+    old_key = forms.CharField(
+        label="Current plugin encryption key",
+        widget=forms.PasswordInput(
+            render_value=False, attrs={"autocomplete": "current-password"}
+        ),
+    )
+    new_key = forms.CharField(
+        label="New plugin encryption key",
+        widget=forms.PasswordInput(
+            render_value=False, attrs={"autocomplete": "new-password"}
+        ),
+    )
+    confirm_new_key = forms.CharField(
+        label="Confirm new plugin encryption key",
+        widget=forms.PasswordInput(
+            render_value=False, attrs={"autocomplete": "new-password"}
+        ),
+    )
+
+    def clean(self) -> dict[str, object]:
+        """Require matching replacement-key inputs without echoing their values."""
+
+        super().clean()
+        if self.cleaned_data.get("new_key") != self.cleaned_data.get("confirm_new_key"):
+            self.add_error("confirm_new_key", "The replacement keys do not match.")
+        return self.cleaned_data
+
+
+class EncryptedSecretResetForm(forms.Form):
+    """Selection plus two explicit acknowledgements for destructive recovery."""
+
+    families = forms.MultipleChoiceField(
+        label="Encrypted data to reset",
+        choices=(),
+        widget=forms.CheckboxSelectMultiple,
+    )
+    acknowledge_data_loss = forms.BooleanField(
+        label=(
+            "I understand the selected ciphertext and its trust fingerprints will "
+            "be permanently cleared."
+        ),
+    )
+    confirmation = forms.CharField(
+        label="Type the exact destructive-reset confirmation phrase to continue",
+        widget=forms.TextInput(attrs={"autocomplete": "off"}),
+    )
+
+    def __init__(self, *args: object, **kwargs: object) -> None:
+        """Load the central family registry only when this recovery form is used."""
+
+        super().__init__(*args, **kwargs)
+        from netbox_proxbox.services.encryption_recovery import (
+            available_encrypted_field_families,
+        )
+
+        self.fields["families"].choices = tuple(
+            (family.key, family.label)
+            for family in available_encrypted_field_families()
+        )
+
+    def clean_confirmation(self) -> str:
+        """Require the exact destructive-recovery phrase."""
+
+        from netbox_proxbox.services.encryption_recovery import (
+            RESET_CONFIRMATION_PHRASE,
+        )
+
+        value = self.cleaned_data.get("confirmation") or ""
+        if value != RESET_CONFIRMATION_PHRASE:
+            raise forms.ValidationError(
+                f"Type the exact confirmation phrase: {RESET_CONFIRMATION_PHRASE}"
+            )
+        return value

@@ -181,10 +181,26 @@ class ProxmoxVMCloudInit(NetBoxModel):
         """True when an encrypted create-time SSH key bundle is stored."""
         return bool(self.sshkeys_enc)
 
+    @property
+    def credential_encryption_state(self) -> str:
+        """Return a secret-free state for the encrypted SSH-key intent bundle."""
+
+        from netbox_proxbox.services.encryption_recovery import ciphertext_state
+
+        state = ciphertext_state(self.sshkeys_enc)
+        return {
+            "configured": "Configured",
+            "recovery_required": "Recovery required",
+        }.get(state, "Not configured")
+
     def set_sshkeys(self, plaintext: str | None) -> None:
         """Encrypt and store the create-time SSH public-key bundle."""
         from netbox_proxbox.models.primary_secrets import encrypt_primary_secret
+        from netbox_proxbox.services.encryption_recovery import (
+            mark_encrypted_fields_for_write,
+        )
 
+        mark_encrypted_fields_for_write(self, "sshkeys_enc")
         self.sshkeys_enc = encrypt_primary_secret(plaintext)
 
     def get_sshkeys(self) -> str:

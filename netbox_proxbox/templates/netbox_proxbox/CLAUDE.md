@@ -16,9 +16,28 @@ This is the main Django template namespace for the plugin.
 ## Main Templates
 
 - Dashboard and informational pages: `home.html`, `dashboard.html`, `community.html`, `contributing.html`, `devices.html`, `interfaces.html`, `ip_addresses.html`, `lxc_containers.html`, `virtual_machines.html`, `logs.html`, `settings.html`, `status_badge.html`, `proxbox-backend-status.html`, and `websocket_page.html`.
+- `settings.html` distinguishes plugin-at-rest encryption, proxbox-api database
+  encryption, and API authentication; renders only family labels/counts/states;
+  and owns separate write-only rotation and permission-gated destructive reset
+  forms. No key, ciphertext, or submitted password value may be rendered.
 - Endpoint pages: `proxmoxendpoint.html`, `proxmoxendpoint_list.html`, `proxmoxendpoint_edit.html`, `proxmoxendpoint_cluster_nodes.html`, `proxmox_endpoint.html`, `proxmox-endpoints.html`, `netboxendpoint.html`, `netboxendpoint_list.html`, `netboxendpoint_edit.html`, `fastapiendpoint.html`, `fastapiendpoint_list.html`, `fastapiendpoint_edit.html`, and `fastapiendpoint_openapi.html`.
 - Sync and action pages: `schedule_sync.html`, `sync_devices.html`, `sync_virtual_machines.html`, `sync_vm_backups.html`, and `sync_full_update.html`.
 - Inventory detail/list pages: `storage_list.html`, `vmbackup.html`, `vmbackup_list.html`, `vmbackup_bulk_delete.html`, `vmsnapshot.html`, `vmsnapshot_list.html`, `vmtaskhistory.html`, `proxmoxstorage.html`, `backup_routine.html`, `backup_routine_list.html`, `replication.html`, `replication_list.html`, and `vm_proxmox_config.html` (live Proxmox config tab).
+- SDN detail pages: `proxmoxsdnfabric.html`, `proxmoxsdncontroller.html`,
+  `proxmoxsdnzone.html`, `proxmoxsdnvnet.html`, `proxmoxsdnsubnet.html`,
+  `proxmoxsdnbinding.html`, `proxmoxsdnroutemap.html`, and
+  `proxmoxsdnprefixlist.html`.
+- Firewall detail pages: `proxmoxfirewallsecuritygroup.html`,
+  `proxmoxfirewallrule.html`, `proxmoxfirewallipset.html`,
+  `proxmoxfirewallipsetentry.html`, `proxmoxfirewallalias.html`, and
+  `proxmoxfirewalloptions.html`.
+- Supporting detail pages: `proxmoxdatacentercpumodel.html`,
+  `proxmoxmetricsinfluxdb.html`, and `nodesshcredential.html`. The metrics page
+  renders its URL and token references only through fail-closed model display
+  properties so malformed stored values never reach HTML.
+- `proxmoxstorage.html` renders the escaped live-content partial-result warning
+  before the mutually exclusive usage-data branches, so a missing or failed
+  usage summary cannot hide that only some per-node content calls completed.
 - Shared fragments and includes: `footer.html`, the `inc/` snippets for job buttons, runtime panels, live poll alerts, schedule form fields, and VM sync actions, plus `widgets/` helpers for custom checkbox controls.
 - Operator bootstrap/status fragment:
   `partials/bootstrap_status_card.html` is included by `home.html` and
@@ -87,6 +106,14 @@ This needs `{% load buttons custom_links helpers perms plugins tabs %}` and two 
 ## Notes
 
 - There is some historical naming overlap in endpoint templates; keep the Python view/template binding in mind before removing or renaming files.
+- Every `register_model_view`-registered `ObjectView` must either set an
+  explicit `template_name` that points to a real file or provide the default
+  `netbox_proxbox/<model_name>.html` template in this namespace.
+  `tests/test_detail_view_templates.py` provides a fast AST/filesystem check,
+  while `tests/test_detail_view_templates_django.py` walks NetBox's populated
+  runtime view registry, resolves every actual `ObjectView` template through
+  Django's loader, and performs authenticated render smokes for this bug's 17
+  affected routes across the supported NetBox matrix.
 - Inline sync actions such as network interfaces and IP addresses are rendered inside their page templates, not as standalone `sync_*.html` files.
 - Any template with dynamic status cards or sync output is likely coupled to the JS files under `static/netbox_proxbox/js/`.
 - Sync buttons in `home.html` carry `data-sync-url` for job-enqueue POST actions; job progress and log details are shown on NetBox Job pages through the Proxbox template extension fragments.

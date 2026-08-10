@@ -261,6 +261,9 @@ def load_plugin_module(
     django_views.View = View
 
     django_views_decorators = types.ModuleType("django.views.decorators")
+    django_views_debug = types.ModuleType("django.views.decorators.debug")
+    django_views_debug.sensitive_post_parameters = lambda *_params: lambda func: func
+    django_views_debug.sensitive_variables = lambda *_params: lambda func: func
     django_views_http = types.ModuleType("django.views.decorators.http")
     django_views_http.require_GET = lambda func: func
     django_views_http.require_http_methods = lambda methods: lambda func: func
@@ -268,11 +271,20 @@ def load_plugin_module(
     django_urls = types.ModuleType("django.urls")
     django_urls.reverse = lambda *args, **kwargs: "/dummy/"
 
+    class NoReverseMatch(Exception):
+        pass
+
+    django_urls.NoReverseMatch = NoReverseMatch
+
     django_contrib = types.ModuleType("django.contrib")
     django_messages = MessagesStub()
     django_contrib.messages = django_messages
 
     django_utils = types.ModuleType("django.utils")
+    django_utils_decorators = types.ModuleType("django.utils.decorators")
+    django_utils_decorators.method_decorator = lambda _decorator, **_kwargs: (
+        lambda value: value
+    )
     django_utils_html = types.ModuleType("django.utils.html")
 
     def _format_html(*args, **kwargs):
@@ -390,6 +402,20 @@ def load_plugin_module(
 
         return decorator
 
+    def get_viewname(model, action=None, rest_api=False):
+        # Mirrors NetBox semantics: plugin models reverse under
+        # ``plugins:<app_label>:``, core models under ``<app_label>:``.
+        meta = getattr(model, "_meta", None)
+        app_label = getattr(meta, "app_label", "netbox_proxbox")
+        model_name = getattr(meta, "model_name", "stub")
+        viewname = f"{app_label}:{model_name}"
+        if app_label == "netbox_proxbox":
+            viewname = f"plugins:{viewname}"
+        if action:
+            viewname = f"{viewname}_{action}"
+        return viewname
+
+    utilities_views.get_viewname = get_viewname
     utilities_views.ConditionalLoginRequiredMixin = ConditionalLoginRequiredMixin
     utilities_views.TokenConditionalLoginRequiredMixin = (
         TokenConditionalLoginRequiredMixin
@@ -453,6 +479,7 @@ def load_plugin_module(
     models_module.Replication = _make_model_class("Replication")
     models_module.VMBackup = _make_model_class("VMBackup")
     models_module.VMSnapshot = _make_model_class("VMSnapshot")
+    models_module.VMTaskHistory = _make_model_class("VMTaskHistory")
 
     if proxbox_settings is None:
         proxbox_settings = SimpleNamespace(
@@ -531,9 +558,11 @@ def load_plugin_module(
         "django.shortcuts": django_shortcuts,
         "django.views": django_views,
         "django.views.decorators": django_views_decorators,
+        "django.views.decorators.debug": django_views_debug,
         "django.views.decorators.http": django_views_http,
         "django.urls": django_urls,
         "django.utils": django_utils,
+        "django.utils.decorators": django_utils_decorators,
         "django.utils.html": django_utils_html,
         "django.utils.text": django_utils_text,
         "django.utils.timezone": django_utils_timezone,

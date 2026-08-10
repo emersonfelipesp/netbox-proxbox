@@ -31,6 +31,7 @@ from .settings import _parse_tenant_regex_rules, _sync_mode_choice_options
 
 from .import_utils import validate_endpoint_import_headers
 from ..models import ProxboxPluginSettings
+from ..utils import encryption as enc_helpers
 from ..models.ssh_credential import (
     AUTH_METHOD_KEY,
     AUTH_METHOD_PASSWORD,
@@ -143,7 +144,10 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
         if credential_source == SSH_CRED_SOURCE_REUSE:
             endpoint_password = cleaned_data.get("password")
             if endpoint_password is None:
-                endpoint_password = getattr(instance, "password", "")
+                try:
+                    endpoint_password = getattr(instance, "password", "")
+                except enc_helpers.EncryptionError:
+                    endpoint_password = ""
             if not endpoint_password:
                 self.add_error(
                     "ssh_credential_source",
@@ -231,8 +235,18 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
         key = ProxboxPluginSettings.get_solo().encryption_key or ""
 
         if self.cleaned_data.get("clear_ssh_password"):
+            from netbox_proxbox.services.encryption_recovery import (
+                mark_encrypted_fields_for_write,
+            )
+
+            mark_encrypted_fields_for_write(instance, "ssh_password_enc")
             instance.ssh_password_enc = ""
         if self.cleaned_data.get("clear_ssh_private_key"):
+            from netbox_proxbox.services.encryption_recovery import (
+                mark_encrypted_fields_for_write,
+            )
+
+            mark_encrypted_fields_for_write(instance, "ssh_private_key_enc")
             instance.ssh_private_key_enc = ""
         password = self.cleaned_data.get("ssh_password") or ""
         private_key = self.cleaned_data.get("ssh_private_key") or ""
@@ -374,13 +388,23 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
             self.fields.pop("clear_password", None)
             self.fields.pop("clear_token", None)
             return
-        if not getattr(instance, "password", ""):
+        if not getattr(instance, "password_enc", ""):
             self.fields.pop("clear_password", None)
         has_token = bool(getattr(instance, "token_name", "")) or bool(
-            getattr(instance, "token_value", "")
+            getattr(instance, "token_value_enc", "")
         )
         if not has_token:
             self.fields.pop("clear_token", None)
+        if instance.password_encryption_state == "recovery_required":
+            self.fields["password"].help_text = _(
+                "Recovery required: the stored password cannot be decrypted. "
+                "Enter a replacement or explicitly clear it."
+            )
+        if instance.token_value_encryption_state == "recovery_required":
+            self.fields["token_value"].help_text = _(
+                "Recovery required: the stored token value cannot be decrypted. "
+                "Enter a replacement or explicitly clear it."
+            )
 
     class Meta:
         model = ProxmoxEndpoint
@@ -438,9 +462,27 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
         # unless they explicitly cleared them above.
         if self.instance and self.instance.pk:
             if not clear_password and not cleaned_data.get("password"):
-                cleaned_data["password"] = self.instance.password
+                try:
+                    cleaned_data["password"] = self.instance.password
+                except enc_helpers.EncryptionError:
+                    self.add_error(
+                        "password",
+                        _(
+                            "The stored password cannot be decrypted. Enter a "
+                            "replacement or select clear."
+                        ),
+                    )
             if not clear_token and not cleaned_data.get("token_value"):
-                cleaned_data["token_value"] = self.instance.token_value
+                try:
+                    cleaned_data["token_value"] = self.instance.token_value
+                except enc_helpers.EncryptionError:
+                    self.add_error(
+                        "token_value",
+                        _(
+                            "The stored token value cannot be decrypted. Enter a "
+                            "replacement or select clear."
+                        ),
+                    )
 
         # Invariant: row must have either a password or a complete (token_name,
         # token_value) pair. Half-tokens are rejected.
@@ -523,7 +565,10 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
             effective_username = str(username).split("@", 1)[0].strip()
             password = cleaned_data.get("password")
             if password is None:
-                password = getattr(instance, "password", "")
+                try:
+                    password = getattr(instance, "password", "")
+                except enc_helpers.EncryptionError:
+                    password = ""
             return bool(host and fingerprint and effective_username and password)
 
         username = (cleaned_data.get("ssh_username") or "").strip()

@@ -13,6 +13,30 @@
 
 This directory implements the plugin's NetBox UI behavior, including dashboard pages, endpoint CRUD views, sync actions, job integration, and status utilities.
 
+The storage detail page routes live per-node content discovery through one
+process-wide four-thread/four-slot pool in `storage_content.py`. A slot is
+reserved before submission and is released only by the worker after the HTTP
+call actually exits, so page deadlines never turn abandoned requests into an
+unbounded collection of authenticated sockets or threads. A page waits only
+until its absolute eight-second deadline; if the shared pool remains full, the
+unstarted nodes use the existing partial-result notice. Each node response is
+streamed under the same absolute deadline and capped at 1 MiB of decoded bytes
+before JSON parsing. The deadline watchdog never closes a Requests/urllib3
+response object: buffered response closure can wait behind the read it is meant
+to cancel. Each request instead owns a dedicated urllib3 pool whose connection
+hook duplicates the TCP socket immediately after connect, before TLS and
+response-header reads. At the deadline the watchdog performs only raw
+`socket.shutdown(SHUT_RDWR)` plus `socket.close()` on that duplicate, which
+interrupts header and body reads without letting one cancellation block later
+deadlines. The worker closes the response and pool only after the interrupted
+read returns. The page still fetches at most 64 membership nodes, and a node
+counts as successful only when the outer payload is a list/object and every
+flattened content record has a non-empty `volid`; error envelopes and
+permissive-schema dictionaries are partial failures. Large storage memberships
+must produce explicit partial/truncation context rather than serially occupying
+a web worker for `node_count * request_timeout` seconds, allocating one future
+per node, or issuing an authenticated request for every membership entry.
+
 ## Files And Ownership
 
 - [`__init__.py`](./__init__.py): top-level page views and re-exports for endpoint views, cluster views, dashboard pages, sync enqueue actions, status checks, settings/storage views, backup/replication views, snapshot/task views, and job integration helpers.
@@ -124,7 +148,13 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
 - [`logs.py`](./logs.py): backend log aggregation page and related rendering helpers.
 - [`replication.py`](./replication.py): list/detail/edit/delete views and VM-related tab views for `Replication`.
 - [`schedule_sync.py`](./schedule_sync.py): recurring/one-shot scheduler UI and quick-schedule flow from the home dashboard. Also exports `handle_endpoint_sync_routine_post(request, endpoint, post_data)` — the NetBox-independent core of the per-endpoint Sync Jobs tab "Create Sync Job" modal (permission gate → disabled-endpoint refusal → `ScheduleSyncForm` validation → **hard endpoint scoping** → enqueue → flash), returning an `(outcome, form)` tuple the tab view maps to a response. Kept here (not in the heavy `endpoints/proxmox.py`) so it is unit-loadable via the stubbed test harness.
-- [`settings.py`](./settings.py): plugin settings page for runtime feature toggles.
+- [`settings.py`](./settings.py): plugin settings page for runtime feature
+  toggles plus secret-free encrypted-family status, atomic verified key
+  rotation, and a separately permissioned selective destructive reset. Rotation
+  requires normal settings-change permission; reset requires
+  `netbox_proxbox.reset_encrypted_secrets` and is POST-only. Rotation marks all
+  three submitted key fields sensitive for Django exception reports; both views
+  provide actor/request metadata to the secret-free recovery audit trail.
 - [`sync_state_repair.py`](./sync_state_repair.py): operator recovery surface
   for missing Proxbox bootstrap/custom-field setup. It builds the shared
   Home/Settings repair-card context without blocking page render, gates the
@@ -150,8 +180,11 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
   so they keep the repair affordance — see `partials/bootstrap_status_card.html`.
 - [`proxmox_cluster_node.py`](./proxmox_cluster_node.py): detail (`ObjectView`) views for `ProxmoxCluster` and `ProxmoxNode`, registered under the bare model names so `get_absolute_url()` resolves.
 - [`storage.py`](./storage.py): CRUD list/detail/delete views for `ProxmoxStorage`.
+- [`storage_content.py`](./storage_content.py): process-wide bounded worker pool,
+  deadline-aware streamed JSON fetch, response-size ceiling, and shared
+  partial/truncation notice formatter for storage-node content fan-out.
 - [`sync.py`](./sync.py): POST endpoints that enqueue `ProxboxSyncJob` runs for devices, storage, virtual machines, virtual disks, backups, snapshots, network interfaces, IP addresses, backup routines, replications, and full update.
-- [`sync_now/`](./sync_now/): targeted per-object sync handlers for cluster, node, storage, and VM actions.
+- [`sync_now/`](./sync_now/): targeted per-object sync handlers for plugin cluster, node, storage, backup, snapshot, and task-history actions. The core VM action remains in `vm_sync_now.py`.
 - [`vm_backup.py`](./vm_backup.py): CRUD list/detail/delete views and the VirtualMachine tab for `VMBackup`.
 - [`vm_config.py`](./vm_config.py): live Proxmox config tab for `VirtualMachine` records.
 - [`vm_snapshot.py`](./vm_snapshot.py): CRUD list/detail/delete views and the VirtualMachine tab for `VMSnapshot`.
@@ -168,6 +201,16 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
 - `HomeView` is the main dashboard entrypoint and assembles endpoint lists plus derived backend URLs for the templates.
 - Most changes to user-visible behavior land here first, then cascade into templates, static assets, and tests.
 - When adding or changing sync actions, update `urls.py`, `sync.py`, scheduling forms/views, template extensions, and relevant frontend/tests that assert button routes and job flow.
+- **Registered detail views must resolve a real template.** Every
+  `register_model_view`-registered `ObjectView` must either declare an explicit
+  `template_name` pointing to an existing file or provide the fallback
+  `netbox_proxbox/<model_name>.html` in the plugin template namespace.
+  `tests/test_detail_view_templates.py` supplies the fast AST/filesystem
+  contract. The merge gate is the complementary real-NetBox test in
+  `tests/test_detail_view_templates_django.py`: it walks the populated runtime
+  registry, asks each actual `ObjectView` for its template, compiles that name
+  through Django's loader, and authenticated-GET smokes the 17 routes repaired
+  by this bug across the supported NetBox matrix.
 - **URL namespace for tabs registered on core models.** When `register_model_view`
   attaches a tab/view to a NetBox **core** model (e.g. `virtualization.Cluster`,
   `virtualization.VirtualMachine`, `core.Job`), NetBox names that URL under the
@@ -185,7 +228,7 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
   `ProxmoxCluster` and `ProxmoxNode` reversed
   `plugins:netbox_proxbox:proxmoxcluster` / `:proxmoxnode`, but `urls.py` never
   mounted `get_model_urls()` for either, so the name did not exist. The Sync-Now
-  template extension calls `get_absolute_url()` on **every core
+  template extension previously called `get_absolute_url()` on **every core
   `virtualization.Cluster` and `dcim.Device` detail page**, which raised
   `NoReverseMatch` and rendered "An error occurred when loading content from
   plugin netbox_proxbox". The models later gained a `try/except NoReverseMatch →
@@ -199,11 +242,11 @@ This directory implements the plugin's NetBox UI behavior, including dashboard p
   have no UI surface).
 - **`views/sync_now/` only registers if something imports it.** That package
   exposes its views through a lazy `__getattr__`, so nothing ever executed the
-  `@register_model_view` decorators in `sync_now/cluster.py`, `node.py`, and
-  `storage.py` — those three Sync Now actions registered **no URL at all**.
-  `urls.py` now imports the three modules for their decorator side effect,
-  before the `get_model_urls()` calls are evaluated. If you add a module there,
-  import it in `urls.py` too, and keep the contract test green.
+  `@register_model_view` decorators in the individual modules. `urls.py` now
+  imports cluster, node, storage, backup, snapshot, and task-history modules for
+  their decorator side effect before the `get_model_urls()` calls are evaluated.
+  If you add a module there, import it in `urls.py` too, and keep the contract
+  test green.
 
 ## Links
 

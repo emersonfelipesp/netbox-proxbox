@@ -61,3 +61,12 @@ organization, bucket, optional measurement prefix, TLS verification, and enabled
 state. The model stores secret references only. Query and writer tokens are kept
 as `nms-secret:<uuid>` references to netbox-nms `ObservabilitySecret` records, so
 the plugin never persists plaintext InfluxDB tokens.
+
+During upgrade, mappings with an unsafe or missing InfluxDB URL or required query
+token reference are quarantined: the unsafe value is cleared, the mapping is
+disabled, and a security-remediation marker is appended to its comments. Existing
+change-log snapshots for these fields are masked as part of the same upgrade. To
+remediate a quarantined mapping, enter a credential-free HTTP(S) base URL and an
+exact `nms-secret:<uuid>` query-token reference, review the optional writer-token
+reference, and then explicitly re-enable the mapping. The migration warning log
+lists affected mapping primary keys but never logs the discarded values.
