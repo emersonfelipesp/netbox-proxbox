@@ -79,7 +79,9 @@ screenshot = [
 ]
 
 [build-system]
-requires = ["hatchling"]
+# Hatchling 1.32 emits Core Metadata 2.5, which the current release-validation
+# toolchain cannot parse yet. Keep producing broadly consumable 2.4 metadata.
+requires = ["hatchling>=1.27,<1.32"]
 build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
