@@ -547,6 +547,7 @@ Key pages:
 - [Backend Setup](https://emersonfelipesp.github.io/netbox-proxbox/installation/backend-setup/)
 - [Endpoint Auto-Configuration](https://emersonfelipesp.github.io/netbox-proxbox/developer/endpoint-autoconfiguration/)
 - [Scheduled Sync](https://emersonfelipesp.github.io/netbox-proxbox/features/scheduled-sync/)
+- [REST API and semantic MCP bridge](https://emersonfelipesp.github.io/netbox-proxbox/api/)
 - [Certification Evidence](https://emersonfelipesp.github.io/netbox-proxbox/certification/)
 - [Application Packet](https://emersonfelipesp.github.io/netbox-proxbox/application-packet/)
 
@@ -564,6 +565,15 @@ Proxbox protects VM destruction behind a five-lock chain. LLM agents **MUST NOT*
 - Approve a `DeletionRequest` as the same user who created it (`self_approve_allowed=False`)
 
 The `DeletionRequest` REST endpoint (`/api/plugins/proxbox/deletion-requests/`) is read-only — enforced by `netbox_proxbox/api/views.py::DeletionRequestViewSet.http_method_names = ["get", "head", "options"]`. Pinned by `tests/test_static_guardrails.py`.
+
+The plugin also publishes a read-only semantic manifest at
+`/api/plugins/proxbox/mcp/` for the standard netbox-sdk bridge. It exposes
+sync-job listing and guarded scheduling through the existing DRF endpoint; the
+plugin does not run a separate MCP server or store a second credential.
+Scheduling is advertised as destructive because reconciliation can remove
+stale NetBox inventory records, not because it deletes Proxmox infrastructure.
+Explicit endpoint scopes must be nonempty; omit them for all endpoints. A
+recurrence value and unit must be supplied together.
 
 ## Contributing
 

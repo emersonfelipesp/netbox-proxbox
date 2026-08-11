@@ -5,6 +5,20 @@ Proxbox exposes two API layers:
 - The NetBox plugin API for Proxbox models inside NetBox
 - The separate `proxbox-api` backend that performs Proxmox discovery and sync orchestration
 
+The NetBox plugin API additionally advertises a read-only semantic-tool
+manifest at `/api/plugins/proxbox/mcp/`. This is metadata for the standard
+`netbox-sdk` MCP bridge, not a third execution layer: `list_sync_jobs` and
+`schedule_sync` both reuse the existing `sync/schedule/` DRF endpoint and its
+NetBox permission checks. Proxbox does not embed FastMCP or create another
+credential store. An explicit `proxmox_endpoint_ids` scope fails closed: every
+requested ID must identify an enabled endpoint or the API returns HTTP 400
+without enqueueing. Omitting the scope retains the deliberate all-enabled
+behavior, while an explicitly empty scope is rejected rather than widened.
+Recurrence value and unit must be supplied together. `schedule_sync` is
+advertised as destructive because reconciliation
+can delete stale NetBox inventory records, while the existing mutation and
+`core.add_job` gates continue to control dispatch.
+
 ## Current Flow
 
 1. The NetBox plugin stores endpoint records.

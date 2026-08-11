@@ -64,7 +64,7 @@ Follow the same dependency order agents use (see [`AGENTS.md`](./AGENTS.md)):
 - **Custom views** should use `utilities.views.ConditionalLoginRequiredMixin` (respects `LOGIN_REQUIRED`) instead of Django’s unconditional `login_required`, and `TokenConditionalLoginRequiredMixin` where REST tokens should authenticate browser-style endpoints.
 - **Operational endpoints** (sync actions, schedule job, WebSocket bridge): `ContentTypePermissionRequiredMixin` with permissions defined in [`netbox_proxbox/views/proxbox_access.py`](./netbox_proxbox/views/proxbox_access.py) — typically `add` on core `Job` for queueing sync work, `delete` on core `Job` for cancel actions, and `view` on `FastAPIEndpoint` for read-only WebSocket test UI.
 - **Dashboard and JSON helpers**: plugin home requires at least one of `view` on `ProxmoxEndpoint` / `NetBoxEndpoint` / `FastAPIEndpoint` when the user is authenticated; endpoint lists use `.restrict(request.user, "view")`. Proxmox card and keepalive JSON resolve objects through restricted querysets (`get_object_or_404(...restrict(...))`). Tagged devices and VMs use `Device.objects.restrict` / `VirtualMachine.objects.restrict` before listing.
-- **Plugin REST API** remains on `NetBoxModelViewSet` with standard NetBox/DRF permission classes.
+- **Plugin REST API** remains on `NetBoxModelViewSet` with standard NetBox/DRF permission classes. Its read-only `mcp/` manifest only describes existing permission-gated routes for the netbox-sdk bridge; it must not grow a parallel MCP server or credential store. The scheduling API rejects the entire request when any explicit Proxmox endpoint ID is unknown or disabled—never filter an explicit scope down to empty, because empty deliberately means all enabled endpoints to the job runner. Omission alone may request that all-endpoint behavior: explicitly empty Proxmox or NetBox scopes are rejected. Recurrence value and unit are a required pair. Advertise scheduling as destructive because reconciliation may remove stale NetBox inventory records, even though it does not delete Proxmox guests or infrastructure.
 
 ---
 
@@ -280,7 +280,7 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   errors. Keep the state machine and automated evidence aligned with
   [`docs/developer/endpoint-autoconfiguration.md`](./docs/developer/endpoint-autoconfiguration.md).
 - NetBox UI routes live in [`netbox_proxbox/urls.py`](./netbox_proxbox/urls.py) and are implemented primarily in `netbox_proxbox/views/`.
-- The plugin also exposes a NetBox plugin API under `netbox_proxbox/api/`, using serializers, filtersets, and standard `NetBoxModelViewSet` classes.
+- The plugin also exposes a NetBox plugin API under `netbox_proxbox/api/`, using serializers, filtersets, and standard `NetBoxModelViewSet` classes. The root advertises a version 1 semantic manifest at `mcp/`; netbox-sdk validates and invokes its fixed plugin-local targets through the normal API client.
 - Sync actions enqueue NetBox background jobs (`ProxboxSyncJob`) on NetBox's default RQ queue and call the external ProxBox FastAPI SSE endpoints to record progress/result on the Job row.
 - **Operator sync-state repair UX (issue #217, hardened in #255).** The Proxbox
   Home Configuration section and plugin Settings page include a shared

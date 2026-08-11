@@ -48,7 +48,7 @@ WORKFLOW_CONTENT_PATH = f"{REPOSITORY_PREFIX}/contents/{WORKFLOW_PATH}"
 
 # Git blob identity of django-tests.yml at the reviewed target-branch commit.
 # A workflow edit must update this only in a separately reviewed base artifact.
-PINNED_WORKFLOW_BLOB_SHA = "9e8ec51dc8d1636c6aeb39ea5db5a4a6e618a164"
+PINNED_WORKFLOW_BLOB_SHA = "7d07b0c189101f2d2852ed98d057a22b0b4141f5"
 
 TOKEN_ENV = "GH_MATRIX_READ_TOKEN"
 TOKEN_FILE_ENV = "GH_MATRIX_READ_TOKEN_FILE"

@@ -559,7 +559,7 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 - [`forms/`](./forms): create/edit, filter, and scheduling forms for plugin models and sync actions.
 - [`tables/`](./tables): list-view table classes for endpoint, storage, backup, snapshot, replication, and cluster views.
 - [`views/`](./views): dashboard pages, endpoint CRUD, sync actions, job helpers, status checks, and targeted sync buttons.
-- [`api/`](./api): NetBox plugin API viewsets, serializers, filters, and URL wiring.
+- [`api/`](./api): NetBox plugin API viewsets, serializers, filters, URL wiring, and the pure versioned semantic-tool manifest consumed through netbox-sdk.
 - [`migrations/`](./migrations): Django schema history for the plugin models.
 - [`templates/`](./templates): bundled Django templates for plugin pages and template fragments.
 - [`static/`](./static): bundled images, JS, CSS, SCSS, and generated theme assets.
@@ -572,6 +572,14 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
   - POST polling (traditional): the plugin waits for completion and returns a single JSON response.
   - GET SSE streaming: the plugin proxies `text/event-stream` from the FastAPI backend to the browser via `StreamingHttpResponse`. The browser JS parses SSE frames and renders granular per-object progress in real time.
 - The API layer exposes the same main models through NetBox plugin API endpoints.
+- The plugin API root advertises `/api/plugins/proxbox/mcp/`, a read-only
+  version 1 semantic-tool manifest. It describes `list_sync_jobs` and
+  `schedule_sync`, which reuse the existing `sync/schedule/` view and its
+  `core.add_job` check. Proxbox does not host FastMCP or a parallel credential;
+  netbox-sdk owns discovery, validation, MCP registration, and mutation gating.
+  Explicit Proxmox endpoint scopes are fail-closed: any unknown or disabled ID
+  rejects the entire request before enqueue, while an omitted scope retains the
+  intentional all-enabled behavior.
 - Browser-side pages use templates plus JS from `static/netbox_proxbox/js/` for dashboard hydration, keepalive polling, SSE streaming, log rendering, and WebSocket updates.
 - Operator recovery for missing Proxbox bootstrap/custom-field setup is exposed
   through `views/sync_state_repair.py` and the shared

@@ -18,6 +18,7 @@ This directory contains the NetBox plugin API surface for ProxBox. It exposes th
 - [`__init__.py`](./__init__.py): package marker.
 - [`urls.py`](./urls.py): API routing for the plugin root, endpoint namespace, non-model views, and model viewsets.
 - [`views.py`](./views.py): `APIRootView` subclasses, `NetBoxModelViewSet` classes, and non-model `APIView` classes (see table below).
+- [`mcp_bridge.py`](./mcp_bridge.py): pure version 1 semantic-tool manifest backed by existing DRF routes; it must not import FastMCP, netbox-sdk, or credentials.
 - [`jobs.py`](./jobs.py): `ProxboxJobCancelAPIView` — `POST jobs/<pk>/cancel/`, the JSON mirror of the UI `proxbox-cancel` action so a stuck/zombie Proxbox sync `core.Job` can be cleared through the nms-backend proxy without the UI (today `nms virt raw POST jobs/<pk>/cancel/`; a first-class `nms virt cancel-job` wrapper is the paired nms-cli follow-up). Reuses `views/job_cancel.py::cancel_rq_job_for_netbox_job()` + `jobs.is_proxbox_sync_job()` + `Job.terminate()`; gated on `core.delete_job`.
 - [`filters.py`](./filters.py): additional filter utilities used by the API router if needed.
 - [`serializers/`](./serializers): package of API serializers for endpoints, clusters, storage, backups, snapshots, task history, backup routines, replications, and the non-model resource/schedule serializers in `resource_views.py`. The `pbs_pdm.py` module provides serializers for `PBSEndpoint`, `PDMEndpoint`, and `PDMRemote`; `intent.py` provides read-only serializers for `DeletionRequest` and `ProxmoxApplyJob`.
@@ -110,10 +111,11 @@ phase.
 
 ## Non-Model API Views
 
-These `APIView` subclasses mirror every data-bearing UI page and expose the same aggregated data as JSON. All are GET-only except `ScheduleSyncAPIView` (also POST) and `ProxboxJobCancelAPIView` (POST-only).
+These `APIView` subclasses mirror every data-bearing UI page and expose the same aggregated data as JSON. `PluginMCPManifestAPIView` is the read-only bridge descriptor. All are GET-only except `ScheduleSyncAPIView` (also POST) and `ProxboxJobCancelAPIView` (POST-only).
 
 | View class | Route | Mirrors UI page | Permission |
 |---|---|---|---|
+| `PluginMCPManifestAPIView` | `mcp/` | n/a — semantic bridge descriptor | `IsAuthenticatedOrLoginNotRequired` |
 | `ProxboxJobCancelAPIView` | `jobs/<pk>/cancel/` | `proxbox-cancel` (Job detail **Cancel job**) | `_ProxboxJobCancelPermission` (`core.delete_job`) |
 | `HomeAPIView` | `home/` | `/plugins/proxbox/` | `_ProxboxDashboardPermission` |
 | `DashboardAPIView` | `dashboard/` | `/plugins/proxbox/dashboard/` | `_ProxboxDashboardPermission` |
@@ -132,6 +134,7 @@ These `APIView` subclasses mirror every data-bearing UI page and expose the same
 - `_ProxboxDashboardPermission` wraps `user_may_access_proxbox_dashboard()` and allows unauthenticated access only when `settings.LOGIN_REQUIRED` is `False`, matching the `ConditionalLoginRequiredMixin` UI behavior.
 - `IsAuthenticatedOrLoginNotRequired` (from `netbox.api.authentication`) allows anonymous API access when `LOGIN_REQUIRED=False`, matching `ConditionalLoginRequiredMixin` on the UI side.
 - `ScheduleSyncAPIView.get()` and `ScheduleSyncAPIView.post()` both invoke `_check_enqueue_permission()`, which verifies the caller holds `core.add_job` (same permission gate as the UI `ContentTypePermissionRequiredMixin`).
+- `ScheduleSyncAPIView.post()` rejects an explicit `proxmox_endpoint_ids` list if any ID is unknown or disabled, before enqueueing. Never filter such a list down to empty: `ProxboxSyncJob` interprets an empty list as the deliberate all-enabled scope.
 
 ### Non-model serializers
 
@@ -147,7 +150,20 @@ These `APIView` subclasses mirror every data-bearing UI page and expose the same
 
 ### API root
 
-`ProxBoxRootView.get()` extends the DRF root response with keys for every non-model URL group: `home`, `dashboard`, `resources` (nested dict with all six sub-paths), `schedule_sync`, and `logs`.
+`ProxBoxRootView.get()` extends the DRF root response with keys for every non-model URL group: `home`, `dashboard`, `resources` (nested dict with all six sub-paths), `schedule_sync`, and `logs`. Its `mcp` member advertises schema version `1` and the exact plugin-local `mcp/` manifest path for netbox-sdk discovery.
+
+The manifest describes only existing routes. Keep its request and response
+schemas aligned with the DRF serializers and views, and keep runtime permission
+checks in those target views. Never add a plugin-local MCP server, credential
+store, or direct transport client. `schedule_sync` must retain its destructive
+effect/hint because reconciliation may delete stale NetBox inventory records.
+`ScheduleSyncRequestSerializer` derives its choices from the canonical
+ChoiceSets, rejects explicitly empty endpoint scopes and incomplete recurrence
+pairs, and `ScheduledJobSerializer` owns the advertised response row.
+
+`tests/fixtures/proxbox_bridge_v1.json` is the canonical SDK compatibility
+fixture. The pure contract suite requires the generated manifest to equal it,
+while netbox-sdk consumes the same fixture through its real bridge-v1 model.
 
 ## Dependencies
 

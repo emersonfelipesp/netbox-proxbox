@@ -945,6 +945,7 @@ def test_resource_serializers_have_expected_fields():
         },
         "ScheduledJobSerializer": {
             "id",
+            "pk",
             "name",
             "sync_types",
             "schedule",

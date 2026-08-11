@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from rest_framework import serializers
 
+from netbox_proxbox.choices import ScheduleIntervalUnitChoices, SyncTypeChoices
+
 
 class NestedObjectSerializer(serializers.Serializer):
     """Minimal nested representation for any FK with id/name/url."""
@@ -85,6 +87,7 @@ class ScheduledJobSerializer(serializers.Serializer):
     """Scheduled Proxbox sync job row returned by GET /api/plugins/proxbox/sync/schedule/."""
 
     id = serializers.IntegerField()
+    pk = serializers.IntegerField()
     name = serializers.CharField(allow_null=True)
     sync_types = serializers.ListField(child=serializers.CharField())
     schedule = serializers.DateTimeField(allow_null=True)
@@ -96,9 +99,12 @@ class ScheduleSyncRequestSerializer(serializers.Serializer):
     """Input body for POST /api/plugins/proxbox/sync/schedule/."""
 
     sync_types = serializers.ListField(
-        child=serializers.CharField(),
+        child=serializers.ChoiceField(choices=SyncTypeChoices),
         min_length=1,
-        help_text="List of sync type slugs (e.g. ['all'] or ['virtual-machines', 'storage']).",
+        help_text=(
+            "List of sync type slugs (e.g. ['all'] or "
+            "['virtual-machines', 'storage']); 'all' must be selected by itself."
+        ),
     )
     job_name = serializers.CharField(
         required=False,
@@ -120,7 +126,7 @@ class ScheduleSyncRequestSerializer(serializers.Serializer):
         help_text="Recurrence interval value (integer). Requires interval_unit.",
     )
     interval_unit = serializers.ChoiceField(
-        choices=["minutes", "hours", "days", "weeks"],
+        choices=ScheduleIntervalUnitChoices,
         required=False,
         allow_null=True,
         default=None,
@@ -130,11 +136,39 @@ class ScheduleSyncRequestSerializer(serializers.Serializer):
         child=serializers.IntegerField(),
         required=False,
         default=list,
-        help_text="PKs of ProxmoxEndpoint objects to include. Empty = all.",
+        help_text=(
+            "PKs of enabled ProxmoxEndpoint objects to include. Omit for all; "
+            "an explicit empty list or any unknown/disabled ID rejects the "
+            "entire request."
+        ),
     )
     netbox_endpoint_ids = serializers.ListField(
         child=serializers.IntegerField(),
         required=False,
         default=list,
-        help_text="PKs of NetBoxEndpoint objects to include. Empty = all.",
+        help_text=(
+            "PKs of NetBoxEndpoint objects to include. Omit for all; an explicit "
+            "empty list is rejected."
+        ),
     )
+
+    def validate(self, attrs: dict) -> dict:
+        """Reject scope widening and incomplete recurrence before enqueue."""
+        errors: dict[str, list[str]] = {}
+        for field_name in ("proxmox_endpoint_ids", "netbox_endpoint_ids"):
+            if field_name in self.initial_data and not attrs.get(field_name):
+                errors[field_name] = [
+                    "An explicit endpoint scope must contain at least one ID; "
+                    "omit the field to select all endpoints."
+                ]
+
+        has_interval_value = attrs.get("interval_value") is not None
+        has_interval_unit = attrs.get("interval_unit") is not None
+        if has_interval_value != has_interval_unit:
+            missing_field = "interval_unit" if has_interval_value else "interval_value"
+            errors[missing_field] = [
+                "interval_value and interval_unit must be provided together."
+            ]
+        if errors:
+            raise serializers.ValidationError(errors)
+        return attrs
