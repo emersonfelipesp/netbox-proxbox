@@ -1,0 +1,216 @@
+{
+  "plugin": "proxbox",
+  "schema_version": "1",
+  "tools": [
+    {
+      "annotations": {
+        "destructiveHint": false,
+        "idempotentHint": true,
+        "openWorldHint": false,
+        "readOnlyHint": true
+      },
+      "description": "List active, failed, and recurring Proxbox synchronization jobs visible to the current NetBox principal.",
+      "effect": "read",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {},
+        "type": "object"
+      },
+      "method": "GET",
+      "name": "list_sync_jobs",
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "count": {
+            "minimum": 0,
+            "type": "integer"
+          },
+          "scheduled_jobs": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "id": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "interval": {
+                  "minimum": 1,
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "name": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "pk": {
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                "schedule": {
+                  "format": "date-time",
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "status": {
+                  "type": "string"
+                },
+                "sync_types": {
+                  "items": {
+                    "type": "string"
+                  },
+                  "type": "array"
+                }
+              },
+              "required": [
+                "id",
+                "pk",
+                "name",
+                "sync_types",
+                "schedule",
+                "interval",
+                "status"
+              ],
+              "type": "object"
+            },
+            "type": "array"
+          }
+        },
+        "required": [
+          "count",
+          "scheduled_jobs"
+        ],
+        "type": "object"
+      },
+      "path": "sync/schedule/",
+      "title": "List Proxbox sync jobs"
+    },
+    {
+      "annotations": {
+        "destructiveHint": true,
+        "idempotentHint": false,
+        "openWorldHint": true,
+        "readOnlyHint": false
+      },
+      "description": "Queue an immediate, future, or recurring Proxbox synchronization through the existing permission-gated scheduling API. Reconciliation may delete stale NetBox inventory records. The \"all\" sync type must be selected by itself. Recurrence value and unit must be set together. Explicit endpoint scopes must contain at least one ID; omit a scope to select all.",
+      "effect": "destructive",
+      "inputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "interval_unit": {
+            "description": "Set with interval_value; omit both for a one-shot job.",
+            "enum": [
+              "minutes",
+              "hours",
+              "days",
+              "weeks",
+              null
+            ],
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "interval_value": {
+            "description": "Set with interval_unit; omit both for a one-shot job.",
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "job_name": {
+            "maxLength": 200,
+            "type": "string"
+          },
+          "netbox_endpoint_ids": {
+            "items": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "proxmox_endpoint_ids": {
+            "items": {
+              "minimum": 1,
+              "type": "integer"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          },
+          "schedule_at": {
+            "format": "date-time",
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "sync_types": {
+            "items": {
+              "enum": [
+                "virtual-machines",
+                "storage",
+                "vm-disks",
+                "vm-backups",
+                "vm-snapshots",
+                "devices",
+                "network-interfaces",
+                "vm-interfaces",
+                "ip-addresses",
+                "sdn",
+                "backup-routines",
+                "replications",
+                "task-history",
+                "all"
+              ],
+              "type": "string"
+            },
+            "minItems": 1,
+            "type": "array",
+            "uniqueItems": true
+          }
+        },
+        "required": [
+          "sync_types"
+        ],
+        "type": "object"
+      },
+      "method": "POST",
+      "name": "schedule_sync",
+      "outputSchema": {
+        "additionalProperties": false,
+        "properties": {
+          "job_id": {
+            "minimum": 1,
+            "type": [
+              "integer",
+              "null"
+            ]
+          },
+          "message": {
+            "type": "string"
+          },
+          "ok": {
+            "const": true
+          }
+        },
+        "required": [
+          "ok",
+          "job_id",
+          "message"
+        ],
+        "type": "object"
+      },
+      "path": "sync/schedule/",
+      "title": "Schedule a Proxbox synchronization"
+    }
+  ]
+}

@@ -13,9 +13,52 @@ Proxbox exposes a REST API under `/api/plugins/proxbox/` for all of its persiste
 
 A GET request to the root returns links to all top-level resources plus the nested `/endpoints/` namespace.
 
+## Semantic MCP bridge
+
+The API root also explicitly advertises a versioned semantic-tool manifest:
+
+```json
+{
+  "mcp": {
+    "schema_version": "1",
+    "manifest": "/api/plugins/proxbox/mcp/"
+  }
+}
+```
+
+`GET /api/plugins/proxbox/mcp/` is a read-only descriptor consumed by
+`netbox-sdk`. It publishes two operations backed by the existing
+`sync/schedule/` DRF view:
+
+| Tool | Method and path | Effect | Existing permission boundary |
+|---|---|---|---|
+| `list_sync_jobs` | `GET sync/schedule/` | read | `IsAuthenticatedOrLoginNotRequired` plus `core.add_job` |
+| `schedule_sync` | `POST sync/schedule/` | destructive | `IsAuthenticatedOrLoginNotRequired` plus `core.add_job` |
+
+The manifest's strict JSON Schemas mirror the existing schedule serializer and
+response envelopes. It does not execute operations, hold credentials, import
+FastMCP, or bypass DRF permissions. `netbox-sdk` performs discovery, input and
+output validation, path confinement, and disabled-by-default mutation gating;
+the target view remains authoritative for NetBox authorization and scheduling.
+For `schedule_sync`, `"all"` is mutually exclusive with every other sync type.
+An explicit Proxmox endpoint scope is fail-closed: if any requested endpoint ID
+is unknown or disabled, the request returns HTTP 400 and no job is enqueued.
+An explicitly present endpoint scope must contain at least one ID; omit the
+field to request the deliberate all-endpoints behavior. `interval_value` and
+`interval_unit` must be supplied together or both omitted.
+The tool is marked destructive because synchronization reconciliation can
+delete stale NetBox inventory records; it does not imply deletion of Proxmox
+guests or infrastructure.
+
 ## Authentication
 
-All endpoints require authentication. Three methods are supported:
+Authentication follows NetBox's `LOGIN_REQUIRED` setting through
+`IsAuthenticatedOrLoginNotRequired`. When `LOGIN_REQUIRED=True`, every endpoint
+requires authentication. A deployment that deliberately sets it to `False`
+may expose read-only descriptors such as the MCP manifest anonymously, but
+operation-specific permission checks still apply: both sync-job listing and
+scheduling require `core.add_job` regardless of that setting. Three
+authentication methods are supported when login is required:
 
 **Token authentication** (recommended for automation):
 
@@ -115,6 +158,7 @@ Two models perform an **upsert** on POST — if a matching record already exists
 | Path | Methods | Documentation |
 |---|---|---|
 | `/api/plugins/proxbox/` | GET | This page |
+| `/api/plugins/proxbox/mcp/` | GET | Version 1 semantic-tool manifest for the netbox-sdk MCP bridge |
 | `/api/plugins/proxbox/endpoints/` | GET | [Endpoint Configuration](endpoints.md) |
 | `/api/plugins/proxbox/endpoints/proxmox/` | GET POST | [ProxmoxEndpoint](endpoints.md#proxmox-endpoint) |
 | `/api/plugins/proxbox/endpoints/proxmox/{id}/` | GET PUT PATCH DELETE | [ProxmoxEndpoint](endpoints.md#proxmox-endpoint) |

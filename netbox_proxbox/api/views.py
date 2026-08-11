@@ -87,6 +87,7 @@ from .serializers import (
     PVETemplateBuildResponseSerializer,
     ReplicationSerializer,
     ScheduleSyncRequestSerializer,
+    ScheduledJobSerializer,
     VMBackupSerializer,
     VMSnapshotSerializer,
     VMTaskHistorySerializer,
@@ -95,6 +96,7 @@ from netbox_proxbox.api.build_pve_template import (
     build_cloud_image_pipeline_via_backend,
     build_pve_template_via_backend,
 )
+from netbox_proxbox.api.mcp_bridge import build_mcp_bridge_manifest
 
 
 class ProxBoxRootView(APIRootView):
@@ -126,6 +128,10 @@ class ProxBoxRootView(APIRootView):
             "virtual_disks": f"{base}/resources/virtual-disks/",
         }
         response.data["schedule_sync"] = f"{base}/sync/schedule/"
+        response.data["mcp"] = {
+            "schema_version": "1",
+            "manifest": f"{base}/mcp/",
+        }
         response.data["logs"] = f"{base}/logs/"
         response.data["cloud_image_templates"] = f"{base}/cloud-image-templates/"
         response.data["metrics_influxdb"] = f"{base}/metrics-influxdb/"
@@ -164,6 +170,18 @@ class ProxBoxEndpointsView(APIRootView):
     def get_view_name(self) -> str:
         """Title for the nested endpoints API root."""
         return "Endpoints"
+
+
+class PluginMCPManifestAPIView(APIView):
+    """Advertise semantic Proxbox operations through bridge v1 metadata."""
+
+    permission_classes = [IsAuthenticatedOrLoginNotRequired]
+
+    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    def get(self, request: Request) -> Response:
+        """Return the static manifest; target views enforce their own permissions."""
+        del request
+        return Response(build_mcp_bridge_manifest())
 
 
 class ProxboxPluginSettingsViewSet(NetBoxModelViewSet):
@@ -1747,8 +1765,9 @@ class ScheduleSyncAPIView(APIView):
             return denied
 
         scheduled_jobs = get_scheduled_jobs_list(request)
+        serialized_jobs = ScheduledJobSerializer(scheduled_jobs, many=True).data
         return Response(
-            {"count": len(scheduled_jobs), "scheduled_jobs": scheduled_jobs}
+            {"count": len(serialized_jobs), "scheduled_jobs": serialized_jobs}
         )
 
     @extend_schema(
@@ -1805,17 +1824,35 @@ class ScheduleSyncAPIView(APIView):
         if interval and not schedule_at:
             schedule_at = local_now()
 
-        proxmox_endpoint_ids = [
-            str(pk) for pk in data.get("proxmox_endpoint_ids") or []
-        ]
-        if proxmox_endpoint_ids:
-            proxmox_endpoint_ids = [
-                str(pk)
-                for pk in models.ProxmoxEndpoint.objects.filter(
-                    pk__in=proxmox_endpoint_ids,
+        requested_proxmox_endpoint_ids = list(
+            dict.fromkeys(data.get("proxmox_endpoint_ids") or [])
+        )
+        enabled_proxmox_endpoint_ids: set[int] = set()
+        if requested_proxmox_endpoint_ids:
+            enabled_proxmox_endpoint_ids = set(
+                models.ProxmoxEndpoint.objects.filter(
+                    pk__in=requested_proxmox_endpoint_ids,
                     enabled=True,
                 ).values_list("pk", flat=True)
+            )
+            unavailable_proxmox_endpoint_ids = [
+                pk
+                for pk in requested_proxmox_endpoint_ids
+                if pk not in enabled_proxmox_endpoint_ids
             ]
+            if unavailable_proxmox_endpoint_ids:
+                return Response(
+                    {
+                        "errors": {
+                            "proxmox_endpoint_ids": [
+                                "Unknown or disabled endpoint ID(s): "
+                                f"{unavailable_proxmox_endpoint_ids}"
+                            ]
+                        }
+                    },
+                    status=400,
+                )
+        proxmox_endpoint_ids = [str(pk) for pk in requested_proxmox_endpoint_ids]
         netbox_endpoint_ids = [str(pk) for pk in data.get("netbox_endpoint_ids") or []]
         job_name = (data.get("job_name") or "").strip()
 

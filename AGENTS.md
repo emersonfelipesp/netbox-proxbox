@@ -51,6 +51,14 @@ Do not add new third-party PyPI dependencies to replace what NetBox or Django al
 
 Use NetBox view mixins from `utilities.views` (`ConditionalLoginRequiredMixin`, `TokenConditionalLoginRequiredMixin`, `ContentTypePermissionRequiredMixin`) for custom routes. Enforce object visibility with `QuerySet.restrict()`. Permission strings for ProxBox-specific operations are centralized in [`netbox_proxbox/views/proxbox_access.py`](./netbox_proxbox/views/proxbox_access.py); see [`CLAUDE.md`](./CLAUDE.md) for the current permission and workflow notes.
 
+The read-only `/api/plugins/proxbox/mcp/` document is only a versioned
+descriptor for the netbox-sdk plugin bridge. Semantic tools must reuse existing
+DRF endpoints and their permissions; do not add FastMCP, credentials, or a
+parallel transport stack to this plugin. Mark sync scheduling destructive:
+reconciliation can remove stale NetBox inventory records even though it does
+not delete Proxmox guests or infrastructure. Omission alone means all
+endpoints; reject explicit empty scopes and incomplete recurrence pairs.
+
 ## Configuration policy
 
 **Prefer DB-backed plugin settings over `.env` variables.**
