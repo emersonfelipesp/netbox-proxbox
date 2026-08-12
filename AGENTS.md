@@ -294,11 +294,12 @@ PyPI must never be replaced with different bytes; advance to the next `rcN` or
 
 ### Gitea Package Registry
 
-The protected publisher uses checksum-pinned uv with fresh per-run tool and
-managed-Python roots, anonymously fetches the exact validated publisher source,
-and exposes the repository `PKG_TOKEN` only to the package-write step. The
-unsupported Gitea Actions job token is not used for registry authentication,
-and no package credential is exposed to the credential-free build job. The registry URL is
+The private publisher directly downloads and verifies the pinned uv archive,
+clears inherited `UV_*` state, disables discovered configuration, and uses fresh
+per-run managed-Python and cache roots. Every release stage runs as a separate
+disposable `ci-untrusted-python312` job. The built-in token stays package-read-
+only, and the repository `PKG_TOKEN` is exposed only to the package-write step;
+no package credential reaches the build job. The registry URL is
 `https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi`.
 The publish workflow deliberately accepts tag `push` events, not Gitea's
 overlapping `create` event. Gitea emits both for a tag; subscribing to both

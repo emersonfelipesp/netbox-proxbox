@@ -11,6 +11,9 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GITEA_PUBLISH_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "publish-gitea.yml"
+GITEA_ARTIFACT_WORKFLOW = (
+    REPO_ROOT / ".gitea" / "workflows" / "artifact-v3-compatibility.yml"
+)
 GITHUB_PUBLISH_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "publish-testpypi.yml"
 GITEA_DEPLOY_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "deploy-production.yml"
 GITEA_PROMOTE_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "promote-final-tag.yml"
@@ -63,29 +66,72 @@ def test_gitea_publish_promotes_only_rc_tags_to_github() -> None:
         "actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b" in workflow
     )
     parsed = yaml.safe_load(workflow)
-    setup_uv_steps = [
-        step
-        for job in parsed["jobs"].values()
-        for step in job.get("steps", [])
-        if str(step.get("uses", "")).startswith("astral-sh/setup-uv@")
-    ]
-    assert setup_uv_steps
     assert all(
-        step.get("with", {}).get("github-token") == "" for step in setup_uv_steps
+        job["runs-on"] == "ci-untrusted-python312" for job in parsed["jobs"].values()
     )
-    assert all(
-        step.get("with", {}).get("checksum")
-        == "e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224"
-        for step in setup_uv_steps
+    assert parsed["jobs"]["publish-gitea"]["permissions"] == {
+        "contents": "read",
+        "packages": "read",
+    }
+    assert "astral-sh/setup-uv@" not in workflow
+    assert "RUNNER_TOOL_CACHE" not in workflow
+    assert "UV_MANAGED_PYTHON" not in workflow
+    assert "mirror-host" not in workflow
+    assert "packages: write" not in workflow
+    assert (
+        workflow.count(
+            "https://github.com/astral-sh/uv/releases/download/0.11.28/"
+            "uv-x86_64-unknown-linux-gnu.tar.gz"
+        )
+        == 2
     )
+    assert (
+        workflow.count(
+            "e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224"
+        )
+        == 2
+    )
+    assert workflow.count("sha256sum --check --strict") == 2
     assert workflow.count("UV_PYTHON_INSTALL_DIR=%s") == 2
-    assert workflow.count('"$UV_PYTHON_INSTALL_DIR"/*) ;;') == 2
+    assert workflow.count("while IFS='=' read -r VARIABLE _; do") == 4
+    assert workflow.count('case "$VARIABLE" in UV_*) unset "$VARIABLE" ;; esac') == 4
+    assert workflow.count("--no-config") == 4
+    assert workflow.count("--managed-python") == 4
+    assert workflow.count("--no-python-downloads") == 2
+    assert workflow.count('"$MANAGED_PYTHON_ROOT"/*) ;;') == 2
     assert "GITEA_TOKEN: ${{ secrets.PKG_TOKEN }}" in workflow
     assert "GITEA_TOKEN: ${{ github.token }}" not in workflow
     assert "Fetch validated publisher tool anonymously" in workflow
-    assert "uv sync --project publisher-tool --only-group publish --locked" in workflow
-    assert "publisher-tool/.venv/bin/python -m twine upload" in workflow
+    assert '"$PUBLISHER_UV" sync' in workflow
+    assert '"$PUBLISHER_PYTHON" -m twine upload' in workflow
+    assert '"$BUILD_ROOT/venv/bin/python" -m build --no-isolation' in workflow
     assert "uvx --from twine" not in workflow
+
+
+def test_gitea_artifact_v3_compatibility_probe_is_bounded_and_disposable() -> None:
+    workflow = _read(GITEA_ARTIFACT_WORKFLOW)
+    parsed = yaml.load(workflow, Loader=yaml.BaseLoader)
+
+    assert parsed["on"] == {"pull_request": "", "workflow_dispatch": ""}
+    assert parsed["permissions"] == {"contents": "read"}
+    assert set(parsed["jobs"]) == {"upload-probe", "download-probe"}
+    assert all(
+        job["runs-on"] == "ci-untrusted-python312" for job in parsed["jobs"].values()
+    )
+    assert parsed["jobs"]["download-probe"]["needs"] == "upload-probe"
+    assert (
+        workflow.count(
+            "9b8fb938761ebbe4a50970b582dc793275d113da31ea12bcb55e50bec71c3d14"
+        )
+        == 2
+    )
+    assert (
+        "actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de" in workflow
+    )
+    assert (
+        "actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b" in workflow
+    )
+    assert "mirror-host" not in workflow
 
 
 def test_gitea_publish_does_not_bypass_nms_production_deployment() -> None:

@@ -86,13 +86,16 @@ sequenceDiagram
 - A candidate tag must resolve to the current canonical Gitea `develop` SHA.
   Each latest required CI status must resolve through authenticated Gitea API
   records to a successful `ci.yml` push run for that exact SHA, trusted actor,
-  job name, and untrusted runner class. The credential-free job builds one
-  wheel and one sdist using checksum-pinned uv in fresh per-run tool and managed
-  Python roots. The protected publisher anonymously fetches the exact validated
-  source, validates the manifest with a locked toolchain, exposes the repository
-  `PKG_TOKEN` only for package writes, links the package to this repository, and
-  downloads the registry bytes again to prove their hashes. The unsupported
-  Gitea Actions job token is never used as a package-registry credential.
+  job name, and untrusted runner class. A credential-free disposable job builds
+  one wheel and one sdist after directly verifying the pinned uv archive,
+  clearing inherited `UV_*` state, disabling discovered configuration, and
+  selecting fresh per-run managed-Python/cache roots. A separate disposable
+  publisher anonymously fetches the exact validated source, validates the
+  manifest with a locked toolchain, exposes repository `PKG_TOKEN` only for
+  package writes, keeps the built-in token package-read-only, links the package
+  to this repository, and downloads the registry bytes again to prove their
+  hashes. The unsupported Gitea Actions job token is never used as a package-
+  registry credential.
 - GitHub never rebuilds release artifacts. It downloads that exact linked
   Gitea wheel/sdist, installs both artifact forms on Python 3.12 and 3.13, and
   uploads the same bytes to TestPyPI or PyPI.

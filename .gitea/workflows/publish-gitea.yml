@@ -93,40 +93,81 @@ jobs:
           ref: ${{ needs.validate-source.outputs.source_sha }}
           persist-credentials: false
 
-      - name: Isolate uv and managed Python
+      - name: Install checksum-verified uv and managed Python
         env:
-          UV_ACTION_TOOL_CACHE: ${{ runner.temp }}/netbox-proxbox-uv-build-${{ github.run_id }}-${{ github.run_attempt }}
-          UV_MANAGED_PYTHON: ${{ runner.temp }}/netbox-proxbox-python-build-${{ github.run_id }}-${{ github.run_attempt }}
+          BOOTSTRAP_UV_ROOT: ${{ runner.temp }}/netbox-proxbox-uv-build-${{ github.run_id }}-${{ github.run_attempt }}
+          BOOTSTRAP_PYTHON_ROOT: ${{ runner.temp }}/netbox-proxbox-python-build-${{ github.run_id }}-${{ github.run_attempt }}
+          BOOTSTRAP_CACHE_ROOT: ${{ runner.temp }}/netbox-proxbox-uv-cache-build-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
-          test ! -e "$UV_ACTION_TOOL_CACHE"
-          test ! -e "$UV_MANAGED_PYTHON"
-          mkdir -p "$UV_ACTION_TOOL_CACHE"
-          printf 'RUNNER_TOOL_CACHE=%s\n' "$UV_ACTION_TOOL_CACHE" >> "$GITHUB_ENV"
-          printf 'UV_PYTHON_INSTALL_DIR=%s\n' "$UV_MANAGED_PYTHON" >> "$GITHUB_ENV"
+          test ! -e "$BOOTSTRAP_UV_ROOT"
+          test ! -e "$BOOTSTRAP_PYTHON_ROOT"
+          test ! -e "$BOOTSTRAP_CACHE_ROOT"
+          mkdir -m 0700 "$BOOTSTRAP_UV_ROOT"
+          mkdir -m 0700 "$BOOTSTRAP_PYTHON_ROOT"
+          mkdir -m 0700 "$BOOTSTRAP_CACHE_ROOT"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$BOOTSTRAP_UV_ROOT/uv.tar.gz" \
+            https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-unknown-linux-gnu.tar.gz
+          printf '%s  %s\n' \
+            e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224 \
+            "$BOOTSTRAP_UV_ROOT/uv.tar.gz" | sha256sum --check --strict
+          tar --extract --gzip --file "$BOOTSTRAP_UV_ROOT/uv.tar.gz" \
+            --directory "$BOOTSTRAP_UV_ROOT" --strip-components=1 \
+            uv-x86_64-unknown-linux-gnu/uv
+          chmod 0555 "$BOOTSTRAP_UV_ROOT/uv"
+          printf 'UV_BIN=%s\n' "$BOOTSTRAP_UV_ROOT/uv" >> "$GITHUB_ENV"
+          printf 'UV_PYTHON_INSTALL_DIR=%s\n' "$BOOTSTRAP_PYTHON_ROOT" >> "$GITHUB_ENV"
+          while IFS='=' read -r VARIABLE _; do
+            case "$VARIABLE" in UV_*) unset "$VARIABLE" ;; esac
+          done < <(env)
+          "$BOOTSTRAP_UV_ROOT/uv" python install \
+            --no-config \
+            --cache-dir "$BOOTSTRAP_CACHE_ROOT" \
+            --install-dir "$BOOTSTRAP_PYTHON_ROOT" \
+            --managed-python \
+            --no-bin \
+            3.12.13
 
-      - name: Install uv
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
-        with:
-          enable-cache: false
-          github-token: ''
-          checksum: e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224
-          version: "0.11.28"
-          python-version: "3.12.13"
+      - name: Prepare locked release tools
+        env:
+          BUILD_ROOT: ${{ runner.temp }}/netbox-proxbox-build-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          umask 077
+          PUBLISHER_UV="$UV_BIN"
+          MANAGED_PYTHON_ROOT="$UV_PYTHON_INSTALL_DIR"
+          while IFS='=' read -r VARIABLE _; do
+            case "$VARIABLE" in UV_*) unset "$VARIABLE" ;; esac
+          done < <(env)
+          test ! -e "$BUILD_ROOT"
+          mkdir -p "$BUILD_ROOT"
+          UV_PYTHON_INSTALL_DIR="$MANAGED_PYTHON_ROOT" \
+            UV_PROJECT_ENVIRONMENT="$BUILD_ROOT/venv" \
+            "$PUBLISHER_UV" sync \
+            --no-config \
+            --cache-dir "$BUILD_ROOT/uv-cache" \
+            --managed-python \
+            --no-python-downloads \
+            --python 3.12.13 \
+            --locked --only-group publish --no-install-project
+          test "$("$PUBLISHER_UV" --version)" = "uv 0.11.28 (x86_64-unknown-linux-gnu)"
+          test "$("$BUILD_ROOT/venv/bin/python" -c 'import platform; print(platform.python_version())')" = 3.12.13
+          case "$(readlink -f "$BUILD_ROOT/venv/bin/python")" in
+            "$MANAGED_PYTHON_ROOT"/*) ;;
+            *) exit 1 ;;
+          esac
 
       - name: Build and bind exact artifacts
         env:
+          BUILD_ROOT: ${{ runner.temp }}/netbox-proxbox-build-${{ github.run_id }}-${{ github.run_attempt }}
           SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
           VERSION: ${{ needs.validate-source.outputs.version }}
         run: |
           set -euo pipefail
-          case "$(readlink -f "$(uv python find --managed-python 3.12.13)")" in
-            "$UV_PYTHON_INSTALL_DIR"/*) ;;
-            *) exit 1 ;;
-          esac
-          uv build
-          uv run --with twine==6.2.0 python -m twine check dist/*
-          python3 scripts/release_artifacts.py manifest \
+          "$BUILD_ROOT/venv/bin/python" -m build --no-isolation --outdir dist
+          "$BUILD_ROOT/venv/bin/python" -m twine check dist/*
+          "$BUILD_ROOT/venv/bin/python" scripts/release_artifacts.py manifest \
             --dist dist --package netbox-proxbox --version "$VERSION" \
             --source-sha "$SOURCE_SHA" --manifest release-manifest.json
           mkdir release-transfer
@@ -144,10 +185,10 @@ jobs:
   publish-gitea:
     name: Publish verified candidate to Gitea
     needs: [validate-source, build-candidate]
-    runs-on: mirror-host
+    runs-on: ci-untrusted-python312
     permissions:
       contents: read
-      packages: write
+      packages: read
     steps:
       - name: Fetch validated publisher tool anonymously
         env:
@@ -162,26 +203,41 @@ jobs:
           git -C publisher-tool checkout --detach FETCH_HEAD
           test "$(git -C publisher-tool rev-parse HEAD)" = "$TOOL_SHA"
 
-      - name: Isolate uv and managed Python
+      - name: Install checksum-verified uv and managed Python
         env:
-          UV_ACTION_TOOL_CACHE: ${{ runner.temp }}/netbox-proxbox-uv-publish-${{ github.run_id }}-${{ github.run_attempt }}
-          UV_MANAGED_PYTHON: ${{ runner.temp }}/netbox-proxbox-python-publish-${{ github.run_id }}-${{ github.run_attempt }}
+          BOOTSTRAP_UV_ROOT: ${{ runner.temp }}/netbox-proxbox-uv-publish-${{ github.run_id }}-${{ github.run_attempt }}
+          BOOTSTRAP_PYTHON_ROOT: ${{ runner.temp }}/netbox-proxbox-python-publish-${{ github.run_id }}-${{ github.run_attempt }}
+          BOOTSTRAP_CACHE_ROOT: ${{ runner.temp }}/netbox-proxbox-uv-cache-publish-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
-          test ! -e "$UV_ACTION_TOOL_CACHE"
-          test ! -e "$UV_MANAGED_PYTHON"
-          mkdir -p "$UV_ACTION_TOOL_CACHE"
-          printf 'RUNNER_TOOL_CACHE=%s\n' "$UV_ACTION_TOOL_CACHE" >> "$GITHUB_ENV"
-          printf 'UV_PYTHON_INSTALL_DIR=%s\n' "$UV_MANAGED_PYTHON" >> "$GITHUB_ENV"
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@37802adc94f370d6bfd71619e3f0bf239e1f3b78 # v7.6.0
-        with:
-          enable-cache: false
-          github-token: ''
-          checksum: e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224
-          version: "0.11.28"
-          python-version: "3.12.13"
+          test ! -e "$BOOTSTRAP_UV_ROOT"
+          test ! -e "$BOOTSTRAP_PYTHON_ROOT"
+          test ! -e "$BOOTSTRAP_CACHE_ROOT"
+          mkdir -m 0700 "$BOOTSTRAP_UV_ROOT"
+          mkdir -m 0700 "$BOOTSTRAP_PYTHON_ROOT"
+          mkdir -m 0700 "$BOOTSTRAP_CACHE_ROOT"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$BOOTSTRAP_UV_ROOT/uv.tar.gz" \
+            https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-unknown-linux-gnu.tar.gz
+          printf '%s  %s\n' \
+            e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224 \
+            "$BOOTSTRAP_UV_ROOT/uv.tar.gz" | sha256sum --check --strict
+          tar --extract --gzip --file "$BOOTSTRAP_UV_ROOT/uv.tar.gz" \
+            --directory "$BOOTSTRAP_UV_ROOT" --strip-components=1 \
+            uv-x86_64-unknown-linux-gnu/uv
+          chmod 0555 "$BOOTSTRAP_UV_ROOT/uv"
+          printf 'UV_BIN=%s\n' "$BOOTSTRAP_UV_ROOT/uv" >> "$GITHUB_ENV"
+          printf 'UV_PYTHON_INSTALL_DIR=%s\n' "$BOOTSTRAP_PYTHON_ROOT" >> "$GITHUB_ENV"
+          while IFS='=' read -r VARIABLE _; do
+            case "$VARIABLE" in UV_*) unset "$VARIABLE" ;; esac
+          done < <(env)
+          "$BOOTSTRAP_UV_ROOT/uv" python install \
+            --no-config \
+            --cache-dir "$BOOTSTRAP_CACHE_ROOT" \
+            --install-dir "$BOOTSTRAP_PYTHON_ROOT" \
+            --managed-python \
+            --no-bin \
+            3.12.13
 
       - name: Download bounded candidate
         uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b # v3.1.0-node20
@@ -190,13 +246,35 @@ jobs:
           path: release-transfer
 
       - name: Install locked publisher toolchain without package authority
+        env:
+          PUBLISH_ROOT: ${{ runner.temp }}/netbox-proxbox-publish-${{ github.run_id }}-${{ github.run_attempt }}
         run: |
           set -euo pipefail
-          uv sync --project publisher-tool --only-group publish --locked
-          case "$(readlink -f publisher-tool/.venv/bin/python)" in
-            "$UV_PYTHON_INSTALL_DIR"/*) ;;
+          umask 077
+          PUBLISHER_UV="$UV_BIN"
+          MANAGED_PYTHON_ROOT="$UV_PYTHON_INSTALL_DIR"
+          while IFS='=' read -r VARIABLE _; do
+            case "$VARIABLE" in UV_*) unset "$VARIABLE" ;; esac
+          done < <(env)
+          test ! -e "$PUBLISH_ROOT"
+          mkdir -p "$PUBLISH_ROOT"
+          UV_PYTHON_INSTALL_DIR="$MANAGED_PYTHON_ROOT" \
+            UV_PROJECT_ENVIRONMENT="$PUBLISH_ROOT/venv" \
+            "$PUBLISHER_UV" sync \
+            --directory publisher-tool \
+            --no-config \
+            --cache-dir "$PUBLISH_ROOT/uv-cache" \
+            --managed-python \
+            --no-python-downloads \
+            --python 3.12.13 \
+            --locked --only-group publish --no-install-project
+          test "$("$PUBLISHER_UV" --version)" = "uv 0.11.28 (x86_64-unknown-linux-gnu)"
+          test "$("$PUBLISH_ROOT/venv/bin/python" -c 'import platform; print(platform.python_version())')" = 3.12.13
+          case "$(readlink -f "$PUBLISH_ROOT/venv/bin/python")" in
+            "$MANAGED_PYTHON_ROOT"/*) ;;
             *) exit 1 ;;
           esac
+          printf 'PUBLISHER_PYTHON=%s\n' "$PUBLISH_ROOT/venv/bin/python" >> "$GITHUB_ENV"
 
       - name: Verify candidate with canonical-main publisher code
         env:
@@ -208,7 +286,7 @@ jobs:
           mv release-transfer/*.whl release-transfer/*.tar.gz dist/
           cmp publisher-tool/scripts/release_artifacts.py \
             release-transfer/release_artifacts.py
-          publisher-tool/.venv/bin/python publisher-tool/scripts/release_artifacts.py verify \
+          "$PUBLISHER_PYTHON" publisher-tool/scripts/release_artifacts.py verify \
             --dist dist --package netbox-proxbox --version "$VERSION" \
             --source-sha "$SOURCE_SHA" --manifest release-transfer/release-manifest.json
 
@@ -217,14 +295,14 @@ jobs:
           GITEA_TOKEN: ${{ secrets.PKG_TOKEN }}
         run: |
           set -euo pipefail
-          publisher-tool/.venv/bin/python -m twine upload --non-interactive \
+          "$PUBLISHER_PYTHON" -m twine upload --non-interactive \
             --repository-url https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi \
             --username emersonfelipesp --password "$GITEA_TOKEN" dist/*
           curl --fail --silent --show-error --request POST \
             --header "Authorization: token ${GITEA_TOKEN}" \
             "https://git.nmulti.cloud/api/v1/packages/emersonfelipesp/pypi/netbox-proxbox/-/link/netbox-proxbox"
           GITEA_PACKAGE_TOKEN="$GITEA_TOKEN" \
-            publisher-tool/.venv/bin/python publisher-tool/scripts/release_artifacts.py publish-manifest \
+            "$PUBLISHER_PYTHON" publisher-tool/scripts/release_artifacts.py publish-manifest \
             --owner emersonfelipesp --repository netbox-proxbox \
             --manifest release-transfer/release-manifest.json
 
@@ -234,7 +312,7 @@ jobs:
           VERSION: ${{ needs.validate-source.outputs.version }}
         run: |
           set -euo pipefail
-          python3 publisher-tool/scripts/release_artifacts.py fetch-gitea \
+          "$PUBLISHER_PYTHON" publisher-tool/scripts/release_artifacts.py fetch-gitea \
             --owner emersonfelipesp --repository netbox-proxbox \
             --package netbox-proxbox --version "$VERSION" --source-sha "$SOURCE_SHA" \
             --dist verified-dist --manifest verified-manifest.json
@@ -244,7 +322,7 @@ jobs:
     name: Promote verified RC tag to GitHub
     needs: [validate-source, publish-gitea]
     if: ${{ needs.validate-source.outputs.is_rc == 'true' }}
-    runs-on: mirror-host
+    runs-on: ci-untrusted-python312
     steps:
       - name: Checkout verified tag
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2

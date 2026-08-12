@@ -595,9 +595,13 @@ not subscribe to Gitea's overlapping
 two immutable package uploads. The tag must equal current `develop`; every
 latest required status must resolve to authenticated successful `ci.yml`
 push-run/job evidence for that exact SHA, trusted actor, expected job, and
-untrusted runner class. A credential-free runner builds a manifest-bound wheel/sdist; a
-protected job publishes with the short-lived Actions package token, links the
-package, then re-downloads and hashes the exact bytes.
+untrusted runner class. Separate disposable `ci-untrusted-python312` jobs build
+the manifest-bound wheel/sdist and verify/publish it. The built-in token remains
+package-read-only; only the final registry-write step receives repository secret
+`PKG_TOKEN`, after which the workflow links the package and re-downloads and
+hashes the exact bytes. The private uv/Python bootstrap clears inherited `UV_*`
+state, verifies the pinned uv archive before extraction, disables discovered
+configuration, and selects fresh per-run Python/cache roots explicitly.
 
 The workflow pushes only RC tags to GitHub so the RC-only public tag trigger
 can validate TestPyPI. Final tags stay private until the exact Gitea package is
@@ -820,8 +824,9 @@ What was done for v0.0.19:
   `push: tags:`, `create`, and `workflow_dispatch`, and that release used a
   direct-upload recovery while tag triggers were broken. This history is not a
   current procedure. The current publisher is tag-push-only, manifest-bound,
-  repository-linked, and fail-closed. It uses checksum-pinned uv with fresh
-  per-run managed-Python roots, anonymously fetches the exact validated source,
+  repository-linked, and fail-closed. It directly verifies pinned uv in fresh
+  per-run managed-Python/cache roots, clears inherited uv state, anonymously
+  fetches the exact validated source, keeps its built-in token package-read-only,
   and exposes `PKG_TOKEN` only to registry writes; fixes always advance to a new
   immutable version.
 - Paired backend: `proxbox-api v0.0.16`.
