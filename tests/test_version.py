@@ -60,9 +60,10 @@ CURRENT_PLUGIN_VERSION = "0.0.23"
 CURRENT_RELEASE_VERSION = "0.0.23.post2"
 CURRENT_PROXBOX_API_PAIRING_LABEL = "guest-VM-interface writer build / next release"
 CURRENT_PAIRING_LINE = (
-    "Current pairing: netbox-proxbox 0.0.23.post2 <-> proxbox-api "
+    "Current backend-runtime pairing: netbox-proxbox 0.0.23.post2 <-> proxbox-api "
     "(guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 "
-    "<-> netbox-sdk 0.0.10."
+    "<-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST "
+    "dependency only and does not provide the semantic MCP bridge."
 )
 PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.19.post5"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"

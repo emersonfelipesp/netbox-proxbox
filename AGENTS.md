@@ -34,7 +34,8 @@ Before committing any change:
 The mocked suite must disable pytest-django per invocation. Real model,
 transaction, form, serializer, and signal behavior runs through
 `.github/workflows/django-tests.yml` with pytest-django enabled. Endpoint
-auto-configuration additionally has an 85% branch-coverage floor there; see
+auto-configuration and the bridge request serializer each have an independent
+85% branch-coverage floor there; see
 [`docs/developer/endpoint-autoconfiguration.md`](./docs/developer/endpoint-autoconfiguration.md).
 
 ## Framework Stack
@@ -51,13 +52,41 @@ Do not add new third-party PyPI dependencies to replace what NetBox or Django al
 
 Use NetBox view mixins from `utilities.views` (`ConditionalLoginRequiredMixin`, `TokenConditionalLoginRequiredMixin`, `ContentTypePermissionRequiredMixin`) for custom routes. Enforce object visibility with `QuerySet.restrict()`. Permission strings for ProxBox-specific operations are centralized in [`netbox_proxbox/views/proxbox_access.py`](./netbox_proxbox/views/proxbox_access.py); see [`CLAUDE.md`](./CLAUDE.md) for the current permission and workflow notes.
 
-The read-only `/api/plugins/proxbox/mcp/` document is only a versioned
-descriptor for the netbox-sdk plugin bridge. Semantic tools must reuse existing
+The read-only `/api/plugins/proxbox/mcp/` document is only a versioned producer
+descriptor for a future compatible netbox-sdk plugin bridge. No released SDK
+identity is currently activated; keep the checked activation artifact blocked
+and do not present the descriptors as operational tools until exact immutable
+SDK provisioning and paired CI are committed. Semantic tools must reuse existing
 DRF endpoints and their permissions; do not add FastMCP, credentials, or a
 parallel transport stack to this plugin. Mark sync scheduling destructive:
 reconciliation can remove stale NetBox inventory records even though it does
-not delete Proxmox guests or infrastructure. Omission alone means all
-endpoints; reject explicit empty scopes and incomplete recurrence pairs.
+not delete Proxmox guests or infrastructure. An activated SDK exposes generic
+`plugin_list_tools` / `plugin_call_tool`; its mutation opt-in enables every MCP
+write, not a single descriptor. Bridge v1 uses explicit concrete `sync_stages`,
+does not advertise legacy `all` or `netbox_endpoint_ids`, and accepts only a
+nonempty verified Proxmox scope, representable strict timezone-bearing RFC 3339
+time, and an exactly-one-unit recurrence bounded to the persisted minute field.
+Schema version 1 identifies the generic descriptor protocol, not a frozen
+plugin payload. Endpoint PKs are bounded to positive signed 64-bit values.
+Integer JSON literals retain that full range; integral float/Decimal forms
+normalize only through `9007199254740991`, while unsafe larger floats, booleans,
+strings, fractions, and non-finite numbers fail. Reject unknown properties,
+duplicates, nonpositive/out-of-range IDs, and overlong names. `sync_stages`
+selects the 13 SSE stages only: endpoint preflight and scoped cluster/node,
+firewall, datacenter, and normally VM-template reconciliation still run. The
+exact unique full set canonicalizes to internal `[all]` for recurring hints and
+repair debounce without accepting `all` through MCP. Never
+auto-retry an ambiguous schedule outcome. Keep the
+manifest, DRF serializer, Proxbox-owned contract snapshot, blocked activation
+artifact, immutable paired-SDK gate, and both MCP test suites aligned. The gate
+must require an exact-commit SDK root whose complete `netbox_sdk/` package
+inventory matches, exact released version plus full commit, fixed
+relative module origin, isolated locked interpreter/dependency origins, and
+package bytes materialized only after bounded commit/tree/blob graph validation
+and explicit blob rehashing; never trust ambient `PYTHONPATH`,
+dirty source, or a version string alone. Read
+[`docs/api/semantic-mcp-bridge.md`](./docs/api/semantic-mcp-bridge.md) before
+changing or invoking this surface.
 
 ## Configuration policy
 
@@ -219,6 +248,10 @@ through `head_branch` and the exact run-name ref, and polls only
 outset. A 404 is a bounded not-yet-visible state under the shared deadline and
 request cap. Workflow-run list ordering or flooding cannot displace the pinned
 pair, and a stale run or rerun attempt cannot satisfy the gate.
+When `django-tests.yml` changes, keep the waiter on the previously reviewed
+blob. Land and review the workflow first; update the base-owned pin only in a
+second, separately reviewed change. A candidate workflow must never authorize
+its own blob.
 Only after that supervisor and its isolation are reviewed may a separate change
 enable a consumer. Prefer `GH_MATRIX_READ_TOKEN_FILE`, naming a private token
 file readable only by the waiter, so the token value never enters the process

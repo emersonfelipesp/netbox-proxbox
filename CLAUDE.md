@@ -64,7 +64,7 @@ Follow the same dependency order agents use (see [`AGENTS.md`](./AGENTS.md)):
 - **Custom views** should use `utilities.views.ConditionalLoginRequiredMixin` (respects `LOGIN_REQUIRED`) instead of Django’s unconditional `login_required`, and `TokenConditionalLoginRequiredMixin` where REST tokens should authenticate browser-style endpoints.
 - **Operational endpoints** (sync actions, schedule job, WebSocket bridge): `ContentTypePermissionRequiredMixin` with permissions defined in [`netbox_proxbox/views/proxbox_access.py`](./netbox_proxbox/views/proxbox_access.py) — typically `add` on core `Job` for queueing sync work, `delete` on core `Job` for cancel actions, and `view` on `FastAPIEndpoint` for read-only WebSocket test UI.
 - **Dashboard and JSON helpers**: plugin home requires at least one of `view` on `ProxmoxEndpoint` / `NetBoxEndpoint` / `FastAPIEndpoint` when the user is authenticated; endpoint lists use `.restrict(request.user, "view")`. Proxmox card and keepalive JSON resolve objects through restricted querysets (`get_object_or_404(...restrict(...))`). Tagged devices and VMs use `Device.objects.restrict` / `VirtualMachine.objects.restrict` before listing.
-- **Plugin REST API** remains on `NetBoxModelViewSet` with standard NetBox/DRF permission classes. Its read-only `mcp/` manifest only describes existing permission-gated routes for the netbox-sdk bridge; it must not grow a parallel MCP server or credential store. The scheduling API rejects the entire request when any explicit Proxmox endpoint ID is unknown or disabled—never filter an explicit scope down to empty, because empty deliberately means all enabled endpoints to the job runner. Omission alone may request that all-endpoint behavior: explicitly empty Proxmox or NetBox scopes are rejected. Recurrence value and unit are a required pair. Advertise scheduling as destructive because reconciliation may remove stale NetBox inventory records, even though it does not delete Proxmox guests or infrastructure.
+- **Plugin REST API** remains on `NetBoxModelViewSet` with standard NetBox/DRF permission classes. Its read-only `mcp/` manifest only describes existing permission-gated routes for a future compatible netbox-sdk bridge; it must not grow a parallel MCP server or credential store. No released SDK identity is currently activated: keep the checked activation artifact blocked until one exact released version and its clean full-commit package blobs, fixed module origin, explicit provisioning, and paired CI all agree. Schema version 1 identifies the generic descriptor protocol, not a frozen Proxbox payload. The scheduling API rejects the entire request when any explicit Proxmox endpoint ID is unknown or disabled—never filter an explicit scope down to empty, because empty deliberately means all enabled endpoints to the job runner. Omission alone may request that all-endpoint behavior: explicitly empty Proxmox or NetBox scopes are rejected. Endpoint PKs are positive signed-64-bit integers. Integer JSON literals retain the full range; integral float/Decimal forms normalize only through `9007199254740991`, while unsafe larger floats, bool/string/fraction/non-finite values reject. Recurrence value and unit are a required pair. Bridge v1 also rejects unknown properties, duplicate list items, nonpositive/out-of-range endpoint IDs, RFC 3339 leap seconds outside a normalized UTC month boundary, unrepresentable instants, and job names longer than 200 characters. The 13 advertised stages control the SSE pipeline only; endpoint preflight and scoped cluster/node, firewall, datacenter, and normally VM-template passes still mutate inventory. The exact full unique set becomes internal `[all]` for recurring/repair identity. Advertise scheduling as destructive because reconciliation may remove stale NetBox inventory records, even though it does not delete Proxmox guests or infrastructure. Keep the manifest, DRF serializer, producer-owned fixture, executable documentation examples, blocked activation artifact, immutable paired-SDK gate, and pure/real-Django tests aligned; the consumer and operator contract is [`docs/api/semantic-mcp-bridge.md`](./docs/api/semantic-mcp-bridge.md).
 
 ---
 
@@ -76,7 +76,7 @@ This repository packages the `netbox_proxbox` NetBox plugin. The plugin adds end
 - Docker-based plugin installation docs are maintained at [`docs/installation/3-installing-plugin-docker.md`](./docs/installation/3-installing-plugin-docker.md), including `plugin_requirements.txt` and `configuration/plugins.py` usage.
 - Backend Docker examples map host `8800` to container `8000` (`-p 8800:8000`) because the published `proxbox-api` image serves through nginx on container port `8000`.
 
-The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.23.post2` and NetBox compatibility `4.5.8` through `4.6.99` (validated against `4.5.8` through `4.5.10` and `4.6.0` through `4.6.5`). Current pairing: netbox-proxbox 0.0.23.post2 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10. The `0.0.23.post2` release adds bounded endpoint auto-configuration and credential establishment while retaining the `0.0.23.post1` universal `guest_os_model` behavior. Existing backend rows authorize only their exact persisted target; rowless discovery is restricted to configured or same-site targets derived from NetBox's trusted public origin, and any unproved target remains pending. The previous stable `0.0.22` release pairs with backend `0.0.19.post5`. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
+The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.23.post2` and NetBox compatibility `4.5.8` through `4.6.99` (validated against `4.5.8` through `4.5.10` and `4.6.0` through `4.6.5`). Current backend-runtime pairing: netbox-proxbox 0.0.23.post2 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge. The `0.0.23.post2` release adds bounded endpoint auto-configuration and credential establishment while retaining the `0.0.23.post1` universal `guest_os_model` behavior. Existing backend rows authorize only their exact persisted target; rowless discovery is restricted to configured or same-site targets derived from NetBox's trusted public origin, and any unproved target remains pending. The previous stable `0.0.22` release pairs with backend `0.0.19.post5`. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
 
 **Companion repos (cross-link map):**
 
@@ -280,7 +280,7 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   errors. Keep the state machine and automated evidence aligned with
   [`docs/developer/endpoint-autoconfiguration.md`](./docs/developer/endpoint-autoconfiguration.md).
 - NetBox UI routes live in [`netbox_proxbox/urls.py`](./netbox_proxbox/urls.py) and are implemented primarily in `netbox_proxbox/views/`.
-- The plugin also exposes a NetBox plugin API under `netbox_proxbox/api/`, using serializers, filtersets, and standard `NetBoxModelViewSet` classes. The root advertises a version 1 semantic manifest at `mcp/`; netbox-sdk validates and invokes its fixed plugin-local targets through the normal API client.
+- The plugin also exposes a NetBox plugin API under `netbox_proxbox/api/`, using serializers, filtersets, and standard `NetBoxModelViewSet` classes. The root advertises a version 1 semantic producer manifest at `mcp/`; only a future exact SDK identity activated by the checked immutable gate may validate and invoke its fixed plugin-local targets through the normal API client.
 - Sync actions enqueue NetBox background jobs (`ProxboxSyncJob`) on NetBox's default RQ queue and call the external ProxBox FastAPI SSE endpoints to record progress/result on the Job row.
 - **Operator sync-state repair UX (issue #217, hardened in #255).** The Proxbox
   Home Configuration section and plugin Settings page include a shared
@@ -550,6 +550,11 @@ flooding cannot displace the trusted pair. Branch provenance is independently
 bound by `head_branch` and the exact run-name ref. All API I/O, parsing,
 retries, rate-limit handling, and polling share one deadline and a hard request
 budget.
+
+When `django-tests.yml` changes, the waiter retains the previously reviewed
+blob pin. The workflow lands and is reviewed first; a second, separately
+reviewed base-artifact change may then update the pin. Candidate code never
+self-authorizes its own workflow blob.
 
 Environment fallback ingress cannot erase the token from the process's
 original environment block: same-runner processes with proc access can still
@@ -909,14 +914,18 @@ Changes to plugin models, service APIs, or backend contracts MUST include an upd
 
 **Coverage Target:** Maintain ≥85% coverage for changed production logic in the
 harness that can execute it. Coverage is measured by `pytest-cov` and reported
-in CI. Endpoint auto-configuration is real-Django-only and has an explicit 85%
-branch-coverage floor in `.github/workflows/django-tests.yml`.
+in CI. Endpoint auto-configuration and the bridge-v1 scheduling serializers are
+real-Django-only and each has an independent 85% branch-coverage floor in
+`.github/workflows/django-tests.yml`; aggregate coverage cannot let one module
+mask the other.
 
 **Coverage Reporting:** 
 - `rtk pytest -p no:django tests/ --cov=netbox_proxbox --cov-report=term-missing`
   runs the broad mocked suite locally.
-- The real-NetBox matrix enforces the endpoint auto-configuration threshold on
-  every push; do not disable pytest-django in that job.
+- The real-NetBox matrix reports the combined data, then runs separate
+  `coverage report --include=... --fail-under=85` gates for endpoint
+  auto-configuration and the bridge serializer on every push; do not disable
+  pytest-django in that job.
 - Uncovered code MUST be documented with a rationale (e.g., "except: pass for legacy API compatibility")
 
 **Exclusions:** The following are exempt from coverage requirements:

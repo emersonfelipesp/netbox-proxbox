@@ -572,14 +572,36 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
   - POST polling (traditional): the plugin waits for completion and returns a single JSON response.
   - GET SSE streaming: the plugin proxies `text/event-stream` from the FastAPI backend to the browser via `StreamingHttpResponse`. The browser JS parses SSE frames and renders granular per-object progress in real time.
 - The API layer exposes the same main models through NetBox plugin API endpoints.
-- The plugin API root advertises `/api/plugins/proxbox/mcp/`, a read-only
-  version 1 semantic-tool manifest. It describes `list_sync_jobs` and
+- The plugin contains a read-only version 1 semantic-tool producer manifest for
+  a future compatible SDK. No released SDK identity is currently activated; the
+  API root omits `mcp` and `/api/plugins/proxbox/mcp/` returns 503. The producer
+  manifest describes `list_sync_jobs` and
   `schedule_sync`, which reuse the existing `sync/schedule/` view and its
   `core.add_job` check. Proxbox does not host FastMCP or a parallel credential;
-  netbox-sdk owns discovery, validation, MCP registration, and mutation gating.
+  once immutably activated, netbox-sdk owns discovery, validation, the generic
+  `plugin_list_tools` / `plugin_call_tool` MCP surface, and server-wide mutation
+  gating.
   Explicit Proxmox endpoint scopes are fail-closed: any unknown or disabled ID
   rejects the entire request before enqueue, while an omitted scope retains the
-  intentional all-enabled behavior.
+  intentional all-enabled behavior. The target serializer also enforces the
+  manifest's strict `additionalProperties: false`, exact concrete
+  `sync_stages`, unique list items, positive signed-64-bit endpoint IDs with
+  full-range integer literals but float/Decimal normalization only through
+  `9007199254740991`, nonempty explicit Proxmox scopes, no MCP
+  NetBox-endpoint scope, representable strict RFC 3339 timestamps,
+  exactly-one-unit bounded recurrence, and 200-character job-name limit.
+  Ambiguous schedule outcomes are never auto-retried. Named JSON examples in
+  `docs/api/semantic-mcp-bridge.md` are executable test contracts rather than
+  illustrative text that may drift.
+  Bridge schema version 1 is the generic descriptor protocol, not a frozen
+  Proxbox payload. Stage selection controls the 13 SSE stages only: endpoint
+  preflight and scoped cluster/node, firewall, datacenter, and normally
+  VM-template reconciliation still run. Only the exact unique full stage set
+  becomes internal `[all]`, preserving recurring hints and repair debounce.
+  Keep `tests/fixtures/netbox_sdk_bridge_activation.json` blocked until an exact
+  SDK version and its clean full-commit package blobs, fixed module origin,
+  explicit CI provisioning, safe integer behavior, and normalized-UTC
+  month-boundary RFC 3339 leap behavior all pass together.
 - Browser-side pages use templates plus JS from `static/netbox_proxbox/js/` for dashboard hydration, keepalive polling, SSE streaming, log rendering, and WebSocket updates.
 - Operator recovery for missing Proxbox bootstrap/custom-field setup is exposed
   through `views/sync_state_repair.py` and the shared

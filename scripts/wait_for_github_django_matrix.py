@@ -46,8 +46,9 @@ WORKFLOW_NAME = "django-tests.yml"
 WORKFLOW_API_PATH = f"{REPOSITORY_PREFIX}/actions/workflows/{WORKFLOW_NAME}"
 WORKFLOW_CONTENT_PATH = f"{REPOSITORY_PREFIX}/contents/{WORKFLOW_PATH}"
 
-# Git blob identity of django-tests.yml at the reviewed target-branch commit.
-# A workflow edit must update this only in a separately reviewed base artifact.
+# Git blob identity of the previously reviewed django-tests.yml base artifact.
+# A candidate workflow edit lands first and remains untrusted; only a later,
+# separately reviewed base-artifact change may update this pin.
 PINNED_WORKFLOW_BLOB_SHA = "7d07b0c189101f2d2852ed98d057a22b0b4141f5"
 
 TOKEN_ENV = "GH_MATRIX_READ_TOKEN"

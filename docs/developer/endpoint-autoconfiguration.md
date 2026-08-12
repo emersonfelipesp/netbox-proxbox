@@ -95,15 +95,24 @@ signals, transactions, and runtime consumers.
 The fast mocked suite must run with `-p no:django`; otherwise pytest-django
 imports `django.test` against the suite's lightweight module stubs and aborts
 during collection. The release-candidate and PyPI-candidate jobs use the same
-flag. The real-NetBox matrix keeps pytest-django enabled and enforces at least
-85% branch coverage for `services.endpoint_autoconfiguration`:
+flag. The real-NetBox matrix keeps pytest-django enabled. It collects both
+real-Django-only production modules and then enforces an independent 85%
+branch-coverage floor for each, so bridge serializer coverage cannot mask
+endpoint auto-configuration or vice versa:
 
 ```bash
 pytest tests/test_sync_state_models.py tests/test_sync_state_contracts.py \
   tests/test_backend_key_adoption_django.py \
   --ds=netbox.settings --reuse-db --create-db \
   --cov=netbox_proxbox.services.endpoint_autoconfiguration \
-  --cov-branch --cov-fail-under=85
+  --cov=netbox_proxbox.api.serializers.resource_views \
+  --cov-branch --cov-fail-under=0
+coverage report \
+  --include='netbox_proxbox/services/endpoint_autoconfiguration.py' \
+  --fail-under=85
+coverage report \
+  --include='netbox_proxbox/api/serializers/resource_views.py' \
+  --fail-under=85
 ```
 
 Local disposable services may override `NETBOX_TEST_DB_HOST`,

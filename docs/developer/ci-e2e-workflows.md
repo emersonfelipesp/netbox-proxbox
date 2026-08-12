@@ -9,7 +9,7 @@ the staged TestPyPI/PyPI release pipeline.
 | Workflow | Trigger | Purpose |
 |---|---|---|
 | `.github/workflows/ci.yml` | Push and pull request | Runs lint, type checks, compile checks, and the mocked pytest suite. NetBox-dependent Django tests skip here. |
-| `.github/workflows/django-tests.yml` | Push, tag, and pull request | Provisions a real NetBox source tree (matrixed over the supported 4.5.x and 4.6.x lines) plus PostgreSQL and Redis, installs the plugin `test` extra (`pytest-django` included), and runs the NetBox-backed Django TestCase suite for sync-state and endpoint auto-configuration. A fifth 4.6.x cell installs a pinned supported `netbox-pdm` checkout and enables it so the optional registry override is exercised. It hard-fails a missing harness and enforces at least 85% branch coverage for `services.endpoint_autoconfiguration`. |
+| `.github/workflows/django-tests.yml` | Push, tag, and pull request | Provisions a real NetBox source tree (matrixed over the supported 4.5.x and 4.6.x lines) plus PostgreSQL and Redis, installs the plugin `test` extra (`pytest-django` included), and runs the NetBox-backed Django TestCase suite for sync-state and endpoint auto-configuration. A fifth 4.6.x cell installs a pinned supported `netbox-pdm` checkout and enables it so the optional registry override is exercised. It hard-fails a missing harness and independently enforces at least 85% branch coverage for `services.endpoint_autoconfiguration` and `api.serializers.resource_views`; aggregate coverage cannot let either module mask the other. |
 | `.github/workflows/e2e-docker.yml` | Manual, scheduled, reusable workflow call | Builds a real NetBox stack with the plugin, rqworker, `proxbox-api`, PostgreSQL, Redis, and a mocked Proxmox API. |
 | `.github/workflows/publish-testpypi.yml` | `v*rc*` tag push (TestPyPI), GitHub release published (PyPI), manual dispatch | Publishes immutable package versions through TestPyPI, PyPI release candidates, final PyPI releases, and post-release fixes. Official PyPI releases are cut from `develop` via `gh release create`; plain non-rc tag pushes do not trigger publishing. |
 | `.github/workflows/docs.yml` | Docs changes on main / PR | Builds and publishes the MkDocs site. |
@@ -51,6 +51,9 @@ same-SHA run from another branch, or run of another workflow is rejected.
 Before polling, the waiter reads
 `.github/workflows/django-tests.yml` at that exact SHA and requires GitHub's Git
 blob identity to equal the reviewed `PINNED_WORKFLOW_BLOB_SHA` constant.
+The pin intentionally remains the previously reviewed base blob while this
+change edits the candidate workflow. That mismatch is fail-closed, not a defect:
+candidate code must never update the value that authorizes itself.
 
 Discovery polls only
 `/repos/{owner}/{repo}/actions/runs/{run_id}/attempts/{attempt}` from the
@@ -120,17 +123,19 @@ most 800 requests plus a 200-request safety margin, below the authenticated
 
 ### Bootstrap order
 
-1. Land and review the waiter, unit contracts, workflow blob pin, and this
-   trust-boundary documentation on the target branch. This is the only step in
-   issue #300.
-2. Build a base-pinned external supervisor that obtains branch/SHA provenance
+1. Land and review a candidate workflow change without updating the existing
+   trusted workflow blob pin. The changed workflow is not trusted evidence yet.
+2. In a separate change based on the newly reviewed target branch, compute and
+   review the exact workflow Git blob, then update only the base-owned waiter
+   pin and its static contract. The workflow change cannot self-authorize.
+3. Build a base-pinned external supervisor that obtains branch/SHA provenance
    plus the expected GitHub run-ID/attempt pair and any optional not-before
    creation time from the trusted control plane, then invokes the waiter from
    reviewed base code. Prefer provisioning the GitHub App token through a
    waiter-only private file and keep it outside every candidate process.
-3. Validate the supervisor and secret boundary independently. Until this is
+4. Validate the supervisor and secret boundary independently. Until this is
    complete, public matrix results remain non-security evidence.
-4. Only then enable a Gitea pre-merge or deployment consumer in a separate,
+5. Only then enable a Gitea pre-merge or deployment consumer in a separate,
    reviewed change. The consumer may rely only on the supervisor's exact-run
    verdict, never directly on a candidate-controlled workflow success.
 
@@ -159,6 +164,29 @@ would disable the plugin needed by this real-NetBox job. Local disposable
 services can set `NETBOX_TEST_DB_HOST`, `NETBOX_TEST_DB_PORT`,
 `NETBOX_TEST_REDIS_HOST`, and `NETBOX_TEST_REDIS_PORT`; hosted CI retains the
 stock service host and ports.
+
+The pytest coverage collection uses both real-Django modules with an aggregate
+report only for visibility. Two subsequent `coverage report --include=...`
+commands apply `--fail-under=85` to each module independently. Never replace
+them with a single aggregate threshold.
+
+### Semantic MCP paired-SDK activation
+
+The Proxbox descriptor is producer-side code, but operational MCP availability
+requires one exact compatible `netbox-sdk` artifact. No released SDK currently
+passes that contract. `tests/fixtures/netbox_sdk_bridge_activation.json`
+therefore says `blocked`, contains no invented version or commit, and the mocked
+suite asserts that no workflow presents
+`tests/validate_paired_netbox_sdk_bridge.py` as active evidence.
+
+Activation is a separate reviewed change after an exact SDK release exists. It
+must explicitly provision that immutable artifact, record its exact released
+version and full Git commit plus `netbox_sdk/plugin_bridge.py` origin, invoke the
+paired script with all identity arguments, and require the lossless endpoint-ID
+and bounded RFC 3339 vectors. Ambient `PYTHONPATH`, a mutable branch, or a
+candidate-supplied version claim is not identity evidence. Until then, a public
+workflow success proves only the Proxbox producer contract, not MCP consumer
+compatibility.
 
 The Gitea package workflow subscribes to tag `push` only (plus manual
 dispatch), not the overlapping `create` event. Gitea emits both events for one

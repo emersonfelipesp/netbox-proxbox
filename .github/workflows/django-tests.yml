@@ -119,4 +119,11 @@ jobs:
             tests/test_mcp_bridge_django.py \
             --ds=netbox.settings --reuse-db --create-db -v --no-header \
             --cov=netbox_proxbox.services.endpoint_autoconfiguration \
-            --cov-branch --cov-report=term-missing --cov-fail-under=85
+            --cov=netbox_proxbox.api.serializers.resource_views \
+            --cov-branch --cov-report=term-missing --cov-fail-under=0
+          coverage report \
+            --include='netbox_proxbox/services/endpoint_autoconfiguration.py' \
+            --fail-under=85
+          coverage report \
+            --include='netbox_proxbox/api/serializers/resource_views.py' \
+            --fail-under=85

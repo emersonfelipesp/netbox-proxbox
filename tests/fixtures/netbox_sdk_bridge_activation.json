@@ -1,0 +1,12 @@
+{
+  "schema_version": 1,
+  "state": "blocked",
+  "expected_version": null,
+  "expected_commit": null,
+  "module_origin": "netbox_sdk/plugin_bridge.py",
+  "required_contracts": [
+    "lossless-json-integer-identity",
+    "bounded-rfc3339-normalization"
+  ],
+  "reason": "No released netbox-sdk version has passed the immutable paired bridge gate yet."
+}

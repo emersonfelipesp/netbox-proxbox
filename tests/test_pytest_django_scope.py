@@ -23,6 +23,7 @@ pins that split so the fix cannot be "simplified" back into a global option.
 
 from __future__ import annotations
 
+import hashlib
 import pathlib
 import re
 
@@ -36,6 +37,7 @@ PRE_COMMIT_CONFIG = REPO_ROOT / ".pre-commit-config.yaml"
 RELEASE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "publish-testpypi.yml"
 GITEA_PUBLISH_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "publish-gitea.yml"
 TRACEABILITY_DOC = REPO_ROOT / "docs" / "developer" / "endpoint-autoconfiguration.md"
+CI_WORKFLOW_DOC = REPO_ROOT / "docs" / "developer" / "ci-e2e-workflows.md"
 MKDOCS = REPO_ROOT / "mkdocs.yml"
 README = REPO_ROOT / "README.md"
 NETBOX_TEST_CONFIG = REPO_ROOT / "tests" / "netbox_test_configuration.py"
@@ -95,12 +97,35 @@ def test_gitea_package_publish_has_one_automatic_tag_trigger():
 
 
 def test_real_django_workflow_enforces_autoconfiguration_branch_coverage():
-    """The code that mocked Django cannot import needs its own coverage gate."""
+    """Each real-Django production module must pass its own coverage gate."""
     workflow = DJANGO_WORKFLOW.read_text()
 
     assert "--cov=netbox_proxbox.services.endpoint_autoconfiguration" in workflow
+    assert "--cov=netbox_proxbox.api.serializers.resource_views" in workflow
     assert "--cov-branch" in workflow
-    assert "--cov-fail-under=85" in workflow
+    assert "--cov-fail-under=0" in workflow
+    assert workflow.count("--fail-under=85") == 2
+    assert (
+        "--include='netbox_proxbox/services/endpoint_autoconfiguration.py'" in workflow
+    )
+    assert "--include='netbox_proxbox/api/serializers/resource_views.py'" in workflow
+
+
+def test_candidate_workflow_cannot_self_authorize_the_waiter_pin():
+    """A workflow edit remains untrusted until a later base-artifact pin update."""
+    waiter = (REPO_ROOT / "scripts" / "wait_for_github_django_matrix.py").read_text()
+    base_workflow_blob = "7d07b0c189101f2d2852ed98d057a22b0b4141f5"
+
+    assert f'PINNED_WORKFLOW_BLOB_SHA = "{base_workflow_blob}"' in waiter
+    payload = DJANGO_WORKFLOW.read_bytes()
+    candidate_blob = hashlib.sha1(
+        f"blob {len(payload)}\0".encode() + payload,
+        usedforsecurity=False,
+    ).hexdigest()
+    assert candidate_blob != base_workflow_blob
+    workflow_docs = CI_WORKFLOW_DOC.read_text()
+    assert "workflow change cannot self-authorize" in workflow_docs
+    assert "In a separate change" in workflow_docs
 
 
 def test_real_django_workflow_runs_pdm_object_permission_regression():

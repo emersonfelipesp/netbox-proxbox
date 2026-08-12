@@ -169,7 +169,10 @@ def _make_job(**kwargs):
     return SimpleNamespace(**kwargs)
 
 
-def test_has_recurring_proxbox_sync_all_finds_all_sync(schedule_hints, monkeypatch):
+def test_mcp_canonical_full_job_suppresses_duplicate_recurring_hint(
+    schedule_hints, monkeypatch
+):
+    """The MCP full-stage translation stores the existing ``[all]`` identity."""
     job = _make_job(
         interval=1440,
         status="scheduled",

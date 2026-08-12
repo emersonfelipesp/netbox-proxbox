@@ -132,6 +132,7 @@ nav:
     - Troubleshooting: 'operations/troubleshooting.md'
   - API Reference:
     - Overview: 'api/index.md'
+    - Semantic MCP Bridge: 'api/semantic-mcp-bridge.md'
     - Endpoints: 'api/endpoints.md'
     - Infrastructure: 'api/infrastructure.md'
     - Firecracker: 'api/firecracker.md'

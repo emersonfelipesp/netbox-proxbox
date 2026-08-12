@@ -25,7 +25,7 @@ netbox-proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data 
 
 ### Version
 
-- Plugin version: `0.0.20.post3`
+- Plugin version: `0.0.23.post2`
 - NetBox compatibility: `4.5.8` through `4.6.99`
 
 ---
@@ -89,6 +89,194 @@ clients.
 | Tables | `netbox_proxbox/tables/` | NetBox table definitions |
 | Templates | `netbox_proxbox/templates/` | HTML templates |
 | Static | `netbox_proxbox/static/` | JS, CSS assets |
+
+---
+
+## Semantic MCP Bridge (bridge v1)
+
+The Proxbox plugin contains a read-only semantic producer descriptor for a
+future compatible `netbox-sdk` MCP bridge. It does not embed FastMCP, listen on
+a separate MCP port, import the SDK at runtime, or store an MCP-specific
+credential. No released SDK identity is currently activated:
+`tests/fixtures/netbox_sdk_bridge_activation.json` remains blocked until one
+exact version or full commit, exact module origin, and explicitly provisioned
+paired CI gate all pass. While blocked, the API root omits `mcp` and the direct
+manifest route returns 503. Descriptor source presence alone is not compatibility.
+
+### Ownership and trust boundary
+
+- Proxbox API root: advertises schema version `"1"` and the manifest URL only
+  after the checked consumer activation becomes valid.
+- Proxbox manifest: describes fixed plugin-local tools and strict JSON Schemas.
+- Existing DRF target views: authenticate, require `core.add_job`, validate,
+  apply NetBox visibility, and enqueue jobs.
+- Activated compatible `netbox-sdk`: owns discovery, manifest validation, plugin-root path
+  confinement, the generic `plugin_list_tools` and `plugin_call_tool` MCP
+  surface, the existing NetBox credential, input/output validation, and
+  disabled-by-default server-wide mutation gating.
+- MCP host/agent: preserves operator intent and treats annotations as safety
+  metadata, never as authorization.
+
+The descriptor can describe a destructive tool but cannot execute it. The
+server-side DRF permission check remains authoritative.
+Schema version `"1"` identifies this generic descriptor protocol and supported
+schema machinery; it does not freeze every plugin tool payload. The Proxbox
+manifest fixture is a producer-owned snapshot, not a fixture authority copied
+between repositories. Its manual paired gate trusts no ambient SDK installation:
+the caller must supply an explicit SDK root, exact version or full commit, and
+exact module origin.
+
+### Discovery
+
+1. Require the checked activation artifact and matching immutable paired-CI
+   evidence to name the exact installed SDK. If it remains blocked, stop.
+2. Read `GET /api/plugins/proxbox/` with the configured NetBox principal.
+3. Require `mcp.schema_version == "1"`.
+4. Fetch the URL in `mcp.manifest` (normally
+   `/api/plugins/proxbox/mcp/`).
+5. Call `plugin_list_tools` with `{"plugin":"proxbox"}`. Let the gated SDK
+   validate the descriptors. Never construct another Proxbox MCP server or pass
+   a token as a tool argument.
+
+Invoke a descriptor only through `plugin_call_tool` with `plugin`, `tool`,
+`arguments`, and optional `dry_run`. `list_sync_jobs` and `schedule_sync` are
+descriptor names, not standalone MCP tools.
+
+The root discovery member is:
+
+```json
+{
+  "mcp": {
+    "schema_version": "1",
+    "manifest": "/api/plugins/proxbox/mcp/"
+  }
+}
+```
+
+### Tools
+
+| Tool | Existing DRF target | Effect | Behavior |
+|---|---|---|---|
+| `list_sync_jobs` | `GET sync/schedule/` | read, idempotent, closed-world | Lists visible active, failed, and recurring Proxbox sync jobs. Strict input is `{}`. |
+| `schedule_sync` | `POST sync/schedule/` | destructive, non-idempotent, open-world | Queues an immediate, future, or recurring `ProxboxSyncJob`. |
+
+Both tools require `core.add_job`, including the read tool, because they reuse
+the existing protected schedule view. The manifest itself follows NetBox's
+`LOGIN_REQUIRED` setting and may be anonymously readable only when that setting
+allows it.
+
+### `schedule_sync` safety contract
+
+- Treat scheduling as destructive and non-idempotent. Reconciliation may
+  remove stale **NetBox inventory** records, and submitting twice can create two
+  jobs. The bridge does not delete Proxmox guests or infrastructure.
+- Keep the SDK mutation gate disabled unless the operator or host policy accepts
+  its complete blast radius. `NETBOX_MCP_ALLOW_MUTATIONS=1` and
+  `--allow-mutations` are global MCP-server opt-ins: either enables every
+  mutation tool, not only Proxbox `schedule_sync`.
+- `sync_stages` is required, nonempty, and unique. Bridge v1 accepts exactly the
+  13 concrete stage slugs and does not advertise the legacy `"all"` sentinel.
+  A full sync sends the complete canonical stage list, which is normalized to
+  the internal `["all"]` identity used by recurring hints and repair debounce.
+- Stage selection controls only those 13 SSE stages. Endpoint/configuration
+  preflight and scoped cluster/node, firewall, and datacenter CPU reconciliation
+  always run first. VM-template reconciliation also runs unless disabled by its
+  sync mode. Those passes can mutate NetBox inventory regardless of the subset.
+- `job_name` is optional and limited to 200 characters.
+- `schedule_at` must be a strict RFC 3339 future time with an explicit timezone
+  whose normalized instant is representable; overflowing year-boundary leap
+  and timezone-offset normalization are rejected.
+  Omit or use `null` for an immediate one-shot call.
+- `recurrence` is an object with exactly one positive `minutes`, `hours`,
+  `days`, or `weeks` member. Per-unit maxima guarantee that the persisted
+  converted interval is at most `2147483647` minutes. If recurrence is present
+  and `schedule_at` is omitted, the first run starts at the server's current time.
+  Exact maxima are `2147483647` minutes, `35791394` hours, `1491308` days, and
+  `213044` weeks; the next integer for any unit is rejected before enqueue.
+- Proxmox endpoint IDs are unique signed-64-bit positive NetBox primary keys
+  (`1..9223372036854775807`). Integer JSON literals retain the full range.
+  Mathematically integral float/Decimal forms such as `7.0` normalize only
+  through `9007199254740991`; larger float forms are rejected before ORM lookup
+  because parsing may already have rounded their identity. Booleans, strings,
+  fractions, non-finite numbers, and signed-64 overflow also reject. The same
+  rule protects the unadvertised legacy direct-API endpoint fields.
+- Every explicitly requested `proxmox_endpoint_ids` row must exist and be
+  enabled. One unknown or disabled ID rejects the entire request; the server
+  never filters the list down to a broader or different scope.
+- Bridge v1 does not expose `netbox_endpoint_ids`; that legacy REST field has no
+  end-to-end bridge scope semantics and is rejected as an additional property.
+- Explicit Proxmox endpoint scopes must be nonempty. Omission alone requests the
+  scheduler's all-endpoint behavior. Never send `[]` as a placeholder.
+- Unknown properties are rejected (`additionalProperties: false`).
+- HTTP 400 and 403 failures enqueue nothing. Never retry them with omitted
+  scope or weaker validation.
+- A timeout, 5xx, invalid response, or transport failure after dispatch is
+  ambiguous. `list_sync_jobs` lacks the submitted scope and stable request
+  identity, so it cannot prove absence. Never auto-retry; report the ambiguity
+  and require operator reconciliation before a deliberate retry.
+
+Minimal immediate request:
+
+```json
+{
+  "plugin": "proxbox",
+  "tool": "schedule_sync",
+  "arguments": {
+    "sync_stages": [
+      "virtual-machines", "storage", "vm-disks", "vm-backups",
+      "vm-snapshots", "devices", "network-interfaces", "vm-interfaces",
+      "ip-addresses", "sdn", "backup-routines", "replications", "task-history"
+    ],
+    "job_name": "operator-requested-full-sync"
+  },
+  "dry_run": false
+}
+```
+
+Scoped recurring request:
+
+```json
+{
+  "plugin": "proxbox",
+  "tool": "schedule_sync",
+  "arguments": {
+    "sync_stages": ["devices", "network-interfaces"],
+    "job_name": "six-hour-inventory",
+    "recurrence": {"hours": 6},
+    "proxmox_endpoint_ids": [7]
+  },
+  "dry_run": false
+}
+```
+
+Accepted calls return HTTP 201 with `ok`, `job_id`, and `message`. Use
+`job_id` as the stable identifier; messages are human-readable.
+
+### Error handling
+
+- 400: do not resubmit automatically or widen endpoint scope. The generic MCP
+  error may expose only the HTTP status; require operator inspection instead of
+  guessing which field failed.
+- 401: repair the normal NetBox SDK authentication; credentials never belong
+  in tool input.
+- 403: the principal lacks `core.add_job`; do not bypass DRF.
+- 404: plugin/route is missing or incompatible; refresh discovery.
+- 5xx or timeout after dispatch: treat the write outcome as ambiguous and never
+  auto-retry a schedule call.
+
+### Compatibility and maintenance
+
+`tests/fixtures/proxbox_bridge_v1.json` is the Proxbox-owned exact wire snapshot,
+not a shared SDK fixture. Keep it aligned with
+`netbox_proxbox/api/mcp_bridge.py`, the DRF serializers/views, the named JSON
+examples in `docs/api/semantic-mcp-bridge.md`, and the pure plus real-Django MCP
+test suites. Keep `tests/fixtures/netbox_sdk_bridge_activation.json` blocked
+until an exact compatible released SDK is immutably provisioned in CI and
+passes safe-integer plus leap/offset-overflow vectors. Do not silently change a
+v1 tool name, path, effect, required field, or meaning. See
+`docs/api/semantic-mcp-bridge.md` for the complete
+architecture, executable examples, error matrix, verification traceability,
+versioning policy, and troubleshooting runbook.
 
 ---
 
@@ -372,7 +560,14 @@ The plugin supports multiple sync types, each mapping to a proxbox-api endpoint:
 | `vm-disks` | `virtualization/virtual-machines/virtual-disks/create/stream` | Sync virtual disks |
 | `vm-backups` | `virtualization/virtual-machines/backups/all/create/stream` | Sync backup records |
 | `vm-snapshots` | `virtualization/virtual-machines/snapshots/all/create/stream` | Sync snapshot records |
-| `all` | (runs all above in order) | Full sync |
+| `network-interfaces` | `dcim/devices/interfaces/create/stream` | Sync node interfaces |
+| `vm-interfaces` | `virtualization/virtual-machines/interfaces/create/stream` | Sync VM interfaces |
+| `ip-addresses` | `virtualization/virtual-machines/interfaces/ip-address/create/stream` | Sync interface addresses |
+| `sdn` | `proxmox/sdn/create/stream` | Sync SDN inventory |
+| `replications` | `proxmox/replication/stream` | Sync replication jobs |
+| `backup-routines` | `proxmox/cluster/backup/stream` | Sync backup routines |
+| `task-history` | `virtualization/virtual-machines/task-history/create/stream` | Sync task history |
+| `all` | (runs all 13 stages in dependency order) | Full sync |
 
 ### Stage Execution Order
 
@@ -383,11 +578,27 @@ _SYNC_STAGE_ORDER = (
     "devices",           # First: create nodes
     "storage",           # Second: create storage
     "virtual-machines",  # Third: create VMs (depends on nodes)
-    "vm-disks",          # Fourth: create virtual disks
-    "vm-backups",        # Fifth: create backup records
-    "vm-snapshots",      # Sixth: create snapshot records
+    "task-history",
+    "vm-disks",
+    "vm-backups",
+    "vm-snapshots",
+    "network-interfaces",
+    "vm-interfaces",
+    "ip-addresses",
+    "sdn",
+    "replications",
+    "backup-routines",
 )
 ```
+
+This order describes the selectable backend SSE stages, not the complete job.
+Every non-targeted scheduled job first runs endpoint/configuration preflight and
+scoped cluster/node, firewall, and datacenter CPU reconciliation. VM-template
+reconciliation also runs unless `sync_mode_vm_template=disabled`. These
+invariant passes can create, update, or remove stale NetBox inventory regardless
+of the selected SSE stage subset. The semantic MCP bridge advertises all 13
+concrete stages and translates only the exact complete unique list to the
+internal `["all"]` identity used by recurring hints and repair debounce.
 
 ### Background Job Flow
 

@@ -53,4 +53,4 @@ part of the same plugin family.
 - Older pages are intentionally brief because the repository does not preserve fuller release-note prose for those versions.
 
 
-> **Current release:** netbox-proxbox `0.0.23.post2` pairs with proxbox-api guest-VM-interface writer build / next release (NetBox `4.5.8`-`4.6.99`). Current pairing: netbox-proxbox 0.0.23.post2 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
+> **Current release:** netbox-proxbox `0.0.23.post2` pairs with proxbox-api guest-VM-interface writer build / next release (NetBox `4.5.8`-`4.6.99`). Current backend-runtime pairing: netbox-proxbox 0.0.23.post2 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
