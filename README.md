@@ -218,7 +218,7 @@ other tenants.
 
 ## What's New in v0.0.23.post2
 
-Current pairing: netbox-proxbox 0.0.23.post2 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
+Current backend-runtime pairing: netbox-proxbox 0.0.23.post2 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 Paired with backend: guest-VM-interface writer build / next release.
 
@@ -230,7 +230,7 @@ Full notes: [Release Notes - v0.0.23.post2](docs/release-notes/version-0.0.23.po
 
 ## What's New in v0.0.23.post1
 
-Current pairing: netbox-proxbox 0.0.23.post1 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
+Backend-runtime pairing: netbox-proxbox 0.0.23.post1 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
 
 Paired with backend: guest-VM-interface writer build / next release.
 
@@ -241,7 +241,7 @@ Full notes: [Release Notes - v0.0.23.post1](docs/release-notes/version-0.0.23.po
 
 ## What's New in v0.0.23
 
-Current pairing: netbox-proxbox 0.0.23 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
+Backend-runtime pairing: netbox-proxbox 0.0.23 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
 
 Paired with backend: guest-VM-interface writer build / next release.
 
@@ -253,7 +253,7 @@ Full notes: [Release Notes - v0.0.23](docs/release-notes/version-0.0.23.md).
 
 ## What's New in v0.0.22
 
-Current pairing: netbox-proxbox 0.0.22 <-> proxbox-api 0.0.19.post5 <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
+Backend-runtime pairing: netbox-proxbox 0.0.22 <-> proxbox-api 0.0.19.post5 <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
 
 Paired with backend [`proxbox-api 0.0.19.post5`](https://github.com/emersonfelipesp/proxbox-api).
 
@@ -270,7 +270,7 @@ Paired with backend [`proxbox-api 0.0.18.post5`](https://github.com/emersonfelip
 
 - **Sync-mode filtering at source.** Per-record VM and VM-template filtering is enforced by the paired backend through `sync_mode_vm` and `sync_mode_vm_template` query params, so disabled modes no longer create dependent NetBox objects for skipped VMs.
 - **Batch and stream hardening.** VM sync uses two-phase batch processing, isolates per-VM dispatch failures, matches interface-dense guest aliases by name, and emits partial-failure stream frames for operator visibility.
-- **Current SDK pairing.** This release pairs with `proxmox-sdk 0.0.12` and `netbox-sdk 0.0.10` through the separate backend runtime.
+- **Backend SDK pairing.** This release pairs with `proxmox-sdk 0.0.12` and `netbox-sdk 0.0.10` only through the separate proxbox-api REST runtime.
 
 Full notes: [Release Notes - v0.0.21](docs/release-notes/version-0.0.21.md).
 
@@ -329,7 +329,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 ## Compatibility Matrix
 
-| NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
+| NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
 | >=4.5.8 | v0.0.23.post2 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
@@ -547,7 +547,8 @@ Key pages:
 - [Backend Setup](https://emersonfelipesp.github.io/netbox-proxbox/installation/backend-setup/)
 - [Endpoint Auto-Configuration](https://emersonfelipesp.github.io/netbox-proxbox/developer/endpoint-autoconfiguration/)
 - [Scheduled Sync](https://emersonfelipesp.github.io/netbox-proxbox/features/scheduled-sync/)
-- [REST API and semantic MCP bridge](https://emersonfelipesp.github.io/netbox-proxbox/api/)
+- [REST API](https://emersonfelipesp.github.io/netbox-proxbox/api/)
+- [Semantic MCP bridge](https://emersonfelipesp.github.io/netbox-proxbox/api/semantic-mcp-bridge/)
 - [Certification Evidence](https://emersonfelipesp.github.io/netbox-proxbox/certification/)
 - [Application Packet](https://emersonfelipesp.github.io/netbox-proxbox/application-packet/)
 
@@ -566,14 +567,28 @@ Proxbox protects VM destruction behind a five-lock chain. LLM agents **MUST NOT*
 
 The `DeletionRequest` REST endpoint (`/api/plugins/proxbox/deletion-requests/`) is read-only — enforced by `netbox_proxbox/api/views.py::DeletionRequestViewSet.http_method_names = ["get", "head", "options"]`. Pinned by `tests/test_static_guardrails.py`.
 
-The plugin also publishes a read-only semantic manifest at
-`/api/plugins/proxbox/mcp/` for the standard netbox-sdk bridge. It exposes
-sync-job listing and guarded scheduling through the existing DRF endpoint; the
-plugin does not run a separate MCP server or store a second credential.
+The plugin contains a read-only semantic producer manifest for a future
+compatible netbox-sdk bridge. No
+released SDK identity is activated yet: the checked activation artifact remains
+blocked, so the API root omits `mcp` and `/api/plugins/proxbox/mcp/` returns 503
+until one exact immutable SDK passes the paired CI vectors. The future
+bridge exposes sync-job listing and guarded scheduling through the existing DRF
+endpoint; the plugin does not run a separate MCP server or store a second
+credential.
 Scheduling is advertised as destructive because reconciliation can remove
 stale NetBox inventory records, not because it deletes Proxmox infrastructure.
-Explicit endpoint scopes must be nonempty; omit them for all endpoints. A
-recurrence value and unit must be supplied together.
+Once activated, agents use netbox-sdk's generic `plugin_list_tools` and
+`plugin_call_tool` envelope; the descriptor names are not standalone MCP tools.
+Bridge v1 accepts
+13 explicit concrete `sync_stages`, an optional fail-closed Proxmox endpoint
+scope, strict RFC 3339 scheduling, and an exactly-one-unit bounded `recurrence`.
+It does not expose the legacy REST `netbox_endpoint_ids` scope. The MCP
+mutation opt-in is server-wide, not per tool, and ambiguous write outcomes must
+never be auto-retried. Integer JSON endpoint-ID literals retain the full signed
+64-bit range, while integral float/Decimal forms normalize only through
+`9007199254740991` to prevent rounded identity. The complete discovery flow,
+executable examples, error handling, compatibility policy, and agent checklist are in the
+[Semantic MCP Bridge guide](https://emersonfelipesp.github.io/netbox-proxbox/api/semantic-mcp-bridge/).
 
 ## Contributing
 

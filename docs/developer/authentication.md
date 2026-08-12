@@ -1,6 +1,6 @@
 # Authentication Flows
 
-Proxbox spans four distinct authentication boundaries. This page documents each one, from browser session through to the Proxmox VE API.
+Proxbox spans five distinct authentication boundaries. This page documents each one, from MCP/REST and browser principals through to the Proxmox VE API.
 
 ---
 
@@ -26,6 +26,32 @@ sequenceDiagram
     API->>PVE: aiohttp + PVEAPIToken=user@realm!id=secret
     PVE-->>API: Proxmox resources (JSON)
 ```
+
+---
+
+## Boundary 0: MCP client ↔ netbox-sdk ↔ NetBox REST API
+
+The semantic MCP bridge will reuse the NetBox principal configured in an exact
+compatible `netbox-sdk`. The plugin contains a bridge-v1 producer manifest, but
+no released SDK identity is activated yet; the API root omits `mcp` and the
+direct manifest route returns 503. Once the checked
+activation artifact names an immutable SDK that passes paired CI, that SDK
+validates the manifest, confines declared paths below the plugin API root, and
+exposes generic `plugin_list_tools` / `plugin_call_tool` MCP tools that send
+ordinary authenticated REST requests. Proxbox
+does not receive or store a token in the manifest or tool arguments and does
+not create an MCP-specific credential.
+
+The descriptor follows NetBox's `LOGIN_REQUIRED` policy. The target
+`sync/schedule/` DRF view independently requires `core.add_job` for both
+the advertised `list_sync_jobs` and `schedule_sync` operations. A compatible SDK's
+disabled-by-default mutation gate protects against accidental scheduling, but
+it is one global switch for all MCP mutations, not per-plugin authorization;
+the DRF permission remains authoritative.
+
+See [Semantic MCP Bridge](../api/semantic-mcp-bridge.md) for the complete
+discovery sequence, strict schemas, executable examples, error handling, and
+agent safety contract.
 
 ---
 

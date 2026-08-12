@@ -15,7 +15,13 @@ A GET request to the root returns links to all top-level resources plus the nest
 
 ## Semantic MCP bridge
 
-The API root also explicitly advertises a versioned semantic-tool manifest:
+For the full consumer, operator, and agent contract—including discovery,
+authentication, tool schemas, executable examples, safety rules, errors,
+compatibility, and troubleshooting—see the dedicated
+[Semantic MCP Bridge guide](semantic-mcp-bridge.md).
+
+After an exact compatible SDK identity is activated, the API root explicitly
+advertises a versioned semantic-tool manifest:
 
 ```json
 {
@@ -26,9 +32,17 @@ The API root also explicitly advertises a versioned semantic-tool manifest:
 }
 ```
 
-`GET /api/plugins/proxbox/mcp/` is a read-only descriptor consumed by
-`netbox-sdk`. It publishes two operations backed by the existing
-`sync/schedule/` DRF view:
+While the checked activation record is blocked, the root omits this member and
+direct `GET /api/plugins/proxbox/mcp/` returns HTTP 503 with the activation
+record. The producer can therefore ship its schema without falsely advertising
+an operational consumer pair.
+
+`GET /api/plugins/proxbox/mcp/` is the reserved route for a read-only producer
+descriptor consumed by a future compatible `netbox-sdk`. No released SDK identity is currently activated;
+`tests/fixtures/netbox_sdk_bridge_activation.json` remains fail-closed. Once an
+exact compatible release is immutably provisioned and passes the paired CI
+gate, the SDK exposes these descriptors through generic `plugin_list_tools` and
+`plugin_call_tool` MCP tools backed by the existing `sync/schedule/` DRF view:
 
 | Tool | Method and path | Effect | Existing permission boundary |
 |---|---|---|---|
@@ -38,17 +52,35 @@ The API root also explicitly advertises a versioned semantic-tool manifest:
 The manifest's strict JSON Schemas mirror the existing schedule serializer and
 response envelopes. It does not execute operations, hold credentials, import
 FastMCP, or bypass DRF permissions. `netbox-sdk` performs discovery, input and
-output validation, path confinement, and disabled-by-default mutation gating;
+output validation, path confinement, and disabled-by-default server-wide
+mutation gating;
 the target view remains authoritative for NetBox authorization and scheduling.
-For `schedule_sync`, `"all"` is mutually exclusive with every other sync type.
+For `schedule_sync`, bridge v1 accepts a unique nonempty `sync_stages` list of
+13 concrete stages; it does not advertise the legacy REST `"all"` sentinel.
 An explicit Proxmox endpoint scope is fail-closed: if any requested endpoint ID
 is unknown or disabled, the request returns HTTP 400 and no job is enqueued.
 An explicitly present endpoint scope must contain at least one ID; omit the
-field to request the deliberate all-endpoints behavior. `interval_value` and
-`interval_unit` must be supplied together or both omitted.
+field to request the deliberate all-endpoints behavior. IDs are positive
+signed-64-bit PKs. Integer JSON literals retain that full range; integral
+float/Decimal forms normalize only through `9007199254740991`, and larger
+float forms fail before ORM lookup rather than risk rounded identity. Booleans,
+strings, fractions, and out-of-range values also fail. `netbox_endpoint_ids`
+is not exposed because the bridge has no end-to-end semantics for it.
+`recurrence` contains exactly one bounded unit/value member, and `schedule_at`
+is strict timezone-bearing RFC 3339 with a representable normalized instant.
+Unknown properties, duplicate list entries, nonpositive endpoint IDs, and job
+names longer than 200 characters are rejected so the DRF target enforces the
+same strict constraints advertised by bridge v1.
+The global mutation opt-in enables every MCP mutation, not just this tool; a
+timeout or post-dispatch failure is ambiguous and must never be auto-retried.
 The tool is marked destructive because synchronization reconciliation can
 delete stale NetBox inventory records; it does not imply deletion of Proxmox
 guests or infrastructure.
+The concrete stage list selects only the 13 SSE stages. Endpoint preflight and
+scoped cluster/node, firewall, and datacenter reconciliation still run first;
+VM-template reconciliation also runs unless disabled by sync mode. The exact
+complete unique list becomes the internal `["all"]` identity used by recurring
+hints and repair debounce, without making `"all"` valid MCP input.
 
 ## Authentication
 
@@ -158,7 +190,7 @@ Two models perform an **upsert** on POST — if a matching record already exists
 | Path | Methods | Documentation |
 |---|---|---|
 | `/api/plugins/proxbox/` | GET | This page |
-| `/api/plugins/proxbox/mcp/` | GET | Version 1 semantic-tool manifest for the netbox-sdk MCP bridge |
+| `/api/plugins/proxbox/mcp/` | GET | [Version 1 semantic-tool manifest for the netbox-sdk MCP bridge](semantic-mcp-bridge.md) |
 | `/api/plugins/proxbox/endpoints/` | GET | [Endpoint Configuration](endpoints.md) |
 | `/api/plugins/proxbox/endpoints/proxmox/` | GET POST | [ProxmoxEndpoint](endpoints.md#proxmox-endpoint) |
 | `/api/plugins/proxbox/endpoints/proxmox/{id}/` | GET PUT PATCH DELETE | [ProxmoxEndpoint](endpoints.md#proxmox-endpoint) |

@@ -34,6 +34,7 @@
                   "type": "integer"
                 },
                 "interval": {
+                  "maximum": 2147483647,
                   "minimum": 1,
                   "type": [
                     "integer",
@@ -97,39 +98,19 @@
         "openWorldHint": true,
         "readOnlyHint": false
       },
-      "description": "Queue an immediate, future, or recurring Proxbox synchronization through the existing permission-gated scheduling API. Reconciliation may delete stale NetBox inventory records. The \"all\" sync type must be selected by itself. Recurrence value and unit must be set together. Explicit endpoint scopes must contain at least one ID; omit a scope to select all.",
+      "description": "Queue an immediate, future, or recurring Proxbox synchronization through the existing permission-gated scheduling API. Reconciliation may delete stale NetBox inventory records. The bridge calls use explicit concrete sync stages; a full sync is the exact complete stage list. Stage selection controls the thirteen backend SSE reconciliation stages; invariant endpoint preflight plus cluster/node, firewall, datacenter, and VM-template reconciliation still run before them for every MCP-scheduled job (VM templates may be disabled by sync mode). Recurrence contains exactly one bounded unit/value member. An explicit Proxmox endpoint scope must contain at least one ID; omit it to select all.",
       "effect": "destructive",
       "inputSchema": {
         "additionalProperties": false,
         "properties": {
-          "interval_unit": {
-            "description": "Set with interval_value; omit both for a one-shot job.",
-            "enum": [
-              "minutes",
-              "hours",
-              "days",
-              "weeks",
-              null
-            ],
-            "type": [
-              "string",
-              "null"
-            ]
-          },
-          "interval_value": {
-            "description": "Set with interval_unit; omit both for a one-shot job.",
-            "minimum": 1,
-            "type": [
-              "integer",
-              "null"
-            ]
-          },
           "job_name": {
             "maxLength": 200,
             "type": "string"
           },
-          "netbox_endpoint_ids": {
+          "proxmox_endpoint_ids": {
             "items": {
+              "description": "Use an integer JSON literal for IDs above 9007199254740991; decimal-form numbers are accepted only while exactly representable by IEEE 754.",
+              "maximum": 9223372036854775807,
               "minimum": 1,
               "type": "integer"
             },
@@ -137,14 +118,34 @@
             "type": "array",
             "uniqueItems": true
           },
-          "proxmox_endpoint_ids": {
-            "items": {
-              "minimum": 1,
-              "type": "integer"
+          "recurrence": {
+            "additionalProperties": false,
+            "description": "Exactly one bounded unit/value member; omit for a one-shot job.",
+            "maxProperties": 1,
+            "minProperties": 1,
+            "properties": {
+              "days": {
+                "maximum": 1491308,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "hours": {
+                "maximum": 35791394,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "minutes": {
+                "maximum": 2147483647,
+                "minimum": 1,
+                "type": "integer"
+              },
+              "weeks": {
+                "maximum": 213044,
+                "minimum": 1,
+                "type": "integer"
+              }
             },
-            "minItems": 1,
-            "type": "array",
-            "uniqueItems": true
+            "type": "object"
           },
           "schedule_at": {
             "format": "date-time",
@@ -153,7 +154,7 @@
               "null"
             ]
           },
-          "sync_types": {
+          "sync_stages": {
             "items": {
               "enum": [
                 "virtual-machines",
@@ -168,8 +169,7 @@
                 "sdn",
                 "backup-routines",
                 "replications",
-                "task-history",
-                "all"
+                "task-history"
               ],
               "type": "string"
             },
@@ -179,7 +179,7 @@
           }
         },
         "required": [
-          "sync_types"
+          "sync_stages"
         ],
         "type": "object"
       },

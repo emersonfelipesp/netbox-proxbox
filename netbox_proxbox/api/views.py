@@ -96,7 +96,11 @@ from netbox_proxbox.api.build_pve_template import (
     build_cloud_image_pipeline_via_backend,
     build_pve_template_via_backend,
 )
-from netbox_proxbox.api.mcp_bridge import build_mcp_bridge_manifest
+from netbox_proxbox.api.mcp_bridge import (
+    build_mcp_bridge_manifest,
+    mcp_bridge_activation_record,
+    mcp_bridge_is_active,
+)
 
 
 class ProxBoxRootView(APIRootView):
@@ -128,10 +132,11 @@ class ProxBoxRootView(APIRootView):
             "virtual_disks": f"{base}/resources/virtual-disks/",
         }
         response.data["schedule_sync"] = f"{base}/sync/schedule/"
-        response.data["mcp"] = {
-            "schema_version": "1",
-            "manifest": f"{base}/mcp/",
-        }
+        if mcp_bridge_is_active():
+            response.data["mcp"] = {
+                "schema_version": "1",
+                "manifest": f"{base}/mcp/",
+            }
         response.data["logs"] = f"{base}/logs/"
         response.data["cloud_image_templates"] = f"{base}/cloud-image-templates/"
         response.data["metrics_influxdb"] = f"{base}/metrics-influxdb/"
@@ -177,10 +182,18 @@ class PluginMCPManifestAPIView(APIView):
 
     permission_classes = [IsAuthenticatedOrLoginNotRequired]
 
-    @extend_schema(responses={200: OpenApiTypes.OBJECT})
+    @extend_schema(responses={200: OpenApiTypes.OBJECT, 503: OpenApiTypes.OBJECT})
     def get(self, request: Request) -> Response:
         """Return the static manifest; target views enforce their own permissions."""
         del request
+        if not mcp_bridge_is_active():
+            return Response(
+                {
+                    "detail": "The semantic MCP consumer bridge is not activated.",
+                    "activation": mcp_bridge_activation_record(),
+                },
+                status=503,
+            )
         return Response(build_mcp_bridge_manifest())
 
 
@@ -1814,8 +1827,12 @@ class ScheduleSyncAPIView(APIView):
                 status=400,
             )
 
-        interval_value = data.get("interval_value")
-        interval_unit = data.get("interval_unit")
+        recurrence = data.get("recurrence") or {}
+        if recurrence:
+            interval_unit, interval_value = next(iter(recurrence.items()))
+        else:
+            interval_value = data.get("interval_value")
+            interval_unit = data.get("interval_unit")
         interval: int | None = None
         if interval_value and interval_unit:
             interval = ScheduleIntervalUnitChoices.to_minutes(

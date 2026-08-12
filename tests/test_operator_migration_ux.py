@@ -488,6 +488,37 @@ def test_repair_outcome_active_full_sync_skips_reconcile_and_enqueue(monkeypatch
     assert "No duplicate repair sync was queued" in outcome.message
 
 
+def test_mcp_canonical_full_job_debounces_repair_for_the_same_scope(monkeypatch):
+    """The MCP 13-stage translation uses the repair path's ``[all]`` identity."""
+    module = load_plugin_module(
+        "netbox_proxbox.views.sync_state_repair", monkeypatch=monkeypatch
+    )
+    active_job = SimpleNamespace(pk=19)
+
+    class ActiveJobs:
+        def restrict(self, user, action):
+            return self
+
+        def filter(self, **kwargs):
+            return self
+
+        def order_by(self, field):
+            return [active_job]
+
+    monkeypatch.setattr(module.Job, "objects", ActiveJobs())
+    monkeypatch.setattr(module, "is_proxbox_sync_job", lambda job: job is active_job)
+    monkeypatch.setattr(
+        module,
+        "proxbox_sync_params_from_job",
+        lambda job: {
+            "sync_types": [module.SyncTypeChoices.ALL],
+            "proxmox_endpoint_ids": ["7", "9"],
+        },
+    )
+
+    assert module._active_repair_sync_job(object(), [7, 9]) is active_job
+
+
 def test_bootstrap_status_payload_inner_backend_failure_surfaces_detail(monkeypatch):
     module = load_plugin_module(
         "netbox_proxbox.views.sync_state_repair", monkeypatch=monkeypatch

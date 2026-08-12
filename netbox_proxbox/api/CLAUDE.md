@@ -150,20 +150,53 @@ These `APIView` subclasses mirror every data-bearing UI page and expose the same
 
 ### API root
 
-`ProxBoxRootView.get()` extends the DRF root response with keys for every non-model URL group: `home`, `dashboard`, `resources` (nested dict with all six sub-paths), `schedule_sync`, and `logs`. Its `mcp` member advertises schema version `1` and the exact plugin-local `mcp/` manifest path for netbox-sdk discovery.
+`ProxBoxRootView.get()` extends the DRF root response with keys for every non-model URL group: `home`, `dashboard`, `resources` (nested dict with all six sub-paths), `schedule_sync`, and `logs`. It adds the `mcp` schema/version and exact plugin-local manifest path only when `mcp_bridge_is_active()` proves one complete immutable SDK identity; while blocked, the root omits `mcp` and the direct manifest route returns 503 with the activation record.
 
 The manifest describes only existing routes. Keep its request and response
 schemas aligned with the DRF serializers and views, and keep runtime permission
 checks in those target views. Never add a plugin-local MCP server, credential
-store, or direct transport client. `schedule_sync` must retain its destructive
+store, or direct transport client. Once an exact compatible identity is
+activated, the paired SDK exposes generic
+`plugin_list_tools` / `plugin_call_tool`, and its mutation opt-in is global to
+all writes rather than scoped to this plugin. `schedule_sync` must retain its destructive
 effect/hint because reconciliation may delete stale NetBox inventory records.
-`ScheduleSyncRequestSerializer` derives its choices from the canonical
-ChoiceSets, rejects explicitly empty endpoint scopes and incomplete recurrence
-pairs, and `ScheduledJobSerializer` owns the advertised response row.
+`ScheduleSyncRequestSerializer` distinguishes bridge `sync_stages` from legacy
+REST `sync_types`, translates only after validation, and preserves the legacy
+flat recurrence / NetBox scope / ordinary DRF date parser without advertising
+them. Bridge `sync_stages` selects the strict RFC 3339 parser. Bridge v1 rejects
+`all`, `netbox_endpoint_ids`, explicitly empty Proxmox scopes, unknown fields,
+duplicate list values, nonpositive endpoint IDs, timezone-less dates, invalid
+RFC 3339 (including leap-second normalization overflow), recurrence objects with other
+than one supported unit, converted intervals above `2147483647`, and job names
+longer than 200 characters. `ScheduledJobSerializer` owns the advertised response
+row. Never auto-retry an ambiguous write outcome: the list response lacks scope
+and stable request identity.
 
-`tests/fixtures/proxbox_bridge_v1.json` is the canonical SDK compatibility
-fixture. The pure contract suite requires the generated manifest to equal it,
-while netbox-sdk consumes the same fixture through its real bridge-v1 model.
+`sync_stages` controls the 13 backend SSE stages, not the invariant job
+prepasses. MCP-scheduled jobs still run endpoint/configuration preflight and
+scoped cluster/node, firewall, and datacenter CPU reconciliation; VM-template
+reconciliation runs unless its sync mode is disabled. Document that mutation
+surface wherever stage selection is shown.
+
+Endpoint fields accept signed-64-bit positive PKs. Integer JSON literals retain
+the full range; finite integral float/Decimal forms normalize only through
+`9007199254740991`, and unsafe larger floats, booleans, strings, fractions,
+non-finite numbers, and out-of-range IDs reject before ORM lookup. The exact complete unique 13-stage bridge set translates to `[all]`
+after validation; every subset remains explicit. This is required for recurring
+schedule hints and repair debounce.
+
+Schema version 1 is the generic SDK descriptor protocol, not a frozen plugin
+payload. `tests/fixtures/proxbox_bridge_v1.json` is the Proxbox-owned contract
+snapshot. The pure suite pins generation to it. No released SDK is activated;
+`tests/fixtures/netbox_sdk_bridge_activation.json` remains blocked. The manual
+`tests/validate_paired_netbox_sdk_bridge.py` requires an explicit SDK root,
+exact released version or full commit, and exact module origin before validating
+the real `PluginManifest` and argument validator; ambient `PYTHONPATH` is never
+identity evidence. Add it to CI only with explicit immutable SDK provisioning.
+The SDK repository does not own or copy this fixture.
+The named JSON blocks in `docs/api/semantic-mcp-bridge.md` are parsed by
+`tests/test_mcp_bridge_docs.py`; real-Django tests submit the request examples
+through the actual route and assert exact enqueue or fail-closed behavior.
 
 ## Dependencies
 

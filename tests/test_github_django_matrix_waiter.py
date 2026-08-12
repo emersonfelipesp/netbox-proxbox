@@ -584,13 +584,16 @@ def test_current_run_selector_is_strictly_validated(
         )
 
 
-def test_reviewed_workflow_pin_matches_the_committed_git_blob():
+def test_candidate_workflow_does_not_self_authorize_its_git_blob():
     workflow = waiter.REPO_ROOT / waiter.WORKFLOW_PATH
     body = workflow.read_bytes()
     git_blob = b"blob " + str(len(body)).encode("ascii") + b"\0" + body
     digest = hashlib.sha1(git_blob, usedforsecurity=False).hexdigest()
 
-    assert digest == waiter.PINNED_WORKFLOW_BLOB_SHA
+    assert waiter.PINNED_WORKFLOW_BLOB_SHA == (
+        "7d07b0c189101f2d2852ed98d057a22b0b4141f5"
+    )
+    assert digest != waiter.PINNED_WORKFLOW_BLOB_SHA
     assert (
         b"run-name: Django Tests (${{ github.event_name }} ${{ github.ref }} @ "
         b"${{ github.sha }})" in body

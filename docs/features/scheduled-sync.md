@@ -49,17 +49,25 @@ sudo systemctl enable --now netbox-rq
 
 1. In NetBox, navigate to **Proxbox > Schedule Sync**.
 2. Choose one or more **Sync types** (checkboxes):
-    - **All** — full update in one backend stream (devices, storage, VMs, disks, backups, snapshots). Do not combine with other types.
+    - **All** — run every one of the 13 backend SSE stages. Do not combine with other types.
     - **Devices** — sync Proxmox nodes as NetBox devices.
     - **Storage** — sync Proxmox storage records.
     - **Virtual Machines** — sync Proxmox VMs as NetBox virtual machines.
     - **VM Disks** — sync VM virtual disks (run after VMs exist in NetBox).
     - **VM Backups** — sync all VM backup records.
     - **VM Snapshots** — sync all VM snapshot records.
+    - **Network Interfaces** — sync Proxmox node interfaces.
+    - **VM Interfaces** — sync virtual-machine interfaces.
+    - **IP Addresses** — sync addresses after their interfaces exist.
+    - **SDN** — sync Proxmox software-defined networking inventory.
     - **Backup Routines** — sync Proxmox vzdump backup schedules.
     - **Replications** — sync Proxmox storage replication jobs.
+    - **Task History** — sync Proxmox task records.
 
-    When you pick several types (not **All**), the job runs them **in order**: devices → storage → virtual machines → VM disks → VM backups → VM snapshots, skipping any type you did not select.
+    When you pick several types (not **All**), the selected SSE stages run in
+    dependency order: devices → storage → virtual machines → task history → VM
+    disks → VM backups → VM snapshots → network interfaces → VM interfaces → IP
+    addresses → SDN → replications → backup routines.
 3. Optionally set a **Schedule at** time. Leave blank to run immediately.
 4. Optionally set a **Recurs every** interval in minutes. Common values:
     - `1` — every minute
@@ -69,6 +77,45 @@ sudo systemctl enable --now netbox-rq
 5. Click **Schedule**.
 
 After scheduling, you are redirected to the NetBox job list where you can track the job's status.
+
+### Scheduling through the semantic MCP bridge
+
+An activated compatible `netbox-sdk` will expose the same protected scheduler
+through the generic `plugin_call_tool` MCP envelope with `plugin="proxbox"` and
+`tool="schedule_sync"`. It still calls
+`POST /api/plugins/proxbox/sync/schedule/`, requires `core.add_job`, and creates
+the same `ProxboxSyncJob`; there is no separate MCP queue or credential. No
+released SDK identity currently passes the immutable paired gate, so the
+checked activation artifact remains blocked and the descriptor must not be
+presented as an operational MCP tool yet.
+
+Treat the tool as destructive and non-idempotent. Reconciliation may remove
+stale NetBox inventory, and retrying a call can enqueue a duplicate job. The
+bridge does not delete Proxmox guests or infrastructure. Explicit endpoint
+scopes must be nonempty, unique lists of positive IDs; every requested Proxmox
+endpoint must exist and be enabled. Omit a scope only when all enabled
+endpoints are intended. Endpoint IDs are signed-64-bit positive PKs. Integer
+JSON literals retain the full range; mathematically integral float/Decimal forms
+such as `7.0` normalize only through `9007199254740991`, while unsafe larger
+floats, booleans, strings, fractions, and out-of-range IDs are rejected before
+ORM lookup. Bridge v1 accepts explicit concrete `sync_stages`, no NetBox-endpoint
+scope, strict RFC 3339 times whose normalized instant is representable, and a
+bounded `recurrence` object with exactly one unit/value member. The server-wide
+mutation opt-in enables all MCP writes; never auto-retry an ambiguous schedule
+outcome.
+
+Stage selection applies to the 13 backend SSE stages only. Every MCP-scheduled
+job still runs endpoint/configuration preflight and scoped cluster/node,
+firewall, and datacenter CPU reconciliation first; VM-template reconciliation
+also runs unless its sync mode is disabled. Those passes can mutate NetBox
+inventory even when their names are absent from `sync_stages`. The exact unique
+13-stage MCP list becomes the normal internal `["all"]` job identity so recurring
+schedule hints and repair debounce recognize it, while MCP continues to reject
+the public `"all"` sentinel.
+
+See [Semantic MCP Bridge](../api/semantic-mcp-bridge.md) for discovery,
+authentication, exact request/response examples, mutation gating, failure
+handling, compatibility, and the safe agent interaction sequence.
 
 ### Examples
 
@@ -95,7 +142,7 @@ Each job record shows:
 | **Scheduled** | When the job is/was scheduled to run |
 | **Started / Completed** | Execution timestamps |
 | **Interval** | Recurrence interval in minutes (blank for one-time jobs) |
-| **Data** | JSON from the ProxBox backend: single payload for **All**, or a `stages` list when multiple types ran |
+| **Data** | Persisted Proxbox job parameters and stage results; full jobs use the internal `["all"]` identity and execute the dependency-ordered stage set |
 | **Error** | Error message if the job failed |
 
 ### Structured Logs

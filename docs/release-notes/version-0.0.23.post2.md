@@ -2,14 +2,14 @@
 
 netbox-proxbox `0.0.23.post2` adds bounded endpoint auto-configuration and
 credential establishment for the Proxbox backend. It retains the existing
-backend and SDK pairing and supports NetBox `4.5.8` through `4.6.99`
+backend runtime pairing and supports NetBox `4.5.8` through `4.6.99`
 (validated against `4.5.8` through `4.5.10` and `4.6.0` through `4.6.5`).
 
-Current pairing: netbox-proxbox 0.0.23.post2 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10.
+Current backend-runtime pairing: netbox-proxbox 0.0.23.post2 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 ## Compatibility
 
-| NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
+| NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
 | >=4.5.8 | v0.0.23.post2 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 
