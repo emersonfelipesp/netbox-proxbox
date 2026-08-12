@@ -45,7 +45,7 @@ jobs:
     runs-on: prod-deploy
     permissions:
       contents: read
-      packages: write
+      packages: read
     env:
       DEPLOY_SOURCE: ${{ inputs.deploy_source }}
       PACKAGE_VERSION: ${{ inputs.package_version }}
@@ -75,8 +75,6 @@ jobs:
 
       - name: Bind exact package artifacts before deployment
         if: ${{ inputs.deploy_source == 'latest_package' }}
-        env:
-          GITEA_PACKAGE_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
           git fetch --force --no-tags origin \
@@ -94,7 +92,8 @@ jobs:
         if: ${{ inputs.deploy_source == 'latest_package' }}
         run: |
           set -euo pipefail
-          /opt/nmulticloud/deploy/bin/deploy-netbox-plugin-package netbox-proxbox "$PACKAGE_VERSION"
+          /opt/nmulticloud/deploy/bin/deploy-netbox-plugin-package \
+            netbox-proxbox "$PACKAGE_VERSION" "$GITHUB_RUN_ID"
 
       - name: Deploy canonical main override
         if: ${{ inputs.deploy_source == 'main_branch' }}
@@ -105,16 +104,17 @@ jobs:
       - name: Require healthy production status
         run: /opt/nmulticloud/deploy/bin/status-app netbox
 
-      - name: Publish immutable successful-deployment attestation
+      - name: Publish host-issued successful-deployment attestation
         if: ${{ inputs.deploy_source == 'latest_package' }}
         env:
-          GITEA_PACKAGE_TOKEN: ${{ github.token }}
+          GITEA_PACKAGE_TOKEN: ${{ secrets.PKG_TOKEN }}
         run: |
           set -euo pipefail
-          python3 scripts/release_artifacts.py create-attestation \
-            --manifest release-manifest.json \
-            --repository emersonfelipesp/netbox-proxbox \
-            --run-id "$GITHUB_RUN_ID" --output completion.json
+          /opt/nmulticloud/deploy/bin/export-package-deploy-receipt \
+            netbox-proxbox "$PACKAGE_VERSION" "$GITHUB_RUN_ID" > completion.json
+          python3 scripts/release_artifacts.py validate-attestation \
+            --manifest release-manifest.json --attestation completion.json \
+            --repository emersonfelipesp/netbox-proxbox
           python3 scripts/release_artifacts.py publish-attestation \
             --owner emersonfelipesp --repository netbox-proxbox \
             --manifest release-manifest.json --attestation completion.json

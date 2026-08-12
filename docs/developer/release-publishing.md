@@ -99,10 +99,13 @@ sequenceDiagram
 - GitHub never rebuilds release artifacts. It downloads that exact linked
   Gitea wheel/sdist, installs both artifact forms on Python 3.12 and 3.13, and
   uploads the same bytes to TestPyPI or PyPI.
-- A final package-first production workflow emits an immutable, repository-
-  linked Gitea generic attestation only after the health check succeeds. The
-  final GitHub release event must match that attestation's source SHA, version,
-  artifact hashes, manifest digest, production environment, and Gitea run ID.
+- A final package-first production workflow asks the root-owned fixed deploy
+  helper to emit a schema-2 receipt only after the exact versioned wheel import
+  and NetBox health checks succeed. Workflow code exports and publishes those
+  host-issued bytes; it cannot create a successful-production receipt. The
+  final GitHub release event must match the receipt's source SHA, version,
+  artifact hashes, manifest digest, observed runtime path, production
+  environment, and Gitea run ID.
 - TestPyPI and PyPI candidate validation run the mocked suite with
   `-p no:django`; the separate real-NetBox matrix keeps pytest-django enabled.
 - Release E2E runs with `proxbox_api_runtime: both`. The Python backend and the

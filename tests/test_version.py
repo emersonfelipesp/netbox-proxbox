@@ -19,6 +19,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 INIT_PATH = REPO_ROOT / "netbox_proxbox" / "__init__.py"
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 README_PATH = REPO_ROOT / "README.md"
+LLMS_PATH = REPO_ROOT / "llms.txt"
 CLAUDE_PATH = REPO_ROOT / "CLAUDE.md"
 COMPATIBILITY_PATH = REPO_ROOT / "COMPATIBILITY.md"
 DOCS_INDEX_PATH = REPO_ROOT / "docs" / "index.md"
@@ -480,6 +481,10 @@ def test_0_0_23_historical_compatibility_row_is_kept():
         "v0.0.12",
     )
     _assert_markdown_table_row(_read(COMPATIBILITY_PATH), compatibility_row)
+
+
+def test_llms_index_identifies_current_plugin_version() -> None:
+    assert f"Plugin version: `{CURRENT_PLUGIN_VERSION}`" in _read(LLMS_PATH)
 
 
 def test_previous_release_compatibility_row_matches_release_notes():

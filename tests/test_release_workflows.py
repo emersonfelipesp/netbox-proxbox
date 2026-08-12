@@ -177,9 +177,13 @@ def test_repository_deploy_workflow_is_nms_source_aware() -> None:
     assert "- main_branch" in workflow
     assert "package_version:" in workflow
     assert "deploy-netbox-plugin-staging" in workflow
-    assert "deploy-netbox-plugin-package netbox-proxbox" in workflow
+    assert "deploy-netbox-plugin-package \\\n            netbox-proxbox" in workflow
     assert "deploy-netbox-plugin netbox-proxbox" in workflow
-    assert "create-attestation" in workflow
+    assert "create-attestation" not in workflow
+    assert "export-package-deploy-receipt" in workflow
+    assert "GITEA_PACKAGE_TOKEN: ${{ secrets.PKG_TOKEN }}" in workflow
+    assert "GITEA_PACKAGE_TOKEN: ${{ github.token }}" not in workflow
+    assert "packages: write" not in workflow
     assert "publish-attestation" in workflow
 
 
@@ -400,11 +404,25 @@ def test_final_release_requires_exact_nms_promotion_evidence(tmp_path: Path) -> 
         version="0.0.24",
         source_sha="b" * 40,
     )
-    evidence = release_artifacts.create_deployment_attestation(
-        manifest=manifest,
-        repository="emersonfelipesp/netbox-proxbox",
-        run_id=123,
-    )
+    manifest_digest = release_artifacts.manifest_sha256(manifest)
+    evidence = {
+        "artifacts": manifest["artifacts"],
+        "deploy_source": "latest_package",
+        "deployment_run_id": 123,
+        "deployment_status": "success",
+        "environment": "production",
+        "manifest_sha256": manifest_digest,
+        "observed_runtime_identity": (
+            "netbox_proxbox==0.0.24@/opt/netbox/plugin-releases/"
+            f"netbox-proxbox/{manifest_digest}/site-packages"
+        ),
+        "package": "netbox-proxbox",
+        "repository": "emersonfelipesp/netbox-proxbox",
+        "schema": 2,
+        "source_sha": "b" * 40,
+        "target": "netbox-proxbox",
+        "version": "0.0.24",
+    }
     assert (
         release_artifacts.validate_release_attestation(
             evidence=evidence,
@@ -415,6 +433,15 @@ def test_final_release_requires_exact_nms_promotion_evidence(tmp_path: Path) -> 
     )
 
     evidence["deploy_source"] = "main_branch"
+    with pytest.raises(release_artifacts.ReleaseArtifactError):
+        release_artifacts.validate_release_attestation(
+            evidence=evidence,
+            manifest=manifest,
+            repository="emersonfelipesp/netbox-proxbox",
+        )
+
+    evidence["deploy_source"] = "latest_package"
+    evidence["observed_runtime_identity"] = "netbox_proxbox==0.0.24@/tmp/forged"
     with pytest.raises(release_artifacts.ReleaseArtifactError):
         release_artifacts.validate_release_attestation(
             evidence=evidence,

@@ -617,9 +617,11 @@ Pushes to `develop` deploy this plugin to the staging NetBox endpoint at
 `https://staging.netbox.nmulti.cloud`. Production is an NMS-dispatched manual
 workflow on canonical `main`: `latest_package` requires the exact Gitea version
 and is the default; `main_branch` is an explicit override. After a healthy
-package deployment, the workflow publishes immutable repository-linked Gitea
-completion evidence containing the source SHA, exact artifact hashes, manifest
-digest, production environment, and workflow-run identity.
+package deployment, the root-owned fixed helper emits schema-2 completion
+evidence containing the source SHA, exact artifact hashes, manifest digest,
+observed versioned import path, production environment, and workflow-run
+identity. The workflow may only export, validate, and publish those host-issued
+bytes; it cannot construct production evidence itself.
 
 ### E2E Docker workflow (`e2e-docker.yml`)
 

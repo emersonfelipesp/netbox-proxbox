@@ -372,27 +372,6 @@ def fetch_gitea_artifacts(
     return published_manifest
 
 
-def create_deployment_attestation(
-    *, manifest: dict[str, Any], repository: str, run_id: int
-) -> dict[str, Any]:
-    """Create protected completion evidence after a successful package deploy."""
-    if isinstance(run_id, bool) or not isinstance(run_id, int) or run_id <= 0:
-        raise ReleaseArtifactError("NMS deployment run ID must be a positive integer")
-    return {
-        "artifacts": manifest["artifacts"],
-        "deploy_source": "latest_package",
-        "deployment_run_id": run_id,
-        "deployment_status": "success",
-        "environment": "production",
-        "manifest_sha256": manifest_sha256(manifest),
-        "package": manifest["package"],
-        "repository": repository,
-        "schema": 1,
-        "source_sha": manifest["source_sha"],
-        "version": manifest["version"],
-    }
-
-
 def validate_release_attestation(
     *, evidence: object, manifest: dict[str, Any], repository: str
 ) -> dict[str, Any]:
@@ -404,14 +383,18 @@ def validate_release_attestation(
         "deployment_status",
         "environment",
         "manifest_sha256",
+        "observed_runtime_identity",
         "package",
         "repository",
         "schema",
         "source_sha",
+        "target",
         "version",
     }:
         raise ReleaseArtifactError("NMS promotion evidence schema is not exact")
     typed_evidence = cast(dict[str, Any], evidence)
+    package = str(manifest["package"])
+    target = package
     expected = {
         "artifacts": manifest["artifacts"],
         "deploy_source": "latest_package",
@@ -420,8 +403,9 @@ def validate_release_attestation(
         "manifest_sha256": manifest_sha256(manifest),
         "package": manifest["package"],
         "repository": repository,
-        "schema": 1,
+        "schema": 2,
         "source_sha": manifest["source_sha"],
+        "target": target,
         "version": manifest["version"],
     }
     if any(typed_evidence.get(key) != value for key, value in expected.items()):
@@ -432,6 +416,12 @@ def validate_release_attestation(
         or typed_evidence["deployment_run_id"] <= 0
     ):
         raise ReleaseArtifactError("NMS deployment run ID must be a positive integer")
+    expected_runtime = (
+        f"netbox_proxbox=={manifest['version']}@/opt/netbox/plugin-releases/"
+        f"netbox-proxbox/{manifest_sha256(manifest)}/site-packages"
+    )
+    if typed_evidence.get("observed_runtime_identity") != expected_runtime:
+        raise ReleaseArtifactError("NMS runtime identity does not match netbox-proxbox")
     return typed_evidence
 
 
@@ -537,11 +527,6 @@ def main() -> None:
     attest.add_argument("--attestation", type=Path, required=True)
     attest.add_argument("--manifest", type=Path, required=True)
     attest.add_argument("--repository", required=True)
-    create_attest = subparsers.add_parser("create-attestation")
-    create_attest.add_argument("--manifest", type=Path, required=True)
-    create_attest.add_argument("--repository", required=True)
-    create_attest.add_argument("--run-id", type=int, required=True)
-    create_attest.add_argument("--output", type=Path, required=True)
     fetch_attest = subparsers.add_parser("fetch-attestation")
     fetch_attest.add_argument("--owner", required=True)
     fetch_attest.add_argument("--repository", required=True)
@@ -591,12 +576,6 @@ def main() -> None:
             manifest=manifest,
             repository=args.repository,
         )
-    elif args.command == "create-attestation":
-        manifest = load_manifest(args.manifest)
-        evidence = create_deployment_attestation(
-            manifest=manifest, repository=args.repository, run_id=args.run_id
-        )
-        args.output.write_bytes(_manifest_bytes(evidence))
     elif args.command == "fetch-attestation":
         manifest = load_manifest(args.manifest)
         fetch_gitea_attestation(
