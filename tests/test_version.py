@@ -60,6 +60,7 @@ APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
 CURRENT_PLUGIN_VERSION = "0.0.24"
 CURRENT_RELEASE_VERSION = "0.0.24"
+CURRENT_PACKAGE_VERSION = "0.0.24rc1"
 CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.20"
 CURRENT_PAIRING_LINE = (
     "Current backend-runtime pairing: netbox-proxbox 0.0.24 <-> proxbox-api "
@@ -156,11 +157,11 @@ def test_current_release_version_identity_is_exact():
     config_version = constants.get("version")
     pyproject_version = pyproject["project"]["version"]
 
-    assert config_version == pyproject_version == CURRENT_RELEASE_VERSION, (
+    assert config_version == pyproject_version == CURRENT_PACKAGE_VERSION, (
         "release version identity drifted: "
         f"ProxboxConfig.version={config_version!r}, "
         f"pyproject.toml={pyproject_version!r}, "
-        f"certification constant={CURRENT_RELEASE_VERSION!r}"
+        f"package constant={CURRENT_PACKAGE_VERSION!r}"
     )
 
 
@@ -329,7 +330,7 @@ def test_pyproject_metadata_is_certification_ready():
     pyproject = tomllib.loads(PYPROJECT_PATH.read_text(encoding="utf-8"))
     project = pyproject["project"]
 
-    assert project["version"] == CURRENT_RELEASE_VERSION
+    assert project["version"] == CURRENT_PACKAGE_VERSION
     assert project["license"] == "Apache-2.0"
     assert project["license-files"] == ["LICENSE"]
     assert (
