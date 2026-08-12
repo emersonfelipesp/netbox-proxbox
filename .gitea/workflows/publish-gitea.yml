@@ -182,8 +182,8 @@ jobs:
           if-no-files-found: error
           retention-days: 1
 
-  publish-gitea:
-    name: Publish verified candidate to Gitea
+  verify-candidate:
+    name: Verify candidate without package authority
     needs: [validate-source, build-candidate]
     runs-on: ci-untrusted-python312
     permissions:
@@ -276,13 +276,13 @@ jobs:
           esac
           printf 'PUBLISHER_PYTHON=%s\n' "$PUBLISH_ROOT/venv/bin/python" >> "$GITHUB_ENV"
 
-      - name: Verify candidate with canonical-main publisher code
+      - name: Verify candidate with its reviewed release tooling
         env:
           SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
           VERSION: ${{ needs.validate-source.outputs.version }}
         run: |
           set -euo pipefail
-          mkdir dist verified-dist
+          mkdir dist
           mv release-transfer/*.whl release-transfer/*.tar.gz dist/
           cmp publisher-tool/scripts/release_artifacts.py \
             release-transfer/release_artifacts.py
@@ -290,37 +290,183 @@ jobs:
             --dist dist --package netbox-proxbox --version "$VERSION" \
             --source-sha "$SOURCE_SHA" --manifest release-transfer/release-manifest.json
 
-      - name: Publish exact files with package-only authority
-        env:
-          GITEA_TOKEN: ${{ secrets.PKG_TOKEN }}
+      - name: Transfer data-only verified candidate
         run: |
           set -euo pipefail
-          "$PUBLISHER_PYTHON" -m twine upload --non-interactive \
-            --repository-url https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi \
-            --username emersonfelipesp --password "$GITEA_TOKEN" dist/*
-          curl --fail --silent --show-error --request POST \
-            --header "Authorization: token ${GITEA_TOKEN}" \
-            "https://git.nmulti.cloud/api/v1/packages/emersonfelipesp/pypi/netbox-proxbox/-/link/netbox-proxbox"
-          GITEA_PACKAGE_TOKEN="$GITEA_TOKEN" \
-            "$PUBLISHER_PYTHON" publisher-tool/scripts/release_artifacts.py publish-manifest \
-            --owner emersonfelipesp --repository netbox-proxbox \
-            --manifest release-transfer/release-manifest.json
+          mkdir verified-transfer
+          cp dist/*.whl dist/*.tar.gz release-transfer/release-manifest.json \
+            verified-transfer/
 
-      - name: Re-download and compare registry bytes without credentials
+      - name: Upload data-only verified candidate
+        uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de # v3.2.2-node20
+        with:
+          name: verified-private-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: verified-transfer
+          if-no-files-found: error
+          retention-days: 1
+
+  publish-gitea:
+    name: Publish from isolated credential boundary
+    needs: [validate-source, verify-candidate]
+    runs-on: release-publisher
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Install checksum-verified uv and managed Python
+        env:
+          BOOTSTRAP_UV_ROOT: ${{ runner.temp }}/netbox-proxbox-uv-credential-${{ github.run_id }}-${{ github.run_attempt }}
+          BOOTSTRAP_PYTHON_ROOT: ${{ runner.temp }}/netbox-proxbox-python-credential-${{ github.run_id }}-${{ github.run_attempt }}
+          BOOTSTRAP_CACHE_ROOT: ${{ runner.temp }}/netbox-proxbox-uv-cache-credential-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          test ! -e "$BOOTSTRAP_UV_ROOT"
+          test ! -e "$BOOTSTRAP_PYTHON_ROOT"
+          test ! -e "$BOOTSTRAP_CACHE_ROOT"
+          mkdir -m 0700 "$BOOTSTRAP_UV_ROOT"
+          mkdir -m 0700 "$BOOTSTRAP_PYTHON_ROOT"
+          mkdir -m 0700 "$BOOTSTRAP_CACHE_ROOT"
+          curl --fail --location --proto '=https' --tlsv1.2 \
+            --output "$BOOTSTRAP_UV_ROOT/uv.tar.gz" \
+            https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-unknown-linux-gnu.tar.gz
+          printf '%s  %s\n' \
+            e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224 \
+            "$BOOTSTRAP_UV_ROOT/uv.tar.gz" | sha256sum --check --strict
+          tar --extract --gzip --file "$BOOTSTRAP_UV_ROOT/uv.tar.gz" \
+            --directory "$BOOTSTRAP_UV_ROOT" --strip-components=1 \
+            uv-x86_64-unknown-linux-gnu/uv
+          chmod 0555 "$BOOTSTRAP_UV_ROOT/uv"
+          printf 'UV_BIN=%s\n' "$BOOTSTRAP_UV_ROOT/uv" >> "$GITHUB_ENV"
+          printf 'UV_PYTHON_INSTALL_DIR=%s\n' "$BOOTSTRAP_PYTHON_ROOT" >> "$GITHUB_ENV"
+          while IFS='=' read -r VARIABLE _; do
+            case "$VARIABLE" in UV_*) unset "$VARIABLE" ;; esac
+          done < <(env)
+          "$BOOTSTRAP_UV_ROOT/uv" python install \
+            --no-config \
+            --cache-dir "$BOOTSTRAP_CACHE_ROOT" \
+            --install-dir "$BOOTSTRAP_PYTHON_ROOT" \
+            --managed-python \
+            --no-bin \
+            3.12.13
+
+      - name: Install fixed publisher executable without candidate files
+        env:
+          PUBLISH_ROOT: ${{ runner.temp }}/netbox-proxbox-credential-tool-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          umask 077
+          PUBLISHER_UV="$UV_BIN"
+          MANAGED_PYTHON_ROOT="$UV_PYTHON_INSTALL_DIR"
+          while IFS='=' read -r VARIABLE _; do
+            case "$VARIABLE" in UV_*) unset "$VARIABLE" ;; esac
+          done < <(env)
+          test ! -e "$PUBLISH_ROOT"
+          mkdir -p "$PUBLISH_ROOT/bin" "$PUBLISH_ROOT/tools" "$PUBLISH_ROOT/cache"
+          UV_PYTHON_INSTALL_DIR="$MANAGED_PYTHON_ROOT" \
+            UV_TOOL_BIN_DIR="$PUBLISH_ROOT/bin" \
+            UV_TOOL_DIR="$PUBLISH_ROOT/tools" \
+            "$PUBLISHER_UV" tool install \
+            --no-config \
+            --cache-dir "$PUBLISH_ROOT/cache" \
+            --managed-python \
+            --no-python-downloads \
+            --python 3.12.13 \
+            twine==6.2.0
+          case "$("$PUBLISH_ROOT/bin/twine" --version)" in
+            "twine version 6.2.0 "*) ;;
+            *) exit 1 ;;
+          esac
+          printf 'PUBLISHER_TWINE=%s\n' "$PUBLISH_ROOT/bin/twine" >> "$GITHUB_ENV"
+
+      - name: Download data-only verified candidate
+        uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b # v3.1.0-node20
+        with:
+          name: verified-private-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: verified-transfer
+
+      - name: Enforce bounded credential-job input
+        run: |
+          set -euo pipefail
+          test "$(find verified-transfer -maxdepth 1 -type l | wc -l)" -eq 0
+          test "$(find verified-transfer -maxdepth 1 -type f -name '*.whl' | wc -l)" -eq 1
+          test "$(find verified-transfer -maxdepth 1 -type f -name '*.tar.gz' | wc -l)" -eq 1
+          test "$(find verified-transfer -maxdepth 1 -type f -name 'release-manifest.json' | wc -l)" -eq 1
+          test "$(find verified-transfer -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 3
+
+      - name: Publish exact files with package-only authority
+        env:
+          AUTH_PARENT: ${{ runner.temp }}
+          GITEA_TOKEN: ${{ secrets.PKG_TOKEN }}
+          TWINE_REPOSITORY_URL: https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi
+          TWINE_USERNAME: emersonfelipesp
+          VERSION: ${{ needs.validate-source.outputs.version }}
+        run: |
+          set -euo pipefail
+          umask 077
+          AUTH_ROOT="$(mktemp -d "${AUTH_PARENT}/netbox-proxbox-auth.XXXXXX")"
+          trap 'rm -f "$AUTH_ROOT/netrc"; rmdir "$AUTH_ROOT"' EXIT
+          printf 'machine git.nmulti.cloud\nlogin %s\npassword %s\n' \
+            "$TWINE_USERNAME" "$GITEA_TOKEN" > "$AUTH_ROOT/netrc"
+          chmod 0600 "$AUTH_ROOT/netrc"
+          export TWINE_PASSWORD="$GITEA_TOKEN"
+          unset GITEA_TOKEN
+          "$PUBLISHER_TWINE" upload --non-interactive \
+            verified-transfer/*.whl verified-transfer/*.tar.gz
+          unset TWINE_PASSWORD
+          curl --fail --silent --show-error --request POST \
+            --netrc-file "$AUTH_ROOT/netrc" \
+            "https://git.nmulti.cloud/api/v1/packages/emersonfelipesp/pypi/netbox-proxbox/-/link/netbox-proxbox"
+          curl --fail --silent --show-error \
+            --netrc-file "$AUTH_ROOT/netrc" \
+            --upload-file verified-transfer/release-manifest.json \
+            "https://git.nmulti.cloud/api/packages/emersonfelipesp/generic/netbox-proxbox-release-manifest/${VERSION}/release-manifest.json"
+          curl --fail --silent --show-error --request POST \
+            --netrc-file "$AUTH_ROOT/netrc" \
+            "https://git.nmulti.cloud/api/v1/packages/emersonfelipesp/generic/netbox-proxbox-release-manifest/-/link/netbox-proxbox"
+
+  verify-registry:
+    name: Re-download and verify registry bytes without authority
+    needs: [validate-source, publish-gitea]
+    runs-on: ci-untrusted-python312
+    permissions:
+      contents: read
+      packages: read
+    steps:
+      - name: Fetch reviewed verification tool anonymously
+        env:
+          TOOL_SHA: ${{ needs.validate-source.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          test ! -e verifier-tool
+          git init verifier-tool
+          git -C verifier-tool remote add origin \
+            https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox.git
+          git -C verifier-tool fetch --force --no-tags origin "$TOOL_SHA"
+          git -C verifier-tool checkout --detach FETCH_HEAD
+          test "$(git -C verifier-tool rev-parse HEAD)" = "$TOOL_SHA"
+
+      - name: Download data-only verified candidate
+        uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b # v3.1.0-node20
+        with:
+          name: verified-private-release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: verified-transfer
+
+      - name: Re-download and compare registry bytes
         env:
           SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
           VERSION: ${{ needs.validate-source.outputs.version }}
         run: |
           set -euo pipefail
-          "$PUBLISHER_PYTHON" publisher-tool/scripts/release_artifacts.py fetch-gitea \
+          mkdir verified-dist
+          python3 verifier-tool/scripts/release_artifacts.py fetch-gitea \
             --owner emersonfelipesp --repository netbox-proxbox \
             --package netbox-proxbox --version "$VERSION" --source-sha "$SOURCE_SHA" \
             --dist verified-dist --manifest verified-manifest.json
-          cmp release-transfer/release-manifest.json verified-manifest.json
+          cmp verified-transfer/release-manifest.json verified-manifest.json
 
   push-to-github:
     name: Promote verified RC tag to GitHub
-    needs: [validate-source, publish-gitea]
+    needs: [validate-source, verify-registry]
     if: ${{ needs.validate-source.outputs.is_rc == 'true' }}
     runs-on: ci-untrusted-python312
     steps:
@@ -337,7 +483,21 @@ jobs:
           TAG: ${{ needs.validate-source.outputs.tag }}
         run: |
           set -euo pipefail
+          umask 077
           test "$(git rev-parse HEAD^{commit})" = "${{ needs.validate-source.outputs.source_sha }}"
           git remote add github https://github.com/emersonfelipesp/netbox-proxbox.git
-          git -c http.https://github.com/.extraheader="AUTHORIZATION: bearer ${GH_TOKEN}" \
-            push github "refs/tags/${TAG}:refs/tags/${TAG}"
+          SECRET_ROOT="${RUNNER_TEMP}/netbox-proxbox-github-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "$SECRET_ROOT"
+          mkdir -m 0700 "$SECRET_ROOT"
+          trap 'rm -rf -- "$SECRET_ROOT"' EXIT
+          cat > "$SECRET_ROOT/askpass" <<'EOF'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' x-access-token ;;
+            *Password*) printf '%s\n' "$GH_TOKEN" ;;
+            *) exit 1 ;;
+          esac
+          EOF
+          chmod 0500 "$SECRET_ROOT/askpass"
+          GIT_ASKPASS="$SECRET_ROOT/askpass" GIT_TERMINAL_PROMPT=0 \
+            git push github "refs/tags/${TAG}:refs/tags/${TAG}"

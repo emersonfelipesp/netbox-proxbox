@@ -197,6 +197,25 @@ def test_home_javascript_passes_error_detail_to_badge_state():
     assert "initializeWebSocket" in contents
 
 
+def test_dynamic_dashboard_values_use_dom_text_apis() -> None:
+    table_script = _read("netbox_proxbox/static/netbox_proxbox/js/table.js")
+    home_script = _read("netbox_proxbox/static/netbox_proxbox/js/home_inline.js")
+    module_home_script = _read("netbox_proxbox/static/netbox_proxbox/js/home.js")
+    forbidden_sink = "inner" + "HTML"
+
+    assert forbidden_sink not in table_script
+    assert forbidden_sink not in home_script
+    assert forbidden_sink not in module_home_script
+    assert "cell.textContent = normalizeText(value)" in table_script
+    assert "cell.replaceChildren(createUndefinedBadge())" in table_script
+    assert 'label.textContent = "undefined"' in table_script
+    assert "strong.textContent = String(value)" in home_script
+    assert "alert.textContent = detail" in home_script
+    assert "container.replaceChildren(alert)" in home_script
+    assert "strong.textContent = String(value)" in module_home_script
+    assert "container.replaceChildren(alert)" in module_home_script
+
+
 def test_vm_detail_sync_now_button_contract():
     extension_contents = _read("netbox_proxbox/template_content.py")
     button_contents = _read(

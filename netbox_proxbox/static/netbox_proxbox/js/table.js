@@ -1,162 +1,136 @@
+function normalizeText(value) {
+    return value === undefined || value === null ? "" : String(value)
+}
+
+function createUndefinedBadge() {
+    const badge = document.createElement("span")
+    badge.className = "badge text-bg-grey"
+    badge.title = "Proxmox VM ID"
+
+    const label = document.createElement("strong")
+    label.textContent = "undefined"
+    badge.appendChild(label)
+    return badge
+}
+
+function replaceCellContents(cell, value, showUndefinedBadge) {
+    if (showUndefinedBadge) {
+        cell.replaceChildren(createUndefinedBadge())
+        return
+    }
+    cell.textContent = normalizeText(value)
+}
+
+function updateCounter(counterId) {
+    const counter = document.getElementById(counterId)
+    if (!counter) {
+        return
+    }
+    counter.textContent = String(Number.parseInt(counter.textContent, 10) + 1)
+}
+
+function updatePercentage(totalId, completedId, percentageId) {
+    const total = document.getElementById(totalId)
+    const completed = document.getElementById(completedId)
+    const percentage = document.getElementById(percentageId)
+    if (!total || !completed || !percentage) {
+        return
+    }
+    const totalCount = Number.parseInt(total.textContent, 10)
+    const completedCount = Number.parseInt(completed.textContent, 10)
+    const ratio = totalCount > 0 ? (completedCount / totalCount) * 100 : 0
+    percentage.textContent = `${ratio.toFixed(2)}%`
+}
+
 export function populateTable({tableType, jsonMessage, tableDivId, tableId, defaultRowId}) {
-    // Populate Table with data from Websocket JSON message
-    if (!jsonMessage) {
+    if (!jsonMessage || !jsonMessage.data) {
         return
     }
 
-    // Get whole table div element
-    let tableDiv = document.getElementById(tableDivId)
-
-    // Get Virtual Machine Table <table> element
-    let table = document.getElementById(tableId)
-
-    if (!table) {
-        // If table not found, return.
+    const tableDiv = document.getElementById(tableDivId)
+    const table = document.getElementById(tableId)
+    if (!table || !tableDiv) {
         return
-    } else {
-        // If table found, display it.
-        tableDiv.style.display = "block"
     }
-
-    let jsonDataName = undefined
+    tableDiv.style.display = "block"
 
     try {
-        jsonDataName = jsonMessage.data.name
-    } catch (error) {
-        console.log(`ERROR: ${error}`)
-    }
-
-    // JSON message is parsed. Now, let's check if it's a Virtual Machine message.
-    try {
-        let undefinedHtml = `<span class='badge text-bg-grey' title='Proxmox VM ID'><strong></strong>undefined</strong></span>`
-
-        let defaultRow = document.getElementById(defaultRowId)
+        const defaultRow = document.getElementById(defaultRowId)
         if (defaultRow) {
             defaultRow.style.display = "none"
         }
-        
-        
-        let vmStatusDataHtml = undefinedHtml
 
-        function createTdElement({table_element, row_element, rowID, field, innerHTML}) {
-            let dataId = `${rowID}-${field}-data`
-
-            let data_element = document.getElementById(dataId)
-            if (data_element) {
-                // If data element found, update it.
-                data_element.innerHTML = innerHTML
-            } else {
-                // If data element not found, create it.
-                data_element = document.createElement('td')
-                data_element.id = dataId
-                data_element.innerHTML = innerHTML
-
-                row_element.appendChild(data_element)
-                table_element.appendChild(row)
-            }
+        const rowId = normalizeText(jsonMessage.data.rowid)
+        if (!rowId) {
+            return
         }
-
-
-        // Create Table Row
-        let rowID = jsonMessage.data.rowid
-
-        let row = undefined
-        if (rowID) {
-            row = document.getElementById(rowID)
-        }
-        
+        let row = document.getElementById(rowId)
         if (!row) {
-            row = document.createElement('tr')
-            row.id = rowID
+            row = document.createElement("tr")
+            row.id = rowId
         }
 
-        if (tableType == 'device' && jsonMessage.object == 'device') {
-            // Populate Table Row with Table Data parsed from Websocket JSON message
-            createTdElement({table_element: table, row_element: row, rowID, field: `status`, innerHTML: jsonMessage.data.sync_status})
-            createTdElement({table_element: table, row_element: row, rowID, field: `netbox-id`, innerHTML: jsonMessage.data.netbox_id})
-            createTdElement({table_element: table, row_element: row, rowID, field: `node-id`, innerHTML: undefinedHtml})
-            createTdElement({table_element: table, row_element: row, rowID, field: `name`, innerHTML: jsonMessage.data.name})
-            createTdElement({table_element: table, row_element: row, rowID, field: `manufacturer`, innerHTML: jsonMessage.data.manufacturer})
-            createTdElement({table_element: table, row_element: row, rowID, field: `type`, innerHTML: jsonMessage.data.device_type})
-            createTdElement({table_element: table, row_element: row, rowID, field: `vm-ct-count`, innerHTML: undefinedHtml})
-            createTdElement({table_element: table, row_element: row, rowID, field: `ip-address`, innerHTML: undefinedHtml})
-            createTdElement({table_element: table, row_element: row, rowID, field: `role`, innerHTML: jsonMessage.data.role})
-            createTdElement({table_element: table, row_element: row, rowID, field: `virtual-cpus`, innerHTML: undefinedHtml})
-            createTdElement({table_element: table, row_element: row, rowID, field: `cluster`, innerHTML: jsonMessage.data.cluster})
-            createTdElement({table_element: table, row_element: row, rowID, field: `disk-space`, innerHTML: undefinedHtml})
-            
-            let totalDeviceCountName = 'total-device-count'
-            let syncedDeviceCountName = 'synced-device-count'
-            let percentageDeviceCompletedName = 'device-sync-percentage-ratio'
-
-            // Total VM Count
-            if (jsonMessage.data.completed != undefined && jsonMessage.data.completed == false) {
-                let totalVmCount = document.getElementById(totalDeviceCountName)
-                if (totalVmCount) {
-                    totalVmCount.innerHTML = parseInt(totalVmCount.innerHTML) + 1
-                }
+        function createTdElement({field, value, showUndefinedBadge = false}) {
+            const dataId = `${rowId}-${field}-data`
+            let dataElement = document.getElementById(dataId)
+            if (!dataElement) {
+                dataElement = document.createElement("td")
+                dataElement.id = dataId
+                row.appendChild(dataElement)
+                table.appendChild(row)
             }
-            // Synced VM Count
-            if (jsonMessage.data.completed != undefined && jsonMessage.data.completed == true && jsonMessage.data.increment_count == 'yes') {
-                let currentCompletedCount = document.getElementById(syncedDeviceCountName)
-                if (currentCompletedCount) {
-                    currentCompletedCount.innerHTML = parseInt(currentCompletedCount.innerHTML) + 1
-                }
-            }
-            // Update Sync Percentage
-            let percentageCompleted = document.getElementById(percentageDeviceCompletedName)
-            if (percentageCompleted) {
-                let totalVmCount = parseInt(document.getElementById(totalDeviceCountName).innerHTML)
-                let currentCompletedCount = parseInt(document.getElementById(syncedDeviceCountName).innerHTML)
-                let percentage = (currentCompletedCount / totalVmCount) * 100
-
-                percentageCompleted.innerHTML = `${percentage.toFixed(2)}%`
-            }
-        }
-        if (tableType == 'virtual_machine' && jsonMessage.object == 'virtual_machine') {
-            // Populate Table Row with Table Data parsed from Websocket JSON message
-            createTdElement({table_element: table, row_element: row, rowID, field: `sync_status`, innerHTML: jsonMessage.data.sync_status})
-            createTdElement({table_element: table, row_element: row, rowID, field: `netbox-id`, innerHTML: jsonMessage.data.netbox_id})
-            createTdElement({table_element: table, row_element: row, rowID, field: `name`, innerHTML: jsonMessage.data.name})
-            createTdElement({table_element: table, row_element: row, rowID, field: `status`, innerHTML: jsonMessage.data.status})
-            createTdElement({table_element: table, row_element: row, rowID, field: `device`, innerHTML: jsonMessage.data.device})
-            createTdElement({table_element: table, row_element: row, rowID, field: `cluster`, innerHTML: jsonMessage.data.cluster})
-            createTdElement({table_element: table, row_element: row, rowID, field: `vm-interfaces`, innerHTML: jsonMessage.data.vm_interfaces})
-            createTdElement({table_element: table, row_element: row, rowID, field: `role`, innerHTML: jsonMessage.data.role})
-            createTdElement({table_element: table, row_element: row, rowID, field: `vcpus`, innerHTML: jsonMessage.data.vcpus})
-            createTdElement({table_element: table, row_element: row, rowID, field: `memory`, innerHTML: jsonMessage.data.memory})
-            createTdElement({table_element: table, row_element: row, rowID, field: `disk-space`, innerHTML: jsonMessage.data.disk})
-            createTdElement({table_element: table, row_element: row, rowID, field: `ip-address`, innerHTML: undefinedHtml})
-            
-            let totalVmCountName = 'total-vm-count'
-            let syncedVmCountName = 'synced-vm-count'
-            let percentageVmCompletedName = 'sync-percentage-ratio'
-
-            // Total VM Count
-            if (jsonMessage.data.completed != undefined && jsonMessage.data.completed == false) {
-                let totalVmCount = document.getElementById(totalVmCountName)
-                if (totalVmCount) {
-                    totalVmCount.innerHTML = parseInt(totalVmCount.innerHTML) + 1
-                }
-            }
-            // Synced VM Count
-            if (jsonMessage.data.completed != undefined && jsonMessage.data.completed == true && jsonMessage.data.increment_count == 'yes') {
-                let currentCompletedCount = document.getElementById(syncedVmCountName)
-                if (currentCompletedCount) {
-                    currentCompletedCount.innerHTML = parseInt(currentCompletedCount.innerHTML) + 1
-                }
-            }
-            // Update Sync Percentage
-            let percentageCompleted = document.getElementById(percentageVmCompletedName)
-            if (percentageCompleted) {
-                let totalVmCount = parseInt(document.getElementById(totalVmCountName).innerHTML)
-                let currentCompletedCount = parseInt(document.getElementById(syncedVmCountName).innerHTML)
-                let percentage = (currentCompletedCount / totalVmCount) * 100
-
-                percentageCompleted.innerHTML = `${percentage.toFixed(2)}%`
-            }
+            replaceCellContents(dataElement, value, showUndefinedBadge)
         }
 
+        if (tableType === "device" && jsonMessage.object === "device") {
+            createTdElement({field: "status", value: jsonMessage.data.sync_status})
+            createTdElement({field: "netbox-id", value: jsonMessage.data.netbox_id})
+            createTdElement({field: "node-id", showUndefinedBadge: true})
+            createTdElement({field: "name", value: jsonMessage.data.name})
+            createTdElement({field: "manufacturer", value: jsonMessage.data.manufacturer})
+            createTdElement({field: "type", value: jsonMessage.data.device_type})
+            createTdElement({field: "vm-ct-count", showUndefinedBadge: true})
+            createTdElement({field: "ip-address", showUndefinedBadge: true})
+            createTdElement({field: "role", value: jsonMessage.data.role})
+            createTdElement({field: "virtual-cpus", showUndefinedBadge: true})
+            createTdElement({field: "cluster", value: jsonMessage.data.cluster})
+            createTdElement({field: "disk-space", showUndefinedBadge: true})
+
+            if (jsonMessage.data.completed === false) {
+                updateCounter("total-device-count")
+            }
+            if (jsonMessage.data.completed === true && jsonMessage.data.increment_count === "yes") {
+                updateCounter("synced-device-count")
+            }
+            updatePercentage(
+                "total-device-count",
+                "synced-device-count",
+                "device-sync-percentage-ratio",
+            )
+        }
+
+        if (tableType === "virtual_machine" && jsonMessage.object === "virtual_machine") {
+            createTdElement({field: "sync_status", value: jsonMessage.data.sync_status})
+            createTdElement({field: "netbox-id", value: jsonMessage.data.netbox_id})
+            createTdElement({field: "name", value: jsonMessage.data.name})
+            createTdElement({field: "status", value: jsonMessage.data.status})
+            createTdElement({field: "device", value: jsonMessage.data.device})
+            createTdElement({field: "cluster", value: jsonMessage.data.cluster})
+            createTdElement({field: "vm-interfaces", value: jsonMessage.data.vm_interfaces})
+            createTdElement({field: "role", value: jsonMessage.data.role})
+            createTdElement({field: "vcpus", value: jsonMessage.data.vcpus})
+            createTdElement({field: "memory", value: jsonMessage.data.memory})
+            createTdElement({field: "disk-space", value: jsonMessage.data.disk})
+            createTdElement({field: "ip-address", showUndefinedBadge: true})
+
+            if (jsonMessage.data.completed === false) {
+                updateCounter("total-vm-count")
+            }
+            if (jsonMessage.data.completed === true && jsonMessage.data.increment_count === "yes") {
+                updateCounter("synced-vm-count")
+            }
+            updatePercentage("total-vm-count", "synced-vm-count", "sync-percentage-ratio")
+        }
     } catch (error) {
         console.log(`ERROR: ${error}`)
     }

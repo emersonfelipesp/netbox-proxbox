@@ -85,17 +85,20 @@ sequenceDiagram
   `create` event, so a tag can start only one immutable registry upload.
 - A candidate tag must resolve to the current canonical Gitea `develop` SHA.
   Each latest required CI status must resolve through authenticated Gitea API
-  records to a successful `ci.yml` push run for that exact SHA, trusted actor,
-  job name, and untrusted runner class. A credential-free disposable job builds
+  records to a successful `ci.yml` push run and run attempt for that exact SHA,
+  trusted actor, job name, and untrusted runner class. A credential-free disposable job builds
   one wheel and one sdist after directly verifying the pinned uv archive,
   clearing inherited `UV_*` state, disabling discovered configuration, and
   selecting fresh per-run managed-Python/cache roots. A separate disposable
-  publisher anonymously fetches the exact validated source, validates the
-  manifest with a locked toolchain, exposes repository `PKG_TOKEN` only for
-  package writes, keeps the built-in token package-read-only, links the package
-  to this repository, and downloads the registry bytes again to prove their
-  hashes. The unsupported Gitea Actions job token is never used as a package-
-  registry credential.
+  verifier anonymously fetches the exact validated source and validates the
+  manifest with a locked toolchain. It transfers only the wheel, sdist, and
+  manifest into a fresh credential job on the dedicated protected
+  `release-publisher` runner, so candidate processes and source files cannot
+  persist into the `PKG_TOKEN` boundary. That job invokes fixed Twine
+  tooling with environment credentials, uses a mode-0600 netrc for package
+  linking, and never places the token in process arguments. A final no-authority
+  job downloads the registry bytes again to prove their hashes. The built-in
+  token stays package-read-only.
 - GitHub never rebuilds release artifacts. It downloads that exact linked
   Gitea wheel/sdist, installs both artifact forms on Python 3.12 and 3.13, and
   uploads the same bytes to TestPyPI or PyPI.
@@ -127,10 +130,10 @@ sequenceDiagram
    through NMS using `latest_package` by default.
 4. After production integration and health checks pass, dispatch each
    repository's `promote-final-tag.yml` from canonical Gitea `main`. The
-   workflow verifies the exact package and protected NMS attestation before
+   workflow verifies the exact package and protected host-issued deployment receipt before
    pushing only that tag to the authorized GitHub repository. Then create the
    proxbox-api and netbox-proxbox GitHub Releases with `--verify-tag`; those
-   final tags and protected Gitea deployment attestations authorize
+   final tags and protected Gitea deployment receipts authorize
    PyPI/Docker Hub publication.
 5. If any published validation fails, bump to the next `.postN` or `rcN`; never
    retry the same artifact version.

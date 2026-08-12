@@ -91,11 +91,25 @@ jobs:
           TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
+          umask 077
           SOURCE_SHA="$(git rev-parse refs/release-policy/candidate^{commit})"
           git remote add github https://github.com/emersonfelipesp/netbox-proxbox.git
           test "$(git remote get-url github)" = \
             "https://github.com/emersonfelipesp/netbox-proxbox.git"
-          git -c http.https://github.com/.extraheader="AUTHORIZATION: bearer ${GH_TOKEN}" \
-            push github "refs/tags/${TAG}:refs/tags/${TAG}"
+          SECRET_ROOT="${RUNNER_TEMP}/netbox-proxbox-final-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "$SECRET_ROOT"
+          mkdir -m 0700 "$SECRET_ROOT"
+          trap 'rm -rf -- "$SECRET_ROOT"' EXIT
+          cat > "$SECRET_ROOT/askpass" <<'EOF'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' x-access-token ;;
+            *Password*) printf '%s\n' "$GH_TOKEN" ;;
+            *) exit 1 ;;
+          esac
+          EOF
+          chmod 0500 "$SECRET_ROOT/askpass"
+          GIT_ASKPASS="$SECRET_ROOT/askpass" GIT_TERMINAL_PROMPT=0 \
+            git push github "refs/tags/${TAG}:refs/tags/${TAG}"
           REMOTE_SHA="$(git ls-remote --exit-code github "refs/tags/${TAG}^{}" | awk '{print $1}')"
           test "$REMOTE_SHA" = "$SOURCE_SHA"

@@ -271,6 +271,12 @@ jobs:
     needs: [prepare-release, validate-gitea-artifacts, page-coverage]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout exact locked publisher metadata
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.prepare-release.outputs.source_sha }}
+          persist-credentials: false
+
       - name: Set up Python 3.13
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
@@ -288,19 +294,22 @@ jobs:
           path: dist
 
       - name: Install locked publisher toolchain without registry authority
-        run: uv sync --only-group publish --locked
+        env:
+          SOURCE_SHA: ${{ needs.prepare-release.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -f pyproject.toml
+          test -f uv.lock
+          uv sync --only-group publish --locked --no-install-project
 
       - name: Upload to TestPyPI
         env:
-          TEST_PYPI_USERNAME: ${{ secrets.TEST_PYPI_USERNAME }}
-          TEST_PYPI_TOKEN: ${{ secrets.TEST_PYPI_TOKEN }}
+          TWINE_PASSWORD: ${{ secrets.TEST_PYPI_TOKEN }}
+          TWINE_REPOSITORY_URL: https://test.pypi.org/legacy/
+          TWINE_USERNAME: ${{ secrets.TEST_PYPI_USERNAME }}
         run: |
-          .venv/bin/python -m twine upload \
-            --non-interactive \
-            --repository-url https://test.pypi.org/legacy/ \
-            --username "$TEST_PYPI_USERNAME" \
-            --password "$TEST_PYPI_TOKEN" \
-            dist/*
+          .venv/bin/python -m twine upload --non-interactive dist/*
 
   validate-testpypi:
     name: validate TestPyPI / py${{ matrix.python-version }}
@@ -444,6 +453,12 @@ jobs:
     needs: [prepare-release, validate-pypi-candidate, e2e-docker-pypi-candidate, page-coverage]
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout exact locked publisher metadata
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.prepare-release.outputs.source_sha }}
+          persist-credentials: false
+
       - name: Set up Python 3.13
         uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
@@ -461,19 +476,22 @@ jobs:
           path: dist
 
       - name: Install locked publisher toolchain without registry authority
-        run: uv sync --only-group publish --locked
+        env:
+          SOURCE_SHA: ${{ needs.prepare-release.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -f pyproject.toml
+          test -f uv.lock
+          uv sync --only-group publish --locked --no-install-project
 
       - name: Upload to PyPI
         env:
-          PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
-          PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
+          TWINE_PASSWORD: ${{ secrets.PYPI_TOKEN }}
+          TWINE_REPOSITORY_URL: https://upload.pypi.org/legacy/
+          TWINE_USERNAME: ${{ secrets.PYPI_USERNAME }}
         run: |
-          .venv/bin/python -m twine upload \
-            --non-interactive \
-            --repository-url https://upload.pypi.org/legacy/ \
-            --username "$PYPI_USERNAME" \
-            --password "$PYPI_TOKEN" \
-            dist/*
+          .venv/bin/python -m twine upload --non-interactive dist/*
 
   validate-pypi:
     name: validate PyPI / py${{ matrix.python-version }}

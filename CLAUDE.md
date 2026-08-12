@@ -594,12 +594,16 @@ not subscribe to Gitea's overlapping
 `create` event: Gitea emits both `create` and `push` for one tag, which races
 two immutable package uploads. The tag must equal current `develop`; every
 latest required status must resolve to authenticated successful `ci.yml`
-push-run/job evidence for that exact SHA, trusted actor, expected job, and
-untrusted runner class. Separate disposable `ci-untrusted-python312` jobs build
-the manifest-bound wheel/sdist and verify/publish it. The built-in token remains
-package-read-only; only the final registry-write step receives repository secret
-`PKG_TOKEN`, after which the workflow links the package and re-downloads and
-hashes the exact bytes. The private uv/Python bootstrap clears inherited `UV_*`
+push-run/run-attempt/job evidence for that exact SHA, trusted actor, expected
+job, and untrusted runner class. Separate disposable `ci-untrusted-python312`
+jobs build and verify the manifest-bound wheel/sdist, then transfer only those
+two artifacts and the manifest into a fresh credential job on the dedicated
+protected `release-publisher` runner. Candidate source and processes cannot
+persist into the credential boundary. The built-in token
+remains package-read-only; only the registry-write step receives repository
+secret `PKG_TOKEN` through Twine's environment and a protected netrc, never a
+process argument. A final no-authority job re-downloads and hashes the exact
+bytes. The private uv/Python bootstrap clears inherited `UV_*`
 state, verifies the pinned uv archive before extraction, disables discovered
 configuration, and selects fresh per-run Python/cache roots explicitly.
 
@@ -607,7 +611,7 @@ The workflow pushes only RC tags to GitHub so the RC-only public tag trigger
 can validate TestPyPI. Final tags stay private until the exact Gitea package is
 linked, verified, and deployed through NMS using `latest_package` by default.
 Only after production validation may canonical-main `promote-final-tag.yml`
-verify the package and NMS attestation and push the final tag to the exact
+verify the package and host-issued deployment receipt and push the final tag to the exact
 authorized GitHub repository; the operator then creates the GitHub Release
 that authorizes PyPI.
 
@@ -645,7 +649,7 @@ Accepts four main inputs:
 ### Release pipeline (`publish-testpypi.yml`)
 
 ```
-prepare-release (downloads exact linked Gitea artifacts; final requires the protected NMS attestation)
+prepare-release (downloads exact linked Gitea artifacts; final requires the protected host-issued deployment receipt)
 ├── validate-gitea-artifacts (wheel + sdist on Python 3.12/3.13)
 ├── TestPyPI lane
 │   ├── publish-testpypi
@@ -873,20 +877,12 @@ NetBox/plugin health checks pass.
       does not exercise plugin models, so this is the gate that catches a
       stale-code / schema mismatch.
 
-**Monitoring deployment:**
-- Watch the `publish-gitea.yml` workflow run in Gitea Actions
-- Check the `deploy` job logs for SSH output and health check results
-- Verify production health: `ssh nmc-prod-207 -- health netbox`
-- Check service logs: `ssh nmc-prod-207 -- logs netbox`
-
-**Manual deployment for hotfixes or rollbacks:**
-```bash
-# Deploy a specific tag or branch (short name "proxbox", not "netbox-proxbox")
-ssh nmc-prod-207 -- deploy-plugin proxbox v0.0.19.post5
-
-# List recent deploys (check system journal)
-ssh nmc-prod-207 -- journalctl -u netbox.service -n 50 --no-pager
-```
+**Monitoring and manual recovery:**
+- Watch the `publish-gitea.yml` and `deploy-production.yml` workflow runs in
+  Gitea Actions.
+- Use the approved NMS CLI deployment/status surfaces for production health,
+  logs, hotfixes, and rollbacks. Do not access the production host directly or
+  bypass NMS with SSH commands.
 
 For detailed production deployment infrastructure and cross-plugin coordination, see `/root/personal-context/nmulticloud-context/CLAUDE.md` "Automatic Plugin Deployment to Production" section.
 

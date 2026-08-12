@@ -296,10 +296,13 @@ PyPI must never be replaced with different bytes; advance to the next `rcN` or
 
 The private publisher directly downloads and verifies the pinned uv archive,
 clears inherited `UV_*` state, disables discovered configuration, and uses fresh
-per-run managed-Python and cache roots. Every release stage runs as a separate
-disposable `ci-untrusted-python312` job. The built-in token stays package-read-
-only, and the repository `PKG_TOKEN` is exposed only to the package-write step;
-no package credential reaches the build job. The registry URL is
+per-run managed-Python and cache roots. Candidate build and verification run in
+disposable `ci-untrusted-python312` jobs, then transfer only the wheel, sdist,
+and manifest to a fresh credential job on the dedicated protected
+`release-publisher` runner. Candidate source and processes cannot persist into
+that boundary. The built-in token stays package-read-only, and the
+repository `PKG_TOKEN` reaches only the package-write step through Twine's
+environment and a protected netrc, never a process argument. The registry URL is
 `https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi`.
 The publish workflow deliberately accepts tag `push` events, not Gitea's
 overlapping `create` event. Gitea emits both for a tag; subscribing to both
@@ -310,8 +313,8 @@ is never retried; fix forward with the next immutable version.
 
 - `publish-gitea.yml` accepts only a canonical version tag that equals current
   Gitea `develop`; each latest required status must resolve to authenticated
-  successful `ci.yml` push-run/job evidence for that exact SHA, trusted actor,
-  expected job, and untrusted runner class.
+  successful `ci.yml` push-run/run-attempt/job evidence for that exact SHA,
+  trusted actor, expected job, and untrusted runner class.
 - Build credentials and package credentials are separated; the registry package
   is linked to this repository and byte-compared with its canonical manifest.
 
@@ -335,7 +338,9 @@ reviewed `develop` push to staging. Production is manual and dispatched by the
 NMS package-backed target from canonical `main`: `latest_package` requires the
 exact Gitea version and is the default, while `main_branch` is an explicit
 override. A successful package deployment publishes immutable, repository-
-linked completion evidence for the public-promotion gate.
+linked completion evidence for the public-promotion gate, but those bytes are
+issued only by the root-owned fixed helper after exact import and health proof;
+workflow code cannot create them.
 
 ## Navigation
 

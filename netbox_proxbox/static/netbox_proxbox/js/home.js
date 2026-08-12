@@ -65,15 +65,14 @@ function renderServiceStatusMessage(element, payload) {
     const detail = statusDetail(payload).trim();
     const shouldRender = detail && (payload.status !== "success" || payload.warnings?.length);
     if (!shouldRender) {
-        container.innerHTML = "";
+        container.replaceChildren();
         return;
     }
 
     const alert = document.createElement("div");
     alert.className = `alert ${payload.status === "error" ? "alert-danger" : "alert-warning"} py-2 px-3 mb-0`;
     alert.textContent = detail;
-    container.innerHTML = "";
-    container.appendChild(alert);
+    container.replaceChildren(alert);
 }
 
 async function refreshStatusBadges() {
@@ -142,18 +141,29 @@ function renderProxmoxField(card, fieldName, value) {
         return;
     }
 
+    const badge = document.createElement("span");
+    badge.className = `badge ${fieldName === "mode" && value ? "text-bg-purple" : "text-bg-grey"}`;
     if (!value) {
-        cell.innerHTML = '<span class="badge text-bg-grey">Empty</span>';
+        badge.textContent = "Empty";
+    } else if (fieldName === "mode") {
+        badge.textContent = value === "cluster" ? "Cluster (Multiple Nodes)" : "Standalone";
+    } else {
+        const strong = document.createElement("strong");
+        strong.textContent = String(value);
+        badge.appendChild(strong);
+    }
+    cell.replaceChildren(badge);
+}
+
+function renderProxmoxAlert(container, style, detail) {
+    if (!container || !detail) {
+        container?.replaceChildren();
         return;
     }
-
-    if (fieldName === "mode") {
-        const label = value === "cluster" ? "Cluster (Multiple Nodes)" : "Standalone";
-        cell.innerHTML = `<span class="badge text-bg-purple">${label}</span>`;
-        return;
-    }
-
-    cell.innerHTML = `<span class="badge text-bg-grey"><strong>${value}</strong></span>`;
+    const alert = document.createElement("div");
+    alert.className = `alert ${style} py-2 px-3 mb-0`;
+    alert.textContent = detail;
+    container.replaceChildren(alert);
 }
 
 async function hydrateProxmoxCards() {
@@ -178,11 +188,7 @@ async function hydrateProxmoxCards() {
                 }
 
                 if (errorContainer) {
-                    if (payload.detail) {
-                        errorContainer.innerHTML = `<div class="alert alert-warning py-2 px-3 mb-0">${payload.detail}</div>`;
-                    } else {
-                        errorContainer.innerHTML = "";
-                    }
+                    renderProxmoxAlert(errorContainer, "alert-warning", payload.detail);
                 }
             } catch (error) {
                 renderProxmoxField(card, "mode", null);
@@ -192,7 +198,11 @@ async function hydrateProxmoxCards() {
                     setBadgeState(badge, "error", error.message || "Unknown error");
                 }
                 if (errorContainer) {
-                    errorContainer.innerHTML = `<div class="alert alert-danger py-2 px-3 mb-0">${error.message || "Unable to load Proxmox card data."}</div>`;
+                    renderProxmoxAlert(
+                        errorContainer,
+                        "alert-danger",
+                        error.message || "Unable to load Proxmox card data.",
+                    );
                 }
             }
         }),
