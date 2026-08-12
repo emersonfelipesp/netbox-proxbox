@@ -107,10 +107,22 @@ class ProxmoxMetricsInfluxDBMigrationTest(TransactionTestCase):
             1,
             f"Expected exactly one netbox_proxbox migration leaf, found {leaves!r}",
         )
-        leaf = leaves[0]
+        migration_targets = tuple(
+            target
+            for target in executor.loader.disk_migrations
+            if target[0] == "netbox_proxbox"
+            and target[1].endswith("_metrics_influxdb_secret_ref_constraints")
+        )
+        self.assertEqual(
+            len(migration_targets),
+            1,
+            f"Expected exactly one metrics-security migration, found "
+            f"{migration_targets!r}",
+        )
+        migrate_to = migration_targets[0]
         in_app_dependencies = tuple(
             dependency
-            for dependency in executor.loader.disk_migrations[leaf].dependencies
+            for dependency in executor.loader.disk_migrations[migrate_to].dependencies
             if dependency[0] == "netbox_proxbox"
         )
         self.assertEqual(
@@ -119,7 +131,7 @@ class ProxmoxMetricsInfluxDBMigrationTest(TransactionTestCase):
             f"Expected the metrics-security leaf to have one in-app parent, found "
             f"{in_app_dependencies!r}",
         )
-        return in_app_dependencies[0], leaf
+        return in_app_dependencies[0], migrate_to
 
     def test_forward_scrubs_then_constrains_and_reverse_only_drops_constraints(
         self,
@@ -329,7 +341,10 @@ class ProxmoxMetricsInfluxDBMigrationTest(TransactionTestCase):
                 unconstrained.writer_token_secret_ref, "accepted-only-after-reverse"
             )
         finally:
-            self._migrate_to(migrate_to)
+            executor = MigrationExecutor(connection)
+            current_leaves = tuple(executor.loader.graph.leaf_nodes("netbox_proxbox"))
+            self.assertEqual(len(current_leaves), 1)
+            self._migrate_to(current_leaves[0])
 
 
 class ProxmoxMetricsInfluxDBSecuritySurfaceTest(TestCase):
@@ -343,7 +358,6 @@ class ProxmoxMetricsInfluxDBSecuritySurfaceTest(TestCase):
     def setUpTestData(cls) -> None:
         cls.user = get_user_model().objects.create_user(
             username="metrics-security-reviewer",
-            is_staff=True,
             is_superuser=True,
         )
         cls.endpoint = ProxmoxEndpoint.objects.create(name="metrics-security-endpoint")
@@ -365,10 +379,15 @@ class ProxmoxMetricsInfluxDBSecuritySurfaceTest(TestCase):
 
     def _sanitize_historical_snapshots(self) -> None:
         executor = MigrationExecutor(connection)
-        leaves = tuple(executor.loader.graph.leaf_nodes("netbox_proxbox"))
-        self.assertEqual(len(leaves), 1)
+        migration_targets = tuple(
+            target
+            for target in executor.loader.disk_migrations
+            if target[0] == "netbox_proxbox"
+            and target[1].endswith("_metrics_influxdb_secret_ref_constraints")
+        )
+        self.assertEqual(len(migration_targets), 1)
         migration_module = importlib.import_module(
-            f"netbox_proxbox.migrations.{leaves[0][1]}"
+            f"netbox_proxbox.migrations.{migration_targets[0][1]}"
         )
         migration_module._sanitize_objectchange_snapshots(
             django_apps,

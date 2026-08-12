@@ -1,0 +1,115 @@
+name: Promote production-validated final tag to GitHub
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Exact final or post-release tag already deployed from Gitea
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: final-tag-promotion-${{ github.repository }}-${{ inputs.tag }}
+  cancel-in-progress: false
+
+jobs:
+  promote-final-tag:
+    name: Verify production evidence and promote exact tag
+    if: ${{ github.ref == 'refs/heads/main' }}
+    runs-on: mirror-host
+    steps:
+      - name: Checkout canonical-main promotion policy
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: main
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate canonical release source and production evidence
+        env:
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          case "$TAG" in
+            v[0-9]*.[0-9]*.[0-9]* | v[0-9]*.[0-9]*.[0-9]*.post[0-9]*) ;;
+            *) echo "Final promotion rejects non-final tag: $TAG"; exit 1 ;;
+          esac
+          git fetch --force --no-tags origin \
+            "+refs/heads/main:refs/remotes/gitea/release-main" \
+            "+refs/heads/develop:refs/remotes/gitea/release-develop" \
+            "+refs/tags/${TAG}:refs/release-policy/candidate"
+          SOURCE_SHA="$(git rev-parse refs/release-policy/candidate^{commit})"
+          test "$SOURCE_SHA" = "$(git rev-parse refs/remotes/gitea/release-main^{commit})"
+          test "$SOURCE_SHA" = "$(git rev-parse refs/remotes/gitea/release-develop^{commit})"
+          test "$SOURCE_SHA" = "$(git rev-parse HEAD^{commit})"
+          VERSION="${TAG#v}"
+          python3 - "$VERSION" <<'PY'
+          import ast
+          import pathlib
+          import re
+          import sys
+          import tomllib
+
+          version = sys.argv[1]
+          if re.fullmatch(r"(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)\.(?:0|[1-9][0-9]*)(?:\.post[1-9][0-9]*)?", version) is None:
+              raise SystemExit("Final promotion version is not canonical")
+          project = tomllib.loads(pathlib.Path("pyproject.toml").read_text())
+          if project["project"]["name"] != "netbox-proxbox":
+              raise SystemExit("Unexpected package identity")
+          if project["project"]["version"] != version:
+              raise SystemExit("Tag and project version differ")
+          tree = ast.parse(pathlib.Path("netbox_proxbox/__init__.py").read_text())
+          versions = [
+              ast.literal_eval(node.value)
+              for cls in tree.body
+              if isinstance(cls, ast.ClassDef) and cls.name == "ProxboxConfig"
+              for node in cls.body
+              if isinstance(node, ast.Assign)
+              and any(
+                  isinstance(target, ast.Name) and target.id == "version"
+                  for target in node.targets
+              )
+          ]
+          if versions != [version]:
+              raise SystemExit("Runtime plugin version differs from tag")
+          PY
+          mkdir verified-dist
+          python3 scripts/release_artifacts.py fetch-gitea \
+            --owner emersonfelipesp --repository netbox-proxbox \
+            --package netbox-proxbox --version "$VERSION" --source-sha "$SOURCE_SHA" \
+            --dist verified-dist --manifest release-manifest.json
+          python3 scripts/release_artifacts.py fetch-attestation \
+            --owner emersonfelipesp --repository netbox-proxbox \
+            --manifest release-manifest.json
+
+      - name: Push exact verified tag to authorized GitHub destination
+        env:
+          GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          umask 077
+          SOURCE_SHA="$(git rev-parse refs/release-policy/candidate^{commit})"
+          git remote add github https://github.com/emersonfelipesp/netbox-proxbox.git
+          test "$(git remote get-url github)" = \
+            "https://github.com/emersonfelipesp/netbox-proxbox.git"
+          SECRET_ROOT="${RUNNER_TEMP}/netbox-proxbox-final-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "$SECRET_ROOT"
+          mkdir -m 0700 "$SECRET_ROOT"
+          trap 'rm -rf -- "$SECRET_ROOT"' EXIT
+          cat > "$SECRET_ROOT/askpass" <<'EOF'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' x-access-token ;;
+            *Password*) printf '%s\n' "$GH_TOKEN" ;;
+            *) exit 1 ;;
+          esac
+          EOF
+          chmod 0500 "$SECRET_ROOT/askpass"
+          GIT_ASKPASS="$SECRET_ROOT/askpass" GIT_TERMINAL_PROMPT=0 \
+            git push github "refs/tags/${TAG}:refs/tags/${TAG}"
+          REMOTE_SHA="$(git ls-remote --exit-code github "refs/tags/${TAG}^{}" | awk '{print $1}')"
+          test "$REMOTE_SHA" = "$SOURCE_SHA"

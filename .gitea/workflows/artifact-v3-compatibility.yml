@@ -1,0 +1,62 @@
+name: Verify Gitea artifact v3 compatibility
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: artifact-v3-compatibility-${{ github.repository }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  upload-probe:
+    name: Upload bounded compatibility probe
+    runs-on: ci-untrusted-python312
+    permissions:
+      contents: read
+    steps:
+      - name: Create exact probe
+        env:
+          PROBE_ROOT: ${{ runner.temp }}/artifact-v3-probe-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          test ! -e "$PROBE_ROOT"
+          mkdir -m 0700 "$PROBE_ROOT"
+          printf 'netbox-proxbox artifact-v3 compatibility\n' > "$PROBE_ROOT/probe.txt"
+          printf '%s  %s\n' \
+            9b8fb938761ebbe4a50970b582dc793275d113da31ea12bcb55e50bec71c3d14 \
+            "$PROBE_ROOT/probe.txt" | sha256sum --check --strict
+
+      - name: Upload exact probe with the supported artifact client
+        uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de # v3.2.2-node20
+        with:
+          name: netbox-proxbox-artifact-v3-probe-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/artifact-v3-probe-${{ github.run_id }}-${{ github.run_attempt }}/probe.txt
+          if-no-files-found: error
+          retention-days: 1
+
+  download-probe:
+    name: Download and verify bounded compatibility probe
+    needs: upload-probe
+    runs-on: ci-untrusted-python312
+    permissions:
+      contents: read
+    steps:
+      - name: Download exact probe with the supported artifact client
+        uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b # v3.1.0-node20
+        with:
+          name: netbox-proxbox-artifact-v3-probe-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/artifact-v3-received-${{ github.run_id }}-${{ github.run_attempt }}
+
+      - name: Verify exact downloaded probe
+        env:
+          PROBE_ROOT: ${{ runner.temp }}/artifact-v3-received-${{ github.run_id }}-${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          test "$(find "$PROBE_ROOT" -maxdepth 1 -type f -printf '%f\n')" = probe.txt
+          printf '%s  %s\n' \
+            9b8fb938761ebbe4a50970b582dc793275d113da31ea12bcb55e50bec71c3d14 \
+            "$PROBE_ROOT/probe.txt" | sha256sum --check --strict

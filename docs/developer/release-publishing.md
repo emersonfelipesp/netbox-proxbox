@@ -21,7 +21,9 @@ flowchart TD
     RCE2E[E2E Docker\nnetbox-proxbox rcN from TestPyPI\nproxbox-api rcN from TestPyPI]
     RCFailed{Any TestPyPI\nvalidation failed?}
     NextRC[Bump to vX.Y.ZrcN+1]
-    FinalTag[Create or dispatch final tag\nvX.Y.Z]
+    FinalPrivate[Publish final package to Gitea\nvX.Y.Z]
+    Deploy[Deploy exact Gitea package\nthrough NMS]
+    PublicRelease[Create GitHub Release\nafter production validation]
     FinalUpload[Upload vX.Y.Z to PyPI]
     FinalValidate[Install final from PyPI\nrun post-upload E2E]
     FinalFailed{Post-release fix needed?}
@@ -30,8 +32,8 @@ flowchart TD
 
     Start --> Bump --> RCTag --> RCCI --> RCUpload --> RCValidate --> RCE2E --> RCFailed
     RCFailed -- yes --> NextRC --> RCTag
-    RCFailed -- no --> FinalTag --> FinalUpload --> FinalValidate --> FinalFailed
-    FinalFailed -- yes --> Post --> FinalTag
+    RCFailed -- no --> FinalPrivate --> Deploy --> PublicRelease --> FinalUpload --> FinalValidate --> FinalFailed
+    FinalFailed -- yes --> Post --> FinalPrivate
     FinalFailed -- no --> Done
 ```
 
@@ -58,7 +60,7 @@ sequenceDiagram
     E2E->>API: validate proxbox-api Python and PyO3/Rust runtimes
     E2E-->>WF: Release-candidate checks pass for both runtimes
 
-    Tag->>WF: vX.Y.Z, vX.Y.Z.postN, or publish_target=pypi
+    Tag->>WF: published GitHub Release for vX.Y.Z or vX.Y.Z.postN
     WF->>PY: Upload netbox-proxbox package
     WF->>E2E: install_source=pypi, dependency_mode=pypi-package
     E2E->>NB: pip install netbox-proxbox==X.Y.Z or X.Y.Z.postN from PyPI
@@ -73,13 +75,40 @@ sequenceDiagram
 - `rcN` tag pushes (pattern `v*rc*`) publish to TestPyPI for release-candidate
   validation.
 - Official releases (`vX.Y.Z`, `vX.Y.Z.postN`) are triggered **only** by GitHub
-  release creation (`release: published`) cut from the `develop` branch. Plain
-  non-rc tag pushes do **not** trigger the publish workflow. Manual workflow
-  dispatch with `publish_target=pypi` also publishes to PyPI.
+  release creation (`release: published`) cut from the `develop` branch after
+  the final Gitea package and NMS production gates. Plain non-rc tag pushes do
+  **not** trigger public publishing. Manual workflow dispatch is TestPyPI-only
+  and requires an RC version.
 - Package uploads intentionally omit `twine --skip-existing`; a consumed version
   must move forward to the next `.postN` or `rcN`.
 - The Gitea package workflow listens for tag `push`, not the overlapping
   `create` event, so a tag can start only one immutable registry upload.
+- A candidate tag must resolve to the current canonical Gitea `develop` SHA.
+  Each latest required CI status must resolve through authenticated Gitea API
+  records to a successful `ci.yml` push run and run attempt for that exact SHA,
+  trusted actor, job name, and untrusted runner class. A credential-free disposable job builds
+  one wheel and one sdist after directly verifying the pinned uv archive,
+  clearing inherited `UV_*` state, disabling discovered configuration, and
+  selecting fresh per-run managed-Python/cache roots. A separate disposable
+  verifier anonymously fetches the exact validated source and validates the
+  manifest with a locked toolchain. It transfers only the wheel, sdist, and
+  manifest into a fresh credential job on the dedicated protected
+  `release-publisher` runner, so candidate processes and source files cannot
+  persist into the `PKG_TOKEN` boundary. That job invokes fixed Twine
+  tooling with environment credentials, uses a mode-0600 netrc for package
+  linking, and never places the token in process arguments. A final no-authority
+  job downloads the registry bytes again to prove their hashes. The built-in
+  token stays package-read-only.
+- GitHub never rebuilds release artifacts. It downloads that exact linked
+  Gitea wheel/sdist, installs both artifact forms on Python 3.12 and 3.13, and
+  uploads the same bytes to TestPyPI or PyPI.
+- A final package-first production workflow asks the root-owned fixed deploy
+  helper to emit a schema-2 receipt only after the exact versioned wheel import
+  and NetBox health checks succeed. Workflow code exports and publishes those
+  host-issued bytes; it cannot create a successful-production receipt. The
+  final GitHub release event must match the receipt's source SHA, version,
+  artifact hashes, manifest digest, observed runtime path, production
+  environment, and Gitea run ID.
 - TestPyPI and PyPI candidate validation run the mocked suite with
   `-p no:django`; the separate real-NetBox matrix keeps pytest-django enabled.
 - Release E2E runs with `proxbox_api_runtime: both`. The Python backend and the
@@ -97,8 +126,14 @@ sequenceDiagram
 1. Publish and validate `proxbox-api` on TestPyPI first.
 2. Publish and validate `netbox-proxbox` on TestPyPI using that TestPyPI
    `proxbox-api` version.
-3. Promote `proxbox-api` through PyPI release candidates and final PyPI release.
-4. Promote `netbox-proxbox` through PyPI release candidates and final PyPI
-   release using the matching PyPI `proxbox-api` version.
+3. Publish each final package in Gitea, link/verify it, and deploy the exact pair
+   through NMS using `latest_package` by default.
+4. After production integration and health checks pass, dispatch each
+   repository's `promote-final-tag.yml` from canonical Gitea `main`. The
+   workflow verifies the exact package and protected host-issued deployment receipt before
+   pushing only that tag to the authorized GitHub repository. Then create the
+   proxbox-api and netbox-proxbox GitHub Releases with `--verify-tag`; those
+   final tags and protected Gitea deployment receipts authorize
+   PyPI/Docker Hub publication.
 5. If any published validation fails, bump to the next `.postN` or `rcN`; never
    retry the same artifact version.

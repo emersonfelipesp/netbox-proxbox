@@ -119,6 +119,7 @@ _REQUIRED_OBJECT_VIEW_REGISTRY = {
     "netbox_proxbox.guestvminterfaceaddress:guestvminterfaceaddress": "netbox_proxbox.views.guest_vm_interface.GuestVMInterfaceAddressView",
     "netbox_proxbox.netboxendpoint:netboxendpoint": "netbox_proxbox.views.endpoints.netbox.NetBoxEndpointView",
     "netbox_proxbox.nodesshcredential:nodesshcredential": "netbox_proxbox.views.ssh_credential.NodeSSHCredentialView",
+    "netbox_proxbox.pdmendpoint:pdmendpoint": "netbox_proxbox.views.endpoints.pdm.PDMEndpointView",
     "netbox_proxbox.proxmoxcluster:proxmoxcluster": "netbox_proxbox.views.proxmox_cluster_node.ProxmoxClusterView",
     "netbox_proxbox.proxmoxdatacentercpumodel:proxmoxdatacentercpumodel": "netbox_proxbox.views.datacenter.ProxmoxDatacenterCpuModelView",
     "netbox_proxbox.proxmoxendpoint:cluster_nodes": "netbox_proxbox.views.cluster_nodes_tab.ProxmoxEndpointClusterNodesTabView",
@@ -163,9 +164,6 @@ _REQUIRED_OBJECT_VIEW_REGISTRY = {
     "virtualization.virtualmachine:replications": "netbox_proxbox.views.replication.ReplicationTabView",
     "virtualization.virtualmachine:snapshots": "netbox_proxbox.views.vm_snapshot.VMSnapshotTabView",
     "virtualization.virtualmachine:task_history": "netbox_proxbox.views.vm_task_history.VMTaskHistoryTabView",
-}
-_OPTIONAL_PDM_OBJECT_VIEW_REGISTRY = {
-    "netbox_proxbox.pdmendpoint:pdmendpoint": "netbox_proxbox.views.endpoints.pdm.PDMEndpointView",
 }
 _SSH_PASSWORD_MARKER = "detail-view-password-must-not-render"
 _SSH_PRIVATE_KEY_MARKER = "detail-view-private-key-must-not-render"
@@ -297,8 +295,6 @@ class RegisteredObjectViewTemplateRuntimeTest(SimpleTestCase):
             for registry_name, view_class in registrations
         }
         expected_registry = dict(_REQUIRED_OBJECT_VIEW_REGISTRY)
-        if apps.is_installed("netbox_pdm"):
-            expected_registry.update(_OPTIONAL_PDM_OBJECT_VIEW_REGISTRY)
 
         self.assertEqual(
             len(registrations),
@@ -326,7 +322,6 @@ class MissingDetailTemplateRenderTest(TestCase):
     def setUpTestData(cls) -> None:
         cls.user = get_user_model().objects.create_user(
             username="detail-template-viewer",
-            is_staff=True,
             is_superuser=True,
         )
         cls.endpoint = ProxmoxEndpoint.objects.create(name="detail-render-endpoint")

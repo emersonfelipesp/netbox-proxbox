@@ -26,6 +26,7 @@ from __future__ import annotations
 import hashlib
 import pathlib
 import re
+import tomllib
 
 import pytest
 
@@ -56,6 +57,16 @@ def test_mocked_suite_disables_pytest_django():
         "pytest-django's collection hook imports django.test against the "
         "conftest stub and aborts with an INTERNALERROR before any test runs"
     )
+
+
+def test_ci_static_toolchain_is_pinned_and_markdown_is_not_python_formatted():
+    """Hosted lint results must not change under an unreviewed tool release."""
+
+    workflow = CI_WORKFLOW.read_text()
+    configuration = tomllib.loads(PYPROJECT.read_text())
+
+    assert 'pip install "ruff==0.15.10" "bandit==1.9.4"' in workflow
+    assert configuration["tool"]["ruff"]["format"]["exclude"] == ["*.md"]
 
 
 def test_pre_commit_mocked_suite_disables_pytest_django():

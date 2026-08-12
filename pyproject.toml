@@ -1,6 +1,6 @@
 [project]
 name = "netbox-proxbox"
-version = "0.0.23.post2"
+version = "0.0.24"
 description = "Netbox Plugin - Integrate Proxmox and Netbox"
 readme = "README.md"
 authors = [
@@ -65,6 +65,7 @@ dev = [
     "yamllint>=1.38.0",
 ]
 test = [
+    "PyYAML>=6.0.3",
     "pytest>=9.0.2",
     "pytest-cov>=7.1.0",
     "pytest-django>=4.11.1",
@@ -147,6 +148,10 @@ ignore = ["F403", "F401", "E501", "W293"]
 
 [tool.ruff.format]
 quote-style = "double"
+# Ruff 0.15 can format fenced Python examples in standalone Markdown files.
+# Documentation formatting is owned by MkDocs/markdownlint; keep this gate on
+# Python sources so tool upgrades cannot rewrite historical/reference snippets.
+exclude = ["*.md"]
 
 [dependency-groups]
 dev = [
@@ -163,4 +168,11 @@ dev = [
     # for >=10.2, which admits both ranges.
     # tests/test_dependency_security_floors.py enforces this.
     "pymdown-extensions>=11.0.1",
+]
+publish = [
+    "build==1.5.0",
+    "packaging==26.0",
+    "setuptools==80.9.0",
+    "twine==6.2.0",
+    "wheel==0.45.1",
 ]

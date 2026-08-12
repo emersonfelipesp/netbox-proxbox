@@ -1965,6 +1965,18 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
         executor = MigrationExecutor(connection)
         return executor.loader.project_state([target]).apps
 
+    def _restore_current_leaf(self) -> None:
+        """Restore the graph leaf so historical tests cannot pollute later suites."""
+
+        executor = MigrationExecutor(connection)
+        leaves = tuple(executor.loader.graph.leaf_nodes("netbox_proxbox"))
+        self.assertEqual(
+            len(leaves),
+            1,
+            f"Expected exactly one netbox_proxbox migration leaf: {leaves}",
+        )
+        self._migrate_to(leaves[0])
+
     def _seed_sync_state_sources(self) -> dict[str, int]:
         cluster_type = ClusterType.objects.create(
             name="migration-sync-state-cluster-type",
@@ -2464,7 +2476,7 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
             self._assert_all_sidecars_exist(apps_0069_after_reapply, ids)
             self._assert_0069_relation_payloads(apps_0069_after_reapply, ids)
         finally:
-            self._migrate_to(MIGRATION_0069)
+            self._restore_current_leaf()
 
     def test_relation_fk_reverse_preserves_api_written_values(self) -> None:
         ids = self._seed_sync_state_sources()
@@ -2551,7 +2563,7 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
             )
             self.assertIsNone(restored_cleared_interface.proxbox_bridge)
         finally:
-            self._migrate_to(MIGRATION_0069)
+            self._restore_current_leaf()
 
     def test_relation_fk_data_migration_can_rerun_after_mid_failure(self) -> None:
         ids = self._seed_sync_state_sources()
@@ -2584,7 +2596,7 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
             apps_0069 = self._migrate_to(MIGRATION_0069)
             self._assert_0069_relation_payloads(apps_0069, ids)
         finally:
-            self._migrate_to(MIGRATION_0069)
+            self._restore_current_leaf()
 
     def test_relation_fk_data_migration_preserves_invalid_relation_payloads(
         self,
@@ -2654,7 +2666,7 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
             self._assert_0069_relation_payloads(apps_0069_reapply, ids)
             self._assert_0069_relation_edge_cases(apps_0069_reapply, edge_ids)
         finally:
-            self._migrate_to(MIGRATION_0069)
+            self._restore_current_leaf()
 
     def test_relation_fk_data_migration_uses_targeted_relation_lookups(self) -> None:
         ids = self._seed_sync_state_sources()
@@ -2707,4 +2719,4 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
                 "\n".join(interface_selects),
             )
         finally:
-            self._migrate_to(MIGRATION_0069)
+            self._restore_current_leaf()

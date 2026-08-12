@@ -1,73 +1,124 @@
-name: Deploy NetBox plugin (staging/production)
+name: Deploy netbox-proxbox
 
 on:
   push:
     branches:
       - develop
-      - main
   workflow_dispatch:
     inputs:
-      ref:
-        description: "Git ref to deploy (tag, branch, or commit SHA)"
-        required: false
-      environment:
-        description: "Target environment (optional for main/develop refs)"
-        required: false
+      deploy_source:
+        description: "Immutable Gitea package by default; canonical main is an explicit override"
+        required: true
+        default: latest_package
         type: choice
         options:
-          - staging
-          - production
+          - latest_package
+          - main_branch
+      package_version:
+        description: "Exact package version (required only for latest_package)"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
 
+concurrency:
+  group: netbox-proxbox-${{ github.event_name == 'push' && 'staging' || 'production' }}-deploy
+  cancel-in-progress: false
+
 jobs:
-  deploy:
-    name: Deploy plugin
+  staging:
+    name: Deploy plugin to staging
+    if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/develop' }}
     runs-on: prod-deploy
-    env:
-      REF: ${{ inputs.ref || github.sha }}
-      REQUESTED_ENVIRONMENT: ${{ inputs.environment }}
     steps:
-      - name: Deploy plugin
-        shell: bash
+      - name: Deploy reviewed develop commit
         run: |
           set -euo pipefail
+          test "${GITHUB_SHA}" = "$(printf '%s' "$GITHUB_SHA" | grep -E '^[a-f0-9]{40}$')"
+          /opt/nmulticloud/deploy/bin/deploy-netbox-plugin-staging netbox-proxbox "$GITHUB_SHA"
 
-          case "$REF" in
-            v[0-9]*.[0-9]*.[0-9]* | main | develop | [a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9][a-f0-9]*) ;;
-            *) echo "ERROR: Invalid ref format: $REF"; exit 1 ;;
+  production:
+    name: Deploy plugin to production through NMS-selected source
+    if: ${{ github.event_name == 'workflow_dispatch' }}
+    runs-on: prod-deploy
+    permissions:
+      contents: read
+      packages: read
+    env:
+      DEPLOY_SOURCE: ${{ inputs.deploy_source }}
+      PACKAGE_VERSION: ${{ inputs.package_version }}
+      WORKFLOW_REF: ${{ github.ref }}
+      WORKFLOW_SHA: ${{ github.sha }}
+    steps:
+      - name: Checkout canonical workflow source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Validate source-aware production request
+        run: |
+          set -euo pipefail
+          test "$WORKFLOW_REF" = refs/heads/main
+          printf '%s' "$WORKFLOW_SHA" | grep -Eq '^[a-f0-9]{40}$'
+          case "$DEPLOY_SOURCE" in
+            latest_package)
+              printf '%s' "$PACKAGE_VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(rc[1-9][0-9]*|\.post[1-9][0-9]*)?$'
+              ;;
+            main_branch)
+              test -z "$PACKAGE_VERSION"
+              ;;
+            *) exit 1 ;;
           esac
 
-          target="${REQUESTED_ENVIRONMENT:-}"
-          if [[ -z "$target" ]]; then
-            case "${GITHUB_REF_NAME:-}" in
-              develop) target="staging" ;;
-              main) target="production" ;;
-              *) echo "ERROR: Cannot infer deploy target from ref '${GITHUB_REF_NAME:-}'"; exit 1 ;;
-            esac
-          fi
+      - name: Bind exact package artifacts before deployment
+        if: ${{ inputs.deploy_source == 'latest_package' }}
+        run: |
+          set -euo pipefail
+          git fetch --force --no-tags origin \
+            "+refs/heads/develop:refs/remotes/gitea/release-develop" \
+            "+refs/tags/v${PACKAGE_VERSION}:refs/release-policy/candidate"
+          SOURCE_SHA="$(git rev-parse refs/release-policy/candidate^{commit})"
+          git merge-base --is-ancestor "$SOURCE_SHA" refs/remotes/gitea/release-develop
+          python3 scripts/release_artifacts.py fetch-gitea \
+            --owner emersonfelipesp --repository netbox-proxbox \
+            --package netbox-proxbox --version "$PACKAGE_VERSION" \
+            --source-sha "$SOURCE_SHA" --dist release-dist \
+            --manifest release-manifest.json
 
-          case "$target" in
-            staging)
-              if [[ ! -x /opt/nmulticloud/deploy/bin/deploy-netbox-plugin-staging ]]; then
-                echo "ERROR: staging deploy helper is not installed on this runner"
-                exit 1
-              fi
-              /opt/nmulticloud/deploy/bin/deploy-netbox-plugin-staging netbox-proxbox "$REF"
-              ;;
-            production)
-              if [[ -x /opt/nmulticloud/deploy/bin/deploy-netbox-plugin ]]; then
-                /opt/nmulticloud/deploy/bin/deploy-netbox-plugin netbox-proxbox "$REF"
-              else
-                ssh -o StrictHostKeyChecking=accept-new \
-                    -o ServerAliveInterval=30 \
-                    -o ServerAliveCountMax=20 \
-                    nmc-prod-207 -- deploy-plugin netbox-proxbox "$REF"
-              fi
-              ;;
-            *)
-              echo "ERROR: Invalid deploy target: $target"
-              exit 1
-              ;;
-          esac
+      - name: Deploy exact Gitea package
+        if: ${{ inputs.deploy_source == 'latest_package' }}
+        run: |
+          set -euo pipefail
+          /opt/nmulticloud/deploy/bin/deploy-netbox-plugin-package \
+            netbox-proxbox "$PACKAGE_VERSION" "$GITHUB_RUN_ID"
+
+      - name: Deploy canonical main override
+        if: ${{ inputs.deploy_source == 'main_branch' }}
+        run: |
+          set -euo pipefail
+          /opt/nmulticloud/deploy/bin/deploy-netbox-plugin netbox-proxbox "$WORKFLOW_SHA"
+
+      - name: Require healthy production status
+        run: /opt/nmulticloud/deploy/bin/status-app netbox
+
+      - name: Publish host-issued successful-deployment attestation
+        if: ${{ inputs.deploy_source == 'latest_package' }}
+        env:
+          GITEA_PACKAGE_TOKEN: ${{ secrets.PKG_TOKEN }}
+        run: |
+          set -euo pipefail
+          /opt/nmulticloud/deploy/bin/export-package-deploy-receipt \
+            netbox-proxbox "$PACKAGE_VERSION" "$GITHUB_RUN_ID" > completion.json
+          python3 scripts/release_artifacts.py validate-attestation \
+            --manifest release-manifest.json --attestation completion.json \
+            --repository emersonfelipesp/netbox-proxbox
+          python3 scripts/release_artifacts.py publish-attestation \
+            --owner emersonfelipesp --repository netbox-proxbox \
+            --manifest release-manifest.json --attestation completion.json
+
+      - name: Report failure status
+        if: failure()
+        run: /opt/nmulticloud/deploy/bin/status-app netbox

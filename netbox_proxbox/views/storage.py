@@ -99,7 +99,8 @@ class ProxmoxStorageView(generic.ObjectView):
         query_params: dict[str, str] | None = None,
         request_timeout: float | None = None,
     ) -> tuple[object | None, str | None]:
-        response = requests.get(
+        # The explicit bounded timeout below is selected per remaining page budget.
+        response = requests.get(  # nosec B113
             f"{base_url}{route}",
             params=query_params or None,
             headers=auth_headers,

@@ -23,12 +23,12 @@ jobs:
         # Declared support is NetBox 4.5.8 - 4.6.99. Gate the minimum,
         # the latest certified 4.5 patch, and both the 4.6 line floor/latest
         # validated patch in step with netbox_proxbox/__init__.py. The extra
-        # 4.6.5 cell loads the supported PDM override so its registry identity
+        # 4.6.6 cell loads the supported PDM override so its registry identity
         # contract cannot become a permanently skipped optional branch.
-        netbox: ["v4.5.8", "v4.5.10", "v4.6.0", "v4.6.5"]
+        netbox: ["v4.5.8", "v4.5.10", "v4.6.0", "v4.6.6"]
         pdm: [false]
         include:
-          - netbox: "v4.6.5"
+          - netbox: "v4.6.6"
             pdm: true
 
     services:

@@ -310,7 +310,6 @@ class ProxmoxStorageNodesCapacityTest(TestCase):
         ]
         user = get_user_model().objects.create_user(
             username="storage-long-membership-api",
-            is_staff=True,
             is_superuser=True,
         )
         token = Token.objects.create(user=user)
@@ -357,17 +356,24 @@ class ProxmoxStorageNodesCapacityMigrationTest(TransactionTestCase):
 
     def _migration_edge(self) -> tuple[tuple[str, str], tuple[str, str]]:
         executor = MigrationExecutor(connection)
-        leaf_targets = executor.loader.graph.leaf_nodes("netbox_proxbox")
+        leaf_targets = tuple(executor.loader.graph.leaf_nodes("netbox_proxbox"))
         self.assertEqual(
             len(leaf_targets),
             1,
             f"Expected exactly one netbox_proxbox migration leaf: {leaf_targets}",
         )
-        migrate_to = leaf_targets[0]
-        self.assertTrue(
-            migrate_to[1].endswith("_storage_nodes_text"),
-            f"Current plugin leaf is not the storage nodes migration: {migrate_to}",
+        migration_targets = tuple(
+            target
+            for target in executor.loader.disk_migrations
+            if target[0] == "netbox_proxbox"
+            and target[1].endswith("_storage_nodes_text")
         )
+        self.assertEqual(
+            len(migration_targets),
+            1,
+            f"Expected exactly one storage-nodes migration: {migration_targets}",
+        )
+        migrate_to = migration_targets[0]
         migration = executor.loader.get_migration(*migrate_to)
         plugin_dependencies = [
             dependency
@@ -434,4 +440,7 @@ class ProxmoxStorageNodesCapacityMigrationTest(TransactionTestCase):
                 rollback_membership,
             )
         finally:
-            self._migrate_to(migrate_to)
+            executor = MigrationExecutor(connection)
+            current_leaves = tuple(executor.loader.graph.leaf_nodes("netbox_proxbox"))
+            self.assertEqual(len(current_leaves), 1)
+            self._migrate_to(current_leaves[0])
