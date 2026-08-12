@@ -216,17 +216,22 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
-## What's New in v0.0.23.post2
+## What's New in v0.0.24
 
-Current backend-runtime pairing: netbox-proxbox 0.0.23.post2 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.24 <-> proxbox-api 0.0.20 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
-Paired with backend: guest-VM-interface writer build / next release.
+Paired with backend: `proxbox-api 0.0.20`.
 
-- **Bounded backend auto-configuration.** Saving or enabling a backend can establish its key automatically, but only against the exact persisted URL/IP, port, and TLS policy. Startup discovery without a row is limited to configured and trusted same-site candidates.
-- **Fail-closed target binding.** Credentials are fingerprint-bound to their canonical HTTP, fallback-IP, TLS, and WebSocket targets. Unlisted hosts, redirects, disabled endpoints, target drift, and initialized backends whose key is not held locally are rejected.
-- **Automatic NetBox configuration.** The local NetBox public origin and its backend credential can be established through the trusted boundary without requiring operators to paste endpoint secrets into Proxbox forms.
+- **NetBox 4.6.6 certification.** Real-Django and Docker matrices cover the
+  certified 4.5/4.6 range through 4.6.6.
+- **Compatibility fixes.** Settings serialization, storage capacity, detail
+  templates, InfluxDB metrics, sync-state models, and empty encryption-key
+  recovery follow current NetBox/Django behavior.
+- **Immutable staged release.** Gitea stores the original artifact manifest,
+  authenticated CI evidence binds the exact tag, and the same wheel/sdist bytes
+  progress through TestPyPI, production, and PyPI without rebuilding.
 
-Full notes: [Release Notes - v0.0.23.post2](docs/release-notes/version-0.0.23.post2.md).
+Full notes: [Release Notes - v0.0.24](docs/release-notes/version-0.0.24.md).
 
 ## What's New in v0.0.23.post1
 
@@ -331,7 +336,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
-| >=4.5.8 | v0.0.23.post2 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
+| >=4.5.8 | v0.0.24 | v0.0.20 | v0.0.10 | v0.0.13 |
 | >=4.5.8 | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |
@@ -350,7 +355,7 @@ See [COMPATIBILITY.md](COMPATIBILITY.md) for the full version compatibility tabl
 ## Requirements
 
 - NetBox 4.5.8 through 4.5.10, or 4.6.x
-- Verified with NetBox v4.5.8 through v4.5.10 and v4.6.0 through v4.6.5
+- Verified with NetBox v4.5.8 through v4.5.10 and v4.6.0 through v4.6.6
 - Python 3.12+
 - Proxmox VE 7.x, 8.x, or 9.x (PVE 9 requires `VM.GuestAgent.Audit` on the API role; see "Troubleshooting" below for the PVE 9 auth checklist)
 - Proxbox API backend as a separately deployed service (see below)

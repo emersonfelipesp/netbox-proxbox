@@ -213,7 +213,8 @@ deleted while the flag exists.
 ## Release Procedure (summary)
 
 Official releases are cut **from `develop`** and triggered **only** by
-GitHub release creation. The publish workflow listens to:
+GitHub release creation after the Gitea package and NMS production gates. The
+public publish workflow listens to:
 
 - `push: tags: v*rc*` → TestPyPI (release-candidate gate)
 - `release: published` → PyPI (official releases)
@@ -275,32 +276,43 @@ boundary.
 
 The official release pipeline runs in this order:
 
-1. **Gitea tag push** — push an annotated tag to Gitea (`git tag -a vX.Y.Z && git push gitea vX.Y.Z`).
-2. **Gitea Actions: `.gitea/workflows/publish-gitea.yml`** — fires on every tag push. Builds and uploads the dist to the Gitea Package Registry, then calls `push-to-github` to push the tag to GitHub. For non-RC tags it also creates (or publishes an existing draft) GitHub release via `gh release create / gh release edit --draft=false`.
-3. **GitHub Actions: `.github/workflows/publish-testpypi.yml` — `release: published` trigger** — fires when `publish-gitea.yml` creates the non-draft GitHub release. Validates version, builds dist, checks if version already on PyPI (skip if yes), uploads to PyPI, runs validate-pypi and E2E checks.
-4. **GitHub Actions: Docker Hub** — called by `publish-testpypi.yml` after PyPI validation.
+1. **Gitea tag push** — push an annotated RC or final tag to Gitea.
+2. **Gitea package** — `.gitea/workflows/publish-gitea.yml` builds and uploads the exact package. It pushes only RC tags to GitHub for TestPyPI.
+3. **Production gate** — link and verify the final Gitea package, then deploy through NMS with `latest_package` by default (or explicitly selected `main_branch`).
+4. **Public promotion** — after production health validation, promote the final tag and create the GitHub Release; `release: published` authorizes PyPI.
 
 ### RC (release-candidate) pipeline
 
-1. Push a `vX.Y.ZrcN` tag to GitHub directly (`git push origin vX.Y.ZrcN`).
+1. Push a `vX.Y.ZrcN` tag to Gitea; the private publisher promotes that RC tag to GitHub.
 2. `.github/workflows/publish-testpypi.yml` fires on `push: tags: v*rc*` → publishes to TestPyPI.
 
-### Idempotency guarantee (PyPI upload)
+### Immutable-version guarantee
 
-The `publish-pypi` job in `.github/workflows/publish-testpypi.yml` checks the PyPI API before uploading. If the version already exists (HTTP 200), the upload step is skipped and the job succeeds. This prevents duplicate-upload failures when `release: published` fires after a tag-push run already published to PyPI, and allows safe re-triggering of the workflow.
+Uploads never use `--skip-existing`. A version consumed in Gitea, TestPyPI, or
+PyPI must never be replaced with different bytes; advance to the next `rcN` or
+`postN` and record it in the release ledger.
 
 ### Gitea Package Registry
 
-Use `PKG_TOKEN` (not `GITEA_TOKEN` — GITEA_ prefix is reserved and will fail). The registry URL is `https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi`.
+The protected publisher uses checksum-pinned uv with fresh per-run tool and
+managed-Python roots, anonymously fetches the exact validated publisher source,
+and exposes the repository `PKG_TOKEN` only to the package-write step. The
+unsupported Gitea Actions job token is not used for registry authentication,
+and no package credential is exposed to the credential-free build job. The registry URL is
+`https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi`.
 The publish workflow deliberately accepts tag `push` events, not Gitea's
 overlapping `create` event. Gitea emits both for a tag; subscribing to both
-starts duplicate immutable uploads of one version. Manual dispatch remains the
-operator retry path.
+starts duplicate immutable uploads of one version. A consumed or failed version
+is never retried; fix forward with the next immutable version.
 
 ### Security
 
-- `publish-gitea.yml` uses `env:` indirection for `inputs.tag_name` and `github.event_name` to prevent CI/CD expression injection.
-- Tag pattern validation (`^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+|\.post[0-9]+)?$`) rejects unexpected refs before any build step.
+- `publish-gitea.yml` accepts only a canonical version tag that equals current
+  Gitea `develop`; each latest required status must resolve to authenticated
+  successful `ci.yml` push-run/job evidence for that exact SHA, trusted actor,
+  expected job, and untrusted runner class.
+- Build credentials and package credentials are separated; the registry package
+  is linked to this repository and byte-compared with its canonical manifest.
 
 ## Gitea-to-GitHub Mirror
 
@@ -317,12 +329,12 @@ GitHub git credentials through `gh auth setup-git`, and pushes only
 
 ## Branch-tier Deployment
 
-The deployment workflow at `.gitea/workflows/deploy-production.yml` treats
-`develop` as staging and `main` as production. Pushes to `develop` deploy
-`netbox-proxbox` to `https://staging.netbox.nmulti.cloud`; pushes to `main`
-deploy it to `https://netbox.nmulti.cloud`. Manual dispatch can omit
-`environment` for `develop` and `main`; specify `environment=staging|production`
-when deploying a ref outside those branch triggers.
+The deployment workflow at `.gitea/workflows/deploy-production.yml` deploys a
+reviewed `develop` push to staging. Production is manual and dispatched by the
+NMS package-backed target from canonical `main`: `latest_package` requires the
+exact Gitea version and is the default, while `main_branch` is an explicit
+override. A successful package deployment publishes immutable, repository-
+linked completion evidence for the public-promotion gate.
 
 ## Navigation
 

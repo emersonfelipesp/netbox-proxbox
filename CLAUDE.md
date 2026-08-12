@@ -76,7 +76,7 @@ This repository packages the `netbox_proxbox` NetBox plugin. The plugin adds end
 - Docker-based plugin installation docs are maintained at [`docs/installation/3-installing-plugin-docker.md`](./docs/installation/3-installing-plugin-docker.md), including `plugin_requirements.txt` and `configuration/plugins.py` usage.
 - Backend Docker examples map host `8800` to container `8000` (`-p 8800:8000`) because the published `proxbox-api` image serves through nginx on container port `8000`.
 
-The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.23.post2` and NetBox compatibility `4.5.8` through `4.6.99` (validated against `4.5.8` through `4.5.10` and `4.6.0` through `4.6.5`). Current backend-runtime pairing: netbox-proxbox 0.0.23.post2 <-> proxbox-api (guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge. The `0.0.23.post2` release adds bounded endpoint auto-configuration and credential establishment while retaining the `0.0.23.post1` universal `guest_os_model` behavior. Existing backend rows authorize only their exact persisted target; rowless discovery is restricted to configured or same-site targets derived from NetBox's trusted public origin, and any unproved target remains pending. The previous stable `0.0.22` release pairs with backend `0.0.19.post5`. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
+The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.24` and NetBox compatibility `4.5.8` through `4.6.99` (validated against `4.5.8` through `4.5.10` and `4.6.0` through `4.6.6`). Current backend-runtime pairing: netbox-proxbox 0.0.24 <-> proxbox-api 0.0.20 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge. The `0.0.24` release adds NetBox 4.6.6 certification, settings/storage compatibility fixes, blank-key encryption recovery, and immutable Gitea-first release provenance while retaining bounded endpoint auto-configuration and the universal `guest_os_model` behavior. Existing backend rows authorize only their exact persisted target; rowless discovery is restricted to configured or same-site targets derived from NetBox's trusted public origin, and any unproved target remains pending. The previous stable `0.0.23.post2` release introduced bounded endpoint auto-configuration. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
 
 **Companion repos (cross-link map):**
 
@@ -589,25 +589,33 @@ credentials with `gh auth setup-git`, and pushes only
 
 ### Gitea Package Registry publish (`.gitea/workflows/publish-gitea.yml`)
 
-Added to `develop` in v0.0.19. Handles `push: tags:` and
-`workflow_dispatch`. It deliberately does not subscribe to Gitea's overlapping
+Added to `develop` in v0.0.19. Handles `push: tags:` only. It deliberately does
+not subscribe to Gitea's overlapping
 `create` event: Gitea emits both `create` and `push` for one tag, which races
-two immutable package uploads. Packages are published via direct upload. See
-`proxbox-api/CLAUDE.md` for the exact upload command. Secret name: `PKG_TOKEN`
-(GITEA_ prefix is reserved by Gitea, cannot be used).
+two immutable package uploads. The tag must equal current `develop`; every
+latest required status must resolve to authenticated successful `ci.yml`
+push-run/job evidence for that exact SHA, trusted actor, expected job, and
+untrusted runner class. A credential-free runner builds a manifest-bound wheel/sdist; a
+protected job publishes with the short-lived Actions package token, links the
+package, then re-downloads and hashes the exact bytes.
+
+The workflow pushes only RC tags to GitHub so the RC-only public tag trigger
+can validate TestPyPI. Final tags stay private until the exact Gitea package is
+linked, verified, and deployed through NMS using `latest_package` by default.
+Only after production validation may canonical-main `promote-final-tag.yml`
+verify the package and NMS attestation and push the final tag to the exact
+authorized GitHub repository; the operator then creates the GitHub Release
+that authorizes PyPI.
 
 ### Branch-tier deployment (`.gitea/workflows/deploy-production.yml`)
 
 Pushes to `develop` deploy this plugin to the staging NetBox endpoint at
-`https://staging.netbox.nmulti.cloud`. Pushes to `main` deploy the same repo to
-the production NetBox endpoint at `https://netbox.nmulti.cloud`.
-
-Manual dispatch accepts an optional `environment=staging|production` and an
-optional `ref`. When no manual environment is supplied, the workflow derives the
-target from `develop` or `main`. The staging path uses
-`/opt/nmulticloud/deploy/bin/deploy-netbox-plugin-staging netbox-proxbox "$REF"`;
-the production path uses
-`/opt/nmulticloud/deploy/bin/deploy-netbox-plugin netbox-proxbox "$REF"`.
+`https://staging.netbox.nmulti.cloud`. Production is an NMS-dispatched manual
+workflow on canonical `main`: `latest_package` requires the exact Gitea version
+and is the default; `main_branch` is an explicit override. After a healthy
+package deployment, the workflow publishes immutable repository-linked Gitea
+completion evidence containing the source SHA, exact artifact hashes, manifest
+digest, production environment, and workflow-run identity.
 
 ### E2E Docker workflow (`e2e-docker.yml`)
 
@@ -631,7 +639,8 @@ Accepts four main inputs:
 ### Release pipeline (`publish-testpypi.yml`)
 
 ```
-prepare-release
+prepare-release (downloads exact linked Gitea artifacts; final requires the protected NMS attestation)
+├── validate-gitea-artifacts (wheel + sdist on Python 3.12/3.13)
 ├── TestPyPI lane
 │   ├── publish-testpypi
 │   ├── validate-testpypi
@@ -644,7 +653,7 @@ prepare-release
     └── e2e-docker-pypi (install_source=pypi, dependency_mode=pypi-package)
 ```
 
-`rcN` tag pushes (pattern `v*rc*`) publish to TestPyPI for release-candidate validation. **Official releases (`vX.Y.Z`, `vX.Y.Z.postN`) are triggered exclusively by GitHub release creation (`release: published`) — non-rc plain tag pushes no longer trigger the publish workflow.** Manual dispatch with `publish_target=pypi` also publishes to PyPI.
+`rcN` tag pushes (pattern `v*rc*`) publish to TestPyPI for release-candidate validation. **Official releases (`vX.Y.Z`, `vX.Y.Z.postN`) are triggered exclusively by GitHub release creation (`release: published`) — non-rc plain tag pushes no longer trigger the publish workflow.** Manual dispatch is TestPyPI-only and requires an RC version.
 
 TestPyPI validation installs both `netbox-proxbox` and the configured `proxbox-api` from TestPyPI. PyPI candidate/final validation uses PyPI `proxbox-api` for backend package-index E2E.
 
@@ -654,13 +663,13 @@ For public docs, keep [`docs/developer/ci-e2e-workflows.md`](./docs/developer/ci
 
 ### Release Procedure (manual steps around the workflow)
 
-**Two trigger rules — official releases are always cut from `develop` via
-GitHub release creation.**
+**Two trigger rules — official releases use the immutable tag created from the
+reviewed `develop` commit, after package-first production validation.**
 
 | Trigger | Use for | Publishes to |
 |---------|---------|--------------|
 | `push: tags: v*rc*` (plain tag push) | Release candidates `vX.Y.ZrcN` | TestPyPI |
-| `release: published` (GitHub release) | Official `vX.Y.Z` and `vX.Y.Z.postN` | PyPI (Created automatically by `.gitea/workflows/publish-gitea.yml` for future releases) |
+| `release: published` (GitHub release) | Official `vX.Y.Z` and `vX.Y.Z.postN` | PyPI (created by the operator after the NMS production gate) |
 
 Plain non-rc tag pushes (`vX.Y.Z`, `vX.Y.Z.postN`) **do not** trigger the
 publish workflow — the trigger pattern is `v*rc*`, so only rc tags fire it.
@@ -668,12 +677,10 @@ This makes the GitHub release creation the **single, authoritative trigger**
 for official PyPI publishing and eliminates the duplicate-run problem the
 old dual-trigger flow created.
 
-For future releases, `.gitea/workflows/publish-gitea.yml` (Gitea Actions) pushes
-the tag to GitHub **and** creates the non-draft GitHub release automatically via the
-`push-to-github` → "Create GitHub Release" step, which fires `release: published`
-and triggers the GitHub Actions publish workflow. Manually running `gh release create`
-is only needed if `publish-gitea.yml` was not yet added, or for hotfix releases done
-directly on GitHub.
+`.gitea/workflows/publish-gitea.yml` pushes RC tags to GitHub but deliberately
+does not promote final tags or create public releases. Final promotion remains
+an operator action after Gitea-package verification and the NMS package-first
+production health gate.
 
 **RC flow (TestPyPI gate, repeatable):**
 
@@ -684,10 +691,11 @@ directly on GitHub.
    rtk ruff check .
    rtk pytest -p no:django tests/
    ```
-2. Annotated tag, push:
+2. Create the annotated tag and push it to Gitea. The private publisher
+   promotes only the RC tag to GitHub:
    ```bash
    git tag -a vX.Y.ZrcN -m "Release vX.Y.ZrcN"
-   git push origin vX.Y.ZrcN
+   git push gitea vX.Y.ZrcN
    gh run watch <run-id> --repo emersonfelipesp/netbox-proxbox
    ```
 3. If anything fails, fix-forward with `rcN+1` — never `twine --skip-existing`.
@@ -706,32 +714,35 @@ directly on GitHub.
    grep '^version' pyproject.toml
    grep 'version = ' netbox_proxbox/__init__.py
    ```
-3. **Create the GitHub release pointing at `develop`.** This is the only
-   step that fires the publish workflow:
+3. **Publish and verify the final package in Gitea, then deploy it through NMS.**
+   Use the target's default `latest_package` source; `main_branch` is permitted
+   only when explicitly selected by the operator. Validate production health
+   before public promotion.
+4. **Promote the exact final tag and create the GitHub release.**
+   This is the only step that fires the public publish workflow:
    ```bash
    gh release create vX.Y.Z \
      --repo emersonfelipesp/netbox-proxbox \
-     --target develop \
      --verify-tag \
      --title vX.Y.Z \
      --notes-file docs/release-notes/version-X.Y.Z.md
    ```
-   - Use `--verify-tag` when the tag already exists at the right commit
-     (e.g. from a prior rc → final tag move). Otherwise omit it and
-     `gh release create` will create the tag at the tip of `--target develop`.
+   - `--verify-tag` is mandatory. Push the final tag to the authorized GitHub
+     repository only after the NMS gate; never let `gh release create` invent or
+     move the tag.
    - Use `--notes-file` to point at the curated release notes; fall back to
      `--generate-notes` only for posts that have no curated file.
-4. **Watch the publish run:**
+5. **Watch the publish run:**
    ```bash
    gh run list --repo emersonfelipesp/netbox-proxbox --event release \
      --limit 3 --json databaseId,name,status,conclusion
    gh run watch <run-id> --repo emersonfelipesp/netbox-proxbox
    ```
-5. **Verify the dist is live on PyPI:**
+6. **Verify the dist is live on PyPI:**
    ```bash
    curl -s https://pypi.org/pypi/netbox-proxbox/json | jq '.releases | keys'
    ```
-6. **Delete the rc branch** (local + remote) once PyPI is green. Only
+7. **Delete the rc branch** (local + remote) once PyPI is green. Only
    `develop` and `gh-pages` should remain on `origin`.
 
 **Do not:**
@@ -805,39 +816,28 @@ What was done for v0.0.19:
 - Fixes database and API compatibility issues between the plugin and proxbox-api:
   `FastAPIEndpoint` token-drift fix (re-register on explicit token change),
   `PBSEndpoint`/`PDMEndpoint` `host` and `timeout_seconds` bridging properties.
-- **Gitea-first publish pipeline**: added `.gitea/workflows/publish-gitea.yml` to
-  `develop`. The original workflow handled `push: tags:`, `create`, and
-  `workflow_dispatch`; it now uses tag `push` plus manual dispatch only so one
-  tag cannot start duplicate immutable uploads. Gitea 1.26.2's dispatch API
-  returns 500 and tag triggers don't fire on
-  this instance. Until resolved, packages are published via direct `uv build` +
-  `twine upload` to `https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi`
-  using the `PKG_TOKEN` secret (GITEA_ prefix is reserved by Gitea, cannot be used).
-  See `proxbox-api/CLAUDE.md` for the full upload command.
+- **Historical v0.0.19 Gitea-first bootstrap**: the original workflow handled
+  `push: tags:`, `create`, and `workflow_dispatch`, and that release used a
+  direct-upload recovery while tag triggers were broken. This history is not a
+  current procedure. The current publisher is tag-push-only, manifest-bound,
+  repository-linked, and fail-closed. It uses checksum-pinned uv with fresh
+  per-run managed-Python roots, anonymously fetches the exact validated source,
+  and exposes `PKG_TOKEN` only to registry writes; fixes always advance to a new
+  immutable version.
 - Paired backend: `proxbox-api v0.0.16`.
-- **GitHub release**: The draft GitHub release `v0.0.19` was published via `gh release edit v0.0.19 --repo emersonfelipesp/netbox-proxbox --draft=false` (one-time cleanup for releases created as drafts before `publish-gitea.yml` was added). For future releases, `.gitea/workflows/publish-gitea.yml` creates the non-draft GitHub release automatically via the `push-to-github` → "Create GitHub Release" step, which fires `release: published` and triggers the GitHub Actions publish workflow.
+- **Historical GitHub release**: The draft GitHub release `v0.0.19` was
+  published manually as a one-time cleanup. Current private publishing pushes
+  only RC tags to GitHub; final promotion and GitHub Release creation happen
+  only after the Gitea package and NMS production gates.
 
-### Automatic Production Deployment (`.gitea/workflows/publish-gitea.yml`)
+### Package-first Production Deployment
 
-**Starting with v0.0.19**, non-release-candidate (`vX.Y.Z`, `vX.Y.Z.postN`) releases automatically deploy to `netbox.nmulti.cloud` after successful Gitea package registry publish and GitHub release creation.
-
-**Deploy job:**
-- Runs after `push-to-github` job completes (requires validated tag and GitHub Release created)
-- Condition: only for non-RC releases (`is_rc == false`)
-- Runs on a `prod-deploy` runner (the repo's Gitea Actions runner must carry the
-  `prod-deploy:host` label in addition to `mirror-host:host`, or the deploy job
-  stays queued forever)
-- Executes the deploy with the **short** plugin name `proxbox` (the deploy
-  script's whitelist maps `proxbox` → module `netbox_proxbox` / package
-  `netbox-proxbox`; passing `netbox-proxbox` fails validation). It prefers the
-  local script when the runner is on the prod host, falling back to ssh for a
-  remote runner: `/opt/nmulticloud/deploy/bin/deploy-netbox-plugin proxbox "$TAG"`
-  else `ssh nmc-prod-207 -- deploy-plugin proxbox "$TAG"`
-
-**Security hardening:**
-- TAG is passed via environment variable, not direct GitHub Actions context interpolation
-- Bash case statement validates tag format before SSH (accepts `v<X>.<Y>.<Z>` patterns)
-- StrictHostKeyChecking=accept-new prevents MITM attacks
+The package publisher never deploys directly and never uses SSH. After a final
+Gitea package is linked to this repository and its two artifacts/digests are
+verified, dispatch the production target through `nms git deployments` with
+`latest_package` (default). `main_branch` is an explicit operator-selected
+alternative. Promote to GitHub/PyPI only after NMS reports success and the live
+NetBox/plugin health checks pass.
 - Quoted variable interpolation prevents shell injection
 
 **Deployment flow:**
@@ -1026,8 +1026,9 @@ rtk ty check proxbox_cli
 
 **During release publishing**:
 
-- [ ] Only use `gh release create` to trigger the publish workflow
-- [ ] Never manually push tags with `git push origin vX.Y.Z` (use GitHub release)
+- [ ] Push RC and final tags to Gitea first; only RC tags are promoted automatically
+- [ ] Link and verify the final Gitea package, then deploy it through NMS
+- [ ] Only after production validation, promote the final tag and use `gh release create`
 - [ ] Monitor CI/CD for successful PyPI and Docker Hub publication
 - [ ] Verify dist is live on PyPI before declaring success
 

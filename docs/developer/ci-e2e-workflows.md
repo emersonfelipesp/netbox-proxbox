@@ -11,7 +11,7 @@ the staged TestPyPI/PyPI release pipeline.
 | `.github/workflows/ci.yml` | Push and pull request | Runs lint, type checks, compile checks, and the mocked pytest suite. NetBox-dependent Django tests skip here. |
 | `.github/workflows/django-tests.yml` | Push, tag, and pull request | Provisions a real NetBox source tree (matrixed over the supported 4.5.x and 4.6.x lines) plus PostgreSQL and Redis, installs the plugin `test` extra (`pytest-django` included), and runs the NetBox-backed Django TestCase suite for sync-state and endpoint auto-configuration. A fifth 4.6.x cell installs a pinned supported `netbox-pdm` checkout and enables it so the optional registry override is exercised. It hard-fails a missing harness and independently enforces at least 85% branch coverage for `services.endpoint_autoconfiguration` and `api.serializers.resource_views`; aggregate coverage cannot let either module mask the other. |
 | `.github/workflows/e2e-docker.yml` | Manual, scheduled, reusable workflow call | Builds a real NetBox stack with the plugin, rqworker, `proxbox-api`, PostgreSQL, Redis, and a mocked Proxmox API. |
-| `.github/workflows/publish-testpypi.yml` | `v*rc*` tag push (TestPyPI), GitHub release published (PyPI), manual dispatch | Publishes immutable package versions through TestPyPI, PyPI release candidates, final PyPI releases, and post-release fixes. Official PyPI releases are cut from `develop` via `gh release create`; plain non-rc tag pushes do not trigger publishing. |
+| `.github/workflows/publish-testpypi.yml` | `v*rc*` tag push or RC-only manual dispatch (TestPyPI); GitHub Release published (PyPI) | Promotes the exact linked Gitea artifacts. Official PyPI releases require the already-pushed final tag, successful package-first NMS attestation, and `gh release create --verify-tag`; plain non-RC tag pushes do not trigger publishing. |
 | `.github/workflows/docs.yml` | Docs changes on main / PR | Builds and publishes the MkDocs site. |
 | `.github/workflows/docs-screenshots.yml` | Manual dispatch | Refreshes committed UI screenshots used by the docs site. |
 | `.github/workflows/nightly-contracts.yml` | Schedule / manual dispatch | Checks cross-repo contracts that must stay aligned with `proxbox-api`. |
@@ -231,7 +231,7 @@ The reusable inputs select what is under test:
 | `dependency_mode` | `dev`, `published`, `testpypi-package`, `pypi-package` | Selects how the separate `proxbox-api` container is built or installed. |
 | `proxbox_api_version` | Version string | Pins the backend package version for TestPyPI/PyPI package-index E2E modes. |
 | `proxbox_api_runtime` | `python`, `pyo3-rust`, `both` | Selects the backend reconciliation runtime. `both` is the default and doubles the matrix. |
-| `netbox_image` | Full image ref | Overrides the NetBox image; default matrix covers `v4.5.8` through `v4.5.10` and `v4.6.0` through `v4.6.5`. |
+| `netbox_image` | Full image ref | Overrides the NetBox image; default matrix covers `v4.5.8` through `v4.5.10` and `v4.6.0` through `v4.6.6`. |
 | `proxmox_service` | `pve`, `pbs`, `pdm`, `all` | Selects the proxmox-sdk mock image suffix. `all` runs the full per-service matrix. |
 
 The `pyo3-rust` runtime uses the `proxbox-api` `raw-pyo3-rust` Docker target in
@@ -263,14 +263,14 @@ sequenceDiagram
     participant NB as NetBox container
     participant API as proxbox-api container
 
-    Tag->>WF: vX.Y.Z or vX.Y.Z.postN
+    Tag->>WF: vX.Y.ZrcN
     WF->>TP: Upload netbox-proxbox
     WF->>E2E: install_source=testpypi + dependency_mode=testpypi-package + runtime=both
     E2E->>NB: Install netbox-proxbox==X.Y.Z from TestPyPI
     E2E->>API: Validate proxbox-api Python and PyO3/Rust runtimes
     E2E-->>WF: Full stack E2E passed for both runtimes
 
-    Tag->>WF: vX.Y.ZrcN or publish_target=pypi
+    Tag->>WF: published GitHub Release for vX.Y.Z or vX.Y.Z.postN
     WF->>PY: Upload netbox-proxbox
     WF->>E2E: install_source=pypi/local + dependency_mode=pypi-package + runtime=both
     E2E->>NB: Install netbox-proxbox from PyPI or current checkout

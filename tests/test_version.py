@@ -44,6 +44,7 @@ RELEASE_NOTES_023_POST1_PATH = (
 RELEASE_NOTES_023_POST2_PATH = (
     REPO_ROOT / "docs" / "release-notes" / "version-0.0.23.post2.md"
 )
+RELEASE_NOTES_024_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.24.md"
 E2E_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "e2e-docker.yml"
 PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "publish-testpypi.yml"
 NIGHTLY_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "nightly-contracts.yml"
@@ -56,21 +57,24 @@ CERTIFICATION_PATH = REPO_ROOT / "CERTIFICATION.md"
 DOCS_CERTIFICATION_PATH = REPO_ROOT / "docs" / "certification.md"
 APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
-CURRENT_PLUGIN_VERSION = "0.0.23"
-CURRENT_RELEASE_VERSION = "0.0.23.post2"
-CURRENT_PROXBOX_API_PAIRING_LABEL = "guest-VM-interface writer build / next release"
+CURRENT_PLUGIN_VERSION = "0.0.24"
+CURRENT_RELEASE_VERSION = "0.0.24"
+CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.20"
 CURRENT_PAIRING_LINE = (
-    "Current backend-runtime pairing: netbox-proxbox 0.0.23.post2 <-> proxbox-api "
-    "(guest-VM-interface writer build / next release) <-> proxmox-sdk 0.0.12 "
-    "<-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST "
+    "Current backend-runtime pairing: netbox-proxbox 0.0.24 <-> proxbox-api "
+    "0.0.20 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST "
     "dependency only and does not provide the semantic MCP bridge."
 )
-PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.19.post5"
+PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.20"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
 CURRENT_NETBOX_MAX_VERSION = "4.6.99"
-LATEST_CERTIFIED_NETBOX_VERSION = "4.6.5"
+LATEST_CERTIFIED_NETBOX_VERSION = "4.6.6"
 LATEST_CERTIFIED_NETBOX_IMAGE = (
     f"netboxcommunity/netbox:v{LATEST_CERTIFIED_NETBOX_VERSION}"
+)
+LATEST_CANDIDATE_NETBOX_VERSION = "4.6.6"
+LATEST_CANDIDATE_NETBOX_IMAGE = (
+    f"netboxcommunity/netbox:v{LATEST_CANDIDATE_NETBOX_VERSION}"
 )
 SUPPORTED_NETBOX_IMAGE_TAGS = (
     "netboxcommunity/netbox:v4.5.8",
@@ -82,13 +86,14 @@ SUPPORTED_NETBOX_IMAGE_TAGS = (
     "netboxcommunity/netbox:v4.6.3",
     "netboxcommunity/netbox:v4.6.4",
     "netboxcommunity/netbox:v4.6.5",
+    "netboxcommunity/netbox:v4.6.6",
 )
 E2E_DEFAULT_INSTALL_SOURCES = ("local", "pypi", "container")
 E2E_EXPLICIT_INSTALL_SOURCES = (*E2E_DEFAULT_INSTALL_SOURCES, "testpypi")
-DJANGO_TESTED_NETBOX_TAGS = ("v4.5.8", "v4.5.10", "v4.6.0", "v4.6.5")
+DJANGO_TESTED_NETBOX_TAGS = ("v4.5.8", "v4.5.10", "v4.6.0", "v4.6.6")
 PREVIOUS_PLUGIN_VERSION = "0.0.22"
 PREVIOUS_PROXBOX_API_VERSION = "0.0.19.post5"
-CURRENT_RELEASE_NOTES_PATH = RELEASE_NOTES_023_POST2_PATH
+CURRENT_RELEASE_NOTES_PATH = RELEASE_NOTES_024_PATH
 
 
 def _class_constants(class_name: str) -> dict[str, str]:
@@ -226,7 +231,7 @@ def test_e2e_stable_python_cells_are_gating_for_pve():
 
 def test_docs_screenshots_pins_latest_certified_netbox():
     workflow = _read(DOCS_SCREENSHOTS_WORKFLOW_PATH)
-    assert workflow.count(f"NETBOX_IMAGE: {LATEST_CERTIFIED_NETBOX_IMAGE}") == 1
+    assert workflow.count(f"NETBOX_IMAGE: {LATEST_CANDIDATE_NETBOX_IMAGE}") == 1
 
 
 def test_django_tests_pin_expected_netbox_matrix():
@@ -237,9 +242,9 @@ def test_django_tests_pin_expected_netbox_matrix():
 
 def test_page_coverage_pins_latest_certified_netbox():
     workflow = _read(PAGE_COVERAGE_WORKFLOW_PATH)
-    assert workflow.count(f"NETBOX_IMAGE: {LATEST_CERTIFIED_NETBOX_IMAGE}") == 1
+    assert workflow.count(f"NETBOX_IMAGE: {LATEST_CANDIDATE_NETBOX_IMAGE}") == 1
     assert (
-        f"name: Page Coverage / {LATEST_CERTIFIED_NETBOX_IMAGE} / local / pve"
+        f"name: Page Coverage / {LATEST_CANDIDATE_NETBOX_IMAGE} / local / pve"
         in workflow
     )
 
@@ -351,6 +356,7 @@ def test_release_notes_files_are_present():
         RELEASE_NOTES_023_PATH,
         RELEASE_NOTES_023_POST1_PATH,
         RELEASE_NOTES_023_POST2_PATH,
+        RELEASE_NOTES_024_PATH,
     ):
         assert path.is_file(), f"{path} is missing"
 
@@ -421,7 +427,7 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         f"v{CURRENT_RELEASE_VERSION}",
         CURRENT_PROXBOX_API_PAIRING_LABEL,
         "v0.0.10",
-        "v0.0.12",
+        "v0.0.13",
     )
     for path in (README_PATH, DOCS_INDEX_PATH, CURRENT_RELEASE_NOTES_PATH):
         text = _read(path)
@@ -433,7 +439,7 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         ">=3.12",
         CURRENT_PROXBOX_API_PAIRING_LABEL,
         "v0.0.10",
-        "v0.0.12",
+        "v0.0.13",
     )
     _assert_markdown_table_row(_read(COMPATIBILITY_PATH), compatibility_row)
 
@@ -448,7 +454,7 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         text = _read(path)
         assert CURRENT_RELEASE_VERSION in text, f"{path} missing release version"
         assert CURRENT_PLUGIN_VERSION in text, f"{path} missing plugin version"
-        assert CURRENT_PROXBOX_API_PAIRING_LABEL in text, (
+        assert CURRENT_PROXBOX_API_PAIRING_LABEL.removeprefix("v") in text, (
             f"{path} missing backend pairing label"
         )
         assert CURRENT_PAIRING_LINE in text, f"{path} missing pairing line"
@@ -458,7 +464,7 @@ def test_0_0_23_historical_compatibility_row_is_kept():
     historical_row = (
         f">={CURRENT_NETBOX_MIN_VERSION}",
         "v0.0.23",
-        CURRENT_PROXBOX_API_PAIRING_LABEL,
+        "guest-VM-interface writer build / next release",
         "v0.0.10",
         "v0.0.12",
     )
@@ -469,7 +475,7 @@ def test_0_0_23_historical_compatibility_row_is_kept():
         "v0.0.23",
         f">={CURRENT_NETBOX_MIN_VERSION}",
         ">=3.12",
-        CURRENT_PROXBOX_API_PAIRING_LABEL,
+        "guest-VM-interface writer build / next release",
         "v0.0.10",
         "v0.0.12",
     )

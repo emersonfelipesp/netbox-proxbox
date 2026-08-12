@@ -343,8 +343,10 @@ def _dormant_optional_ciphertext_exists(
                     f"COALESCE({connection.ops.quote_name(field_name)}, '') <> ''"
                     for field_name in family.encrypted_fields
                 )
+                # Identifiers come only from the static encrypted-family registry
+                # and are quoted by Django; there are no caller-controlled values.
                 cursor.execute(
-                    "SELECT 1 FROM "
+                    "SELECT 1 FROM "  # nosec B608
                     f"{connection.ops.quote_name(table_name)} "
                     f"WHERE ({predicates}) LIMIT 1"
                 )

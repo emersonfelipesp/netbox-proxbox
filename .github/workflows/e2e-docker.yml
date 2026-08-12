@@ -95,7 +95,7 @@ on:
     - cron: "31 2 * * *"
 
 env:
-  PROXBOX_API_RELEASE_VERSION: 0.0.19.post5
+  PROXBOX_API_RELEASE_VERSION: 0.0.20
   PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api
   PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk
   PROXMOX_SDK_TAG_PREFIX: latest
@@ -115,8 +115,8 @@ jobs:
         # Scheduled events have no inputs. Treat empty, "both", and unknown values
         # as the full certification matrix instead of an empty install source.
         install_source: ${{ fromJSON((inputs.install_source == 'local' || inputs.install_source == 'pypi' || inputs.install_source == 'container' || inputs.install_source == 'testpypi') && format('["{0}"]', inputs.install_source) || '["local","pypi","container"]') }}
-        # Certified NetBox support set: v4.5.8 through v4.5.10 and v4.6.0 through v4.6.5.
-        netbox_image: ${{ fromJSON(inputs.netbox_image != '' && format('["{0}"]', inputs.netbox_image) || '["netboxcommunity/netbox:v4.5.8","netboxcommunity/netbox:v4.5.9","netboxcommunity/netbox:v4.5.10","netboxcommunity/netbox:v4.6.0","netboxcommunity/netbox:v4.6.1","netboxcommunity/netbox:v4.6.2","netboxcommunity/netbox:v4.6.3","netboxcommunity/netbox:v4.6.4","netboxcommunity/netbox:v4.6.5"]') }}
+        # Certified NetBox support set: v4.5.8 through v4.5.10 and v4.6.0 through v4.6.6.
+        netbox_image: ${{ fromJSON(inputs.netbox_image != '' && format('["{0}"]', inputs.netbox_image) || '["netboxcommunity/netbox:v4.5.8","netboxcommunity/netbox:v4.5.9","netboxcommunity/netbox:v4.5.10","netboxcommunity/netbox:v4.6.0","netboxcommunity/netbox:v4.6.1","netboxcommunity/netbox:v4.6.2","netboxcommunity/netbox:v4.6.3","netboxcommunity/netbox:v4.6.4","netboxcommunity/netbox:v4.6.5","netboxcommunity/netbox:v4.6.6"]') }}
         network_stack: [ipv4]
         proxbox_api_runtime: ${{ fromJSON(github.event_name == 'pull_request' && '["python"]' || ((inputs.proxbox_api_runtime == 'python' || inputs.proxbox_api_runtime == 'pyo3-rust') && format('["{0}"]', inputs.proxbox_api_runtime) || '["python","pyo3-rust"]')) }}
         proxmox_service: ${{ fromJSON(github.event_name == 'pull_request' && '["pve"]' || ((inputs.proxmox_service == 'pve' || inputs.proxmox_service == 'pbs' || inputs.proxmox_service == 'pdm') && format('["{0}"]', inputs.proxmox_service) || '["pve","pbs","pdm"]')) }}

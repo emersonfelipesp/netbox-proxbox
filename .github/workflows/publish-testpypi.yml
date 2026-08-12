@@ -13,15 +13,14 @@ on:
   workflow_dispatch:
     inputs:
       publish_target:
-        description: "Package index to publish to. rc tag pushes use TestPyPI; non-rc tag pushes and GitHub releases use PyPI."
+        description: "Package index to publish to. RC tag pushes use TestPyPI; published GitHub releases use PyPI."
         required: true
         type: choice
         options:
           - testpypi
-          - pypi
         default: testpypi
       source_ref:
-        description: "Version tag to publish, for example v0.0.15 or v0.0.15rc1. Empty uses the workflow ref."
+        description: "RC tag to publish, for example v0.0.24rc1. Empty uses the workflow ref."
         required: false
         type: string
         default: ""
@@ -40,9 +39,9 @@ permissions:
   contents: read
 
 env:
-  PROXBOX_API_DEFAULT_VERSION: ${{ vars.PROXBOX_API_RELEASE_VERSION || '0.0.19.post5' }}
-  PROXBOX_API_TESTPYPI_VERSION: ${{ vars.PROXBOX_API_TESTPYPI_VERSION || '0.0.19.post5' }}
-  PROXBOX_API_PYPI_VERSION: ${{ vars.PROXBOX_API_PYPI_VERSION || vars.PROXBOX_API_RELEASE_VERSION || '0.0.19.post5' }}
+  PROXBOX_API_DEFAULT_VERSION: ${{ vars.PROXBOX_API_RELEASE_VERSION || '0.0.20' }}
+  PROXBOX_API_TESTPYPI_VERSION: ${{ vars.PROXBOX_API_TESTPYPI_VERSION || '0.0.20' }}
+  PROXBOX_API_PYPI_VERSION: ${{ vars.PROXBOX_API_PYPI_VERSION || vars.PROXBOX_API_RELEASE_VERSION || '0.0.20' }}
 
 jobs:
   prepare-release:
@@ -50,24 +49,33 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       package_name: ${{ steps.meta.outputs.package_name }}
+      manifest_sha256: ${{ steps.artifacts.outputs.manifest_sha256 }}
       proxbox_api_version: ${{ steps.meta.outputs.proxbox_api_version }}
       publish_target: ${{ steps.meta.outputs.publish_target }}
+      source_sha: ${{ steps.artifacts.outputs.source_sha }}
       tag: ${{ steps.meta.outputs.tag }}
       version: ${{ steps.meta.outputs.version }}
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || (github.event_name == 'release' && github.event.release.tag_name || github.ref) }}
+          fetch-depth: 0
+          persist-credentials: false
 
       - name: Set up Python 3.13
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: "3.13"
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.28"
+
+      - name: Install locked release validation toolchain
+        run: uv sync --only-group publish --locked
 
       - name: Validate package metadata and tag
         id: meta
@@ -135,14 +143,20 @@ jobs:
               raise SystemExit(f'Tag/version mismatch: tag={ref_name!r}, version={version!r}')
 
           target_input = os.getenv('PUBLISH_TARGET_INPUT', '') or ''
-          if target_input:
+          if event == 'workflow_dispatch' and target_input:
+              if not re.search(r'rc\d+$', version):
+                  raise SystemExit('Manual dispatch is TestPyPI-only and requires an RC version')
               publish_target = target_input
           elif event == 'release':
+              if re.search(r'rc\d+$', version):
+                  raise SystemExit('Published release events must use a final version')
               publish_target = 'pypi'
           elif event == 'push' and re.search(r'rc\d+$', version):
               publish_target = 'testpypi'
           else:
-              publish_target = 'pypi'
+              raise SystemExit(
+                  f'Unsupported release event/ref combination: event={event!r}, ref={ref_name!r}'
+              )
 
           proxbox_api_version = os.getenv('PROXBOX_API_VERSION_INPUT', '') or ''
           if not proxbox_api_version:
@@ -160,15 +174,91 @@ jobs:
               fh.write(f'version={version}\n')
           PY
 
-      - name: Build distribution
-        run: uv build
+      - name: Verify Gitea provenance and retrieve exact artifacts
+        id: artifacts
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          TAG: ${{ steps.meta.outputs.tag }}
+          VERSION: ${{ steps.meta.outputs.version }}
+        run: |
+          set -euo pipefail
+          git remote add gitea https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox.git
+          git fetch --force --no-tags gitea \
+            "+refs/heads/develop:refs/remotes/gitea/release-develop" \
+            "+refs/tags/${TAG}:refs/release-policy/gitea-tag"
+          SOURCE_SHA="$(git rev-parse HEAD^{commit})"
+          GITEA_TAG_SHA="$(git rev-parse refs/release-policy/gitea-tag^{commit})"
+          test "$SOURCE_SHA" = "$GITEA_TAG_SHA"
+          git merge-base --is-ancestor "$SOURCE_SHA" refs/remotes/gitea/release-develop
+          python scripts/release_artifacts.py fetch-gitea \
+            --owner emersonfelipesp --repository netbox-proxbox \
+            --package netbox-proxbox --version "$VERSION" --source-sha "$SOURCE_SHA" \
+            --dist dist --manifest release-manifest.json
+          .venv/bin/python -m twine check dist/*
+          MANIFEST_SHA256="$(sha256sum release-manifest.json | cut -d' ' -f1)"
+          printf 'source_sha=%s\nmanifest_sha256=%s\n' "$SOURCE_SHA" "$MANIFEST_SHA256" >> "$GITHUB_OUTPUT"
+          if [ "$EVENT_NAME" = release ]; then
+            python scripts/release_artifacts.py fetch-attestation \
+              --owner emersonfelipesp --repository netbox-proxbox \
+              --manifest release-manifest.json
+          fi
 
       - name: Upload dist artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist
           path: dist/*
           if-no-files-found: error
+
+  validate-gitea-artifacts:
+    name: exact Gitea artifact / py${{ matrix.python-version }} / ${{ matrix.kind }}
+    needs: prepare-release
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ['3.12', '3.13']
+        kind: [wheel, sdist]
+    steps:
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.28"
+
+      - name: Download exact Gitea artifacts
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: dist
+          path: candidate
+
+      - name: Install the selected exact artifact
+        env:
+          ARTIFACT_KIND: ${{ matrix.kind }}
+          PACKAGE_NAME: ${{ needs.prepare-release.outputs.package_name }}
+          PACKAGE_VERSION: ${{ needs.prepare-release.outputs.version }}
+        run: |
+          set -euo pipefail
+          uv venv --python "${{ matrix.python-version }}" .artifact-smoke
+          if [ "$ARTIFACT_KIND" = wheel ]; then
+            ARTIFACT="$(find candidate -maxdepth 1 -type f -name '*.whl' -print -quit)"
+          else
+            ARTIFACT="$(find candidate -maxdepth 1 -type f -name '*.tar.gz' -print -quit)"
+          fi
+          test -n "$ARTIFACT"
+          uv pip install --python .artifact-smoke/bin/python "$ARTIFACT"
+          .artifact-smoke/bin/python - <<'PY'
+          import importlib.metadata as metadata
+          import os
+
+          actual = metadata.version(os.environ["PACKAGE_NAME"])
+          if actual != os.environ["PACKAGE_VERSION"]:
+              raise SystemExit(f"Installed {actual}, expected {os.environ['PACKAGE_VERSION']}")
+          PY
 
   page-coverage:
     name: Page Coverage gate
@@ -178,29 +268,34 @@ jobs:
   publish-testpypi:
     name: publish to TestPyPI
     if: needs.prepare-release.outputs.publish_target == 'testpypi'
-    needs: [prepare-release, page-coverage]
+    needs: [prepare-release, validate-gitea-artifacts, page-coverage]
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python 3.13
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.13'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.28"
 
       - name: Download dist artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: dist
           path: dist
+
+      - name: Install locked publisher toolchain without registry authority
+        run: uv sync --only-group publish --locked
 
       - name: Upload to TestPyPI
         env:
           TEST_PYPI_USERNAME: ${{ secrets.TEST_PYPI_USERNAME }}
           TEST_PYPI_TOKEN: ${{ secrets.TEST_PYPI_TOKEN }}
         run: |
-          uv run --with twine python -m twine upload \
+          .venv/bin/python -m twine upload \
             --non-interactive \
             --repository-url https://test.pypi.org/legacy/ \
             --username "$TEST_PYPI_USERNAME" \
@@ -218,17 +313,19 @@ jobs:
         python-version: ['3.12', '3.13']
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || (github.event_name == 'release' && github.event.release.tag_name || github.ref) }}
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.28"
 
       - name: Validate package install from TestPyPI
         env:
@@ -294,7 +391,7 @@ jobs:
   validate-pypi-candidate:
     name: validate PyPI candidate / py${{ matrix.python-version }}
     if: needs.prepare-release.outputs.publish_target == 'pypi'
-    needs: [prepare-release]
+    needs: [prepare-release, validate-gitea-artifacts]
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -302,17 +399,19 @@ jobs:
         python-version: ['3.12', '3.13']
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.source_ref || (github.event_name == 'release' && github.event.release.tag_name || github.ref) }}
 
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.28"
 
       - name: Sync development environment
         run: uv sync --extra test --extra dev --extra cli --locked
@@ -331,7 +430,7 @@ jobs:
   e2e-docker-pypi-candidate:
     name: E2E Docker / PyPI candidate
     if: needs.prepare-release.outputs.publish_target == 'pypi'
-    needs: [prepare-release]
+    needs: [prepare-release, validate-gitea-artifacts]
     uses: ./.github/workflows/e2e-docker.yml
     with:
       install_source: local
@@ -346,41 +445,30 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Python 3.13
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: '3.13'
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.28"
 
       - name: Download dist artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           name: dist
           path: dist
 
-      - name: Check if version already on PyPI
-        id: pypi_check
-        env:
-          VERSION: ${{ needs.prepare-release.outputs.version }}
-        run: |
-          HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" \
-            "https://pypi.org/pypi/netbox-proxbox/${VERSION}/json")
-          if [ "$HTTP_STATUS" = "200" ]; then
-            echo "already_on_pypi=true" >> "$GITHUB_OUTPUT"
-            echo "netbox-proxbox ${VERSION} already on PyPI — upload skipped"
-          else
-            echo "already_on_pypi=false" >> "$GITHUB_OUTPUT"
-            echo "netbox-proxbox ${VERSION} not found on PyPI (HTTP ${HTTP_STATUS})"
-          fi
+      - name: Install locked publisher toolchain without registry authority
+        run: uv sync --only-group publish --locked
 
       - name: Upload to PyPI
-        if: steps.pypi_check.outputs.already_on_pypi != 'true'
         env:
           PYPI_USERNAME: ${{ secrets.PYPI_USERNAME }}
           PYPI_TOKEN: ${{ secrets.PYPI_TOKEN }}
         run: |
-          uv run --with twine python -m twine upload \
+          .venv/bin/python -m twine upload \
             --non-interactive \
             --repository-url https://upload.pypi.org/legacy/ \
             --username "$PYPI_USERNAME" \
@@ -398,12 +486,14 @@ jobs:
         python-version: ['3.12', '3.13']
     steps:
       - name: Set up Python ${{ matrix.python-version }}
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405 # v6.2.0
         with:
           python-version: ${{ matrix.python-version }}
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v7
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.28"
 
       - name: Validate package install from PyPI
         env:

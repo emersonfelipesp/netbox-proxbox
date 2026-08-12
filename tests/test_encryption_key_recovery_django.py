@@ -82,6 +82,9 @@ from netbox_proxbox.api.serializers.settings import (  # noqa: E402
 from netbox_proxbox.api.serializers.vm_cloudinit import (  # noqa: E402
     ProxmoxVMCloudInitSerializer,
 )
+
+
+_RESET_REPORTER_MARKER = "legacy-plaintext-reset-reporter-marker"
 from netbox_proxbox.forms.settings import (  # noqa: E402
     EncryptedSecretResetForm,
     ProxboxPluginSettingsForm,
@@ -879,6 +882,7 @@ class EncryptionKeyRecoveryTest(TestCase):
 
             def __init__(self, *, pk: int | None = None) -> None:
                 self.pk = pk
+                self._state = SimpleNamespace(db=None)
                 self.proxbox_api_key_enc = persisted["ciphertext"] if pk else ""
 
             def set_proxbox_api_key(self, plaintext: str) -> None:
@@ -1010,12 +1014,10 @@ class EncryptionKeyRecoveryTest(TestCase):
     def test_unexpected_reset_failure_masks_key_and_collected_credential_material(
         self,
     ) -> None:
-        stored_material = "legacy-plaintext-reset-reporter-marker"
-        healthy_ciphertext = self.proxmox.token_value_enc
         _raw_update_fields(
             ProxmoxEndpoint,
             self.proxmox.pk,
-            password_enc=stored_material,
+            password_enc=_RESET_REPORTER_MARKER,
         )
         request = RequestFactory().post(
             "/plugins/proxbox/settings/encrypted-secrets/reset/",
@@ -1048,10 +1050,10 @@ class EncryptionKeyRecoveryTest(TestCase):
                 self.fail("The injected reset failure did not escape.")
 
         self.assertNotIn(self.old_key, report)
-        self.assertNotIn(stored_material, report)
-        self.assertNotIn(healthy_ciphertext, report)
+        self.assertNotIn(_RESET_REPORTER_MARKER, report)
+        self.assertNotIn(self.proxmox.token_value_enc, report)
         self.proxmox.refresh_from_db()
-        self.assertEqual(self.proxmox.password_enc, stored_material)
+        self.assertEqual(self.proxmox.password_enc, _RESET_REPORTER_MARKER)
 
     def test_ordinary_model_and_api_key_replacement_are_rejected(self) -> None:
         self.settings_obj.encryption_key = self.new_key
@@ -1492,7 +1494,7 @@ class EncryptionKeyRecoveryTest(TestCase):
     def test_destructive_view_requires_the_separate_custom_permission(self) -> None:
         user_model = get_user_model()
         user = user_model.objects.create_user(
-            username="recovery-operator", password="not-a-secret", is_staff=True
+            username="recovery-operator", password="not-a-secret"
         )
         client = Client()
         client.force_login(user)

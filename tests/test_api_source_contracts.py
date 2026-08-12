@@ -332,7 +332,23 @@ def test_settings_runtime_action_preserves_secret_gate():
     )
     assert "return [IsAuthenticated()]" in views_contents
 
-    assert '"encryption_key": {"write_only": True}' in serializers_contents
+    module = _parse_serializers_package()
+    settings = _classdef(module, "ProxboxPluginSettingsSerializer")
+    field = next(
+        node
+        for node in settings.body
+        if isinstance(node, ast.Assign) and _assigned_name(node) == "encryption_key"
+    )
+    assert isinstance(field.value, ast.Call)
+    assert isinstance(field.value.func, ast.Attribute)
+    assert field.value.func.attr == "CharField"
+    keywords = {
+        keyword.arg: ast.literal_eval(keyword.value) for keyword in field.value.keywords
+    }
+    assert keywords["write_only"] is True
+    assert keywords["required"] is False
+    assert keywords["allow_blank"] is True
+    assert "assert_ordinary_key_mutation_allowed" in serializers_contents
 
 
 def test_reconciliation_engine_settings_are_exposed_to_backend_runtime_settings():

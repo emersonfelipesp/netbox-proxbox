@@ -15,6 +15,16 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
     Provides full CRUD via API for settings that proxbox-api reads.
     """
 
+    # Declare this explicitly instead of relying on NetBox's model-field builder.
+    # NetBox 4.5/4.6 can otherwise omit a blank partial update from validated_data,
+    # bypassing the field-level ordinary-mutation error until model save time.
+    encryption_key = serializers.CharField(
+        allow_blank=True,
+        max_length=255,
+        required=False,
+        write_only=True,
+    )
+
     @sensitive_variables()
     def run_validation(self, data: object = serializers.empty) -> object:
         """Validate settings without exposing write-only input in parent frames."""
@@ -177,6 +187,3 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "created",
             "last_updated",
         ]
-        extra_kwargs = {
-            "encryption_key": {"write_only": True},
-        }

@@ -20,7 +20,10 @@ jobs:
           cache: "pip"
 
       - name: Install ruff and bandit
-        run: pip install ruff bandit
+        # Keep the hosted gate aligned with the reviewed uv.lock toolchain.
+        # Unpinned Ruff changed standalone-Markdown formatting after this
+        # candidate was prepared and made the same source nondeterministically red.
+        run: pip install "ruff==0.15.10" "bandit==1.9.4"
 
       - name: Run ruff (lint + format check)
         run: |
