@@ -108,9 +108,9 @@ def _assert_schema_accepts(
         if "maxLength" in schema:
             assert len(value) <= schema["maxLength"], f"{path} is too long"
         if schema.get("format") == "date-time":
-            assert _RFC3339_DATE_TIME_RE.fullmatch(
-                value
-            ), f"{path} is not an RFC 3339 date-time"
+            assert _RFC3339_DATE_TIME_RE.fullmatch(value), (
+                f"{path} is not an RFC 3339 date-time"
+            )
             normalized = value.replace("t", "T").replace("z", "Z")
             normalized = re.sub(r":60(?=(?:\.\d+)?(?:Z|[+-]))", ":59", normalized)
             datetime.fromisoformat(normalized)
@@ -129,13 +129,13 @@ def _assert_schema_accepts(
     if isinstance(value, dict):
         properties = schema.get("properties", {})
         if "minProperties" in schema:
-            assert (
-                len(value) >= schema["minProperties"]
-            ), f"{path} has too few properties"
+            assert len(value) >= schema["minProperties"], (
+                f"{path} has too few properties"
+            )
         if "maxProperties" in schema:
-            assert (
-                len(value) <= schema["maxProperties"]
-            ), f"{path} has too many properties"
+            assert len(value) <= schema["maxProperties"], (
+                f"{path} has too many properties"
+            )
         missing = set(schema.get("required", [])) - set(value)
         assert not missing, f"{path} is missing required properties: {sorted(missing)}"
         if schema.get("additionalProperties") is False:

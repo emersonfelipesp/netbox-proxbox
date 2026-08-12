@@ -431,6 +431,7 @@ def test_paired_sdk_gate_rejects_loose_object_content_mismatch(tmp_path: Path) -
     ).stdout.strip()
     hostile = b"BRIDGE = 'different'\n"
     loose_object = sdk_root / ".git/objects" / object_id[:2] / object_id[2:]
+    loose_object.chmod(0o600)
     loose_object.write_bytes(
         zlib.compress(b"blob " + str(len(hostile)).encode("ascii") + b"\0" + hostile)
     )
