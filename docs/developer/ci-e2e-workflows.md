@@ -181,7 +181,7 @@ suite asserts that no workflow presents
 
 Activation is a separate reviewed change after an exact SDK release exists. It
 must explicitly provision that immutable artifact, record its exact released
-version or full Git commit plus `netbox_sdk/plugin_bridge.py` origin, invoke the
+version and full Git commit plus `netbox_sdk/plugin_bridge.py` origin, invoke the
 paired script with all identity arguments, and require the lossless endpoint-ID
 and bounded RFC 3339 vectors. Ambient `PYTHONPATH`, a mutable branch, or a
 candidate-supplied version claim is not identity evidence. Until then, a public

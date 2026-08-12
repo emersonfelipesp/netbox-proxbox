@@ -22,6 +22,7 @@
         "additionalProperties": false,
         "properties": {
           "count": {
+            "maximum": 9223372036854775807,
             "minimum": 0,
             "type": "integer"
           },
@@ -30,6 +31,7 @@
               "additionalProperties": false,
               "properties": {
                 "id": {
+                  "maximum": 9223372036854775807,
                   "minimum": 1,
                   "type": "integer"
                 },
@@ -48,6 +50,7 @@
                   ]
                 },
                 "pk": {
+                  "maximum": 9223372036854775807,
                   "minimum": 1,
                   "type": "integer"
                 },
@@ -189,6 +192,7 @@
         "additionalProperties": false,
         "properties": {
           "job_id": {
+            "maximum": 9223372036854775807,
             "minimum": 1,
             "type": [
               "integer",

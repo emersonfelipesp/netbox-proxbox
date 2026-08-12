@@ -203,7 +203,7 @@ disabled-by-default mutation gate and preserve the operator's scheduling intent.
 |---|---:|---|
 | `sync_stages` | yes | Nonempty, unique list of the 13 concrete manifest-declared slugs. Bridge v1 does not advertise the legacy `"all"` sentinel. A full sync is the exact complete list shown below. |
 | `job_name` | no | String of at most 200 characters. Whitespace at the edges is removed before enqueue; an empty value uses the default job name. |
-| `schedule_at` | no | Strict RFC 3339 date-time with an explicit `Z` or numeric offset, and it must resolve to a future representable instant. Leap seconds are accepted only when normalization remains representable; `9999-12-31T23:59:60Z` and the offset-overflowing `9999-12-31T23:59:59-23:59` are HTTP 400. Omit or send `null` for immediate execution unless recurrence is requested. |
+| `schedule_at` | no | Strict RFC 3339 date-time with an explicit `Z` or numeric offset, and it must resolve to a future representable instant. A `:60` value is accepted only when the normalized UTC instant crosses a month boundary; arbitrary-minute leap seconds and normalization overflow are HTTP 400. For example, `2100-01-01T00:59:60+01:00` is the same accepted instant as `2099-12-31T23:59:60Z`, while `2026-08-12T12:34:60Z`, `9999-12-31T23:59:60Z`, and `9999-12-31T23:59:59-23:59` reject. Omit or send `null` for immediate execution unless recurrence is requested. |
 | `recurrence` | no | Object containing exactly one of `minutes`, `hours`, `days`, or `weeks`, with a positive JSON Schema integer bounded so the converted minute count is at most `2147483647`. A finite mathematically integral JSON number such as `6.0` is an integer and is normalized to Python `int`; booleans, strings, nonintegral numbers, and non-finite numbers are rejected. Omit for a one-shot job. |
 | `proxmox_endpoint_ids` | no | Nonempty, unique list of positive signed-64-bit NetBox PKs (`1..9223372036854775807`). Integer JSON literals retain the full range. Decimal/exponent forms such as `7.0` normalize only within the exact IEEE-754 safe range `1..9007199254740991`; larger float/Decimal values reject before ORM lookup because a JSON parser may already have rounded their identity. Booleans, strings, nonintegral/non-finite values, and signed-64 overflow also reject. Every requested row must exist and be enabled or the whole request fails. Omit for all enabled Proxmox endpoints. |
 
@@ -451,27 +451,34 @@ No released SDK identity is currently certified for this descriptor.
 `state="blocked"` with no version or commit, and ordinary CI asserts that the
 paired script is not presented as an active gate. In that state the API root
 omits `mcp` and the direct manifest endpoint returns 503. Activation requires a later,
-explicit change that provisions one immutable SDK artifact, records its exact
-released version or full commit and module origin, adds the paired command to
+explicit change that provisions one immutable SDK release checkout, records its
+exact released version, full commit, and module origin, adds the paired command to
 committed CI, and changes the artifact only after every vector passes.
 
 The manual paired gate also fails closed. It requires an explicit SDK root,
-absolute module origin, and exactly one immutable identity; ambient
-`PYTHONPATH`, an arbitrary installed package, or omitted identity arguments are
-insufficient. A source-checkout example is:
+the fixed relative module origin, and one exact commit whose complete
+`netbox_sdk/` package inventory matches the checkout. It materializes
+the package from Git blob objects into a private temporary tree before import,
+after bounded offline verification of the complete commit/tree/blob graph and
+an explicit rehash of every imported blob;
+dirty tracked package files, version spoofing, untracked package modules, ambient `PYTHONPATH`,
+and arbitrary installed packages are not identity evidence. Run it as:
 
 ```bash
-/path/to/netbox-sdk/.venv/bin/python tests/validate_paired_netbox_sdk_bridge.py \
+/path/to/netbox-sdk/.venv/bin/python -I tests/validate_paired_netbox_sdk_bridge.py \
   --sdk-root /path/to/netbox-sdk \
   --expected-commit <full-lowercase-commit-sha> \
-  --expected-module-origin /path/to/netbox-sdk/netbox_sdk/plugin_bridge.py
+  --expected-version <exact-released-version> \
+  --expected-environment-root /path/to/netbox-sdk/.venv \
+  --expected-module-origin netbox_sdk/plugin_bridge.py
 ```
 
-For an eventual released artifact, use `--expected-version` with its exact
-released value instead of `--expected-commit`; do not substitute a branch name,
-range, or unreleased version guess. The required SDK behavior includes lossless
-large endpoint identity, rejection of unsafe integral floats, and rejection of
-RFC 3339 leap/offset normalization overflow.
+The release activation separately records the version belonging to that exact
+commit; a mutable source tree whose `__version__` merely matches is never
+accepted. Do not substitute a branch name, range, or unreleased version guess.
+The required SDK behavior includes lossless large endpoint identity, rejection
+of unsafe integral floats, and acceptance of `:60` only when the normalized UTC
+instant crosses a month boundary without calendar overflow.
 
 The manifest is generated from pure Python without Django state, network I/O,
 or credentials. Its choices are cross-checked against the canonical DRF
@@ -488,9 +495,9 @@ serializer in the real-NetBox test matrix.
 | `LOGIN_REQUIRED` and `core.add_job` boundaries | `tests/test_mcp_bridge_django.py` |
 | Read envelope and response serializer parity | Pure and real-Django MCP bridge suites |
 | Immediate, future, recurring, scoped, and omitted-scope dispatch | `tests/test_mcp_bridge_django.py` |
-| Strict input, lossless integer identity, safe-float boundary, signed-64-bit bounds, leap/offset overflow, and no-enqueue failures | Pure serializer contract plus real-Django route matrix |
+| Strict input, lossless integer identity, safe-float boundary, signed-64-bit bounds, normalized-UTC month-boundary leap semantics, leap/offset overflow, and no-enqueue failures | Pure serializer contract plus real-Django route matrix |
 | Paired SDK activation remains blocked until exact identity exists | `tests/fixtures/netbox_sdk_bridge_activation.json` plus `tests/test_mcp_bridge_contract.py` |
-| Exact paired SDK descriptor and argument validation after explicit provisioning | `tests/validate_paired_netbox_sdk_bridge.py --sdk-root ... --expected-commit/--expected-version ... --expected-module-origin ...` |
+| Exact paired SDK descriptor, argument, and response validation after explicit provisioning | `<locked-python> -I tests/validate_paired_netbox_sdk_bridge.py --sdk-root ... --expected-commit ... --expected-version ... --expected-environment-root ... --expected-module-origin netbox_sdk/plugin_bridge.py` |
 | Full-stage recurring hint and repair-debounce identity | Real-Django bridge suite plus `tests/test_schedule_hints.py` and `tests/test_operator_migration_ux.py` |
 | No FastMCP, SDK import, or duplicate credential | `tests/test_mcp_bridge_contract.py` |
 | Documentation build and link/navigation integrity | MkDocs strict build in local/CI gates |

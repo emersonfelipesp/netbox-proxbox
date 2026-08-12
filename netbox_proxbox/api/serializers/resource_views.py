@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import math
 import re
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 from rest_framework import serializers
@@ -162,12 +162,22 @@ class _StrictRFC3339DateTimeField(serializers.DateTimeField):
         normalized = value.replace("t", "T").replace("z", "Z")
         normalized = re.sub(r":60(?=(?:\.\d+)?(?:Z|[+-]))", ":59", normalized)
         parsed = super().to_internal_value(normalized)
-        if not leap_second:
-            return parsed
         try:
-            return parsed + timedelta(seconds=1)
+            parsed = parsed.astimezone(UTC)
+            if leap_second:
+                parsed += timedelta(seconds=1)
         except OverflowError:
             self.fail("invalid", format="RFC 3339 date-time")
+        if not leap_second:
+            return parsed
+        if not (
+            parsed.day == 1
+            and parsed.hour == 0
+            and parsed.minute == 0
+            and parsed.second == 0
+        ):
+            self.fail("invalid", format="RFC 3339 date-time")
+        return parsed
 
 
 class ScheduleSyncRecurrenceSerializer(serializers.Serializer):

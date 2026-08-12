@@ -79,8 +79,12 @@ repair debounce without accepting `all` through MCP. Never
 auto-retry an ambiguous schedule outcome. Keep the
 manifest, DRF serializer, Proxbox-owned contract snapshot, blocked activation
 artifact, immutable paired-SDK gate, and both MCP test suites aligned. The gate
-must require SDK root, exact version or full commit, and exact module origin;
-never trust ambient `PYTHONPATH`. Read
+must require an exact-commit SDK root whose complete `netbox_sdk/` package
+inventory matches, exact released version plus full commit, fixed
+relative module origin, isolated locked interpreter/dependency origins, and
+package bytes materialized only after bounded commit/tree/blob graph validation
+and explicit blob rehashing; never trust ambient `PYTHONPATH`,
+dirty source, or a version string alone. Read
 [`docs/api/semantic-mcp-bridge.md`](./docs/api/semantic-mcp-bridge.md) before
 changing or invoking this surface.
 

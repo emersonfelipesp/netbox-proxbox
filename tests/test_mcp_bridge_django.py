@@ -608,26 +608,37 @@ class MCPBridgeRuntimeTest(TestCase):
                 self.assertLessEqual(persisted, MAX_PERSISTED_INTERVAL_MINUTES)
 
     def test_bridge_rfc3339_parity_includes_leap_seconds(self) -> None:
-        with patch(
-            "netbox_proxbox.jobs.ProxboxSyncJob.enqueue",
-            return_value=SimpleNamespace(pk=321),
-        ) as enqueue:
-            response = self._post_schedule(
-                {
-                    "sync_stages": ["storage"],
-                    "schedule_at": "2099-12-31T23:59:60Z",
-                }
-            )
-        self.assertEqual(response.status_code, 201, response.content)
-        self.assertEqual(
-            enqueue.call_args.kwargs["schedule_at"].isoformat(),
-            "2100-01-01T00:00:00+00:00",
-        )
+        vectors = {
+            "2099-12-31T23:59:60Z": "2100-01-01T00:00:00+00:00",
+            "2100-01-01T00:59:60+01:00": "2100-01-01T00:00:00+00:00",
+            "2099-12-31T18:59:60-05:00": "2100-01-01T00:00:00+00:00",
+        }
+        for schedule_at, expected in vectors.items():
+            with self.subTest(schedule_at=schedule_at):
+                with patch(
+                    "netbox_proxbox.jobs.ProxboxSyncJob.enqueue",
+                    return_value=SimpleNamespace(pk=321),
+                ) as enqueue:
+                    response = self._post_schedule(
+                        {
+                            "sync_stages": ["storage"],
+                            "schedule_at": schedule_at,
+                        }
+                    )
+                self.assertEqual(response.status_code, 201, response.content)
+                self.assertEqual(
+                    enqueue.call_args.kwargs["schedule_at"].isoformat(),
+                    expected,
+                )
 
-    def test_unrepresentable_year_boundary_instants_are_bounded_400s(self) -> None:
+    def test_invalid_or_unrepresentable_leap_instants_are_bounded_400s(self) -> None:
         for schedule_at in (
             "9999-12-31T23:59:60Z",
+            "9999-12-31T23:59:60+23:59",
             "9999-12-31T23:59:59-23:59",
+            "0001-01-01T00:00:00+23:59",
+            "2026-08-12T12:34:60Z",
+            "2099-12-31T23:59:60+01:00",
         ):
             with self.subTest(schedule_at=schedule_at):
                 with (

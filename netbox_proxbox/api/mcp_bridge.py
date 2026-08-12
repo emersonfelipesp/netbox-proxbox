@@ -78,7 +78,8 @@ def mcp_bridge_is_active() -> bool:
     )
     return (
         MCP_BRIDGE_ACTIVATION_STATE == "active"
-        and has_version != has_commit
+        and has_version
+        and has_commit
         and MCP_BRIDGE_EXPECTED_MODULE_ORIGIN == "netbox_sdk/plugin_bridge.py"
         and MCP_BRIDGE_REQUIRED_CONTRACTS
         == [
@@ -92,14 +93,26 @@ def _list_sync_jobs_output_schema() -> dict[str, Any]:
     return {
         "type": "object",
         "properties": {
-            "count": {"type": "integer", "minimum": 0},
+            "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": MAX_POSITIVE_SIGNED_64_BIT_INTEGER,
+            },
             "scheduled_jobs": {
                 "type": "array",
                 "items": {
                     "type": "object",
                     "properties": {
-                        "id": {"type": "integer", "minimum": 1},
-                        "pk": {"type": "integer", "minimum": 1},
+                        "id": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": MAX_POSITIVE_SIGNED_64_BIT_INTEGER,
+                        },
+                        "pk": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": MAX_POSITIVE_SIGNED_64_BIT_INTEGER,
+                        },
                         "name": {"type": ["string", "null"]},
                         "sync_types": {
                             "type": "array",
@@ -241,7 +254,11 @@ def build_mcp_bridge_manifest() -> dict[str, Any]:
                     "type": "object",
                     "properties": {
                         "ok": {"const": True},
-                        "job_id": {"type": ["integer", "null"], "minimum": 1},
+                        "job_id": {
+                            "type": ["integer", "null"],
+                            "minimum": 1,
+                            "maximum": MAX_POSITIVE_SIGNED_64_BIT_INTEGER,
+                        },
                         "message": {"type": "string"},
                     },
                     "required": ["ok", "job_id", "message"],

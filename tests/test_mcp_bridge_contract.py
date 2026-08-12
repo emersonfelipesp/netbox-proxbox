@@ -5,7 +5,12 @@ from __future__ import annotations
 import ast
 import importlib.util
 import json
+import subprocess
+import sys
+import zlib
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 BRIDGE_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "mcp_bridge.py"
@@ -19,6 +24,7 @@ PAIRED_SDK_GATE_PATH = REPO_ROOT / "tests" / "validate_paired_netbox_sdk_bridge.
 PAIRED_SDK_ACTIVATION_PATH = (
     REPO_ROOT / "tests" / "fixtures" / "netbox_sdk_bridge_activation.json"
 )
+CI_GUIDE_PATH = REPO_ROOT / "docs" / "developer" / "ci-e2e-workflows.md"
 CI_WORKFLOW_PATHS = (
     REPO_ROOT / ".gitea" / "workflows" / "ci.yml",
     REPO_ROOT / ".github" / "workflows" / "ci.yml",
@@ -32,6 +38,48 @@ def _load_bridge_module():
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)
     return module
+
+
+def _load_paired_gate_module():
+    spec = importlib.util.spec_from_file_location(
+        "_paired_sdk_gate", PAIRED_SDK_GATE_PATH
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
+def _create_sdk_git_fixture(root: Path) -> str:
+    package = root / "netbox_sdk"
+    package.mkdir(parents=True)
+    (package / "__init__.py").write_text('__version__ = "1.2.3"\n')
+    (package / "plugin_bridge.py").write_text("BRIDGE = 'committed'\n")
+    for arguments in (
+        ("init", "-q"),
+        ("add", "netbox_sdk"),
+        (
+            "-c",
+            "user.name=Contract Test",
+            "-c",
+            "user.email=contract@example.invalid",
+            "commit",
+            "-q",
+            "-m",
+            "fixture",
+        ),
+    ):
+        subprocess.run(
+            ["git", "-C", str(root), *arguments],
+            check=True,
+            capture_output=True,
+        )
+    return subprocess.run(
+        ["git", "-C", str(root), "rev-parse", "HEAD"],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
 
 
 def test_manifest_uses_bridge_v1_and_fixed_existing_sync_endpoint() -> None:
@@ -205,14 +253,226 @@ def test_explicit_cross_repository_gate_imports_the_real_sdk_model() -> None:
     assert "--sdk-root" in source
     assert "--expected-commit" in source
     assert "--expected-version" in source
+    assert "--expected-environment-root" in source
     assert "--expected-module-origin" in source
     assert "module_file" in source
-    assert "_sdk_git_commit" in source
+    assert "_materialize_sdk_commit" in source
+    assert '"cat-file",' in source and '"blob",' in source
+    assert '"core.fsmonitor=false"' in source
+    assert 'Path("/usr/bin/git")' in source
+    assert "sys.flags.isolated" in source
+    assert "_require_dependency_origins" in source
     assert "9007199254740992.0" not in source
     assert "9_007_199_254_740_992.0" in source
     assert '"9999-12-31T23:59:60Z"' in source
     assert '"9999-12-31T23:59:59-23:59"' in source
     assert "pytest.importorskip" not in source
+
+
+def test_paired_sdk_gate_materializes_only_committed_package_bytes(
+    tmp_path: Path,
+) -> None:
+    gate = _load_paired_gate_module()
+    sdk_root = tmp_path / "sdk"
+    sdk_root.mkdir()
+    commit = _create_sdk_git_fixture(sdk_root)
+    destination = tmp_path / "snapshot"
+
+    gate._materialize_sdk_commit(sdk_root, commit, destination)
+
+    assert (destination / "netbox_sdk/plugin_bridge.py").read_text() == (
+        "BRIDGE = 'committed'\n"
+    )
+    assert (destination / "netbox_sdk/__init__.py").read_text() == (
+        '__version__ = "1.2.3"\n'
+    )
+
+
+@pytest.mark.parametrize(
+    "mutation", ["tracked-bridge", "version-spoof", "untracked-module"]
+)
+def test_paired_sdk_gate_rejects_dirty_or_untracked_package_bytes(
+    tmp_path: Path,
+    mutation: str,
+) -> None:
+    gate = _load_paired_gate_module()
+    sdk_root = tmp_path / "sdk"
+    sdk_root.mkdir()
+    commit = _create_sdk_git_fixture(sdk_root)
+    if mutation == "tracked-bridge":
+        (sdk_root / "netbox_sdk/plugin_bridge.py").write_text("BRIDGE = 'dirty'\n")
+    elif mutation == "version-spoof":
+        (sdk_root / "netbox_sdk/__init__.py").write_text('__version__ = "9.9.9"\n')
+    else:
+        (sdk_root / "netbox_sdk/shadow.py").write_text("SHADOW = True\n")
+
+    with pytest.raises(gate.PairedSDKGateError, match="exactly match"):
+        gate._materialize_sdk_commit(sdk_root, commit, tmp_path / "snapshot")
+
+
+@pytest.mark.parametrize(
+    "raw_path",
+    [
+        b"netbox_sdk/../escaped.py",
+        b"netbox_sdk/../../escaped.py",
+        b"netbox_sdk//escaped.py",
+        b"netbox_sdk/./escaped.py",
+        b"netbox_sdk/sub directory/escaped.py",
+    ],
+)
+def test_paired_sdk_gate_rejects_unsafe_tree_paths(raw_path: bytes) -> None:
+    gate = _load_paired_gate_module()
+
+    with pytest.raises(gate.PairedSDKGateError, match="path is unsafe"):
+        gate._canonical_sdk_relative_path(raw_path)
+
+
+def test_paired_sdk_gate_disables_repository_fsmonitor(tmp_path: Path) -> None:
+    gate = _load_paired_gate_module()
+    sdk_root = tmp_path / "sdk"
+    sdk_root.mkdir()
+    commit = _create_sdk_git_fixture(sdk_root)
+    marker = tmp_path / "fsmonitor-ran"
+    hook = tmp_path / "fsmonitor.sh"
+    hook.write_text(f"#!/bin/sh\ntouch {marker}\n")
+    hook.chmod(0o755)
+    subprocess.run(
+        ["git", "-C", str(sdk_root), "config", "core.fsmonitor", str(hook)],
+        check=True,
+        capture_output=True,
+    )
+
+    gate._materialize_sdk_commit(sdk_root, commit, tmp_path / "snapshot")
+
+    assert not marker.exists()
+
+
+def test_paired_sdk_git_runner_has_bounded_output(tmp_path: Path) -> None:
+    gate = _load_paired_gate_module()
+    sdk_root = tmp_path / "sdk"
+    sdk_root.mkdir()
+    _create_sdk_git_fixture(sdk_root)
+
+    with pytest.raises(gate.PairedSDKGateError, match="output limit"):
+        gate._run_git(
+            sdk_root,
+            "show",
+            "HEAD:netbox_sdk/plugin_bridge.py",
+            max_stdout_bytes=1,
+        )
+
+
+def test_paired_sdk_gate_disables_promisor_lazy_fetch(tmp_path: Path) -> None:
+    gate = _load_paired_gate_module()
+    sdk_root = tmp_path / "sdk"
+    sdk_root.mkdir()
+    _create_sdk_git_fixture(sdk_root)
+    object_id = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(sdk_root),
+            "rev-parse",
+            "HEAD:netbox_sdk/plugin_bridge.py",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    object_path = sdk_root / ".git/objects" / object_id[:2] / object_id[2:]
+    assert object_path.is_file()
+    marker = tmp_path / "lazy-fetch-ran"
+    helper = tmp_path / "promisor-helper.sh"
+    helper.write_text(f"#!/bin/sh\ntouch {marker}\nexit 1\n")
+    helper.chmod(0o755)
+    for key, value in (
+        ("core.repositoryformatversion", "1"),
+        ("extensions.partialClone", "origin"),
+        ("remote.origin.promisor", "true"),
+        ("remote.origin.partialclonefilter", "blob:none"),
+        ("remote.origin.url", f"ext::{helper}"),
+        ("protocol.ext.allow", "always"),
+    ):
+        subprocess.run(
+            ["git", "-C", str(sdk_root), "config", key, value],
+            check=True,
+            capture_output=True,
+        )
+    object_path.unlink()
+
+    with pytest.raises(gate.PairedSDKGateError, match="failed safely"):
+        gate._run_git(
+            sdk_root,
+            "cat-file",
+            "blob",
+            object_id,
+            max_stdout_bytes=4096,
+        )
+
+    assert not marker.exists()
+
+
+def test_paired_sdk_gate_rejects_loose_object_content_mismatch(tmp_path: Path) -> None:
+    gate = _load_paired_gate_module()
+    sdk_root = tmp_path / "sdk"
+    sdk_root.mkdir()
+    commit = _create_sdk_git_fixture(sdk_root)
+    object_id = subprocess.run(
+        [
+            "git",
+            "-C",
+            str(sdk_root),
+            "rev-parse",
+            "HEAD:netbox_sdk/plugin_bridge.py",
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout.strip()
+    hostile = b"BRIDGE = 'different'\n"
+    loose_object = sdk_root / ".git/objects" / object_id[:2] / object_id[2:]
+    loose_object.write_bytes(
+        zlib.compress(b"blob " + str(len(hostile)).encode("ascii") + b"\0" + hostile)
+    )
+    (sdk_root / "netbox_sdk/plugin_bridge.py").write_bytes(hostile)
+
+    with pytest.raises(gate.PairedSDKGateError, match="failed safely|object identity"):
+        gate._materialize_sdk_commit(sdk_root, commit, tmp_path / "snapshot")
+
+
+def test_paired_sdk_environment_check_accepts_standard_isolated_venv(
+    tmp_path: Path,
+) -> None:
+    environment_root = tmp_path / "venv"
+    subprocess.run(
+        [sys.executable, "-m", "venv", str(environment_root)],
+        check=True,
+        capture_output=True,
+    )
+    program = f"""
+import argparse
+import importlib.util
+import pathlib
+import sys
+
+gate_path = pathlib.Path({str(PAIRED_SDK_GATE_PATH)!r})
+spec = importlib.util.spec_from_file_location('_paired_sdk_gate_isolated', gate_path)
+assert spec is not None and spec.loader is not None
+module = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+arguments = argparse.Namespace(expected_environment_root=pathlib.Path(sys.prefix))
+assert module._require_isolated_environment(arguments) == pathlib.Path(sys.prefix).resolve()
+"""
+
+    process = subprocess.run(
+        [str(environment_root / "bin/python"), "-I", "-c", program],
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=30,
+    )
+
+    assert process.returncode == 0, process.stderr
 
 
 def test_paired_sdk_ci_activation_remains_fail_closed_until_exact_release() -> None:
@@ -237,20 +497,25 @@ def test_paired_sdk_ci_activation_remains_fail_closed_until_exact_release() -> N
     assert bridge.mcp_bridge_is_active() is False
     workflows = "\n".join(path.read_text() for path in CI_WORKFLOW_PATHS)
     assert "validate_paired_netbox_sdk_bridge.py" not in workflows
+    ci_guide = CI_GUIDE_PATH.read_text()
+    assert "version and full Git commit" in ci_guide
+    assert "version or full Git commit" not in ci_guide
 
 
-def test_sdk_activation_requires_exactly_one_complete_immutable_identity() -> None:
+def test_sdk_activation_requires_release_version_and_exact_commit_identity() -> None:
     bridge = _load_bridge_module()
     bridge.MCP_BRIDGE_ACTIVATION_STATE = "active"
 
     bridge.MCP_BRIDGE_EXPECTED_SDK_VERSION = "1.2.3"
-    assert bridge.mcp_bridge_is_active() is True
-
-    bridge.MCP_BRIDGE_EXPECTED_SDK_COMMIT = "a" * 40
     assert bridge.mcp_bridge_is_active() is False
 
-    bridge.MCP_BRIDGE_EXPECTED_SDK_VERSION = None
+    bridge.MCP_BRIDGE_EXPECTED_SDK_COMMIT = "a" * 40
     assert bridge.mcp_bridge_is_active() is True
+
+    bridge.MCP_BRIDGE_EXPECTED_SDK_VERSION = None
+    assert bridge.mcp_bridge_is_active() is False
+
+    bridge.MCP_BRIDGE_EXPECTED_SDK_VERSION = "1.2.3"
 
     bridge.MCP_BRIDGE_EXPECTED_SDK_COMMIT = "A" * 40
     assert bridge.mcp_bridge_is_active() is False

@@ -599,8 +599,9 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
   VM-template reconciliation still run. Only the exact unique full stage set
   becomes internal `[all]`, preserving recurring hints and repair debounce.
   Keep `tests/fixtures/netbox_sdk_bridge_activation.json` blocked until an exact
-  SDK version or full commit, module origin, explicit CI provisioning, safe
-  integer behavior, and bounded RFC 3339 normalization all pass together.
+  SDK version and its clean full-commit package blobs, fixed module origin,
+  explicit CI provisioning, safe integer behavior, and normalized-UTC
+  month-boundary RFC 3339 leap behavior all pass together.
 - Browser-side pages use templates plus JS from `static/netbox_proxbox/js/` for dashboard hydration, keepalive polling, SSE streaming, log rendering, and WebSocket updates.
 - Operator recovery for missing Proxbox bootstrap/custom-field setup is exposed
   through `views/sync_state_repair.py` and the shared

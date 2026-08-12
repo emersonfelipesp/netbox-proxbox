@@ -189,10 +189,15 @@ Schema version 1 is the generic SDK descriptor protocol, not a frozen plugin
 payload. `tests/fixtures/proxbox_bridge_v1.json` is the Proxbox-owned contract
 snapshot. The pure suite pins generation to it. No released SDK is activated;
 `tests/fixtures/netbox_sdk_bridge_activation.json` remains blocked. The manual
-`tests/validate_paired_netbox_sdk_bridge.py` requires an explicit SDK root,
-exact released version or full commit, and exact module origin before validating
-the real `PluginManifest` and argument validator; ambient `PYTHONPATH` is never
-identity evidence. Add it to CI only with explicit immutable SDK provisioning.
+`tests/validate_paired_netbox_sdk_bridge.py` requires an explicit SDK checkout
+whose complete package inventory matches the exact full commit, plus a fixed
+relative module origin, then imports only
+package blobs materialized from that commit after bounded object-graph
+verification and explicit blob rehashing, under an exact released version and
+isolated locked interpreter/dependency environment before validating the real
+`PluginManifest` plus argument and response validators; ambient `PYTHONPATH`,
+dirty source, and a spoofed version are never identity evidence. Add it to CI
+only with explicit immutable SDK provisioning.
 The SDK repository does not own or copy this fixture.
 The named JSON blocks in `docs/api/semantic-mcp-bridge.md` are parsed by
 `tests/test_mcp_bridge_docs.py`; real-Django tests submit the request examples
