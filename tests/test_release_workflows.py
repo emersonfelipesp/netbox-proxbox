@@ -137,6 +137,12 @@ def test_gitea_job_token_is_confined_to_source_validation() -> None:
     validate_source = yaml.safe_dump(parsed["jobs"]["validate-source"])
     build_source = yaml.safe_dump(parsed["jobs"]["build-request"])
 
+    assert "permissions" not in parsed
+    assert parsed["jobs"]["validate-source"]["permissions"] == {
+        "actions": "read",
+        "contents": "read",
+    }
+    assert parsed["jobs"]["build-request"]["permissions"] == {"contents": "read"}
     assert validate_source.count("github.token") == 1
     assert "GITEA_API_TOKEN" in validate_source
     assert "github.token" not in build_source

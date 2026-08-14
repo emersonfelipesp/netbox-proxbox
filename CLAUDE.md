@@ -594,7 +594,11 @@ overlapping `create` event: Gitea emits both events for one tag, which would
 race duplicate immutable release requests. The tag must equal current
 `develop`; every latest required status must resolve to authenticated
 successful `ci.yml` push-run/run-attempt/job evidence for that exact SHA,
-trusted actor, expected job, and untrusted runner class.
+trusted actor, expected job, and untrusted runner class. That validation job's
+built-in token is explicitly limited to `actions: read` and `contents: read`;
+omitting the separate Actions scope would deny the run/job evidence lookup. The
+separate untrusted build job receives only `contents: read` and no Actions-read
+authority.
 
 A disposable `ci-untrusted-python312` job builds the manifest-bound
 wheel/sdist and uploads exactly four data files: wheel, sdist,

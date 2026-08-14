@@ -278,7 +278,7 @@ The official release pipeline runs in this order:
 
 1. **Activation gate** — do not merge the target cutover until the private control repository has a positive policy-pinned ID and its protected workflows, host boundaries, sockets, and repository-scoped runners pass readiness. Leave the existing publisher active until then.
 2. **Gitea tag push** — push an annotated RC or final tag to Gitea.
-3. **Data-only request** — `.gitea/workflows/publish-gitea.yml` builds a wheel, sdist, manifest, and canonical `release-request.json`; it has no package or mirror credential and cannot publish or push tags.
+3. **Data-only request** — `.gitea/workflows/publish-gitea.yml` gives only its source-validation job `actions: read` plus `contents: read` to validate exact CI evidence; the separate untrusted build job has only `contents: read`. It then builds a wheel, sdist, manifest, and canonical `release-request.json`; it has no package or mirror credential and cannot publish or push tags.
 4. **Locked validation and publication** — dispatch `validate.yml` first, then the separate irreversible `publish.yml`, each with exactly the repository name, first-attempt target run ID, and request SHA-256. The isolated builder verifies and seals the bytes; the isolated publisher uploads the exact package and promotes only RC tags to GitHub.
 5. **Production gate** — link and verify the final Gitea package, then deploy through NMS with `latest_package` by default (or explicitly selected `main_branch`).
 6. **Public promotion** — after production health validation, promote the final tag and create the GitHub Release; `release: published` authorizes PyPI.

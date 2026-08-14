@@ -94,7 +94,10 @@ sequenceDiagram
 - A candidate tag must resolve to the current canonical Gitea `develop` SHA.
   Each latest required CI status must resolve through authenticated Gitea API
   records to a successful `ci.yml` push run and run attempt for that exact SHA,
-  trusted actor, job name, and untrusted runner class. A disposable target job
+  trusted actor, job name, and untrusted runner class. Only that validation
+  job's built-in token receives `actions: read` plus `contents: read`; Actions
+  evidence is a separate Gitea permission scope. The separate untrusted build
+  job receives only `contents: read`. A disposable target job
   builds one wheel and one sdist after verifying the pinned uv archive and
   selecting fresh per-run managed-Python/cache roots. It uploads exactly four
   data files: the wheel, sdist, canonical manifest, and canonical
