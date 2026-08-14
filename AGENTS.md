@@ -276,15 +276,18 @@ boundary.
 
 The official release pipeline runs in this order:
 
-1. **Gitea tag push** — push an annotated RC or final tag to Gitea.
-2. **Gitea package** — `.gitea/workflows/publish-gitea.yml` builds and uploads the exact package. It pushes only RC tags to GitHub for TestPyPI.
-3. **Production gate** — link and verify the final Gitea package, then deploy through NMS with `latest_package` by default (or explicitly selected `main_branch`).
-4. **Public promotion** — after production health validation, promote the final tag and create the GitHub Release; `release: published` authorizes PyPI.
+1. **Activation gate** — do not merge the target cutover until the private control repository has a positive policy-pinned ID and its protected workflows, host boundaries, sockets, and repository-scoped runners pass readiness. Leave the existing publisher active until then.
+2. **Gitea tag push** — push an annotated RC or final tag to Gitea.
+3. **Data-only request** — `.gitea/workflows/publish-gitea.yml` builds a wheel, sdist, manifest, and canonical `release-request.json`; it has no package or mirror credential and cannot publish or push tags.
+4. **Locked validation and publication** — dispatch `validate.yml` first, then the separate irreversible `publish.yml`, each with exactly the repository name, first-attempt target run ID, and request SHA-256. The isolated builder verifies and seals the bytes; the isolated publisher uploads the exact package and promotes only RC tags to GitHub.
+5. **Production gate** — link and verify the final Gitea package, then deploy through NMS with `latest_package` by default (or explicitly selected `main_branch`).
+6. **Public promotion** — after production health validation, promote the final tag and create the GitHub Release; `release: published` authorizes PyPI.
 
 ### RC (release-candidate) pipeline
 
-1. Push a `vX.Y.ZrcN` tag to Gitea; the private publisher promotes that RC tag to GitHub.
-2. `.github/workflows/publish-testpypi.yml` fires on `push: tags: v*rc*` → publishes to TestPyPI.
+1. Push a `vX.Y.ZrcN` tag to Gitea and wait for its `release-control-request` artifact.
+2. Hash `release-request.json`; dispatch `validate.yml`, then `publish.yml`, with exactly `repository=netbox-proxbox`, the target run ID, and that SHA-256. The control publisher publishes the Gitea bytes and promotes only that RC tag to GitHub.
+3. `.github/workflows/publish-testpypi.yml` fires on `push: tags: v*rc*` → publishes the exact Gitea bytes to TestPyPI.
 
 ### Immutable-version guarantee
 
@@ -294,15 +297,16 @@ PyPI must never be replaced with different bytes; advance to the next `rcN` or
 
 ### Gitea Package Registry
 
-The private publisher directly downloads and verifies the pinned uv archive,
-clears inherited `UV_*` state, disables discovered configuration, and uses fresh
-per-run managed-Python and cache roots. Candidate build and verification run in
-disposable `ci-untrusted-python312` jobs, then transfer only the wheel, sdist,
-and manifest to a fresh credential job on the dedicated protected
-`release-publisher` runner. Candidate source and processes cannot persist into
-that boundary. The built-in token stays package-read-only, and the
-repository `PKG_TOKEN` reaches only the package-write step through Twine's
-environment and a protected netrc, never a process argument. The registry URL is
+The target workflow verifies the pinned uv archive and uses fresh per-run
+managed-Python and cache roots. Its disposable `ci-untrusted-python312` job
+produces exactly a wheel, sdist, manifest, and canonical request. The request
+binds the repository ID, source/tag/version, first-attempt run identity,
+workflow digest, manifest digest, and artifact inventory. The target repository
+holds no package or mirror credential. The separately administered control
+plane verifies the policy-pinned target workflow and every byte on an isolated
+builder, seals the handoff, and lets only an isolated publisher read credentials
+or invoke fixed digest-locked publication tooling. Public no-authority downloads
+must match the manifest before the durable ledger advances. The registry URL is
 `https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi`.
 The publish workflow deliberately accepts tag `push` events, not Gitea's
 overlapping `create` event. Gitea emits both for a tag; subscribing to both
@@ -315,8 +319,10 @@ is never retried; fix forward with the next immutable version.
   Gitea `develop`; each latest required status must resolve to authenticated
   successful `ci.yml` push-run/run-attempt/job evidence for that exact SHA,
   trusted actor, expected job, and untrusted runner class.
-- Build credentials and package credentials are separated; the registry package
-  is linked to this repository and byte-compared with its canonical manifest.
+- The target workflow cannot publish. The control builder and publisher use
+  separate identities, state, runtime directories, and locked executables; the
+  registry package is linked to this repository and byte-compared with its
+  canonical manifest.
 
 ## Gitea-to-GitHub Mirror
 

@@ -20,6 +20,11 @@ GITEA_PROMOTE_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "promote-final-tag
 RELEASE_ARTIFACTS_PATH = REPO_ROOT / "scripts" / "release_artifacts.py"
 CI_GATE_PATH = REPO_ROOT / "scripts" / "gitea_ci_gate.py"
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
+RELEASE_CONTROL_DOC_PATHS = (
+    REPO_ROOT / "AGENTS.md",
+    REPO_ROOT / "CLAUDE.md",
+    REPO_ROOT / "docs" / "developer" / "release-publishing.md",
+)
 
 
 def _load_release_artifacts():
@@ -44,126 +49,100 @@ def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_gitea_publish_promotes_only_rc_tags_to_github() -> None:
+def test_gitea_tag_workflow_builds_only_a_release_control_request() -> None:
     workflow = _read(GITEA_PUBLISH_WORKFLOW)
+    parsed = yaml.safe_load(workflow)
 
-    assert "needs.validate-source.outputs.is_rc == 'true'" in workflow
-    assert "gh release create" not in workflow
-    assert "Create GitHub Release" not in workflow
+    assert set(parsed["jobs"]) == {"validate-source", "build-request"}
+    assert all(
+        job["runs-on"] == "ci-untrusted-python312" for job in parsed["jobs"].values()
+    )
     assert "refs/heads/develop:refs/remotes/gitea/release-develop" in workflow
     assert "release-manifest.json" in workflow
-    assert "fetch-gitea" in workflow
-    assert "scripts/release_artifacts.py release-transfer/" in workflow
-    assert "release-transfer/release_artifacts.py" in workflow
-    assert "/-/link/netbox-proxbox" in workflow
-    assert "generic/netbox-proxbox-release-manifest/${VERSION}" in workflow
     assert "scripts/gitea_ci_gate.py" in workflow
     assert "/commits/${SOURCE_SHA}/statuses" not in workflow
     assert (
         "actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de" in workflow
     )
-    assert (
-        "actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b" in workflow
-    )
-    parsed = yaml.safe_load(workflow)
-    assert parsed["jobs"]["publish-gitea"]["runs-on"] == "release-publisher"
-    assert all(
-        job["runs-on"] == "ci-untrusted-python312"
-        for name, job in parsed["jobs"].items()
-        if name != "publish-gitea"
-    )
-    assert parsed["jobs"]["publish-gitea"]["permissions"] == {
-        "contents": "read",
-        "packages": "read",
-    }
+    assert "actions/download-artifact@" not in workflow
     assert "astral-sh/setup-uv@" not in workflow
     assert "RUNNER_TOOL_CACHE" not in workflow
     assert "UV_MANAGED_PYTHON" not in workflow
     assert "mirror-host" not in workflow
     assert "packages: write" not in workflow
+    assert "secrets." not in workflow
+    assert "PKG_TOKEN" not in workflow
+    assert "GH_MIRROR_TOKEN" not in workflow
+    assert "release-publisher" not in workflow
+    assert "twine upload" not in workflow
+    assert "gh release create" not in workflow
+    assert "git push" not in workflow
+    assert "/api/packages/" not in workflow
     assert (
         workflow.count(
             "https://github.com/astral-sh/uv/releases/download/0.11.28/"
             "uv-x86_64-unknown-linux-gnu.tar.gz"
         )
-        == 3
+        == 1
     )
     assert (
         workflow.count(
             "e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224"
         )
-        == 3
+        == 1
     )
-    assert workflow.count("sha256sum --check --strict") == 3
-    assert workflow.count("UV_PYTHON_INSTALL_DIR=%s") == 3
-    assert workflow.count("while IFS='=' read -r VARIABLE _; do") == 6
-    assert workflow.count('case "$VARIABLE" in UV_*) unset "$VARIABLE" ;; esac') == 6
-    assert workflow.count("--no-config") == 6
-    assert workflow.count("--managed-python") == 6
-    assert workflow.count("--no-python-downloads") == 3
-    assert workflow.count('"$MANAGED_PYTHON_ROOT"/*) ;;') == 2
-    assert "GITEA_TOKEN: ${{ secrets.PKG_TOKEN }}" in workflow
-    assert "GITEA_TOKEN: ${{ github.token }}" not in workflow
-    assert "Fetch validated publisher tool anonymously" in workflow
-    assert '"$PUBLISHER_UV" sync' in workflow
-    assert '"$PUBLISHER_TWINE" upload --non-interactive' in workflow
+    assert workflow.count("sha256sum --check --strict") == 1
+    assert workflow.count("UV_PYTHON_INSTALL_DIR=%s") == 1
+    assert workflow.count("--no-config") == 2
+    assert workflow.count("--managed-python") == 2
+    assert workflow.count("--no-python-downloads") == 1
     assert '"$BUILD_ROOT/venv/bin/python" -m build --no-isolation' in workflow
     assert "uvx --from twine" not in workflow
 
 
-def test_gitea_package_secret_isolated_from_candidate_execution() -> None:
-    parsed = yaml.safe_load(_read(GITEA_PUBLISH_WORKFLOW))
-    jobs = parsed["jobs"]
-    verify_job = jobs["verify-candidate"]
-    publish_job = jobs["publish-gitea"]
-    verify_source = yaml.safe_dump(verify_job)
-    publish_source = yaml.safe_dump(publish_job)
-
-    assert publish_job["needs"] == ["validate-source", "verify-candidate"]
-    assert publish_job["runs-on"] == "release-publisher"
-    assert verify_job["runs-on"] == "ci-untrusted-python312"
-    assert "secrets.PKG_TOKEN" not in verify_source
-    assert "publisher-tool" in verify_source
-    assert "release_artifacts.py verify" in verify_source
-    assert "verified-transfer" in publish_source
-    assert "publisher-tool" not in publish_source
-    assert "verifier-tool" not in publish_source
-    assert "release_artifacts.py" not in publish_source
-    assert "actions/checkout@" not in publish_source
-    assert "git fetch" not in publish_source
-    assert publish_source.count("secrets.PKG_TOKEN") == 1
-    assert "TWINE_PASSWORD" in publish_source
-    assert "--netrc-file" in publish_source
-    assert "--password" not in publish_source
-    assert 'header "Authorization:' not in publish_source
-
-    secret_steps = [
-        step
-        for step in publish_job["steps"]
-        if "secrets.PKG_TOKEN" in yaml.safe_dump(step)
-    ]
-    assert [step["name"] for step in secret_steps] == [
-        "Publish exact files with package-only authority"
-    ]
-    secret_run = secret_steps[0]["run"]
-    assert secret_run.index("unset TWINE_PASSWORD") < secret_run.index("curl --fail")
-
-
-def test_gitea_registry_verification_runs_after_credential_job() -> None:
+def test_release_control_request_binds_exact_repository_run_and_artifacts() -> None:
     workflow = _read(GITEA_PUBLISH_WORKFLOW)
     parsed = yaml.safe_load(workflow)
-    verify_job = parsed["jobs"]["verify-registry"]
-    verify_source = yaml.safe_dump(verify_job)
+    build_job = parsed["jobs"]["build-request"]
+    build_source = yaml.safe_dump(build_job)
+    upload_step = build_job["steps"][-1]
 
-    assert verify_job["needs"] == ["validate-source", "publish-gitea"]
-    assert "secrets.PKG_TOKEN" not in verify_source
-    assert "fetch-gitea" in verify_source
-    assert parsed["jobs"]["push-to-github"]["needs"] == [
-        "validate-source",
-        "verify-registry",
-    ]
-    assert 'GIT_ASKPASS="$SECRET_ROOT/askpass"' in workflow
-    assert "http.https://github.com/.extraheader" not in workflow
+    assert build_job["needs"] == "validate-source"
+    assert upload_step["with"] == {
+        "name": "release-control-request",
+        "path": "release-transfer",
+        "if-no-files-found": "error",
+        "retention-days": 1,
+        "compression-level": 0,
+    }
+    assert '"repository_id": 38' in workflow
+    assert '"owner": "emersonfelipesp"' in workflow
+    assert '"repository": "netbox-proxbox"' in workflow
+    assert '"schema": 1' in workflow
+    assert '"workflow_sha256"' in workflow
+    assert '"release_manifest_sha256"' in workflow
+    assert '"initiating_run_id"' in workflow
+    assert '"initiating_run_attempt"' in workflow
+    assert "release-request.json" in workflow
+    assert (
+        'test "$(find release-transfer -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 4'
+        in workflow
+    )
+    assert "secrets." not in build_source
+    assert "github.token" not in build_source
+
+
+def test_gitea_job_token_is_confined_to_source_validation() -> None:
+    parsed = yaml.safe_load(_read(GITEA_PUBLISH_WORKFLOW))
+    validate_source = yaml.safe_dump(parsed["jobs"]["validate-source"])
+    build_source = yaml.safe_dump(parsed["jobs"]["build-request"])
+
+    assert validate_source.count("github.token") == 1
+    assert "GITEA_API_TOKEN" in validate_source
+    assert "github.token" not in build_source
+    assert "GITEA_API_TOKEN" not in build_source
+    assert "persist-credentials: false" in validate_source
+    assert "persist-credentials: false" in build_source
 
 
 def test_gitea_artifact_v3_compatibility_probe_is_bounded_and_disposable() -> None:
@@ -198,6 +177,19 @@ def test_gitea_publish_does_not_bypass_nms_production_deployment() -> None:
     assert "Deploy to production" not in workflow
     assert "deploy-netbox-plugin" not in workflow
     assert "nmc-prod-207" not in workflow
+
+
+def test_operator_docs_match_the_locked_control_dispatch_contract() -> None:
+    documentation = "\n".join(_read(path) for path in RELEASE_CONTROL_DOC_PATHS)
+
+    assert "publish=true" not in documentation
+    assert "validate.yml" in documentation
+    assert "publish.yml" in documentation
+    assert "repository name" in documentation
+    assert "target run ID" in documentation
+    assert "request SHA-256" in documentation
+    assert "do not merge" in documentation.lower()
+    assert "existing publisher" in documentation.lower()
 
 
 def test_github_publish_accepts_rc_pushes_and_final_release_events_only() -> None:
@@ -409,13 +401,13 @@ def test_ci_gate_binds_status_to_authenticated_run_and_job(
             "head_sha": sha,
             "head_branch": "develop",
             "path": "ci.yml@refs/heads/develop",
-            "run_attempt": 2,
+            "run_attempt": 0,
             "actor": {"login": "emersonfelipesp"},
         },
         "/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34": {
             "id": 34,
             "run_id": 12,
-            "run_attempt": 2,
+            "run_attempt": 1,
             "name": "Static checks and mocked regressions",
             "status": "completed",
             "conclusion": "success",
@@ -435,11 +427,39 @@ def test_ci_gate_binds_status_to_authenticated_run_and_job(
         trusted_actor="emersonfelipesp",
         token="test-token",
     )
-    assert evidence == {context: {"job_id": 34, "run_attempt": 2, "run_id": 12}}
+    assert evidence == {context: {"job_id": 34, "run_attempt": 1, "run_id": 12}}
+
+    responses["/repos/emersonfelipesp/netbox-proxbox/actions/runs/12"][
+        "run_attempt"
+    ] = 1
+    assert gate.validate_ci_gate(
+        owner="emersonfelipesp",
+        repository="netbox-proxbox",
+        source_sha=sha,
+        required_contexts=[context],
+        trusted_actor="emersonfelipesp",
+        token="test-token",
+    ) == {context: {"job_id": 34, "run_attempt": 1, "run_id": 12}}
+
+    responses["/repos/emersonfelipesp/netbox-proxbox/actions/runs/12"][
+        "run_attempt"
+    ] = 2
+    with pytest.raises(gate.CIGateError, match="run attempt is invalid"):
+        gate.validate_ci_gate(
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            source_sha=sha,
+            required_contexts=[context],
+            trusted_actor="emersonfelipesp",
+            token="test-token",
+        )
+    responses["/repos/emersonfelipesp/netbox-proxbox/actions/runs/12"][
+        "run_attempt"
+    ] = 0
 
     responses["/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34"][
         "run_attempt"
-    ] = 1
+    ] = 2
     with pytest.raises(gate.CIGateError, match="job does not match"):
         gate.validate_ci_gate(
             owner="emersonfelipesp",
@@ -451,7 +471,7 @@ def test_ci_gate_binds_status_to_authenticated_run_and_job(
         )
     responses["/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34"][
         "run_attempt"
-    ] = 2
+    ] = 1
 
     responses["/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34"]["head_sha"] = (
         "b" * 40

@@ -227,9 +227,10 @@ Paired with backend: `proxbox-api 0.0.20`.
 - **Compatibility fixes.** Settings serialization, storage capacity, detail
   templates, InfluxDB metrics, sync-state models, and empty encryption-key
   recovery follow current NetBox/Django behavior.
-- **Immutable staged release.** Gitea stores the original artifact manifest,
-  authenticated CI evidence binds the exact tag, and the same wheel/sdist bytes
-  progress through TestPyPI, production, and PyPI without rebuilding.
+- **Immutable staged release.** The target workflow emits a credential-free,
+  manifest-bound four-file request; the locked control plane independently
+  verifies and publishes those exact wheel/sdist bytes before they progress
+  through TestPyPI, production, and PyPI without rebuilding.
 
 Full notes: [Release Notes - v0.0.24](docs/release-notes/version-0.0.24.md).
 

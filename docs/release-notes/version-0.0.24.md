@@ -26,10 +26,11 @@ Current backend-runtime pairing: netbox-proxbox 0.0.24 <-> proxbox-api 0.0.20 <-
 - Builds one wheel and one sdist in an untrusted job and binds them to a
   canonical, repository-linked Gitea release manifest.
 - Uses checksum-pinned uv with fresh per-run tool and managed-Python roots. A
-  data-only wheel/sdist/manifest handoff separates candidate validation from
-  the fresh credential job on the protected `release-publisher` runner, which
-  supplies the repository package token only through Twine's environment and a
-  protected netrc at the registry-write boundary.
+  data-only wheel/sdist/manifest/canonical-request handoff carries no package or
+  mirror credential. The separately administered control plane verifies the
+  pinned workflow, exact first-attempt run, request, manifest, and artifact
+  bytes on an isolated builder before sealing them for its isolated publisher.
+  Only fixed digest-locked publisher tooling can read publication credentials.
 - Requires authenticated Gitea CI run, run-attempt, and job evidence for the
   exact canonical `develop` commit before accepting a tag.
 - Reuses the exact Gitea bytes for TestPyPI and PyPI; uploads never use

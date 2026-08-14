@@ -589,27 +589,36 @@ credentials with `gh auth setup-git`, and pushes only
 
 ### Gitea Package Registry publish (`.gitea/workflows/publish-gitea.yml`)
 
-Added to `develop` in v0.0.19. Handles `push: tags:` only. It deliberately does
-not subscribe to Gitea's overlapping
-`create` event: Gitea emits both `create` and `push` for one tag, which races
-two immutable package uploads. The tag must equal current `develop`; every
-latest required status must resolve to authenticated successful `ci.yml`
-push-run/run-attempt/job evidence for that exact SHA, trusted actor, expected
-job, and untrusted runner class. Separate disposable `ci-untrusted-python312`
-jobs build and verify the manifest-bound wheel/sdist, then transfer only those
-two artifacts and the manifest into a fresh credential job on the dedicated
-protected `release-publisher` runner. Candidate source and processes cannot
-persist into the credential boundary. The built-in token
-remains package-read-only; only the registry-write step receives repository
-secret `PKG_TOKEN` through Twine's environment and a protected netrc, never a
-process argument. A final no-authority job re-downloads and hashes the exact
-bytes. The private uv/Python bootstrap clears inherited `UV_*`
-state, verifies the pinned uv archive before extraction, disables discovered
-configuration, and selects fresh per-run Python/cache roots explicitly.
+Handles `push: tags:` only. It deliberately does not subscribe to Gitea's
+overlapping `create` event: Gitea emits both events for one tag, which would
+race duplicate immutable release requests. The tag must equal current
+`develop`; every latest required status must resolve to authenticated
+successful `ci.yml` push-run/run-attempt/job evidence for that exact SHA,
+trusted actor, expected job, and untrusted runner class.
 
-The workflow pushes only RC tags to GitHub so the RC-only public tag trigger
-can validate TestPyPI. Final tags stay private until the exact Gitea package is
-linked, verified, and deployed through NMS using `latest_package` by default.
+A disposable `ci-untrusted-python312` job builds the manifest-bound
+wheel/sdist and uploads exactly four data files: wheel, sdist,
+`release-manifest.json`, and canonical `release-request.json`. The request
+binds repository ID, source/tag/version, first-attempt run identity, target
+workflow digest, manifest digest, and artifact inventory. The target workflow
+has no package or GitHub-mirror credential and cannot publish or push tags.
+The separately administered `N-MultiCloud/release-control` workflow must be
+manually dispatched with this repository name, the exact target run ID, and
+the request SHA-256. Its isolated builder independently verifies the
+policy-pinned target workflow and sealed bytes; only its isolated publisher
+can read the package/mirror credentials or invoke the fixed digest-locked
+publication tooling. Public no-authority downloads must match the manifest
+before the durable ledger advances.
+
+Do not merge this data-only target cutover until the private control repository
+has a positive policy-pinned repository ID and its protected workflows, host
+boundaries, sockets, and repository-scoped runners have passed readiness checks.
+Until then the existing target publisher must remain active; an unprovisioned
+control repository is a release freeze, not a reason to remove publication.
+
+The control plane pushes only RC tags to GitHub so the RC-only public tag
+trigger can validate TestPyPI. Final tags stay private until the exact Gitea
+package is linked, verified, and deployed through NMS using `latest_package` by default.
 Only after production validation may canonical-main `promote-final-tag.yml`
 verify the package and host-issued deployment receipt and push the final tag to the exact
 authorized GitHub repository; the operator then creates the GitHub Release
@@ -687,10 +696,11 @@ This makes the GitHub release creation the **single, authoritative trigger**
 for official PyPI publishing and eliminates the duplicate-run problem the
 old dual-trigger flow created.
 
-`.gitea/workflows/publish-gitea.yml` pushes RC tags to GitHub but deliberately
-does not promote final tags or create public releases. Final promotion remains
-an operator action after Gitea-package verification and the NMS package-first
-production health gate.
+`.gitea/workflows/publish-gitea.yml` only emits the four-file data request. The
+locked control plane publishes the exact Gitea bytes and pushes RC tags to
+GitHub, but deliberately does not promote final tags or create public
+releases. Final promotion remains an operator action after Gitea-package
+verification and the NMS package-first production health gate.
 
 **RC flow (TestPyPI gate, repeatable):**
 
@@ -701,8 +711,12 @@ production health gate.
    rtk ruff check .
    rtk pytest -p no:django tests/
    ```
-2. Create the annotated tag and push it to Gitea. The private publisher
-   promotes only the RC tag to GitHub:
+2. Create the annotated tag and push it to Gitea. Wait for the target workflow,
+   hash its canonical `release-request.json`, then dispatch the locked
+   `validate.yml` workflow with `repository=netbox-proxbox`, its exact run ID,
+   and that request SHA-256. After validation succeeds, dispatch the separate
+   irreversible `publish.yml` workflow with the same three exact inputs. The
+   control publisher promotes only the RC tag to GitHub:
    ```bash
    git tag -a vX.Y.ZrcN -m "Release vX.Y.ZrcN"
    git push gitea vX.Y.ZrcN
@@ -829,12 +843,12 @@ What was done for v0.0.19:
 - **Historical v0.0.19 Gitea-first bootstrap**: the original workflow handled
   `push: tags:`, `create`, and `workflow_dispatch`, and that release used a
   direct-upload recovery while tag triggers were broken. This history is not a
-  current procedure. The current publisher is tag-push-only, manifest-bound,
-  repository-linked, and fail-closed. It directly verifies pinned uv in fresh
-  per-run managed-Python/cache roots, clears inherited uv state, anonymously
-  fetches the exact validated source, keeps its built-in token package-read-only,
-  and exposes `PKG_TOKEN` only to registry writes; fixes always advance to a new
-  immutable version.
+  current procedure. The current target is tag-push-only, manifest-bound,
+  repository-linked, and fail-closed. It verifies pinned uv in fresh per-run
+  managed-Python/cache roots and emits only a canonical four-file request. The
+  separate locked control plane verifies and seals the bytes before its isolated
+  publisher performs registry writes; fixes always advance to a new immutable
+  version.
 - Paired backend: `proxbox-api v0.0.16`.
 - **Historical GitHub release**: The draft GitHub release `v0.0.19` was
   published manually as a one-time cleanup. Current private publishing pushes
@@ -878,8 +892,8 @@ NetBox/plugin health checks pass.
       stale-code / schema mismatch.
 
 **Monitoring and manual recovery:**
-- Watch the `publish-gitea.yml` and `deploy-production.yml` workflow runs in
-  Gitea Actions.
+- Watch the target `publish-gitea.yml`, central locked-control, and
+  `deploy-production.yml` workflow runs in Gitea Actions.
 - Use the approved NMS CLI deployment/status surfaces for production health,
   logs, hotfixes, and rollbacks. Do not access the production host directly or
   bypass NMS with SSH commands.
