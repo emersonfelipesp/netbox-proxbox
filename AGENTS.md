@@ -299,8 +299,10 @@ PyPI must never be replaced with different bytes; advance to the next `rcN` or
 ### Gitea Package Registry
 
 The target workflow verifies the pinned uv archive and uses fresh per-run
-managed-Python and cache roots. Its disposable `ci-release-netbox-proxbox` job
-produces exactly a wheel, sdist, manifest, and canonical request. The request
+managed-Python and cache roots. Its dedicated ephemeral `ci-release-netbox-proxbox` registration
+advertises only that release label.
+The job produces exactly a wheel, sdist, manifest, canonical request,
+supervisor completion statement, and detached signature. The request
 binds the repository ID, source/tag/version, first-attempt run identity,
 workflow digest, manifest digest, and artifact inventory. The target repository
 holds no package or mirror credential. The separately administered control

@@ -190,9 +190,11 @@ compatibility.
 
 The target Gitea release-request workflow subscribes to tag `push` only, not
 manual dispatch or the overlapping `create` event. Gitea emits both tag events,
-and accepting both would race duplicate immutable requests. It uploads only the
-wheel, sdist, manifest, and canonical request; the separately administered
-locked release-control workflow is the sole manual publication entry point.
+and accepting both would race duplicate immutable requests. It uploads exactly
+the wheel, sdist, manifest, canonical request, supervisor completion statement,
+and detached signature. The separately administered locked release-control
+workflow verifies that signed completion before sealing and is the sole manual
+publication entry point.
 `tests/test_pytest_django_scope.py` pins the target trigger contract.
 
 ## Docker E2E Stack

@@ -645,8 +645,9 @@ controller require that signed scope digest to equal the pinned acceptance
 value. Candidate code
 receives no package, mirror, job, runtime, or write credential.
 
-A disposable `ci-release-netbox-proxbox` job builds the manifest-bound
-wheel/sdist and uploads exactly six data files: wheel, sdist,
+A dedicated ephemeral `ci-release-netbox-proxbox` registration advertises only
+that release label. Its job builds the manifest-bound wheel/sdist and uploads
+exactly six data files: wheel, sdist,
 `release-manifest.json`, canonical `release-request.json`, canonical
 `runner-completion-attestation.json`, and its detached signature. The request
 binds repository ID, source/tag/version, first-attempt run identity, target

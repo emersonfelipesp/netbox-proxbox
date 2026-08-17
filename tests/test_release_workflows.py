@@ -336,10 +336,10 @@ def test_release_runner_gate_is_pinned_and_precedes_candidate_execution() -> Non
     acceptance = json.loads(RUNNER_ACCEPTANCE_PATH.read_bytes())
 
     assert runner_gate_sha256 == (
-        "bf84ac9a455323128f6126a51ea5cc1f5cc8e3aad84b1f9480848db35f50fc8d"
+        "71d7dfc5f2d6013d108fdf0b253091cfae5ffc93692824b081f5354f27f800a6"
     )
     assert acceptance_sha256 == (
-        "d604575f6276d103afcf5c80e9486b4fa4868809a50aeffae2f728326f4629bb"
+        "edeaa049a82ab1a60bc4b7de4452a0c2a8ff5f5af8744f5403c177922fd83f4b"
     )
     assert workflow.count(runner_gate_sha256) == 2
     assert workflow.count(acceptance_sha256) == 2
@@ -353,8 +353,6 @@ def test_release_runner_gate_is_pinned_and_precedes_candidate_execution() -> Non
     assert acceptance["supervisor_policy_sha256"] == "0" * 64
     assert acceptance["registered_labels"] == [
         "ci-release-netbox-proxbox",
-        "ci-untrusted-netbox46",
-        "ci-untrusted-python312",
     ]
     build_steps = parsed["jobs"]["build-request"]["steps"]
     gate_index = next(
@@ -389,8 +387,6 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
         "network_attestation_sha256": "b" * 64,
         "registered_labels": [
             "ci-release-netbox-proxbox",
-            "ci-untrusted-netbox46",
-            "ci-untrusted-python312",
         ],
         "runner_id": 41,
         "runner_label": "ci-release-netbox-proxbox",
@@ -877,7 +873,10 @@ def test_operator_docs_match_the_locked_control_dispatch_contract() -> None:
 
     agent_docs = (REPO_ROOT / "AGENTS.md", REPO_ROOT / "CLAUDE.md")
     for path in agent_docs:
-        assert f"disposable `{release_label}` job" in documentation_by_path[path]
+        assert (
+            f"dedicated ephemeral `{release_label}` registration"
+            in documentation_by_path[path]
+        )
 
 
 def test_github_publish_accepts_rc_pushes_and_final_release_events_only() -> None:
