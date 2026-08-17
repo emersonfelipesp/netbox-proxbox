@@ -62,28 +62,53 @@ VM_ROLE_SEEDS = (
 )
 
 
+#: django-mptt bookkeeping columns on the historical ``dcim.DeviceRole`` model.
+#: NetBox 4.7 migrated nested group models from django-mptt to PostgreSQL
+#: ltree and dropped all four; there, ``path`` is maintained by per-table
+#: triggers and ``sort_path`` carries a default, so a plain create is correct
+#: and writing to them from Python is explicitly unsupported.
+_MPTT_BOOKKEEPING_FIELDS = frozenset({"tree_id", "lft", "rght", "level"})
+
+
+def _model_has_mptt_columns(model) -> bool:
+    """True on NetBox <=4.6, where DeviceRole is still django-mptt backed.
+
+    Keyed off the historical model's concrete field set rather than a NetBox
+    version string: inside a data migration the model is reconstructed from
+    migration state, so its fields are the only trustworthy signal.
+    """
+    field_names = {field.name for field in model._meta.get_fields()}
+    return _MPTT_BOOKKEEPING_FIELDS <= field_names
+
+
 def seed_default_vm_roles(apps, schema_editor):
     """Seed the two default VM DeviceRoles and assign them on the singleton."""
     DeviceRole = apps.get_model("dcim", "DeviceRole")
     ProxboxPluginSettings = apps.get_model("netbox_proxbox", "ProxboxPluginSettings")
 
-    next_tree_id = (DeviceRole.objects.aggregate(Max("tree_id"))["tree_id__max"] or 0) + 1
+    uses_mptt = _model_has_mptt_columns(DeviceRole)
+    next_tree_id = 0
+    if uses_mptt:
+        next_tree_id = (
+            DeviceRole.objects.aggregate(Max("tree_id"))["tree_id__max"] or 0
+        ) + 1
 
     roles_by_slug = {}
     for seed in VM_ROLE_SEEDS:
+        defaults = {
+            "name": seed["name"],
+            "color": seed["color"],
+            "vm_role": True,
+        }
+        if uses_mptt:
+            defaults.update(
+                {"level": 0, "lft": 1, "rght": 2, "tree_id": next_tree_id}
+            )
         role, created = DeviceRole.objects.get_or_create(
             slug=seed["slug"],
-            defaults={
-                "name": seed["name"],
-                "color": seed["color"],
-                "vm_role": True,
-                "level": 0,
-                "lft": 1,
-                "rght": 2,
-                "tree_id": next_tree_id,
-            },
+            defaults=defaults,
         )
-        if created:
+        if created and uses_mptt:
             next_tree_id += 1
         roles_by_slug[seed["slug"]] = role
 

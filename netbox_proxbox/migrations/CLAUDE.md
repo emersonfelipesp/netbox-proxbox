@@ -186,6 +186,35 @@ contract and issue #454 for the bug history.
   `0080_metrics_influxdb_secret_ref_constraints`) at merge time. Tests find
   this migration by operation content rather than its number.
 
+## Hierarchy backends: never assume django-mptt columns
+
+NetBox 4.7 migrated nested group models — `dcim.DeviceRole` among them — from
+django-mptt to PostgreSQL `ltree`, **dropping `tree_id`, `lft`, `rght`, and
+`level`**. There, `path` is maintained by per-table triggers and must not be
+written from Python, and `sort_path` carries a default plus its own trigger.
+
+`_v0_0_15_release_data.py::seed_default_vm_roles` used to aggregate
+`Max("tree_id")` and pass all four MPTT columns as `get_or_create` defaults
+unconditionally. On NetBox 4.7 that raised
+`FieldError: Cannot resolve keyword 'tree_id' into field` while applying
+`0037_v0_0_15_release`, so a **fresh install could not run `manage.py migrate`
+at all** — the failure is invisible on 4.5/4.6 and on any database that had
+already applied 0037.
+
+The fix keys off the historical model's concrete field set
+(`_model_has_mptt_columns()`), which is the only trustworthy signal inside a
+data migration: the model there is rebuilt from migration state, not imported,
+so there is no version string to branch on. A **partial** MPTT field set is
+deliberately treated as non-MPTT — half-migrated state must not produce a create
+referencing a column that is already gone.
+
+Apply the same rule to any future data migration that touches a NetBox nested
+group model (`DeviceRole`, `Region`, `SiteGroup`, `Location`, `TenantGroup`,
+`RackRole`, wireless LAN groups, …): supply hierarchy bookkeeping only after
+confirming the columns exist, and never write `path`. Guarded by
+`tests/test_seed_default_vm_roles_hierarchy.py`, which drives the callable with
+fake historical models for both generations.
+
 ## Notes
 
 - Review this directory before changing model fields or uniqueness rules.
