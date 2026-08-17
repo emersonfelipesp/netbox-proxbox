@@ -117,7 +117,7 @@ sequenceDiagram
   that ABI or the build fails. The
   `ci-release-netbox-proxbox` activation canary must separately prove that the
   exact repository-scoped release runner/container denies management and
-  production network access; the runner's online label is not sufficient
+  production network access; an online runner label alone is insufficient
   evidence.
   Candidate stdout/stderr is bounded and captured instead of reaching the runner
   workflow-command parser, with live `set-env`/`add-path` canaries checked in the

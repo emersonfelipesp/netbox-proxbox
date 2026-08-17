@@ -614,7 +614,8 @@ filesystem writes only below the per-run build root, so candidate code cannot
 modify runner workflow-command files or consume shared writable temporary
 storage. The `ci-release-netbox-proxbox` activation canary must separately prove
 that the exact repository-scoped release runner/container denies management and
-production network access; an online runner label alone is not that evidence.
+production network access; an online runner label alone is insufficient
+evidence.
 Only reviewed outer shell/Python code
 regains the runtime-bearing environment. Candidate output is captured with a one-MiB limit
 and is never relayed raw to the runner command parser; legacy `set-env` and

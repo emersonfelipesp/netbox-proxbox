@@ -546,8 +546,14 @@ def test_operator_docs_match_the_locked_control_dispatch_contract() -> None:
     assert "request SHA-256" in documentation
     assert "do not merge" in documentation.lower()
     assert "existing publisher" in documentation.lower()
+    canary_contract = (
+        f"The `{release_label}` activation canary must separately prove that the "
+        "exact repository-scoped release runner/container denies management and "
+        "production network access; an online runner label alone is insufficient "
+        "evidence."
+    )
     for path, text in documentation_by_path.items():
-        assert f"`{release_label}` activation canary" in text, path
+        assert canary_contract in " ".join(text.split()), path
         assert "dedicated untrusted CI VM" not in text, path
 
     agent_docs = (REPO_ROOT / "AGENTS.md", REPO_ROOT / "CLAUDE.md")
