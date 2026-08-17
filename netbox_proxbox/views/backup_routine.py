@@ -1,5 +1,6 @@
 """Provide NetBox CRUD views for backup routine records."""
 
+from netbox.object_actions import BulkExport, BulkDelete
 from netbox.views import generic
 from utilities.views import register_model_view
 
@@ -27,10 +28,7 @@ class BackupRoutineListView(generic.ObjectListView):
     filterset = BackupRoutineFilterSet
     filterset_form = BackupRoutineFilterForm
     template_name = "netbox_proxbox/backup_routine_list.html"
-    actions = {
-        "bulk_delete": {"delete"},
-        "export": {"view"},
-    }
+    actions = (BulkExport, BulkDelete)
 
 
 @register_model_view(BackupRoutine)

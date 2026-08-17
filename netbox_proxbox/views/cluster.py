@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.http import HttpRequest
+from netbox.object_actions import BulkExport, BulkDelete
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 from virtualization.models import Cluster
@@ -29,10 +30,7 @@ class ClusterStoragesTabView(TableConfigOverrideMixin, generic.ObjectChildrenVie
     table = ProxmoxStorageTable
     filterset = ProxmoxStorageFilterSet
     filterset_form = ProxmoxStorageFilterForm
-    actions = {
-        "bulk_delete": {"delete"},
-        "export": {"view"},
-    }
+    actions = (BulkExport, BulkDelete)
     tab = ViewTab(
         label="Storages",
         badge=lambda obj: ProxmoxStorage.objects.filter(cluster=obj).count(),

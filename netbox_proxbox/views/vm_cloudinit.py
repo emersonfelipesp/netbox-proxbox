@@ -6,6 +6,7 @@ disables every editable field. Edits flow in only via the plugin DRF endpoint
 """
 
 from django.http import HttpRequest
+from netbox.object_actions import BulkExport, BulkDelete
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 from virtualization.models import VirtualMachine
@@ -38,10 +39,7 @@ class ProxmoxVMCloudInitListView(generic.ObjectListView):
     filterset = ProxmoxVMCloudInitFilterSet
     filterset_form = ProxmoxVMCloudInitFilterForm
     template_name = "netbox_proxbox/proxmoxvmcloudinit_list.html"
-    actions = {
-        "bulk_delete": {"delete"},
-        "export": {"view"},
-    }
+    actions = (BulkExport, BulkDelete)
 
 
 @register_model_view(ProxmoxVMCloudInit)

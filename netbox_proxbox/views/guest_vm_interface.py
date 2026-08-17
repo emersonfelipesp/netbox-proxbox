@@ -1,5 +1,6 @@
 """CRUD views for guest OS VM interface inventory."""
 
+from netbox.object_actions import BulkExport, BulkDelete
 from netbox.views import generic
 from utilities.views import register_model_view
 
@@ -44,10 +45,7 @@ class GuestVMInterfaceListView(generic.ObjectListView):
     table = GuestVMInterfaceTable
     filterset = GuestVMInterfaceFilterSet
     filterset_form = GuestVMInterfaceFilterForm
-    actions = {
-        "bulk_delete": {"delete"},
-        "export": {"view"},
-    }
+    actions = (BulkExport, BulkDelete)
 
 
 @register_model_view(GuestVMInterface)
@@ -101,10 +99,7 @@ class GuestVMInterfaceAddressListView(generic.ObjectListView):
     table = GuestVMInterfaceAddressTable
     filterset = GuestVMInterfaceAddressFilterSet
     filterset_form = GuestVMInterfaceAddressFilterForm
-    actions = {
-        "bulk_delete": {"delete"},
-        "export": {"view"},
-    }
+    actions = (BulkExport, BulkDelete)
 
 
 @register_model_view(GuestVMInterfaceAddress)

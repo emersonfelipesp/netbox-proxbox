@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from netbox.object_actions import AddObject, BulkExport, BulkDelete
 from netbox.views import generic
 from utilities.views import register_model_view
 
@@ -37,11 +38,7 @@ class ProxmoxMetricsInfluxDBListView(generic.ObjectListView):
     table = ProxmoxMetricsInfluxDBTable
     filterset = ProxmoxMetricsInfluxDBFilterSet
     filterset_form = ProxmoxMetricsInfluxDBFilterForm
-    actions = {
-        "add": {"add"},
-        "bulk_delete": {"delete"},
-        "export": {"view"},
-    }
+    actions = (AddObject, BulkExport, BulkDelete)
 
 
 @register_model_view(ProxmoxMetricsInfluxDB)

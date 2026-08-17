@@ -7,6 +7,7 @@ import time
 import requests
 from django.db import ProgrammingError
 from django.http import HttpRequest
+from netbox.object_actions import BulkExport, BulkDelete
 from netbox.views import generic
 from pydantic import ValidationError
 from utilities.views import ViewTab, register_model_view
@@ -65,10 +66,7 @@ class ProxmoxStorageListView(generic.ObjectListView):
     filterset = ProxmoxStorageFilterSet
     filterset_form = ProxmoxStorageFilterForm
     template_name = "netbox_proxbox/storage_list.html"
-    actions = {
-        "bulk_delete": {"delete"},
-        "export": {"view"},
-    }
+    actions = (BulkExport, BulkDelete)
 
 
 @register_model_view(ProxmoxStorage)
@@ -386,10 +384,7 @@ class ProxmoxStorageBackupsTabView(generic.ObjectChildrenView):
     table = VMBackupTable
     filterset = VMBackupFilterSet
     filterset_form = VMBackupFilterForm
-    actions = {
-        "bulk_delete": {"delete"},
-        "export": {"view"},
-    }
+    actions = (BulkExport, BulkDelete)
     tab = ViewTab(
         label="Backups",
         badge=lambda obj: obj.vm_backups.count(),
@@ -415,10 +410,7 @@ class ProxmoxStorageSnapshotsTabView(generic.ObjectChildrenView):
     table = VMSnapshotTable
     filterset = VMSnapshotFilterSet
     filterset_form = VMSnapshotFilterForm
-    actions = {
-        "bulk_delete": {"delete"},
-        "export": {"view"},
-    }
+    actions = (BulkExport, BulkDelete)
     tab = ViewTab(
         label="Snapshots",
         badge=lambda obj: obj.vm_snapshots.count(),
