@@ -132,6 +132,10 @@ def test_gitea_tag_workflow_builds_only_a_release_control_request() -> None:
     assert "--managed-python" not in workflow
     assert workflow.count("--no-python-downloads") == 1
     assert "--offline --no-index --find-links" in workflow
+    assert "/usr/local/bin/nmc-verify-release-wheelhouse" in workflow
+    assert "deny_network_syscalls()" in workflow
+    assert "socket.socket()" in workflow
+    assert "libc.prctl(22, 2" in workflow
     assert '"$BUILD_ROOT/venv/bin/python" -m build --no-isolation' in workflow
     assert "uvx --from twine" not in workflow
 
@@ -807,6 +811,56 @@ def test_candidate_write_boundary_rejects_shared_filesystem_writes(
     assert not (denied_root / "denied.txt").exists()
 
 
+@pytest.mark.skipif(
+    sys.platform != "linux" or os.uname().machine != "x86_64",
+    reason="release seccomp contract requires x86-64 Linux",
+)
+def test_candidate_seccomp_boundary_denies_socket_syscalls() -> None:
+    workflow = yaml.safe_load(_read(GITEA_PUBLISH_WORKFLOW))
+    boundary_run = _step(
+        workflow["jobs"]["build-request"],
+        "Build artifacts across a token-free UID boundary",
+    )["run"]
+    boundary_code = boundary_run.split("<<'PY'\n", 1)[1].rsplit("\nPY\n", 1)[0]
+    tree = ast.parse(boundary_code)
+    boundary_function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "deny_network_syscalls"
+    )
+    isolated_code = ast.unparse(
+        ast.Module(
+            body=[
+                ast.Import(names=[ast.alias(name="ctypes")]),
+                ast.Import(names=[ast.alias(name="errno")]),
+                ast.Import(names=[ast.alias(name="os")]),
+                ast.Import(names=[ast.alias(name="socket")]),
+                boundary_function,
+            ],
+            type_ignores=[],
+        )
+    )
+    probe = (
+        isolated_code
+        + "\ndeny_network_syscalls()\n"
+        + "try:\n"
+        + "    socket.socket()\n"
+        + "except PermissionError as exc:\n"
+        + "    raise SystemExit(0 if exc.errno == errno.EPERM else 2)\n"
+        + "raise SystemExit(3)\n"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-I", "-c", probe],
+        check=False,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
 def _artifact_handoff_code() -> str:
     parsed = yaml.safe_load(_read(GITEA_PUBLISH_WORKFLOW))
     bind_run = _step(
@@ -1101,6 +1155,7 @@ def test_public_publish_workflow_uses_immutable_locked_tooling() -> None:
 
     assert project["dependency-groups"]["publish"] == [
         "build==1.5.0",
+        "hatchling==1.31.0",
         "packaging==26.0",
         "setuptools==80.9.0",
         "twine==6.2.0",

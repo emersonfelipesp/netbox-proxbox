@@ -620,7 +620,11 @@ and resource limits, no read access to the root parent's `/proc/.../environ`,
 and post-build process cleanup. A fail-closed x86-64 Landlock ABI 3+ ruleset permits
 filesystem writes only below the per-run build root, so candidate code cannot
 modify runner workflow-command files or consume shared writable temporary
-storage. The `ci-release-netbox-proxbox` activation canary must separately prove
+storage. A fail-closed x86-64 seccomp filter denies every candidate socket
+syscall and is live-probed before dependency/build code. The immutable
+wheelhouse manifest is revalidated in-container, and the locked publish group
+includes Hatchling for the configured PEP 517 backend. The
+`ci-release-netbox-proxbox` activation canary must separately prove
 that the exact repository-scoped release runner/container denies management and
 production network access and bind that immutable result plus the runtime
 digest to the same runner ID in the acceptance record; an online runner label

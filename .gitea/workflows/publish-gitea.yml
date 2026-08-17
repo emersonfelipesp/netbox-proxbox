@@ -165,15 +165,22 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_RUN_ATTEMPT" = 1
-          test "$(python3 -I -c 'import platform; print(platform.python_version())')" = 3.12.14
-          test "$(uv --version)" = "uv 0.12.5 (x86_64-unknown-linux-gnu)"
+          test ! -L /usr/local/bin/python3
+          test ! -L /usr/local/bin/uv
+          test "$(stat -c '%u:%g:%a:%h:%F' /usr/local/bin/python3)" = '0:0:755:1:regular file'
+          test "$(stat -c '%u:%g:%a:%h:%F' /usr/local/bin/uv)" = '0:0:755:1:regular file'
+          test "$(/usr/local/bin/python3 -I -c 'import platform; print(platform.python_version())')" = 3.12.14
+          test "$(/usr/local/bin/uv --version)" = "uv 0.12.5 (x86_64-unknown-linux-gnu)"
           printf '%s  %s\n' \
-            3cfc9f27521a58d5718547b583e79b043bb7ffd0b657d658733a595eda8b79ee \
+            69b19f4dc09452bdc01e1ac469c92116e7be7abbced766fd3a8109b2df1faa99 \
             uv.lock | sha256sum --check --strict
           test "$(cat /opt/nmc-release/netbox-proxbox/uv.lock.sha256)" = \
-            3cfc9f27521a58d5718547b583e79b043bb7ffd0b657d658733a595eda8b79ee
+            69b19f4dc09452bdc01e1ac469c92116e7be7abbced766fd3a8109b2df1faa99
           test -d /opt/nmc-release/netbox-proxbox/publish-wheels
           test ! -L /opt/nmc-release/netbox-proxbox/publish-wheels
+          /usr/local/bin/nmc-verify-release-wheelhouse \
+            --wheelhouse /opt/nmc-release/netbox-proxbox/publish-wheels \
+            --manifest /opt/nmc-release/netbox-proxbox/publish-wheels.sha256
           printf '%s\n' \
             'UV_BIN=/usr/local/bin/uv' \
             'UV_PYTHON=/usr/local/bin/python3' \
@@ -387,6 +394,13 @@ jobs:
           test -z "${ACTIONS_RUNTIME_TOKEN:-}"
           test -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}"
           test ! -r "/proc/$BOUNDARY_PARENT_PID/environ"
+          "$UV_PYTHON" -c 'import errno, socket
+          try:
+              socket.socket()
+          except PermissionError as exc:
+              assert exc.errno == errno.EPERM
+          else:
+              raise SystemExit("candidate network syscall remained available")'
           cd "$BUILD_ROOT/source"
           UV_PROJECT_ENVIRONMENT="$BUILD_ROOT/venv" \
             "$UV_BIN" sync --no-config --cache-dir "$BUILD_ROOT/uv-cache" \
@@ -487,8 +501,52 @@ jobs:
                   os.close(root_fd)
                   os.close(ruleset_fd)
 
+          def deny_network_syscalls() -> None:
+              # No socket may be created or operated by candidate-controlled code.
+              class SockFilter(ctypes.Structure):
+                  _fields_ = [
+                      ("code", ctypes.c_ushort),
+                      ("jt", ctypes.c_ubyte),
+                      ("jf", ctypes.c_ubyte),
+                      ("k", ctypes.c_uint32),
+                  ]
+
+              class SockFprog(ctypes.Structure):
+                  _fields_ = [
+                      ("length", ctypes.c_ushort),
+                      ("filters", ctypes.POINTER(SockFilter)),
+                  ]
+
+              instructions = [
+                  SockFilter(0x20, 0, 0, 4),
+                  SockFilter(0x15, 1, 0, 0xC000003E),
+                  SockFilter(0x06, 0, 0, 0x80000000),
+                  SockFilter(0x20, 0, 0, 0),
+              ]
+              for syscall_number in (
+                  41, 42, 43, 44, 45, 46, 47, 48, 49,
+                  50, 51, 52, 53, 54, 55, 288, 299, 307,
+              ):
+                  instructions.extend(
+                      (
+                          SockFilter(0x15, 0, 1, syscall_number),
+                          SockFilter(0x06, 0, 0, 0x00050000 | errno.EPERM),
+                      )
+                  )
+              instructions.append(SockFilter(0x06, 0, 0, 0x7FFF0000))
+              filters = (SockFilter * len(instructions))(*instructions)
+              program = SockFprog(len(instructions), filters)
+              libc = ctypes.CDLL(None, use_errno=True)
+              if libc.prctl(38, 1, 0, 0, 0) != 0:  # PR_SET_NO_NEW_PRIVS
+                  error_number = ctypes.get_errno()
+                  raise OSError(error_number, os.strerror(error_number))
+              if libc.prctl(22, 2, ctypes.byref(program), 0, 0) != 0:
+                  error_number = ctypes.get_errno()
+                  raise OSError(error_number, os.strerror(error_number))
+
           def drop_privileges() -> None:
               restrict_writes_to_build_root(build_root)
+              deny_network_syscalls()
               resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
               resource.setrlimit(resource.RLIMIT_AS, (2 * 1024 * 1024 * 1024,) * 2)
               resource.setrlimit(resource.RLIMIT_CPU, (900, 900))

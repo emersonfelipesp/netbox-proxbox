@@ -136,7 +136,9 @@ sequenceDiagram
   fail-closed x86-64 Landlock ABI 3+ rule permits writes only below the per-run
   build root, preventing candidate writes to runner workflow-command files and
   shared temporary storage; the runner must match that architecture and expose
-  that ABI or the build fails. The
+  that ABI or the build fails. A fail-closed x86-64 seccomp filter also returns
+  `EPERM` for every socket/network syscall, and the candidate probes that denial
+  before dependency or build code runs. The
   `ci-release-netbox-proxbox` activation canary must separately prove that the
   exact repository-scoped release runner/container denies management and
   production network access and bind that immutable result plus the runtime
@@ -159,7 +161,10 @@ sequenceDiagram
   A disposable target job builds one wheel and one sdist with the runner
   image's exact Python 3.12.14 and uv 0.12.5 after verifying the baked
   interpreter/tool versions, the policy-pinned `uv.lock` digest, and the
-  build-lock checksum manifest for its read-only wheelhouse. Dependency
+  build-lock checksum manifest for its read-only wheelhouse. The job revalidates
+  the exact immutable wheel inventory in-container; the publish lock includes
+  Hatchling so the project's configured PEP 517 backend is available without
+  network access. Dependency
   resolution is offline (`--no-index`, no Python downloads). The trusted outer
   steps use image-baked Gitea checkout and artifact clients, so their only
   network authority is same-origin Gitea access. After candidate process
