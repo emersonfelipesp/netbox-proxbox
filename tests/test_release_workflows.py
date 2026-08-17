@@ -135,6 +135,8 @@ def test_gitea_tag_workflow_builds_only_a_release_control_request() -> None:
     assert "/usr/local/bin/nmc-verify-release-wheelhouse" in workflow
     assert "deny_network_syscalls()" in workflow
     assert "socket.socket()" in workflow
+    assert "0x40000000 | 41" in workflow
+    assert "(425, (ctypes.c_uint(1), ctypes.c_void_p()))" in workflow
     assert "libc.prctl(22, 2" in workflow
     assert '"$BUILD_ROOT/venv/bin/python" -m build --no-isolation' in workflow
     assert "uvx --from twine" not in workflow
@@ -338,7 +340,7 @@ def test_release_runner_gate_is_pinned_and_precedes_candidate_execution() -> Non
     acceptance = json.loads(RUNNER_ACCEPTANCE_PATH.read_bytes())
 
     assert runner_gate_sha256 == (
-        "95a128f2ead98af911c71d391abf64f28252233bd3a5c141e01814cdc10683ac"
+        "69b9e15913f9530a5427d85736cb95a30197a54fc09b2ce36d0afeabd5a506cd"
     )
     assert acceptance_sha256 == (
         "ece0ee3975949f7316a25ca57d87ec5d82894c87fdbd684113def9e288d074e7"
@@ -481,6 +483,7 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
         "network_attestation_sha256": acceptance["network_attestation_sha256"],
         "registered_labels": acceptance["registered_labels"],
         "repository": "emersonfelipesp/netbox-proxbox",
+        "run_attempt": 1,
         "run_id": 12,
         "runner_id": 41,
         "runner_name": "ci-release-netbox-proxbox-runner",
@@ -490,6 +493,8 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
         "schema": 1,
         "source_sha": "a" * 40,
         "supervisor_policy_sha256": acceptance["supervisor_policy_sha256"],
+        "workflow_path": gate.WORKFLOW_RELATIVE_PATH,
+        "workflow_sha256": hashlib.sha256(gate.WORKFLOW_PATH.read_bytes()).hexdigest(),
     }
 
     def sign(value: dict[str, object]) -> None:
@@ -547,6 +552,9 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
         ("runtime", {"runtime_image_digest": "e" * 64}),
         ("network", {"network_attestation_sha256": "f" * 64}),
         ("repository-scope", {"runner_scope_sha256": "f" * 64}),
+        ("run-attempt", {"run_attempt": 2}),
+        ("workflow-path", {"workflow_path": ".gitea/workflows/other.yml"}),
+        ("workflow-digest", {"workflow_sha256": "f" * 64}),
         (
             "labels",
             {
@@ -843,11 +851,74 @@ def test_candidate_seccomp_boundary_denies_socket_syscalls() -> None:
     probe = (
         isolated_code
         + "\ndeny_network_syscalls()\n"
+        + "libc = ctypes.CDLL(None, use_errno=True)\n"
         + "try:\n"
         + "    socket.socket()\n"
         + "except PermissionError as exc:\n"
         + "    raise SystemExit(0 if exc.errno == errno.EPERM else 2)\n"
         + "raise SystemExit(3)\n"
+    )
+    completed = subprocess.run(
+        [sys.executable, "-I", "-c", probe],
+        check=False,
+        stdin=subprocess.DEVNULL,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=10,
+    )
+    assert completed.returncode == 0, completed.stderr
+
+
+@pytest.mark.skipif(
+    sys.platform != "linux" or os.uname().machine != "x86_64",
+    reason="release seccomp contract requires x86-64 Linux",
+)
+@pytest.mark.parametrize(
+    ("syscall_number", "arguments"),
+    [
+        (425, "ctypes.c_uint(1), ctypes.c_void_p()"),
+        (
+            0x40000000 | 41,
+            "ctypes.c_int(socket.AF_INET), ctypes.c_int(socket.SOCK_STREAM), ctypes.c_int(0)",
+        ),
+    ],
+)
+def test_candidate_seccomp_boundary_denies_alternate_network_paths(
+    syscall_number: int,
+    arguments: str,
+) -> None:
+    workflow = yaml.safe_load(_read(GITEA_PUBLISH_WORKFLOW))
+    boundary_run = _step(
+        workflow["jobs"]["build-request"],
+        "Build artifacts across a token-free UID boundary",
+    )["run"]
+    boundary_code = boundary_run.split("<<'PY'\n", 1)[1].rsplit("\nPY\n", 1)[0]
+    tree = ast.parse(boundary_code)
+    boundary_function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "deny_network_syscalls"
+    )
+    isolated_code = ast.unparse(
+        ast.Module(
+            body=[
+                ast.Import(names=[ast.alias(name="ctypes")]),
+                ast.Import(names=[ast.alias(name="errno")]),
+                ast.Import(names=[ast.alias(name="os")]),
+                ast.Import(names=[ast.alias(name="socket")]),
+                boundary_function,
+            ],
+            type_ignores=[],
+        )
+    )
+    probe = (
+        isolated_code
+        + "\ndeny_network_syscalls()\n"
+        + "libc = ctypes.CDLL(None, use_errno=True)\n"
+        + "ctypes.set_errno(0)\n"
+        + f"result = libc.syscall(ctypes.c_long({syscall_number}), {arguments})\n"
+        + "raise SystemExit(0 if result == -1 and ctypes.get_errno() == errno.EPERM else 4)\n"
     )
     completed = subprocess.run(
         [sys.executable, "-I", "-c", probe],

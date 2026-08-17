@@ -603,8 +603,9 @@ different release refs from racing the sole release label. Before candidate
 processing, both jobs run a checksum-pinned
 gate that requires the live runner ID, name, and sole label to equal the
 canonical acceptance record plus a fresh signed external-supervisor attestation
-bound to repository/run/job/source, complete registered labels, runtime image,
-and network/runtime policy. Validation and build have independent pinned
+bound to repository/first-attempt run/job/source and the exact workflow
+path/digest, complete registered labels, runtime image, and network/runtime
+policy. Validation and build have independent pinned
 repository-registration scope digests. Zero/empty identity and all-zero key/image/policy
 digests keep tag releases disabled. Both jobs are explicitly
 limited to `actions: read` and `contents: read`, and the build's step-scoped
@@ -621,7 +622,8 @@ and post-build process cleanup. A fail-closed x86-64 Landlock ABI 3+ ruleset per
 filesystem writes only below the per-run build root, so candidate code cannot
 modify runner workflow-command files or consume shared writable temporary
 storage. A fail-closed x86-64 seccomp filter denies every candidate socket
-syscall and is live-probed before dependency/build code. The immutable
+syscall, all `io_uring` entry points, and every x32-tagged syscall; all three
+paths are live-probed before dependency/build code. The immutable
 wheelhouse manifest is revalidated in-container, and the locked publish group
 includes Hatchling for the configured PEP 517 backend. The
 `ci-release-netbox-proxbox` activation canary must separately prove

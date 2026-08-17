@@ -41,7 +41,7 @@ jobs:
           test -f .gitea/release-runner-acceptance.json
           test ! -L .gitea/release-runner-acceptance.json
           printf '%s  %s\n' \
-            95a128f2ead98af911c71d391abf64f28252233bd3a5c141e01814cdc10683ac \
+            69b9e15913f9530a5427d85736cb95a30197a54fc09b2ce36d0afeabd5a506cd \
             scripts/gitea_release_runner_gate.py | sha256sum --check --strict
           printf '%s  %s\n' \
             ece0ee3975949f7316a25ca57d87ec5d82894c87fdbd684113def9e288d074e7 \
@@ -149,7 +149,7 @@ jobs:
           test -f .gitea/release-runner-acceptance.json
           test ! -L .gitea/release-runner-acceptance.json
           printf '%s  %s\n' \
-            95a128f2ead98af911c71d391abf64f28252233bd3a5c141e01814cdc10683ac \
+            69b9e15913f9530a5427d85736cb95a30197a54fc09b2ce36d0afeabd5a506cd \
             scripts/gitea_release_runner_gate.py | sha256sum --check --strict
           printf '%s  %s\n' \
             ece0ee3975949f7316a25ca57d87ec5d82894c87fdbd684113def9e288d074e7 \
@@ -394,13 +394,24 @@ jobs:
           test -z "${ACTIONS_RUNTIME_TOKEN:-}"
           test -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}"
           test ! -r "/proc/$BOUNDARY_PARENT_PID/environ"
-          "$UV_PYTHON" -c 'import errno, socket
+          "$UV_PYTHON" -c 'import ctypes, errno, socket
           try:
               socket.socket()
           except PermissionError as exc:
               assert exc.errno == errno.EPERM
           else:
-              raise SystemExit("candidate network syscall remained available")'
+              raise SystemExit("candidate network syscall remained available")
+          libc = ctypes.CDLL(None, use_errno=True)
+          for syscall_number, arguments in (
+              (425, (ctypes.c_uint(1), ctypes.c_void_p())),
+              (
+                  0x40000000 | 41,
+                  (ctypes.c_int(socket.AF_INET), ctypes.c_int(socket.SOCK_STREAM), ctypes.c_int(0)),
+              ),
+          ):
+              ctypes.set_errno(0)
+              result = libc.syscall(ctypes.c_long(syscall_number), *arguments)
+              assert result == -1 and ctypes.get_errno() == errno.EPERM'
           cd "$BUILD_ROOT/source"
           UV_PROJECT_ENVIRONMENT="$BUILD_ROOT/venv" \
             "$UV_BIN" sync --no-config --cache-dir "$BUILD_ROOT/uv-cache" \
@@ -502,7 +513,10 @@ jobs:
                   os.close(ruleset_fd)
 
           def deny_network_syscalls() -> None:
-              # No socket may be created or operated by candidate-controlled code.
+              # No socket or io_uring operation may be used by candidate code.
+              if os.uname().machine != "x86_64":
+                  raise OSError(errno.ENOTSUP, "Seccomp mapping requires x86-64")
+
               class SockFilter(ctypes.Structure):
                   _fields_ = [
                       ("code", ctypes.c_ushort),
@@ -522,10 +536,14 @@ jobs:
                   SockFilter(0x15, 1, 0, 0xC000003E),
                   SockFilter(0x06, 0, 0, 0x80000000),
                   SockFilter(0x20, 0, 0, 0),
+                  # Reject the x32 ABI tag before any syscall allow path.
+                  SockFilter(0x45, 0, 1, 0x40000000),
+                  SockFilter(0x06, 0, 0, 0x00050000 | errno.EPERM),
               ]
               for syscall_number in (
                   41, 42, 43, 44, 45, 46, 47, 48, 49,
                   50, 51, 52, 53, 54, 55, 288, 299, 307,
+                  425, 426, 427,
               ):
                   instructions.extend(
                       (

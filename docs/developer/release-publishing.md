@@ -106,9 +106,10 @@ sequenceDiagram
   key/runtime/image/network/supervisor digests intentionally disable tag
   releases until live acceptance replaces every sentinel in one reviewed
   change. Even then, the gate requires a root-owned, freshly signed supervisor
-  attestation bound to the repository, run ID, job ID, source SHA, runner
-  identity, complete registered-label set, runtime image, and network/runtime
-  policy digests. Missing, stale, mismatched, or invalidly signed evidence fails
+  attestation bound to the repository, first run attempt, run ID, job ID,
+  source SHA, exact workflow path and digest, runner identity, complete
+  registered-label set, runtime image, and network/runtime policy digests.
+  Missing, stale, mismatched, or invalidly signed evidence fails
   before candidate execution.
 - A candidate tag must resolve to the current canonical Gitea `develop` SHA.
   The gate ignores writer-controlled commit statuses and selects the newest
@@ -137,8 +138,9 @@ sequenceDiagram
   build root, preventing candidate writes to runner workflow-command files and
   shared temporary storage; the runner must match that architecture and expose
   that ABI or the build fails. A fail-closed x86-64 seccomp filter also returns
-  `EPERM` for every socket/network syscall, and the candidate probes that denial
-  before dependency or build code runs. The
+  `EPERM` for every socket syscall, all `io_uring` entry points, and every
+  x32-tagged syscall; the candidate probes all three paths before dependency or
+  build code runs. The
   `ci-release-netbox-proxbox` activation canary must separately prove that the
   exact repository-scoped release runner/container denies management and
   production network access and bind that immutable result plus the runtime

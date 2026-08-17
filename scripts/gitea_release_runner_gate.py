@@ -26,6 +26,9 @@ OPENSSL = Path("/usr/bin/openssl")
 DEFAULT_ATTESTATION_ROOT = Path("/run/nmc-release-attestation")
 DEFAULT_PUBLIC_KEY = Path("/etc/nmc-release-runner-attestation-public.pem")
 TRUSTED_EXTERNAL_UID = 0
+REPOSITORY_ROOT = Path(__file__).resolve().parents[1]
+WORKFLOW_RELATIVE_PATH = ".gitea/workflows/publish-gitea.yml"
+WORKFLOW_PATH = REPOSITORY_ROOT / WORKFLOW_RELATIVE_PATH
 F_ADD_SEALS = 1033
 F_GET_SEALS = 1034
 F_SEAL_SEAL = 0x0001
@@ -55,6 +58,39 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 
 def _canonical_json(value: object) -> bytes:
     return json.dumps(value, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+
+
+def _workflow_sha256() -> str:
+    try:
+        before = WORKFLOW_PATH.lstat()
+        raw = WORKFLOW_PATH.read_bytes()
+        after = WORKFLOW_PATH.lstat()
+    except OSError as exc:
+        raise RunnerGateError("release workflow source is unavailable") from exc
+    stable_identity = (
+        before.st_dev,
+        before.st_ino,
+        before.st_mode,
+        before.st_nlink,
+        before.st_size,
+        before.st_mtime_ns,
+    ) == (
+        after.st_dev,
+        after.st_ino,
+        after.st_mode,
+        after.st_nlink,
+        after.st_size,
+        after.st_mtime_ns,
+    )
+    if (
+        not stat.S_ISREG(before.st_mode)
+        or before.st_nlink != 1
+        or not 0 < before.st_size <= MAX_RESPONSE_BYTES
+        or before.st_size != len(raw)
+        or not stable_identity
+    ):
+        raise RunnerGateError("release workflow source is unsafe")
+    return hashlib.sha256(raw).hexdigest()
 
 
 def _load_acceptance(path: Path, repository: str) -> dict[str, Any]:
@@ -312,11 +348,14 @@ def _verify_live_attestation(
     public_key_path: Path,
     repository_full_name: str,
     run_id: int,
+    expected_run_attempt: int,
     job_id: int,
     expected_runner_id: int,
     expected_runner_name: str,
     expected_runner_scope_sha256: str,
     source_sha: str,
+    expected_workflow_path: str,
+    expected_workflow_sha256: str,
     now: int,
     trusted_external_uid: int,
 ) -> str:
@@ -343,6 +382,7 @@ def _verify_live_attestation(
         "network_attestation_sha256",
         "registered_labels",
         "repository",
+        "run_attempt",
         "run_id",
         "runner_id",
         "runner_name",
@@ -352,6 +392,8 @@ def _verify_live_attestation(
         "schema",
         "source_sha",
         "supervisor_policy_sha256",
+        "workflow_path",
+        "workflow_sha256",
     }
     issued_at = attestation.get("issued_at") if isinstance(attestation, dict) else None
     expires_at = (
@@ -370,6 +412,8 @@ def _verify_live_attestation(
         or not issued_at <= now < expires_at
         or not 0 < expires_at - issued_at <= 300
         or attestation.get("repository") != repository_full_name
+        or attestation.get("run_attempt") != expected_run_attempt
+        or isinstance(attestation.get("run_attempt"), bool)
         or attestation.get("run_id") != run_id
         or isinstance(attestation.get("run_id"), bool)
         or attestation.get("job_id") != job_id
@@ -387,6 +431,9 @@ def _verify_live_attestation(
         != acceptance["network_attestation_sha256"]
         or attestation.get("supervisor_policy_sha256")
         != acceptance["supervisor_policy_sha256"]
+        or attestation.get("workflow_path") != expected_workflow_path
+        or attestation.get("workflow_sha256") != expected_workflow_sha256
+        or SHA256_RE.fullmatch(str(attestation.get("workflow_sha256"))) is None
     ):
         raise RunnerGateError(
             "live runner attestation differs from this job and acceptance"
@@ -513,11 +560,14 @@ def validate_release_runner(
         public_key_path=public_key_path,
         repository_full_name=f"{owner}/{repository}",
         run_id=run_id,
+        expected_run_attempt=int(job["run_attempt"]),
         job_id=int(job["id"]),
         expected_runner_id=expected_runner_id,
         expected_runner_name=expected_runner_name,
         expected_runner_scope_sha256=expected_runner_scope_sha256,
         source_sha=source_sha,
+        expected_workflow_path=WORKFLOW_RELATIVE_PATH,
+        expected_workflow_sha256=_workflow_sha256(),
         now=int(time.time()) if now is None else now,
         trusted_external_uid=trusted_external_uid,
     )
