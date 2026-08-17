@@ -24,6 +24,12 @@ classifiers = [
     "Topic :: System :: Systems Administration",
 ]
 dependencies = [
+    # compat.py imports packaging at module scope to compare NetBox release
+    # strings. Inside a NetBox install it is transitively guaranteed (NetBox
+    # core uses it on the same PluginConfig.validate path), but this package
+    # imports it directly, so it belongs in the metadata rather than being
+    # inherited by luck.
+    "packaging>=23.0",
     "cryptography>=48.0.1",
     "pydantic>=2.13.3,<2.14.0",
     "requests>=2.33.0",

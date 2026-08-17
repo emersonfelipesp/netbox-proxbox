@@ -1,6 +1,7 @@
 """Provide NetBox CRUD and tab views for VM backup records."""
 
 from django.http import HttpRequest
+from netbox.object_actions import BulkDelete, BulkExport
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 from virtualization.models import VirtualMachine
@@ -31,10 +32,7 @@ class VMBackupListView(generic.ObjectListView):
     filterset = VMBackupFilterSet
     filterset_form = VMBackupFilterForm
     template_name = "netbox_proxbox/vmbackup_list.html"
-    actions = {
-        "bulk_delete": {"delete"},
-        "export": {"view"},
-    }
+    actions = (BulkExport, BulkDelete)
 
 
 @register_model_view(VMBackup)
@@ -80,10 +78,7 @@ class VMBackupTabView(TableConfigOverrideMixin, generic.ObjectChildrenView):
     table = VMBackupTable
     filterset = VMBackupFilterSet
     filterset_form = VMBackupFilterForm
-    actions = {
-        "bulk_delete": {"delete"},
-        "export": {"view"},
-    }
+    actions = (BulkExport, BulkDelete)
     tab = ViewTab(
         label="Backups",
         badge=lambda obj: VMBackup.objects.filter(virtual_machine=obj).count(),

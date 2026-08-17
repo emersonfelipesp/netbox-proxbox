@@ -238,9 +238,21 @@ class FastAPIEndpoint(EndpointBase):
         db: str,
         field_names: list[str],
         values: list[object],
+        **kwargs: object,
     ) -> FastAPIEndpoint:
-        """Capture an optimistic-lock snapshot for the backend trust boundary."""
-        instance = super().from_db(db, field_names, values)
+        """Capture an optimistic-lock snapshot for the backend trust boundary.
+
+        ``**kwargs`` is forwarded verbatim and is **not** cosmetic. Django adds
+        keyword-only parameters to ``Model.from_db()`` across releases — 6.1,
+        which NetBox 4.7 ships, introduced ``fetch_mode`` — and every queryset
+        that materialises this model goes through here. A fixed signature
+        therefore turns a single upstream addition into
+        ``TypeError: from_db() got an unexpected keyword argument`` on *every*
+        read of this model, which is what happened on NetBox 4.7 before this
+        change. Accepting and forwarding whatever Django passes keeps the
+        override version-agnostic in both directions.
+        """
+        instance = super().from_db(db, field_names, values, **kwargs)
         if _BACKEND_KEY_PERSISTED_FIELDS.issubset(instance.__dict__):
             instance._backend_key_loaded_signature = (
                 instance._backend_key_persisted_signature()

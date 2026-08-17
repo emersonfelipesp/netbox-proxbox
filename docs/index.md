@@ -2,6 +2,20 @@
 
 Proxbox is a NetBox plugin that integrates Proxmox with NetBox through a separate FastAPI backend.
 
+## NetBox support tiers
+
+`netbox-proxbox` declares two NetBox tiers, defined once in
+`netbox_proxbox/compat.py` and shared verbatim across the Proxbox plugin stack:
+
+| Tier | NetBox range | Behaviour |
+|---|---|---|
+| Stable | `4.5.8` - `4.6.99` | Admitted silently. Exercised in CI at v4.5.8, v4.5.10, v4.6.0 and v4.6.6. |
+| Experimental | `4.7.0` - `4.7.99` | Loads and runs with no configuration change; warns once via system check `netbox_proxbox.W001`. |
+
+Experimental support requires no setting, opt-in flag, or install step. The
+notice is a warning, never an error, and is silenced with Django's stock
+the `silence_netbox_compatibility_warning` key in the plugin's `PLUGINS_CONFIG` entry.
+
 ## Compatibility
 
 | NetBox   | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk    |
@@ -42,7 +56,7 @@ The current repository code declares support for:
 That support comes directly from the plugin config in this repository:
 
 - `min_version = "4.5.8"`
-- `max_version = "4.6.99"`
+- `max_version = "4.7.99"` (the experimental ceiling; `4.5.8`-`4.6.99` is the stable tier)
 
 This compatibility line is validated against NetBox `v4.5.8` through `v4.5.10`
 and `v4.6.0` through `v4.6.6`. It includes per-endpoint API-only vs API+SSH access

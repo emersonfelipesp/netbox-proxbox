@@ -18,7 +18,28 @@ logger = logging.getLogger("netbox_proxbox.branch_lifecycle")
 
 
 def is_branching_available() -> bool:
+    """True only when netbox-branching is a *loaded Django app*.
+
+    Importability is not the question, and treating it as one is unsafe on
+    NetBox 4.7. ``netboxlabs-netbox-branching`` declares ``max_version =
+    "4.6.99"``, and ``netbox/settings.py`` handles an out-of-range plugin by
+    catching ``IncompatiblePluginError``, warning, and **skipping** it. The
+    package therefore remains perfectly importable on 4.7 while its app is
+    absent from ``INSTALLED_APPS`` and its models and schemas do not exist.
+
+    An import check reports "available" in exactly that state, so callers would
+    go on to create branches against an engine that is not running. Requiring
+    the app registry to know about it is what makes the answer true.
+
+    Returns False rather than raising if the registry cannot be consulted —
+    callers treat False as "stay on main", and a detection failure must not
+    take down a sync.
+    """
     try:
+        from django.apps import apps  # noqa: PLC0415
+
+        if not apps.is_installed("netbox_branching"):
+            return False
         import netbox_branching  # noqa: F401, PLC0415
     except Exception:
         return False

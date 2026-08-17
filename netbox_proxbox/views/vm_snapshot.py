@@ -1,6 +1,13 @@
 """Provide NetBox CRUD and tab views for VM snapshot records."""
 
 from django.http import HttpRequest
+from netbox.object_actions import (
+    AddObject,
+    BulkImport,
+    BulkExport,
+    BulkEdit,
+    BulkDelete,
+)
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 from virtualization.models import VirtualMachine
@@ -38,13 +45,7 @@ class VMSnapshotListView(generic.ObjectListView):
     filterset = VMSnapshotFilterSet
     filterset_form = VMSnapshotFilterForm
     template_name = "netbox_proxbox/vmsnapshot_list.html"
-    actions = {
-        "add": {"add"},
-        "bulk_edit": {"change"},
-        "bulk_delete": {"delete"},
-        "bulk_import": {"add"},
-        "export": {"view"},
-    }
+    actions = (AddObject, BulkImport, BulkExport, BulkEdit, BulkDelete)
 
 
 @register_model_view(VMSnapshot)
@@ -110,11 +111,7 @@ class VMSnapshotTabView(TableConfigOverrideMixin, generic.ObjectChildrenView):
     table = VMSnapshotTable
     filterset = VMSnapshotFilterSet
     filterset_form = VMSnapshotFilterForm
-    actions = {
-        "bulk_edit": {"change"},
-        "bulk_delete": {"delete"},
-        "export": {"view"},
-    }
+    actions = (BulkExport, BulkEdit, BulkDelete)
     tab = ViewTab(
         label="Snapshots",
         badge=lambda obj: VMSnapshot.objects.filter(virtual_machine=obj).count(),

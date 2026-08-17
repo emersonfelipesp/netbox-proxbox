@@ -1,5 +1,6 @@
 """Provide NetBox views for dedicated Proxmox VM template inventory."""
 
+from netbox.object_actions import BulkExport, BulkDelete
 from netbox.views import generic
 from utilities.views import register_model_view
 
@@ -35,10 +36,7 @@ class ProxmoxVMTemplateListView(generic.ObjectListView):
     filterset = ProxmoxVMTemplateFilterSet
     filterset_form = ProxmoxVMTemplateFilterForm
     template_name = "netbox_proxbox/proxmoxvmtemplate_list.html"
-    actions = {
-        "bulk_delete": {"delete"},
-        "export": {"view"},
-    }
+    actions = (BulkExport, BulkDelete)
 
 
 @register_model_view(ProxmoxVMTemplate)

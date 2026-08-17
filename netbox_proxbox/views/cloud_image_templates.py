@@ -1,5 +1,6 @@
 """Provide NetBox CRUD views for the Cloud Portal cloud image template catalog."""
 
+from netbox.object_actions import AddObject, BulkExport, BulkDelete
 from netbox.views import generic
 from utilities.views import register_model_view
 
@@ -29,11 +30,7 @@ class CloudImageTemplateListView(generic.ObjectListView):
     filterset = CloudImageTemplateFilterSet
     filterset_form = CloudImageTemplateFilterForm
     template_name = "netbox_proxbox/cloudimagetemplate_list.html"
-    actions = {
-        "add": {"add"},
-        "bulk_delete": {"delete"},
-        "export": {"view"},
-    }
+    actions = (AddObject, BulkExport, BulkDelete)
 
 
 @register_model_view(CloudImageTemplate)

@@ -31,7 +31,7 @@ class ProxmoxSdnFabricListView(ObjectListView):
     table = tables.ProxmoxSdnFabricTable
     filterset = filtersets.ProxmoxSdnFabricFilterSet
     filterset_form = forms.ProxmoxSdnFabricFilterForm
-    actions = {}
+    actions = ()
 
 
 @register_model_view(models.ProxmoxSdnFabric)
@@ -60,7 +60,7 @@ class ProxmoxSdnControllerListView(ObjectListView):
     table = tables.ProxmoxSdnControllerTable
     filterset = filtersets.ProxmoxSdnControllerFilterSet
     filterset_form = forms.ProxmoxSdnControllerFilterForm
-    actions = {}
+    actions = ()
 
 
 @register_model_view(models.ProxmoxSdnController)
@@ -89,7 +89,7 @@ class ProxmoxSdnZoneListView(ObjectListView):
     table = tables.ProxmoxSdnZoneTable
     filterset = filtersets.ProxmoxSdnZoneFilterSet
     filterset_form = forms.ProxmoxSdnZoneFilterForm
-    actions = {}
+    actions = ()
 
 
 @register_model_view(models.ProxmoxSdnZone)
@@ -118,7 +118,7 @@ class ProxmoxSdnVNetListView(ObjectListView):
     table = tables.ProxmoxSdnVNetTable
     filterset = filtersets.ProxmoxSdnVNetFilterSet
     filterset_form = forms.ProxmoxSdnVNetFilterForm
-    actions = {}
+    actions = ()
 
 
 @register_model_view(models.ProxmoxSdnVNet)
@@ -147,7 +147,7 @@ class ProxmoxSdnSubnetListView(ObjectListView):
     table = tables.ProxmoxSdnSubnetTable
     filterset = filtersets.ProxmoxSdnSubnetFilterSet
     filterset_form = forms.ProxmoxSdnSubnetFilterForm
-    actions = {}
+    actions = ()
 
 
 @register_model_view(models.ProxmoxSdnSubnet)
@@ -176,7 +176,7 @@ class ProxmoxSdnBindingListView(ObjectListView):
     table = tables.ProxmoxSdnBindingTable
     filterset = filtersets.ProxmoxSdnBindingFilterSet
     filterset_form = forms.ProxmoxSdnBindingFilterForm
-    actions = {}
+    actions = ()
 
 
 @register_model_view(models.ProxmoxSdnBinding)
@@ -205,7 +205,7 @@ class ProxmoxSdnRouteMapListView(ObjectListView):
     table = tables.ProxmoxSdnRouteMapTable
     filterset = filtersets.ProxmoxSdnRouteMapFilterSet
     filterset_form = forms.ProxmoxSdnRouteMapFilterForm
-    actions = {}
+    actions = ()
 
 
 @register_model_view(models.ProxmoxSdnRouteMap)
@@ -234,7 +234,7 @@ class ProxmoxSdnPrefixListListView(ObjectListView):
     table = tables.ProxmoxSdnPrefixListTable
     filterset = filtersets.ProxmoxSdnPrefixListFilterSet
     filterset_form = forms.ProxmoxSdnPrefixListFilterForm
-    actions = {}
+    actions = ()
 
 
 @register_model_view(models.ProxmoxSdnPrefixList)
