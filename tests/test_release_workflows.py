@@ -91,13 +91,13 @@ def test_gitea_tag_workflow_builds_only_a_release_control_request() -> None:
         job["runs-on"] == "ci-release-netbox-proxbox" for job in parsed["jobs"].values()
     )
     assert "refs/heads/develop:refs/remotes/gitea/release-develop" in workflow
-    assert workflow.count("actions/checkout@") == 1
+    assert "actions/checkout@" not in workflow
+    assert "/usr/local/bin/nmc-gitea-checkout" in workflow
     assert "release-manifest.json" in workflow
     assert "scripts/gitea_ci_gate.py" in workflow
     assert "/commits/${SOURCE_SHA}/statuses" not in workflow
-    assert (
-        "actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de" in workflow
-    )
+    assert "actions/upload-artifact@" not in workflow
+    assert "/usr/local/bin/nmc-upload-gitea-artifact" in workflow
     assert "actions/download-artifact@" not in workflow
     assert "astral-sh/setup-uv@" not in workflow
     assert "RUNNER_TOOL_CACHE" not in workflow
@@ -117,20 +117,21 @@ def test_gitea_tag_workflow_builds_only_a_release_control_request() -> None:
             "https://github.com/astral-sh/uv/releases/download/0.11.28/"
             "uv-x86_64-unknown-linux-gnu.tar.gz"
         )
-        == 1
+        == 0
     )
     assert (
         workflow.count(
             "e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224"
         )
-        == 1
+        == 0
     )
-    assert workflow.count("sha256sum --check --strict") == 6
-    assert workflow.count("UV_PYTHON_INSTALL_DIR=%s") == 1
-    assert workflow.count('test ! -L "$BOOTSTRAP_') == 3
-    assert workflow.count("--no-config") == 2
-    assert workflow.count("--managed-python") == 2
+    assert workflow.count("sha256sum --check --strict") >= 5
+    assert "UV_PYTHON_INSTALL_DIR" not in workflow
+    assert "BOOTSTRAP_" not in workflow
+    assert workflow.count("--no-config") == 1
+    assert "--managed-python" not in workflow
     assert workflow.count("--no-python-downloads") == 1
+    assert "--offline --no-index --find-links" in workflow
     assert '"$BUILD_ROOT/venv/bin/python" -m build --no-isolation' in workflow
     assert "uvx --from twine" not in workflow
 
@@ -183,20 +184,9 @@ def test_release_control_request_binds_exact_repository_run_and_artifacts() -> N
     assert build_job["name"] == (
         "Build exact publisher-credential-free release-control request"
     )
-    assert upload_step["with"] == {
-        "name": "release-control-request",
-        "path": (
-            "release-transfer/*.whl\n"
-            "release-transfer/*.tar.gz\n"
-            "release-transfer/release-manifest.json\n"
-            "release-transfer/release-request.json\n"
-            "release-transfer/runner-completion-attestation.json\n"
-            "release-transfer/runner-completion-attestation.sig\n"
-        ),
-        "if-no-files-found": "error",
-        "retention-days": 1,
-        "compression-level": 0,
-    }
+    assert upload_step["name"] == "Upload exact data-only control request"
+    assert "/usr/local/bin/nmc-upload-gitea-artifact" in upload_step["run"]
+    assert '--root release-transfer --run-id "$GITHUB_RUN_ID"' in upload_step["run"]
     assert '"repository_id": 38' in workflow
     assert '"owner": "emersonfelipesp"' in workflow
     assert '"repository": "netbox-proxbox"' in workflow
@@ -261,7 +251,7 @@ def test_gitea_candidate_build_isolated_from_runner_tokens() -> None:
         "actions": "read",
         "contents": "read",
     }
-    assert validate_source.count("github.token") == 2
+    assert validate_source.count("github.token") == 3
     assert "GITEA_API_TOKEN" in validate_source
     assert build_source.count("github.token") == 1
     assert build_source.count("GITEA_API_TOKEN") == 1
@@ -331,7 +321,8 @@ def test_gitea_candidate_build_isolated_from_runner_tokens() -> None:
     assert "ACTIONS_RUNTIME_TOKEN" not in safe_env
     assert "ACTIONS_ID_TOKEN_REQUEST_TOKEN" not in safe_env
     assert "python3 -I -" in boundary_run
-    assert "persist-credentials: false" in validate_source
+    assert "/usr/local/bin/nmc-gitea-checkout" in validate_source
+    assert "actions/checkout@" not in validate_source
     assert "persist-credentials: false" not in build_source
 
 

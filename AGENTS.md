@@ -298,8 +298,13 @@ PyPI must never be replaced with different bytes; advance to the next `rcN` or
 
 ### Gitea Package Registry
 
-The target workflow verifies the pinned uv archive and uses fresh per-run
-managed-Python and cache roots. Two job-bound ephemeral
+The target workflow uses the runner image's exact Python 3.12.14 and uv 0.12.5
+after verifying the baked interpreter/tool versions, the policy-pinned
+`uv.lock` digest, and the build-lock checksum manifest for its read-only
+wheelhouse. Dependency resolution is offline (`--no-index`, no Python
+downloads). The trusted outer steps use image-baked Gitea checkout and artifact
+clients, so their only network authority is same-origin Gitea access. Two
+job-bound ephemeral
 `ci-release-netbox-proxbox` registrations provide distinct validation and build
 runner identities; each advertises only that release label and terminates after
 its one assigned job.

@@ -156,9 +156,13 @@ sequenceDiagram
   descriptors, bounded regular-file inventory, and copy re-hashing before it
   invokes artifact upload; candidate code receives no job, runtime, package,
   mirror, or write credential.
-  A disposable target job
-  builds one wheel and one sdist after verifying the pinned uv archive and
-  selecting fresh per-run managed-Python/cache roots. After candidate process
+  A disposable target job builds one wheel and one sdist with the runner
+  image's exact Python 3.12.14 and uv 0.12.5 after verifying the baked
+  interpreter/tool versions, the policy-pinned `uv.lock` digest, and the
+  build-lock checksum manifest for its read-only wheelhouse. Dependency
+  resolution is offline (`--no-index`, no Python downloads). The trusted outer
+  steps use image-baked Gitea checkout and artifact clients, so their only
+  network authority is same-origin Gitea access. After candidate process
   cleanup, the root-only external supervisor signs the exact request/artifact
   inventory. The job uploads exactly six data files: the wheel, sdist,
   canonical `release-manifest.json`, canonical `release-request.json`, canonical

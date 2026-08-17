@@ -21,11 +21,15 @@ jobs:
       tag: ${{ steps.policy.outputs.tag }}
       version: ${{ steps.policy.outputs.version }}
     steps:
-      - name: Checkout release source without persisted credentials
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-          persist-credentials: false
+      - name: Checkout exact release source with the image-baked Gitea client
+        env:
+          GITEA_JOB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -z "$(find . -mindepth 1 -maxdepth 1 -print -quit)"
+          /usr/local/bin/nmc-gitea-checkout \
+            --repository "$GITHUB_REPOSITORY" --ref "$GITHUB_REF" \
+            --sha "$GITHUB_SHA" --destination .
 
       - name: Prove exact accepted release runner before source validation
         env:
@@ -157,36 +161,24 @@ jobs:
             --job-name "Build exact publisher-credential-free release-control request" \
             --source-sha "$SOURCE_SHA"
 
-      - name: Install checksum-verified uv and managed Python
-        env:
-          BOOTSTRAP_CACHE_ROOT: ${{ runner.temp }}/netbox-proxbox-uv-cache-${{ github.run_id }}-${{ github.run_attempt }}
-          BOOTSTRAP_PYTHON_ROOT: ${{ runner.temp }}/netbox-proxbox-python-${{ github.run_id }}-${{ github.run_attempt }}
-          BOOTSTRAP_UV_ROOT: ${{ runner.temp }}/netbox-proxbox-uv-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Bind the image-baked offline release toolchain
         run: |
           set -euo pipefail
           test "$GITHUB_RUN_ATTEMPT" = 1
-          test ! -e "$BOOTSTRAP_UV_ROOT"
-          test ! -e "$BOOTSTRAP_PYTHON_ROOT"
-          test ! -e "$BOOTSTRAP_CACHE_ROOT"
-          test ! -L "$BOOTSTRAP_UV_ROOT"
-          test ! -L "$BOOTSTRAP_PYTHON_ROOT"
-          test ! -L "$BOOTSTRAP_CACHE_ROOT"
-          mkdir -m 0700 "$BOOTSTRAP_UV_ROOT" "$BOOTSTRAP_PYTHON_ROOT" "$BOOTSTRAP_CACHE_ROOT"
-          curl --fail --location --proto '=https' --tlsv1.2 \
-            --output "$BOOTSTRAP_UV_ROOT/uv.tar.gz" \
-            https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-unknown-linux-gnu.tar.gz
+          test "$(python3 -I -c 'import platform; print(platform.python_version())')" = 3.12.14
+          test "$(uv --version)" = "uv 0.12.5 (x86_64-unknown-linux-gnu)"
           printf '%s  %s\n' \
-            e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224 \
-            "$BOOTSTRAP_UV_ROOT/uv.tar.gz" | sha256sum --check --strict
-          tar --extract --gzip --file "$BOOTSTRAP_UV_ROOT/uv.tar.gz" \
-            --directory "$BOOTSTRAP_UV_ROOT" --strip-components=1 \
-            uv-x86_64-unknown-linux-gnu/uv
-          chmod 0555 "$BOOTSTRAP_UV_ROOT/uv"
-          printf 'UV_BIN=%s\nUV_PYTHON_INSTALL_DIR=%s\n' \
-            "$BOOTSTRAP_UV_ROOT/uv" "$BOOTSTRAP_PYTHON_ROOT" >> "$GITHUB_ENV"
-          "$BOOTSTRAP_UV_ROOT/uv" python install \
-            --no-config --cache-dir "$BOOTSTRAP_CACHE_ROOT" \
-            --install-dir "$BOOTSTRAP_PYTHON_ROOT" --managed-python --no-bin 3.12.13
+            3cfc9f27521a58d5718547b583e79b043bb7ffd0b657d658733a595eda8b79ee \
+            uv.lock | sha256sum --check --strict
+          test "$(cat /opt/nmc-release/netbox-proxbox/uv.lock.sha256)" = \
+            3cfc9f27521a58d5718547b583e79b043bb7ffd0b657d658733a595eda8b79ee
+          test -d /opt/nmc-release/netbox-proxbox/publish-wheels
+          test ! -L /opt/nmc-release/netbox-proxbox/publish-wheels
+          printf '%s\n' \
+            'UV_BIN=/usr/local/bin/uv' \
+            'UV_PYTHON=/usr/local/bin/python3' \
+            'NMC_PUBLISH_WHEELHOUSE=/opt/nmc-release/netbox-proxbox/publish-wheels' \
+            >> "$GITHUB_ENV"
 
       - name: Build artifacts across a token-free UID boundary
         env:
@@ -201,7 +193,7 @@ jobs:
           test ! -e "$BUILD_ROOT"
           test ! -L "$BUILD_ROOT"
           python3 -I - \
-            "$BUILD_ROOT" "$UV_BIN" "$UV_PYTHON_INSTALL_DIR" \
+            "$BUILD_ROOT" "$UV_BIN" "$UV_PYTHON" "$NMC_PUBLISH_WHEELHOUSE" \
             "$SOURCE_SHA" "$TAG" "$VERSION" \
             "$GITHUB_RUN_ATTEMPT" <<'PY'
           import base64
@@ -227,8 +219,9 @@ jobs:
           TMPFS_INODES_MAX = 50000
           build_root = Path(sys.argv[1]).resolve()
           uv_bin = Path(sys.argv[2]).resolve(strict=True)
-          python_root = Path(sys.argv[3]).resolve(strict=True)
-          source_sha, tag, version, run_attempt = sys.argv[4:]
+          python_bin = Path(sys.argv[3]).resolve(strict=True)
+          publish_wheelhouse = Path(sys.argv[4]).resolve(strict=True)
+          source_sha, tag, version, run_attempt = sys.argv[5:]
 
           if os.geteuid() != 0:
               raise SystemExit("Token boundary requires a root job container")
@@ -361,7 +354,9 @@ jobs:
                       raise SystemExit("Python runtime contains a special file")
 
           hand_tree_to_build_user(build_root)
-          expose_read_only_tree(python_root)
+          if not python_bin.is_file() or python_bin.is_symlink():
+              raise SystemExit("Image-baked Python interpreter is unsafe")
+          expose_read_only_tree(publish_wheelhouse)
           os.chmod(uv_bin.parent, 0o555)
           os.chmod(uv_bin, 0o555)
 
@@ -378,7 +373,8 @@ jobs:
               "TAG": tag,
               "TMPDIR": str(temp_root),
               "UV_BIN": str(uv_bin),
-              "UV_PYTHON_INSTALL_DIR": str(python_root),
+              "UV_PYTHON": str(python_bin),
+              "NMC_PUBLISH_WHEELHOUSE": str(publish_wheelhouse),
               "VERSION": version,
           }
           command = r'''
@@ -394,7 +390,8 @@ jobs:
           cd "$BUILD_ROOT/source"
           UV_PROJECT_ENVIRONMENT="$BUILD_ROOT/venv" \
             "$UV_BIN" sync --no-config --cache-dir "$BUILD_ROOT/uv-cache" \
-            --managed-python --no-python-downloads --python 3.12.13 \
+            --offline --no-index --find-links "$NMC_PUBLISH_WHEELHOUSE" \
+            --no-python-downloads --python "$UV_PYTHON" \
             --locked --only-group publish --no-install-project
           "$BUILD_ROOT/venv/bin/python" -m build --no-isolation --outdir dist
           "$BUILD_ROOT/venv/bin/python" -m twine check dist/*
@@ -909,16 +906,9 @@ jobs:
           test "$(find release-transfer -mindepth 1 -maxdepth 1 -type l | wc -l)" -eq 0
 
       - name: Upload exact data-only control request
-        uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de # v3.2.2-node20
-        with:
-          name: release-control-request
-          path: |
-            release-transfer/*.whl
-            release-transfer/*.tar.gz
-            release-transfer/release-manifest.json
-            release-transfer/release-request.json
-            release-transfer/runner-completion-attestation.json
-            release-transfer/runner-completion-attestation.sig
-          if-no-files-found: error
-          retention-days: 1
-          compression-level: 0
+        run: |
+          set -euo pipefail
+          test -z "${GITHUB_TOKEN:-}"
+          test -z "${GITEA_TOKEN:-}"
+          /usr/local/bin/nmc-upload-gitea-artifact \
+            --root release-transfer --run-id "$GITHUB_RUN_ID"
