@@ -777,3 +777,63 @@ def test_all_persistence_entry_points_use_the_shared_gate() -> None:
     assert "Token Preview" not in command_source
     assert "import requests" not in command_source
     assert "inspect_backend_key" in command_source
+
+
+def test_from_db_override_forwards_unknown_django_keywords() -> None:
+    """`FastAPIEndpoint.from_db()` must accept whatever Django passes it.
+
+    Django adds keyword-only parameters to `Model.from_db()` across releases —
+    6.1, which NetBox 4.7 ships, introduced `fetch_mode` — and *every* queryset
+    that materialises this model goes through the override. A fixed signature
+    therefore converts one upstream addition into
+    `TypeError: from_db() got an unexpected keyword argument` on every read of
+    the model. That is exactly what happened on NetBox 4.7: it turned 5 baseline
+    failures on 4.6.4 into 100 on 4.7.
+
+    Asserted structurally rather than by calling it, because invoking `from_db`
+    needs a real Django model. The property under test is the *signature*: it
+    must accept arbitrary keywords and pass them through to `super()`.
+    """
+    import ast
+    from pathlib import Path
+
+    source = (
+        Path(__file__).resolve().parents[1]
+        / "netbox_proxbox"
+        / "models"
+        / "fastapi_endpoint.py"
+    ).read_text(encoding="utf-8")
+    tree = ast.parse(source)
+
+    overrides = [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "from_db"
+    ]
+    assert len(overrides) == 1, "expected exactly one from_db override"
+    override = overrides[0]
+
+    assert override.args.kwarg is not None, (
+        "from_db must accept **kwargs; without it, a keyword-only parameter added "
+        "by a future Django release breaks every read of this model"
+    )
+
+    # And it must forward them, not merely swallow them.
+    super_calls = [
+        node
+        for node in ast.walk(override)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "from_db"
+    ]
+    assert super_calls, "from_db must delegate to super().from_db()"
+    forwarded = any(
+        kw.arg is None and isinstance(kw.value, ast.Name)
+        and kw.value.id == override.args.kwarg.arg
+        for call in super_calls
+        for kw in call.keywords
+    )
+    assert forwarded, (
+        "from_db must forward **kwargs to super().from_db(); swallowing them "
+        "silently drops behaviour Django asked for"
+    )
