@@ -638,8 +638,11 @@ two artifacts and manifest through no-follow directory/file descriptors,
 requires bounded regular files only, copies exact names, and independently
 re-hashes the copies before upload. After candidate process cleanup, the
 root-only external supervisor signs a canonical completion statement binding
-the initial attestation, live job/runner policy, request digest, and every final
-artifact byte; candidate code cannot access its signer socket. Candidate code
+the initial attestation, its independently derived repository-registration
+scope digest, live job/runner policy, request digest, and every final artifact
+byte; candidate code cannot access its signer socket. The target client and
+controller require that signed scope digest to equal the pinned acceptance
+value. Candidate code
 receives no package, mirror, job, runtime, or write credential.
 
 A disposable `ci-release-netbox-proxbox` job builds the manifest-bound

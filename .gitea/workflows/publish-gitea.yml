@@ -37,10 +37,10 @@ jobs:
           test -f .gitea/release-runner-acceptance.json
           test ! -L .gitea/release-runner-acceptance.json
           printf '%s  %s\n' \
-            bb00911ba0453736a80e829e0f1806a1d236d32cd7c24c5aa80a4c5a1dd40f90 \
+            bf84ac9a455323128f6126a51ea5cc1f5cc8e3aad84b1f9480848db35f50fc8d \
             scripts/gitea_release_runner_gate.py | sha256sum --check --strict
           printf '%s  %s\n' \
-            6a36b55596986686074cc5520ee97367e66b1df2759ae2dac5abdd9bc531a290 \
+            d604575f6276d103afcf5c80e9486b4fa4868809a50aeffae2f728326f4629bb \
             .gitea/release-runner-acceptance.json | sha256sum --check --strict
           python3 -I scripts/gitea_release_runner_gate.py \
             --acceptance .gitea/release-runner-acceptance.json \
@@ -145,10 +145,10 @@ jobs:
           test -f .gitea/release-runner-acceptance.json
           test ! -L .gitea/release-runner-acceptance.json
           printf '%s  %s\n' \
-            bb00911ba0453736a80e829e0f1806a1d236d32cd7c24c5aa80a4c5a1dd40f90 \
+            bf84ac9a455323128f6126a51ea5cc1f5cc8e3aad84b1f9480848db35f50fc8d \
             scripts/gitea_release_runner_gate.py | sha256sum --check --strict
           printf '%s  %s\n' \
-            6a36b55596986686074cc5520ee97367e66b1df2759ae2dac5abdd9bc531a290 \
+            d604575f6276d103afcf5c80e9486b4fa4868809a50aeffae2f728326f4629bb \
             .gitea/release-runner-acceptance.json | sha256sum --check --strict
           python3 -I scripts/gitea_release_runner_gate.py \
             --acceptance .gitea/release-runner-acceptance.json \
@@ -850,7 +850,7 @@ jobs:
                   or (metadata.st_dev, metadata.st_ino, metadata.st_size, metadata.st_mtime_ns)
                   != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
                   or hashlib.sha256(raw).hexdigest()
-                  != "05bcef2befff595d403b59b8258a75583bc44d2dfe39cc5b9bc919167725c3f3"
+                  != "2b0bee25d755f284b5e8eee3b8a84536825328913040c8757374efe51c57f75f"
               ):
                   raise SystemExit("Release attestation client metadata or digest is unsafe")
               flags = getattr(os, "MFD_CLOEXEC", 0x0001) | getattr(

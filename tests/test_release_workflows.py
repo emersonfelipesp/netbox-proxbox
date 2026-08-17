@@ -209,7 +209,7 @@ def test_release_control_request_binds_exact_repository_run_and_artifacts() -> N
     )
     assert "/usr/local/bin/nmc-release-attestation-client" in workflow
     assert (
-        "05bcef2befff595d403b59b8258a75583bc44d2dfe39cc5b9bc919167725c3f3" in workflow
+        "2b0bee25d755f284b5e8eee3b8a84536825328913040c8757374efe51c57f75f" in workflow
     )
     assert "os.O_NOFOLLOW" in workflow
     assert "pass_fds=(snapshot,)" in workflow
@@ -336,15 +336,16 @@ def test_release_runner_gate_is_pinned_and_precedes_candidate_execution() -> Non
     acceptance = json.loads(RUNNER_ACCEPTANCE_PATH.read_bytes())
 
     assert runner_gate_sha256 == (
-        "bb00911ba0453736a80e829e0f1806a1d236d32cd7c24c5aa80a4c5a1dd40f90"
+        "bf84ac9a455323128f6126a51ea5cc1f5cc8e3aad84b1f9480848db35f50fc8d"
     )
     assert acceptance_sha256 == (
-        "6a36b55596986686074cc5520ee97367e66b1df2759ae2dac5abdd9bc531a290"
+        "d604575f6276d103afcf5c80e9486b4fa4868809a50aeffae2f728326f4629bb"
     )
     assert workflow.count(runner_gate_sha256) == 2
     assert workflow.count(acceptance_sha256) == 2
     assert acceptance["runner_id"] == 0
     assert acceptance["runner_name"] == ""
+    assert acceptance["runner_scope_sha256"] == "0" * 64
     assert acceptance["runtime_attestation_sha256"] == "0" * 64
     assert acceptance["network_attestation_sha256"] == "0" * 64
     assert acceptance["attestation_public_key_sha256"] == "0" * 64
@@ -394,6 +395,7 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
         "runner_id": 41,
         "runner_label": "ci-release-netbox-proxbox",
         "runner_name": "ci-release-netbox-proxbox-runner",
+        "runner_scope_sha256": "e" * 64,
         "runtime_attestation_sha256": "a" * 64,
         "runtime_image_digest": "c" * 64,
         "schema": 1,
@@ -478,6 +480,7 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
         "run_id": 12,
         "runner_id": 41,
         "runner_name": "ci-release-netbox-proxbox-runner",
+        "runner_scope_sha256": acceptance["runner_scope_sha256"],
         "runtime_attestation_sha256": acceptance["runtime_attestation_sha256"],
         "runtime_image_digest": acceptance["runtime_image_digest"],
         "schema": 1,
@@ -539,6 +542,7 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
         ("stale", {"issued_at": 800, "expires_at": 1000}),
         ("runtime", {"runtime_image_digest": "e" * 64}),
         ("network", {"network_attestation_sha256": "f" * 64}),
+        ("repository-scope", {"runner_scope_sha256": "f" * 64}),
         (
             "labels",
             {

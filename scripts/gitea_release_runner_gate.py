@@ -63,6 +63,7 @@ def _load_acceptance(path: Path, repository: str) -> dict[str, Any]:
         "runner_id",
         "runner_label",
         "runner_name",
+        "runner_scope_sha256",
         "runtime_attestation_sha256",
         "runtime_image_digest",
         "schema",
@@ -80,6 +81,7 @@ def _load_acceptance(path: Path, repository: str) -> dict[str, Any]:
     pinned_digests = (
         value.get("attestation_public_key_sha256") if isinstance(value, dict) else None,
         network_digest,
+        value.get("runner_scope_sha256") if isinstance(value, dict) else None,
         runtime_digest,
         value.get("runtime_image_digest") if isinstance(value, dict) else None,
         value.get("supervisor_policy_sha256") if isinstance(value, dict) else None,
@@ -301,6 +303,7 @@ def _verify_live_attestation(
         "run_id",
         "runner_id",
         "runner_name",
+        "runner_scope_sha256",
         "runtime_attestation_sha256",
         "runtime_image_digest",
         "schema",
@@ -333,6 +336,7 @@ def _verify_live_attestation(
         or isinstance(attestation.get("runner_id"), bool)
         or attestation.get("runner_name") != acceptance["runner_name"]
         or attestation.get("registered_labels") != acceptance["registered_labels"]
+        or attestation.get("runner_scope_sha256") != acceptance["runner_scope_sha256"]
         or attestation.get("runtime_image_digest") != acceptance["runtime_image_digest"]
         or attestation.get("runtime_attestation_sha256")
         != acceptance["runtime_attestation_sha256"]
