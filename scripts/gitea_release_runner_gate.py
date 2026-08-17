@@ -24,6 +24,7 @@ ZERO_SHA256 = "0" * 64
 OPENSSL = Path("/usr/bin/openssl")
 DEFAULT_ATTESTATION_ROOT = Path("/run/nmc-release-attestation")
 DEFAULT_PUBLIC_KEY = Path("/etc/nmc-release-runner-attestation-public.pem")
+TRUSTED_EXTERNAL_UID = 0
 
 
 class RunnerGateError(ValueError):
@@ -110,7 +111,13 @@ def _load_acceptance(path: Path, repository: str) -> dict[str, Any]:
     return value
 
 
-def _read_external_file(path: Path, label: str, maximum: int) -> bytes:
+def _read_external_file(
+    path: Path,
+    label: str,
+    maximum: int,
+    *,
+    trusted_uid: int = TRUSTED_EXTERNAL_UID,
+) -> bytes:
     try:
         metadata = path.lstat()
         raw = path.read_bytes()
@@ -119,7 +126,7 @@ def _read_external_file(path: Path, label: str, maximum: int) -> bytes:
     if (
         not stat.S_ISREG(metadata.st_mode)
         or stat.S_ISLNK(metadata.st_mode)
-        or metadata.st_uid != 0
+        or metadata.st_uid != trusted_uid
         or metadata.st_nlink != 1
         or metadata.st_size != len(raw)
         or not 0 < len(raw) <= maximum
@@ -138,20 +145,36 @@ def _verify_live_attestation(
     job_id: int,
     source_sha: str,
     now: int,
+    trusted_external_uid: int,
 ) -> str:
     if not attestation_root.is_absolute() or not public_key_path.is_absolute():
         raise RunnerGateError("runner attestation paths are not absolute")
     stem = f"run-{run_id}-job-{job_id}"
     attestation_path = attestation_root / f"{stem}.json"
     signature_path = attestation_root / f"{stem}.sig"
-    public_key = _read_external_file(public_key_path, "attestation public key", 16384)
+    public_key = _read_external_file(
+        public_key_path,
+        "attestation public key",
+        16384,
+        trusted_uid=trusted_external_uid,
+    )
     if (
         hashlib.sha256(public_key).hexdigest()
         != acceptance["attestation_public_key_sha256"]
     ):
         raise RunnerGateError("attestation public key differs from acceptance")
-    raw = _read_external_file(attestation_path, "live runner attestation", 16384)
-    _read_external_file(signature_path, "live runner attestation signature", 16384)
+    raw = _read_external_file(
+        attestation_path,
+        "live runner attestation",
+        16384,
+        trusted_uid=trusted_external_uid,
+    )
+    _read_external_file(
+        signature_path,
+        "live runner attestation signature",
+        16384,
+        trusted_uid=trusted_external_uid,
+    )
     if not OPENSSL.is_file() or OPENSSL.is_symlink():
         raise RunnerGateError("OpenSSL verifier is unavailable")
     try:
@@ -280,6 +303,7 @@ def validate_release_runner(
     attestation_root: Path = DEFAULT_ATTESTATION_ROOT,
     public_key_path: Path = DEFAULT_PUBLIC_KEY,
     now: int | None = None,
+    trusted_external_uid: int = TRUSTED_EXTERNAL_UID,
 ) -> dict[str, Any]:
     acceptance = _load_acceptance(acceptance_path, repository)
     if (
@@ -290,6 +314,9 @@ def validate_release_runner(
         or run_id <= 0
         or not job_name
         or re.fullmatch(r"[0-9a-f]{40}", source_sha) is None
+        or isinstance(trusted_external_uid, bool)
+        or not isinstance(trusted_external_uid, int)
+        or trusted_external_uid < 0
     ):
         raise RunnerGateError("release job identity is invalid")
     payload = (
@@ -339,6 +366,7 @@ def validate_release_runner(
         job_id=int(job["id"]),
         source_sha=source_sha,
         now=int(time.time()) if now is None else now,
+        trusted_external_uid=trusted_external_uid,
     )
     return {
         "acceptance_sha256": hashlib.sha256(_canonical_json(acceptance)).hexdigest(),

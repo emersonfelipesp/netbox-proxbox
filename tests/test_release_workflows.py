@@ -298,7 +298,7 @@ def test_release_runner_gate_is_pinned_and_precedes_candidate_execution() -> Non
     acceptance = json.loads(RUNNER_ACCEPTANCE_PATH.read_bytes())
 
     assert runner_gate_sha256 == (
-        "bb4a719aa7782b0f185d5b4a2bc7761f213b7b09239d2c76cf44ea9d74b2317b"
+        "ea70134b16de15ae98b0aab2b3dd7df53b2de444d9fc732be85c1a91fd05e5d8"
     )
     assert acceptance_sha256 == (
         "6a36b55596986686074cc5520ee97367e66b1df2759ae2dac5abdd9bc531a290"
@@ -395,6 +395,14 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
     acceptance["attestation_public_key_sha256"] = hashlib.sha256(
         public_key.read_bytes()
     ).hexdigest()
+    assert gate.TRUSTED_EXTERNAL_UID == 0
+    with pytest.raises(gate.RunnerGateError, match="metadata is unsafe"):
+        gate._read_external_file(
+            public_key,
+            "attestation public key",
+            16384,
+            trusted_uid=os.geteuid() + 1,
+        )
     acceptance_path = tmp_path / "acceptance.json"
     acceptance_path.write_bytes(gate._canonical_json(acceptance))
     job = {
@@ -462,6 +470,7 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
             attestation_root=attestation_root,
             public_key_path=public_key,
             now=1100,
+            trusted_external_uid=os.geteuid(),
         )["runner_id"]
         == 41
     )
@@ -507,6 +516,7 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
                 attestation_root=attestation_root,
                 public_key_path=public_key,
                 now=1100,
+                trusted_external_uid=os.geteuid(),
             )
 
 
