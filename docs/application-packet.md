@@ -29,11 +29,15 @@ certified.
 (`netbox-ceph`, `netbox-packer`, `netbox-pbs`, `netbox-pdm`) carry the same
 vendored `compat.py`, but only in releases published after this change; every
 earlier companion artifact still declares `max_version = "4.6.99"`.
-Because `PluginConfig.validate()` raises while `netbox/settings.py` is still
-executing, a single companion left at the old ceiling prevents NetBox from
-starting at all on 4.7 — a failed boot, not a disabled plugin. Do not read
-this section as clearance to move a mixed installation to 4.7: upgrade every
-installed Proxbox-family plugin to a 4.7-capable release first.
+A companion left at the old ceiling does **not** fail the boot — `settings.py`
+catches `IncompatiblePluginError`, warns, and **skips** that plugin, so NetBox
+starts without it. That is the more dangerous outcome for a certification
+reader: the symptom is an absence (missing views, REST routes, background jobs)
+rather than an error, and a health probe against NetBox still returns 200. Do
+not read this section as clearance to move a mixed installation to 4.7. Upgrade
+every installed Proxbox-family plugin to a 4.7-capable release first, then
+verify each is registered with `apps.is_installed()` rather than inferring it
+from a successful start.
 
 NetBox `v4.7.0-beta1` is additionally an **upstream pre-release**. Upstream
 does not support pre-releases in production and does not guarantee an upgrade

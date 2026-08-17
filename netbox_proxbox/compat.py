@@ -59,6 +59,7 @@ __all__ = [
     "STABLE_MAX_NETBOX_VERSION",
     "STABLE_MIN_NETBOX_VERSION",
     "current_netbox_support_level",
+    "detect_netbox_designation",
     "detect_netbox_version",
     "experimental_warning_message",
     "is_prerelease_netbox",
@@ -91,6 +92,12 @@ PLUGIN_MAX_VERSION = EXPERIMENTAL_MAX_NETBOX_VERSION
 # test harnesses and ``manage.py`` re-entry can call it again, and a duplicated
 # startup warning reads as two separate problems.
 _REGISTERED_APP_LABELS: set[str] = set()
+
+# How many trailing ``-segment`` groups is_prerelease_netbox() will peel off a
+# display version before giving up. NetBox appends at most a designation and a
+# build, and a build may itself contain dashes (``Docker-3.4.0``), so a small
+# bound covers every real shape without looping on pathological input.
+_VERSION_SUFFIX_STRIP_LIMIT = 6
 
 
 class NetBoxSupportLevel(StrEnum):
@@ -174,23 +181,87 @@ def current_netbox_support_level() -> NetBoxSupportLevel:
     return netbox_support_level(comparison_version)
 
 
-def is_prerelease_netbox(display_version: str) -> bool:
-    """True when ``display_version`` is a NetBox pre-release (beta, rc, alpha).
+def is_prerelease_netbox(
+    display_version: str, designation: str | None = None
+) -> bool:
+    """True when the running NetBox is a pre-release (beta, rc, alpha).
 
-    Pass the **display** version. The comparison version deliberately strips the
-    designation — ``RELEASE.version`` is a bare ``"4.7.0"`` even at tag
-    ``v4.7.0-beta1`` — so only ``RELEASE.full_version`` can answer this.
+    ``designation`` is authoritative when supplied: NetBox leaves it unset on a
+    stable release and sets it to ``"beta1"``/``"rc1"`` otherwise. Prefer it.
 
-    Returns False rather than raising on an unparseable string: this only
-    decorates a warning, and failing to classify maturity must not escalate.
+    The ``display_version`` fallback exists for callers that only have the
+    string, and it must cope with **build metadata**. ``full_version`` is built
+    as ``version[-designation][-build]``, so a Docker image reports
+    ``"4.7.0-beta1-Docker-3.4.0"`` — which ``packaging`` rejects outright. A
+    naive parse would then return False and silently drop the pre-release
+    caveat on every containerised install, which is precisely the deployment
+    most likely to be running a beta. So on a parse failure, trailing
+    ``-segment`` groups are peeled off one at a time until something parses.
+
+    Returns False rather than raising if nothing parses: this only decorates a
+    warning, and a failure to classify maturity must not escalate.
+    """
+    if designation:
+        return True
+
+    text = str(display_version)
+    # Bounded: each iteration removes one trailing "-segment".
+    for _attempt in range(_VERSION_SUFFIX_STRIP_LIMIT):
+        try:
+            return bool(_version.parse(text).is_prerelease)
+        except Exception:  # noqa: BLE001 — try the next-shorter prefix
+            if "-" not in text:
+                return False
+            text = text.rsplit("-", 1)[0]
+    return False
+
+
+def detect_netbox_designation() -> str | None:
+    """Return NetBox's release designation (``"beta1"``, ``"rc1"``) or ``None``.
+
+    This is the *authoritative* maturity signal and the reason it exists as a
+    separate reader: ``RELEASE.full_version`` is assembled as
+    ``version[-designation][-build]``, so a Docker image reports something like
+    ``"4.7.0-beta1-Docker-3.4.0"`` — which is not a parseable version at all.
+    A stable release leaves ``designation`` unset.
+
+    Returns ``None`` rather than raising if it cannot be read; the caller falls
+    back to parsing the display string.
     """
     try:
-        return bool(_version.parse(str(display_version)).is_prerelease)
+        from django.conf import settings
+
+        release: Any = getattr(settings, "RELEASE", None)
+        designation = getattr(release, "designation", None)
+        return str(designation) if designation else None
     except Exception:  # noqa: BLE001 — cosmetic classification only
+        return None
+
+
+def _check_is_silenced(check_id: str) -> bool:
+    """True when ``check_id`` is listed in Django's ``SILENCED_SYSTEM_CHECKS``.
+
+    Django's setting suppresses the *system check framework's* output. It knows
+    nothing about the ``ready()`` log line this module also emits, so without
+    this the documented suppression procedure would only half work: an operator
+    who accepted the risk and silenced the check would still get the warning in
+    every process's startup log, forever. Consulting the same setting is what
+    makes one documented action actually silence both surfaces.
+
+    Fails *open* — an unreadable setting means the notice is still shown, which
+    is the safe direction for a maturity warning.
+    """
+    try:
+        from django.conf import settings
+
+        return check_id in set(getattr(settings, "SILENCED_SYSTEM_CHECKS", None) or ())
+    except Exception:  # noqa: BLE001 — suppression must never break startup
         return False
 
 
-def experimental_warning_message(plugin_label: str, display_version: str) -> str:
+def experimental_warning_message(
+    plugin_label: str, display_version: str, designation: str | None = None
+) -> str:
     """Compose the operator-facing experimental-support warning.
 
     A NetBox pre-release gets an extra sentence. Upstream does not support beta
@@ -207,7 +278,7 @@ def experimental_warning_message(plugin_label: str, display_version: str) -> str
         f"NetBox {STABLE_MIN_NETBOX_VERSION} through "
         f"{STABLE_MAX_NETBOX_VERSION}."
     )
-    if is_prerelease_netbox(display_version):
+    if is_prerelease_netbox(display_version, designation):
         message += (
             f" NetBox {display_version} is also an upstream pre-release: "
             f"upstream does not support pre-releases in production and does "
@@ -263,7 +334,7 @@ def register_netbox_compatibility_check(
         if level is not NetBoxSupportLevel.EXPERIMENTAL:
             return []
 
-        if is_prerelease_netbox(display_version):
+        if is_prerelease_netbox(display_version, detect_netbox_designation()):
             hint = (
                 "The plugin itself is operational on this release; this is a "
                 "maturity notice, not a plugin fault. Do not treat it as "
@@ -283,7 +354,9 @@ def register_netbox_compatibility_check(
 
         return [
             DjangoWarning(
-                experimental_warning_message(plugin_label, display_version),
+                experimental_warning_message(
+                    plugin_label, display_version, detect_netbox_designation()
+                ),
                 hint=hint,
                 id=f"{app_label}.W001",
             )
@@ -297,13 +370,21 @@ def register_netbox_compatibility_check(
         _comparison_version, display_version = detect_netbox_version()
         level = current_netbox_support_level()
     except Exception as exc:  # noqa: BLE001 — never block startup on a version read
-        log.warning(
-            "%s could not determine the running NetBox version (%s); "
-            "compatibility band not verified.",
-            plugin_label,
-            exc,
-        )
+        if not _check_is_silenced(f"{app_label}.W002"):
+            log.warning(
+                "%s could not determine the running NetBox version (%s); "
+                "compatibility band not verified.",
+                plugin_label,
+                exc,
+            )
         return
 
-    if level is NetBoxSupportLevel.EXPERIMENTAL:
-        log.warning("%s", experimental_warning_message(plugin_label, display_version))
+    if level is NetBoxSupportLevel.EXPERIMENTAL and not _check_is_silenced(
+        f"{app_label}.W001"
+    ):
+        log.warning(
+            "%s",
+            experimental_warning_message(
+                plugin_label, display_version, detect_netbox_designation()
+            ),
+        )

@@ -67,6 +67,7 @@ detect_netbox_version = compat.detect_netbox_version
 experimental_warning_message = compat.experimental_warning_message
 register_netbox_compatibility_check = compat.register_netbox_compatibility_check
 is_prerelease_netbox = compat.is_prerelease_netbox
+detect_netbox_designation = compat.detect_netbox_designation
 
 STABLE_MIN_NETBOX_VERSION = compat.STABLE_MIN_NETBOX_VERSION
 STABLE_MAX_NETBOX_VERSION = compat.STABLE_MAX_NETBOX_VERSION
@@ -426,10 +427,42 @@ def test_experimental_warning_message_names_the_certified_range() -> None:
         ("4.6.4", False),
         # Must not raise: this only decorates a warning.
         ("not-a-version", False),
+        # NetBox builds full_version as version[-designation][-build], so a
+        # container image reports a string packaging rejects outright. A naive
+        # parse returns False here and silently drops the pre-release caveat on
+        # every containerised install — the deployment most likely to be running
+        # a beta in the first place.
+        ("4.7.0-beta1-Docker-3.4.0", True),
+        ("4.7.0-rc1-Docker-3.4.0", True),
+        ("4.7.0-Docker-3.4.0", False),
+        ("4.6.4-Docker-3.3.0", False),
     ],
 )
 def test_prerelease_detection(display_version: str, expected: bool) -> None:
     assert is_prerelease_netbox(display_version) is expected
+
+
+@pytest.mark.parametrize(
+    ("display_version", "designation", "expected"),
+    [
+        # The designation is authoritative: NetBox leaves it unset on a stable
+        # release, so any value means pre-release regardless of the string.
+        ("4.7.0-Docker-3.4.0", "beta1", True),
+        ("totally unparseable", "rc2", True),
+        ("4.7.0", None, False),
+        ("4.7.0", "", False),
+    ],
+)
+def test_designation_overrides_string_parsing(
+    display_version: str, designation: str | None, expected: bool
+) -> None:
+    assert is_prerelease_netbox(display_version, designation) is expected
+
+
+def test_prerelease_detection_terminates_on_pathological_input() -> None:
+    """The suffix-stripping loop is bounded; a dash storm must not hang."""
+    assert is_prerelease_netbox("-" * 500) is False
+    assert is_prerelease_netbox("a-" * 500) is False
 
 
 def test_prerelease_warning_states_the_upstream_restriction() -> None:
@@ -474,3 +507,79 @@ def test_prerelease_hint_does_not_read_as_production_clearance(
     # Silencing the check must not be presented as lifting upstream's restriction.
     assert "does not lift it" in hint
     assert "fully operational" not in hint
+
+
+# ---------------------------------------------------------------------------
+# SILENCED_SYSTEM_CHECKS suppresses BOTH surfaces
+# ---------------------------------------------------------------------------
+
+
+def test_silencing_the_check_also_silences_the_startup_log(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """One documented action must silence both surfaces, not just the check.
+
+    Django's SILENCED_SYSTEM_CHECKS only suppresses the check framework's
+    output. The ready() log line is ours, so it has to consult the same setting
+    — otherwise an operator who accepted the risk still gets the warning in
+    every process's startup log forever, and the documented procedure is a lie.
+    """
+    _reset_registration_guard(monkeypatch)
+    settings = types.SimpleNamespace(
+        RELEASE=_FakeRelease(
+            NETBOX_470_BETA1_COMPARISON_VERSION, NETBOX_470_BETA1_DISPLAY_VERSION
+        ),
+        VERSION=NETBOX_470_BETA1_DISPLAY_VERSION,
+        SILENCED_SYSTEM_CHECKS=["netbox_proxbox.W001"],
+    )
+    _install_fake_django(monkeypatch, settings)
+
+    with caplog.at_level(logging.WARNING):
+        register_netbox_compatibility_check(
+            _FakeAppConfig(), logging.getLogger("test.compat")
+        )
+
+    assert caplog.records == []
+
+
+def test_silencing_a_different_check_does_not_silence_ours(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Guard the guard: the suppression must be keyed on our own id."""
+    _reset_registration_guard(monkeypatch)
+    settings = types.SimpleNamespace(
+        RELEASE=_FakeRelease(
+            NETBOX_470_BETA1_COMPARISON_VERSION, NETBOX_470_BETA1_DISPLAY_VERSION
+        ),
+        VERSION=NETBOX_470_BETA1_DISPLAY_VERSION,
+        SILENCED_SYSTEM_CHECKS=["some_other_plugin.W001", "netbox_proxbox.W002"],
+    )
+    _install_fake_django(monkeypatch, settings)
+
+    with caplog.at_level(logging.WARNING):
+        register_netbox_compatibility_check(
+            _FakeAppConfig(), logging.getLogger("test.compat")
+        )
+
+    assert len(caplog.records) == 1
+
+
+def test_a_missing_silenced_setting_still_shows_the_notice(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Suppression fails open — an unreadable setting must not hide the notice."""
+    _reset_registration_guard(monkeypatch)
+    settings = types.SimpleNamespace(
+        RELEASE=_FakeRelease(
+            NETBOX_470_BETA1_COMPARISON_VERSION, NETBOX_470_BETA1_DISPLAY_VERSION
+        ),
+        VERSION=NETBOX_470_BETA1_DISPLAY_VERSION,
+    )  # no SILENCED_SYSTEM_CHECKS attribute at all
+    _install_fake_django(monkeypatch, settings)
+
+    with caplog.at_level(logging.WARNING):
+        register_netbox_compatibility_check(
+            _FakeAppConfig(), logging.getLogger("test.compat")
+        )
+
+    assert len(caplog.records) == 1

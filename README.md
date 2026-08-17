@@ -360,7 +360,7 @@ across the whole Proxbox plugin stack:
 
 | Tier | NetBox range | What it means |
 |---|---|---|
-| **Stable** | `4.5.8` – `4.6.99` | Certified and CI-gated. No warnings. |
+| **Stable** | `4.5.8` – `4.6.99` | Admitted silently. Directly exercised in CI at v4.5.8, v4.5.10, v4.6.0 and v4.6.6. |
 | **Experimental** | `4.7.0` – `4.7.99` | Loads and runs normally; the release line is not yet certified, so the plugin warns once at startup. |
 
 Experimental support needs **no configuration at all** — no setting, no opt-in
@@ -389,13 +389,14 @@ SILENCED_SYSTEM_CHECKS = ["netbox_proxbox.W001"]
 NetBox releases below `4.5.8` and from `4.8` onward are still refused outright
 by NetBox's own plugin version gate.
 
-> **Upgrading to NetBox 4.7 upgrades the whole plugin stack at once.**
-> `PluginConfig.validate()` raises while `netbox/settings.py` is still
-> executing, so one installed Proxbox-family plugin still capped at `4.6.99`
-> stops NetBox from starting at all — a failed boot, not a disabled plugin.
-> Upgrade `netbox-proxbox`, `netbox-ceph`, `netbox-packer`, `netbox-pbs`, and
-> `netbox-pdm` together before moving an instance to 4.7. On 4.5.8–4.6.x,
-> mixed versions remain fine.
+> **Upgrading to NetBox 4.7 means upgrading the whole plugin stack.** A
+> Proxbox-family plugin left at the old `4.6.99` ceiling does not stop NetBox
+> from starting — `settings.py` catches the incompatibility, warns, and
+> **silently skips that plugin**. The symptom is an absence (missing views, API
+> routes and jobs), not an error, and a health probe against NetBox still
+> passes. Upgrade `netbox-proxbox`, `netbox-ceph`, `netbox-packer`,
+> `netbox-pbs` and `netbox-pdm` together, then confirm each is registered with
+> `apps.is_installed(...)`. On 4.5.8–4.6.x, mixed versions remain fine.
 
 > **On beta version strings.** NetBox splits its release identity: at tag
 > `v4.7.0-beta1`, `release.yaml` carries `version: "4.7.0"` with

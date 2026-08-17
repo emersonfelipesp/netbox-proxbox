@@ -11,7 +11,7 @@ vendored byte-identically across the whole Proxbox plugin stack
 
 | Tier | NetBox range | Constant | Behaviour |
 |---|---|---|---|
-| Stable | `4.5.8` – `4.6.99` | `STABLE_MIN_NETBOX_VERSION` / `STABLE_MAX_NETBOX_VERSION` | Certified, CI-gated, silent. |
+| Stable | `4.5.8` – `4.6.99` | `STABLE_MIN_NETBOX_VERSION` / `STABLE_MAX_NETBOX_VERSION` | Admitted silently. Directly exercised in CI at v4.5.8, v4.5.10, v4.6.0 and v4.6.6; the rest of the band is admitted on the strength of those. |
 | Experimental | `4.7.0` – `4.7.99` | `EXPERIMENTAL_MIN_NETBOX_VERSION` / `EXPERIMENTAL_MAX_NETBOX_VERSION` | Loads and runs; warns once via system check `netbox_proxbox.W001`. |
 
 `PluginConfig.min_version` is the stable floor; `PluginConfig.max_version` is
@@ -23,19 +23,34 @@ configuration. The warning is silenceable through Django's stock
 Anything below `4.5.8` or from `4.8` onward is refused by NetBox's own plugin
 version gate.
 
-### Upgrading to NetBox 4.7 upgrades the whole plugin stack at once
+> **These tiers describe the *next* release, not the currently published
+> package.** Every artifact published before this change declares
+> `max_version = "4.6.99"` and will refuse NetBox 4.7 regardless of what this
+> table says. `pip install` of an older version therefore still caps at 4.6.99.
 
-`PluginConfig.validate()` raises `IncompatiblePluginError` **while
-`netbox/settings.py` is still executing**, so a single installed plugin whose
-`max_version` still reads `4.6.99` prevents NetBox from starting at all — it is
-not a degraded mode or a disabled plugin, it is a failed boot.
+### Upgrading to NetBox 4.7 means upgrading the whole plugin stack
 
-That makes the Proxbox-family plugins an all-or-nothing set on 4.7. Upgrading
-`netbox-proxbox` while leaving `netbox-ceph`, `netbox-packer`, `netbox-pbs`, or
-`netbox-pdm` at an older release fails exactly as hard as the reverse. Before
-moving a NetBox instance to 4.7, upgrade **every** installed Proxbox-family
-plugin to a release carrying the `4.7.99` ceiling; on 4.5.8–4.6.x, mixed
-versions remain fine as before.
+A Proxbox-family plugin left at the old `4.6.99` ceiling does **not** stop
+NetBox from starting. `netbox/settings.py` catches `IncompatiblePluginError`,
+emits a Python `warnings.warn`, and **skips that plugin** — NetBox comes up
+without it.
+
+That is easy to miss and worth stating plainly, because the quiet failure is
+the dangerous one. `warnings.warn` does not reach the application log in a
+normal production deployment, so the visible symptom is not an error but an
+*absence*: the plugin's navigation entries, views, REST API routes, and
+background jobs are simply gone, and anything that depended on them fails later
+and further away. A health probe against NetBox itself still returns 200.
+
+So before moving an instance to 4.7, upgrade **every** installed Proxbox-family
+plugin to a release carrying the `4.7.99` ceiling, and afterwards verify each
+one is actually registered rather than trusting that NetBox started:
+
+```bash
+python manage.py shell -c "from django.apps import apps; print([p for p in ('netbox_proxbox','netbox_pbs','netbox_pdm','netbox_ceph','netbox_packer') if apps.is_installed(p)])"
+```
+
+On 4.5.8–4.6.x, mixed versions remain fine as before.
 
 **Beta version strings.** NetBox's `release.yaml` at tag `v4.7.0-beta1` reads
 `version: "4.7.0"` with `designation: "beta1"`, and `netbox/settings.py` passes
