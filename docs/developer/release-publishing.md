@@ -115,9 +115,10 @@ sequenceDiagram
   build root, preventing candidate writes to runner workflow-command files and
   shared temporary storage; the runner must match that architecture and expose
   that ABI or the build fails. The
-  activation canary must also prove the dedicated untrusted CI VM denies
-  management and production network access; the runner's online label is not
-  sufficient evidence.
+  `ci-release-netbox-proxbox` activation canary must separately prove that the
+  exact repository-scoped release runner/container denies management and
+  production network access; the runner's online label is not sufficient
+  evidence.
   Candidate stdout/stderr is bounded and captured instead of reaching the runner
   workflow-command parser, with live `set-env`/`add-path` canaries checked in the
   next step. The job fails closed unless cgroup v2 proves hard one-CPU,

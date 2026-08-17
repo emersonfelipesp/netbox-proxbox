@@ -612,9 +612,10 @@ and resource limits, no read access to the root parent's `/proc/.../environ`,
 and post-build process cleanup. A fail-closed x86-64 Landlock ABI 3+ ruleset permits
 filesystem writes only below the per-run build root, so candidate code cannot
 modify runner workflow-command files or consume shared writable temporary
-storage. The `ci-untrusted-python312` activation canary must also prove that its
-dedicated CI VM denies management and production network access; an online
-runner label alone is not that evidence. Only reviewed outer shell/Python code
+storage. The `ci-release-netbox-proxbox` activation canary must separately prove
+that the exact repository-scoped release runner/container denies management and
+production network access; an online runner label alone is not that evidence.
+Only reviewed outer shell/Python code
 regains the runtime-bearing environment. Candidate output is captured with a one-MiB limit
 and is never relayed raw to the runner command parser; legacy `set-env` and
 `add-path` probes must not affect the next step. The job fails closed unless
@@ -630,7 +631,7 @@ requires bounded regular files only, copies exact names, and independently
 re-hashes the copies before upload. Candidate code receives no package, mirror,
 job, runtime, or write credential.
 
-A disposable `ci-untrusted-python312` job builds the manifest-bound
+A disposable `ci-release-netbox-proxbox` job builds the manifest-bound
 wheel/sdist and uploads exactly four data files: wheel, sdist,
 `release-manifest.json`, and canonical `release-request.json`. The request
 binds repository ID, source/tag/version, first-attempt run identity, target

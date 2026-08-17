@@ -531,7 +531,12 @@ def test_gitea_publish_does_not_bypass_nms_production_deployment() -> None:
 
 
 def test_operator_docs_match_the_locked_control_dispatch_contract() -> None:
-    documentation = "\n".join(_read(path) for path in RELEASE_CONTROL_DOC_PATHS)
+    workflow = yaml.safe_load(_read(GITEA_PUBLISH_WORKFLOW))
+    release_labels = {job["runs-on"] for job in workflow["jobs"].values()}
+    assert len(release_labels) == 1
+    release_label = release_labels.pop()
+    documentation_by_path = {path: _read(path) for path in RELEASE_CONTROL_DOC_PATHS}
+    documentation = "\n".join(documentation_by_path.values())
 
     assert "publish=true" not in documentation
     assert "validate.yml" in documentation
@@ -541,6 +546,13 @@ def test_operator_docs_match_the_locked_control_dispatch_contract() -> None:
     assert "request SHA-256" in documentation
     assert "do not merge" in documentation.lower()
     assert "existing publisher" in documentation.lower()
+    for path, text in documentation_by_path.items():
+        assert f"`{release_label}` activation canary" in text, path
+        assert "dedicated untrusted CI VM" not in text, path
+
+    agent_docs = (REPO_ROOT / "AGENTS.md", REPO_ROOT / "CLAUDE.md")
+    for path in agent_docs:
+        assert f"disposable `{release_label}` job" in documentation_by_path[path]
 
 
 def test_github_publish_accepts_rc_pushes_and_final_release_events_only() -> None:
