@@ -15,7 +15,7 @@ flowchart TD
     Start([Choose target release\nX.Y.Z])
     Bump[Bump package version\npyproject.toml + netbox_proxbox/__init__.py + uv.lock]
     RCTag[Create release-candidate tag\nvX.Y.ZrcN]
-    RCCI[Target CI builds a four-file\ncredential-free control request]
+    RCCI[Target CI builds a four-file\npublisher-credential-free control request]
     Control[Locked release control verifies\nand publishes exact sealed bytes]
     RCUpload[Upload vX.Y.ZrcN to TestPyPI\nwithout --skip-existing]
     RCValidate[Install rcN from TestPyPI\nrun package checks]
@@ -94,10 +94,39 @@ sequenceDiagram
 - A candidate tag must resolve to the current canonical Gitea `develop` SHA.
   Each latest required CI status must resolve through authenticated Gitea API
   records to a successful `ci.yml` push run and run attempt for that exact SHA,
-  trusted actor, job name, and untrusted runner class. Only that validation
+  trusted actor, job name, and exact sole `ci-untrusted-python312` job label.
+  Only that validation
   job's built-in token receives `actions: read` plus `contents: read`; Actions
   evidence is a separate Gitea permission scope. The separate untrusted build
-  job receives only `contents: read`. A disposable target job
+  job declares only `contents: read`, fetches the validated public source
+  without checkout credentials, and rejects job-token environment variables.
+  Gitea's public-repository permission floor can still make public Actions data
+  readable, so this is not an Actions-read confidentiality boundary. The
+  outer job also receives Gitea's artifact runtime token. Candidate-controlled
+  dependency installation, PEP 517 build, Twine check, and manifest generation
+  therefore run as a separate numeric UID with an allowlisted token-free
+  environment, no-new-privileges/resource limits, denial of the root parent's
+  `/proc/.../environ`, and cleanup of every surviving process for that UID. A
+  fail-closed x86-64 Landlock ABI 3+ rule permits writes only below the per-run
+  build root, preventing candidate writes to runner workflow-command files and
+  shared temporary storage; the runner must match that architecture and expose
+  that ABI or the build fails. The
+  activation canary must also prove the dedicated untrusted CI VM denies
+  management and production network access; the runner's online label is not
+  sufficient evidence.
+  Candidate stdout/stderr is bounded and captured instead of reaching the runner
+  workflow-command parser, with live `set-env`/`add-path` canaries checked in the
+  next step. The job fails closed unless cgroup v2 proves hard one-CPU,
+  2-GiB-memory, and 64-PID ceilings and `/nmc-build` is a hard
+  one-GiB/50,000-inode tmpfs. The 900-second wall bound therefore also caps
+  cumulative CPU, while parent accounting includes live and reaped descendants.
+  Logical-size, filesystem-block, file-count, and output checks remain defense
+  in depth; CPU parsing does not trust whitespace in Linux process names.
+  Reviewed outer code uses exact no-follow file
+  descriptors, bounded regular-file inventory, and copy re-hashing before it
+  invokes artifact upload; candidate code receives no job, runtime, package,
+  mirror, or write credential.
+  A disposable target job
   builds one wheel and one sdist after verifying the pinned uv archive and
   selecting fresh per-run managed-Python/cache roots. It uploads exactly four
   data files: the wheel, sdist, canonical manifest, and canonical

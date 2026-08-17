@@ -47,7 +47,7 @@ jobs:
           test "$SOURCE_SHA" = "$DEVELOP_SHA"
           test "$SOURCE_SHA" = "$(git rev-parse HEAD^{commit})"
           VERSION="${TAG#v}"
-          python3 - "$VERSION" <<'PY'
+          python3 -I - "$VERSION" <<'PY'
           import ast
           import pathlib
           import re
@@ -74,7 +74,12 @@ jobs:
           if values != [version]:
               raise SystemExit("Runtime plugin version differs from tag")
           PY
-          python3 scripts/gitea_ci_gate.py \
+          test -f scripts/gitea_ci_gate.py
+          test ! -L scripts/gitea_ci_gate.py
+          printf '%s  %s\n' \
+            14ef8bdb2c39fd4d239b8541a66b1b4708be6a61d7374b62f660b2673db5d8dd \
+            scripts/gitea_ci_gate.py | sha256sum --check --strict
+          python3 -I scripts/gitea_ci_gate.py \
             --owner emersonfelipesp --repository netbox-proxbox \
             --source-sha "$SOURCE_SHA" --trusted-actor emersonfelipesp \
             --required-context "CI / Static checks and mocked regressions (push)" \
@@ -83,17 +88,28 @@ jobs:
             "$TAG" "$VERSION" "$SOURCE_SHA" >> "$GITHUB_OUTPUT"
 
   build-request:
-    name: Build exact credential-free release-control request
+    name: Build exact publisher-credential-free release-control request
     needs: validate-source
     runs-on: ci-untrusted-python312
     permissions:
       contents: read
     steps:
-      - name: Checkout validated source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ needs.validate-source.outputs.source_sha }}
-          persist-credentials: false
+      - name: Fetch validated public source without a job token
+        env:
+          SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          test -z "${GITHUB_TOKEN:-}"
+          test -z "${GITEA_TOKEN:-}"
+          test -z "$(find . -mindepth 1 -maxdepth 1 -print -quit)"
+          export GIT_CONFIG_NOSYSTEM=1
+          export GIT_CONFIG_GLOBAL=/dev/null
+          git init --quiet
+          git remote add origin https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox.git
+          git fetch --quiet --force --no-tags --depth=1 origin "$SOURCE_SHA"
+          git -c advice.detachedHead=false checkout --quiet --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
 
       - name: Install checksum-verified uv and managed Python
         env:
@@ -106,6 +122,9 @@ jobs:
           test ! -e "$BOOTSTRAP_UV_ROOT"
           test ! -e "$BOOTSTRAP_PYTHON_ROOT"
           test ! -e "$BOOTSTRAP_CACHE_ROOT"
+          test ! -L "$BOOTSTRAP_UV_ROOT"
+          test ! -L "$BOOTSTRAP_PYTHON_ROOT"
+          test ! -L "$BOOTSTRAP_CACHE_ROOT"
           mkdir -m 0700 "$BOOTSTRAP_UV_ROOT" "$BOOTSTRAP_PYTHON_ROOT" "$BOOTSTRAP_CACHE_ROOT"
           curl --fail --location --proto '=https' --tlsv1.2 \
             --output "$BOOTSTRAP_UV_ROOT/uv.tar.gz" \
@@ -123,9 +142,9 @@ jobs:
             --no-config --cache-dir "$BOOTSTRAP_CACHE_ROOT" \
             --install-dir "$BOOTSTRAP_PYTHON_ROOT" --managed-python --no-bin 3.12.13
 
-      - name: Build and bind exact artifacts
+      - name: Build artifacts across a token-free UID boundary
         env:
-          BUILD_ROOT: ${{ runner.temp }}/netbox-proxbox-build-${{ github.run_id }}-${{ github.run_attempt }}
+          BUILD_ROOT: /nmc-build/netbox-proxbox-${{ github.run_id }}-${{ github.run_attempt }}
           SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
           TAG: ${{ needs.validate-source.outputs.tag }}
           VERSION: ${{ needs.validate-source.outputs.version }}
@@ -134,7 +153,187 @@ jobs:
           umask 077
           test "$GITHUB_RUN_ATTEMPT" = 1
           test ! -e "$BUILD_ROOT"
-          mkdir -p "$BUILD_ROOT"
+          test ! -L "$BUILD_ROOT"
+          python3 -I - \
+            "$BUILD_ROOT" "$UV_BIN" "$UV_PYTHON_INSTALL_DIR" \
+            "$SOURCE_SHA" "$TAG" "$VERSION" \
+            "$GITHUB_RUN_ATTEMPT" <<'PY'
+          import base64
+          import ctypes
+          import errno
+          import os
+          from pathlib import Path
+          import resource
+          import selectors
+          import shutil
+          import signal
+          import stat
+          import struct
+          import subprocess
+          import sys
+          import time
+
+          BUILD_UID = 65532
+          BUILD_GID = 65532
+          CGROUP_MEMORY_MAX = 2 * 1024 * 1024 * 1024
+          CGROUP_PIDS_MAX = 64
+          TMPFS_BYTES_MAX = 1024 * 1024 * 1024
+          TMPFS_INODES_MAX = 50000
+          build_root = Path(sys.argv[1]).resolve()
+          uv_bin = Path(sys.argv[2]).resolve(strict=True)
+          python_root = Path(sys.argv[3]).resolve(strict=True)
+          source_sha, tag, version, run_attempt = sys.argv[4:]
+
+          if os.geteuid() != 0:
+              raise SystemExit("Token boundary requires a root job container")
+          if run_attempt != "1":
+              raise SystemExit("Release builds must be first-attempt jobs")
+          if build_root.exists() or build_root.is_symlink():
+              raise SystemExit("Build root already exists")
+
+          def positive_limit(path: Path, label: str) -> int:
+              try:
+                  raw = path.read_text(encoding="ascii").strip()
+                  value = int(raw)
+              except (OSError, UnicodeError, ValueError) as exc:
+                  raise SystemExit(f"Hard {label} cgroup limit is unavailable") from exc
+              if value <= 0:
+                  raise SystemExit(f"Hard {label} cgroup limit is invalid")
+              return value
+
+          def verify_kernel_quotas(root: Path) -> None:
+              quota_root = Path("/nmc-build")
+              if root.parent != quota_root or not quota_root.is_dir():
+                  raise SystemExit("Build root is outside the hard quota mount")
+              mount_rows = []
+              for row in Path("/proc/self/mountinfo").read_text(encoding="utf-8").splitlines():
+                  fields = row.split()
+                  try:
+                      separator = fields.index("-")
+                  except ValueError:
+                      continue
+                  if len(fields) > separator + 1 and fields[4] == str(quota_root):
+                      mount_rows.append(fields[separator + 1])
+              if mount_rows != ["tmpfs"]:
+                  raise SystemExit("Build root lacks an exact tmpfs quota mount")
+              filesystem = os.statvfs(quota_root)
+              total_bytes = filesystem.f_blocks * filesystem.f_frsize
+              if not 0 < total_bytes <= TMPFS_BYTES_MAX:
+                  raise SystemExit("Build tmpfs byte quota is unavailable")
+              if not 0 < filesystem.f_files <= TMPFS_INODES_MAX:
+                  raise SystemExit("Build tmpfs inode quota is unavailable")
+
+              cgroup_root = Path("/sys/fs/cgroup")
+              if not (cgroup_root / "cgroup.controllers").is_file():
+                  raise SystemExit("Unified cgroup v2 limits are unavailable")
+              cpu_fields = (cgroup_root / "cpu.max").read_text(encoding="ascii").split()
+              if len(cpu_fields) != 2 or cpu_fields[0] == "max":
+                  raise SystemExit("Hard CPU cgroup limit is unavailable")
+              try:
+                  cpu_quota, cpu_period = map(int, cpu_fields)
+              except ValueError as exc:
+                  raise SystemExit("Hard CPU cgroup limit is invalid") from exc
+              if cpu_quota <= 0 or cpu_period <= 0 or cpu_quota > cpu_period:
+                  raise SystemExit("Hard CPU cgroup limit exceeds one CPU")
+              if positive_limit(cgroup_root / "memory.max", "memory") > CGROUP_MEMORY_MAX:
+                  raise SystemExit("Hard memory cgroup limit exceeds policy")
+              if positive_limit(cgroup_root / "pids.max", "PID") > CGROUP_PIDS_MAX:
+                  raise SystemExit("Hard PID cgroup limit exceeds policy")
+
+          verify_kernel_quotas(build_root)
+
+          def processes_for_uid(uid: int) -> list[int]:
+              matches: list[int] = []
+              for status_path in Path("/proc").glob("[0-9]*/status"):
+                  try:
+                      rows = status_path.read_text(encoding="utf-8").splitlines()
+                  except (FileNotFoundError, ProcessLookupError):
+                      continue
+                  except PermissionError as exc:
+                      raise SystemExit("Cannot inspect reserved build UID") from exc
+                  uid_row = next((row for row in rows if row.startswith("Uid:")), "")
+                  fields = uid_row.split()
+                  if len(fields) >= 2 and fields[1] == str(uid):
+                      matches.append(int(status_path.parent.name))
+              return matches
+
+          if processes_for_uid(BUILD_UID):
+              raise SystemExit("Reserved build UID is already active")
+
+          source_root = build_root / "source"
+          home_root = build_root / "home"
+          temp_root = build_root / "tmp"
+          ignored = shutil.ignore_patterns(
+              ".git", ".pytest_cache", ".ruff_cache", ".venv", "dist", "release-transfer"
+          )
+          for source_path in Path.cwd().rglob("*"):
+              if source_path.is_symlink():
+                  raise SystemExit("Source symlinks are forbidden")
+          shutil.copytree(Path.cwd(), source_root, ignore=ignored)
+          home_root.mkdir(mode=0o700)
+          temp_root.mkdir(mode=0o700)
+
+          def checked_tree(root: Path) -> tuple[Path, list[Path]]:
+              resolved_root = root.resolve(strict=True)
+              candidates = [resolved_root, *resolved_root.rglob("*")]
+              for candidate in candidates:
+                  if candidate.is_symlink():
+                      target = candidate.resolve(strict=True)
+                      if not target.is_relative_to(resolved_root):
+                          raise SystemExit("External tree symlinks are forbidden")
+              return resolved_root, candidates
+
+          def hand_tree_to_build_user(root: Path) -> None:
+              _, candidates = checked_tree(root)
+              for candidate in candidates:
+                  os.chown(candidate, BUILD_UID, BUILD_GID, follow_symlinks=False)
+
+          def expose_read_only_tree(root: Path) -> None:
+              _, candidates = checked_tree(root)
+              for candidate in candidates:
+                  if candidate.is_symlink():
+                      continue
+                  mode = candidate.stat(follow_symlinks=False).st_mode
+                  if stat.S_ISDIR(mode):
+                      os.chmod(candidate, 0o555, follow_symlinks=False)
+                  elif stat.S_ISREG(mode):
+                      read_mode = 0o555 if mode & 0o111 else 0o444
+                      os.chmod(candidate, read_mode, follow_symlinks=False)
+                  else:
+                      raise SystemExit("Python runtime contains a special file")
+
+          hand_tree_to_build_user(build_root)
+          expose_read_only_tree(python_root)
+          os.chmod(uv_bin.parent, 0o555)
+          os.chmod(uv_bin, 0o555)
+
+          safe_env = {
+              "BOUNDARY_PARENT_PID": str(os.getpid()),
+              "BUILD_ROOT": str(build_root),
+              "HOME": str(home_root),
+              "LANG": "C",
+              "LC_ALL": "C",
+              "PATH": "/usr/local/bin:/usr/bin:/bin",
+              "PYTHONNOUSERSITE": "1",
+              "RUN_ATTEMPT": run_attempt,
+              "SOURCE_SHA": source_sha,
+              "TAG": tag,
+              "TMPDIR": str(temp_root),
+              "UV_BIN": str(uv_bin),
+              "UV_PYTHON_INSTALL_DIR": str(python_root),
+              "VERSION": version,
+          }
+          command = r'''
+          set -eu
+          printf '%s\n' '::set-env name=NMC_RELEASE_BOUNDARY_INJECTED::yes'
+          printf '%s\n' '::add-path::/tmp/nmc-release-boundary-injected'
+          test "$RUN_ATTEMPT" = 1
+          test -z "${GITHUB_TOKEN:-}"
+          test -z "${GITEA_TOKEN:-}"
+          test -z "${ACTIONS_RUNTIME_TOKEN:-}"
+          test -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}"
+          test ! -r "/proc/$BOUNDARY_PARENT_PID/environ"
+          cd "$BUILD_ROOT/source"
           UV_PROJECT_ENVIRONMENT="$BUILD_ROOT/venv" \
             "$UV_BIN" sync --no-config --cache-dir "$BUILD_ROOT/uv-cache" \
             --managed-python --no-python-downloads --python 3.12.13 \
@@ -144,17 +343,372 @@ jobs:
           "$BUILD_ROOT/venv/bin/python" scripts/release_artifacts.py manifest \
             --dist dist --package netbox-proxbox --version "$VERSION" \
             --source-sha "$SOURCE_SHA" --manifest release-manifest.json
-          mkdir release-transfer
-          cp dist/*.whl dist/*.tar.gz release-manifest.json release-transfer/
+          '''
+
+          def restrict_writes_to_build_root(root: Path) -> None:
+              # Landlock ABI 3 is the first version that also mediates truncate(2).
+              if os.uname().machine != "x86_64":
+                  raise OSError(errno.ENOTSUP, "Landlock syscall mapping requires x86-64")
+              create_ruleset = 444
+              add_rule = 445
+              restrict_self = 446
+              create_ruleset_version = 1
+              rule_path_beneath = 1
+              write_file = 1 << 1
+              remove_dir = 1 << 4
+              remove_file = 1 << 5
+              make_char = 1 << 6
+              make_dir = 1 << 7
+              make_reg = 1 << 8
+              make_sock = 1 << 9
+              make_fifo = 1 << 10
+              make_block = 1 << 11
+              make_sym = 1 << 12
+              refer = 1 << 13
+              truncate = 1 << 14
+              write_access = (
+                  write_file
+                  | remove_dir
+                  | remove_file
+                  | make_char
+                  | make_dir
+                  | make_reg
+                  | make_sock
+                  | make_fifo
+                  | make_block
+                  | make_sym
+                  | refer
+                  | truncate
+              )
+
+              class RulesetAttr(ctypes.Structure):
+                  _fields_ = [("handled_access_fs", ctypes.c_uint64)]
+
+              libc = ctypes.CDLL(None, use_errno=True)
+              libc.syscall.restype = ctypes.c_long
+
+              def checked_syscall(number: int, *args: object) -> int:
+                  result = libc.syscall(number, *args)
+                  if result < 0:
+                      error_number = ctypes.get_errno()
+                      raise OSError(error_number, os.strerror(error_number))
+                  return int(result)
+
+              abi = checked_syscall(
+                  create_ruleset,
+                  ctypes.c_void_p(),
+                  0,
+                  create_ruleset_version,
+              )
+              if abi < 3:
+                  raise OSError(errno.ENOTSUP, "Landlock ABI 3 or newer is required")
+
+              ruleset_attr = RulesetAttr(handled_access_fs=write_access)
+              ruleset_fd = checked_syscall(
+                  create_ruleset,
+                  ctypes.byref(ruleset_attr),
+                  ctypes.sizeof(ruleset_attr),
+                  0,
+              )
+              root_fd = os.open(root, os.O_PATH | os.O_CLOEXEC)
+              try:
+                  path_rule_raw = struct.pack("=Qi", write_access, root_fd)
+                  path_rule = ctypes.create_string_buffer(
+                      path_rule_raw,
+                      len(path_rule_raw),
+                  )
+                  checked_syscall(
+                      add_rule,
+                      ruleset_fd,
+                      rule_path_beneath,
+                      path_rule,
+                      0,
+                  )
+                  if libc.prctl(38, 1, 0, 0, 0) != 0:  # PR_SET_NO_NEW_PRIVS
+                      error_number = ctypes.get_errno()
+                      raise OSError(error_number, os.strerror(error_number))
+                  checked_syscall(restrict_self, ruleset_fd, 0)
+              finally:
+                  os.close(root_fd)
+                  os.close(ruleset_fd)
+
+          def drop_privileges() -> None:
+              restrict_writes_to_build_root(build_root)
+              resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+              resource.setrlimit(resource.RLIMIT_AS, (2 * 1024 * 1024 * 1024,) * 2)
+              resource.setrlimit(resource.RLIMIT_CPU, (900, 900))
+              resource.setrlimit(resource.RLIMIT_FSIZE, (128 * 1024 * 1024,) * 2)
+              resource.setrlimit(resource.RLIMIT_NOFILE, (256, 256))
+              resource.setrlimit(resource.RLIMIT_NPROC, (64, 64))
+              os.setgroups([])
+              os.setgid(BUILD_GID)
+              os.setuid(BUILD_UID)
+              os.umask(0o077)
+
+          def kill_remaining_build_processes() -> None:
+              for _ in range(4):
+                  pids = processes_for_uid(BUILD_UID)
+                  if not pids:
+                      return
+                  for pid in pids:
+                      try:
+                          os.kill(pid, signal.SIGKILL)
+                      except OSError as exc:
+                          if exc.errno not in {errno.ESRCH}:
+                              raise
+                  time.sleep(0.05)
+              if processes_for_uid(BUILD_UID):
+                  raise SystemExit("Untrusted build process survived cleanup")
+
+          def build_tree_usage() -> tuple[int, int]:
+              total_size = 0
+              total_entries = 0
+              for candidate in build_root.rglob("*"):
+                  metadata = candidate.lstat()
+                  total_entries += 1
+                  if stat.S_ISREG(metadata.st_mode):
+                      total_size += metadata.st_size
+              return total_size, total_entries
+
+          def process_cpu_ticks(stat_row: str) -> int:
+              # The parenthesized comm field can contain spaces and closing
+              # parentheses, so split only after its final delimiter.
+              _, delimiter, remaining = stat_row.rpartition(") ")
+              if not delimiter:
+                  raise ValueError("Malformed process stat record")
+              fields = remaining.split()
+              if len(fields) <= 14:
+                  raise ValueError("Incomplete process stat record")
+              # Include reaped descendants accumulated in cutime/cstime so a
+              # fork-and-reap loop cannot reset aggregate CPU accounting.
+              return sum(int(field) for field in fields[11:15])
+
+          def available_filesystem_bytes(root: Path) -> int:
+              usage = os.statvfs(root)
+              return usage.f_bavail * usage.f_frsize
+
+          def build_process_usage() -> tuple[int, int, float]:
+              total_rss_kib = 0
+              total_cpu_ticks = 0
+              pids = processes_for_uid(BUILD_UID)
+              for pid in pids:
+                  try:
+                      status_rows = Path(f"/proc/{pid}/status").read_text().splitlines()
+                      stat_row = Path(f"/proc/{pid}/stat").read_text()
+                  except (FileNotFoundError, PermissionError, ProcessLookupError):
+                      continue
+                  rss_row = next(
+                      (row for row in status_rows if row.startswith("VmRSS:")), ""
+                  )
+                  rss_fields = rss_row.split()
+                  if len(rss_fields) >= 2:
+                      total_rss_kib += int(rss_fields[1])
+                  total_cpu_ticks += process_cpu_ticks(stat_row)
+              clock_ticks = os.sysconf("SC_CLK_TCK")
+              return len(pids), total_rss_kib, total_cpu_ticks / clock_ticks
+
+          process = subprocess.Popen(
+              ["/bin/sh", "-c", command],
+              cwd=source_root,
+              env=safe_env,
+              preexec_fn=drop_privileges,
+              start_new_session=True,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.STDOUT,
+          )
+          output = bytearray()
+          output_limit = 1024 * 1024
+          disk_limit = 1024 * 1024 * 1024
+          baseline_available_bytes = available_filesystem_bytes(build_root)
+          deadline = time.monotonic() + 900
+          boundary_error: str | None = None
+          selector = selectors.DefaultSelector()
+          assert process.stdout is not None
+          os.set_blocking(process.stdout.fileno(), False)
+          selector.register(process.stdout, selectors.EVENT_READ)
+          try:
+              while selector.get_map():
+                  if time.monotonic() >= deadline:
+                      boundary_error = "Token-free build exceeded wall-clock limit"
+                      break
+                  events = selector.select(timeout=0.25)
+                  for key, _ in events:
+                      chunk = os.read(key.fd, 65536)
+                      if not chunk:
+                          selector.unregister(key.fileobj)
+                          continue
+                      if len(output) + len(chunk) > output_limit:
+                          boundary_error = "Token-free build output exceeded limit"
+                          break
+                      output.extend(chunk)
+                  if boundary_error is not None:
+                      break
+                  try:
+                      disk_bytes, entries = build_tree_usage()
+                      available_bytes = available_filesystem_bytes(build_root)
+                      pids, rss_kib, cpu_seconds = build_process_usage()
+                  except (FileNotFoundError, PermissionError, ProcessLookupError):
+                      boundary_error = "Token-free build filesystem changed"
+                      break
+                  consumed_bytes = max(0, baseline_available_bytes - available_bytes)
+                  if disk_bytes > disk_limit or consumed_bytes > disk_limit or entries > 50000:
+                      boundary_error = "Token-free build exceeded disk quota"
+                      break
+                  if pids > 64 or rss_kib > 2 * 1024 * 1024 or cpu_seconds > 900:
+                      boundary_error = "Token-free build exceeded process quota"
+                      break
+                  if process.poll() is not None and not events:
+                      break
+              if boundary_error is not None:
+                  try:
+                      os.killpg(process.pid, signal.SIGKILL)
+                  except OSError as exc:
+                      if exc.errno not in {errno.ESRCH}:
+                          raise
+              return_code = process.wait(timeout=10)
+          finally:
+              selector.close()
+              try:
+                  os.killpg(process.pid, signal.SIGKILL)
+              except OSError as exc:
+                  if exc.errno not in {errno.ESRCH}:
+                      raise
+              kill_remaining_build_processes()
+          if boundary_error is not None or return_code != 0:
+              encoded_output = base64.b64encode(bytes(output)).decode("ascii")
+              if encoded_output:
+                  print(f"candidate-output-base64:{encoded_output}", file=sys.stderr)
+              raise SystemExit(boundary_error or "Token-free build failed")
+          PY
+
+      - name: Bind exact artifacts into the control request
+        env:
+          BUILD_ROOT: /nmc-build/netbox-proxbox-${{ github.run_id }}-${{ github.run_attempt }}
+          SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
+          TAG: ${{ needs.validate-source.outputs.tag }}
+          VERSION: ${{ needs.validate-source.outputs.version }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -z "${NMC_RELEASE_BOUNDARY_INJECTED:-}"
+          case ":$PATH:" in
+            *:/tmp/nmc-release-boundary-injected:*) exit 1 ;;
+          esac
+          DIST_ROOT="$BUILD_ROOT/source/dist"
+          MANIFEST_PATH="$BUILD_ROOT/source/release-manifest.json"
+          test ! -e release-transfer
+          python3 -I - \
+            "$DIST_ROOT" "$MANIFEST_PATH" release-transfer "$VERSION" <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          import stat
+          import sys
+
+          dist_root = Path(sys.argv[1])
+          manifest_path = Path(sys.argv[2])
+          transfer_root = Path(sys.argv[3])
+          version = sys.argv[4]
+          nofollow = getattr(os, "O_NOFOLLOW", 0)
+          if not nofollow:
+              raise SystemExit("No-follow artifact handoff is unavailable")
+
+          dist_fd = os.open(dist_root, os.O_RDONLY | os.O_DIRECTORY | nofollow)
+          manifest_parent_fd = os.open(
+              manifest_path.parent, os.O_RDONLY | os.O_DIRECTORY | nofollow
+          )
+          transfer_root.mkdir(mode=0o700)
+          transfer_fd = os.open(transfer_root, os.O_RDONLY | os.O_DIRECTORY | nofollow)
+
+          def copy_regular(
+              source_dir_fd: int, name: str, maximum_size: int
+          ) -> tuple[str, int]:
+              metadata = os.stat(name, dir_fd=source_dir_fd, follow_symlinks=False)
+              if not stat.S_ISREG(metadata.st_mode):
+                  raise SystemExit("Release handoff contains a special file")
+              if metadata.st_size <= 0 or metadata.st_size > maximum_size:
+                  raise SystemExit("Release handoff file size is invalid")
+              source_fd = os.open(name, os.O_RDONLY | nofollow, dir_fd=source_dir_fd)
+              source_open = os.fstat(source_fd)
+              if (source_open.st_dev, source_open.st_ino) != (
+                  metadata.st_dev,
+                  metadata.st_ino,
+              ):
+                  raise SystemExit("Release handoff source changed")
+              destination_fd = os.open(
+                  name,
+                  os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow,
+                  0o600,
+                  dir_fd=transfer_fd,
+              )
+              digest = hashlib.sha256()
+              written = 0
+              try:
+                  while True:
+                      chunk = os.read(source_fd, 1024 * 1024)
+                      if not chunk:
+                          break
+                      digest.update(chunk)
+                      written += len(chunk)
+                      pending = memoryview(chunk)
+                      while pending:
+                          count = os.write(destination_fd, pending)
+                          if count <= 0:
+                              raise SystemExit("Release handoff write failed")
+                          pending = pending[count:]
+                  os.fsync(destination_fd)
+              finally:
+                  os.close(source_fd)
+                  os.close(destination_fd)
+              if written != metadata.st_size:
+                  raise SystemExit("Release handoff copy size changed")
+              copied_fd = os.open(name, os.O_RDONLY | nofollow, dir_fd=transfer_fd)
+              copied_digest = hashlib.sha256()
+              try:
+                  while True:
+                      chunk = os.read(copied_fd, 1024 * 1024)
+                      if not chunk:
+                          break
+                      copied_digest.update(chunk)
+              finally:
+                  os.close(copied_fd)
+              if copied_digest.digest() != digest.digest():
+                  raise SystemExit("Release handoff copy digest changed")
+              return digest.hexdigest(), written
+
+          try:
+              names = sorted(os.listdir(dist_fd))
+              expected_wheel = f"netbox_proxbox-{version}-py3-none-any.whl"
+              expected_sdist = f"netbox_proxbox-{version}.tar.gz"
+              expected_names = sorted([expected_wheel, expected_sdist])
+              if names != expected_names:
+                  raise SystemExit("Release artifact inventory is invalid")
+              copy_regular(dist_fd, expected_wheel, 128 * 1024 * 1024)
+              copy_regular(dist_fd, expected_sdist, 128 * 1024 * 1024)
+              if manifest_path.name != "release-manifest.json":
+                  raise SystemExit("Release manifest identity is invalid")
+              copy_regular(
+                  manifest_parent_fd, manifest_path.name, 1024 * 1024
+              )
+              if sorted(os.listdir(transfer_fd)) != sorted(
+                  [expected_wheel, expected_sdist, manifest_path.name]
+              ):
+                  raise SystemExit("Release transfer inventory changed")
+          finally:
+              os.close(dist_fd)
+              os.close(manifest_parent_fd)
+              os.close(transfer_fd)
+          PY
+          MANIFEST_PATH="release-transfer/release-manifest.json"
           WORKFLOW_SHA256="$(sha256sum .gitea/workflows/publish-gitea.yml | cut -d' ' -f1)"
-          export WORKFLOW_SHA256
-          "$BUILD_ROOT/venv/bin/python" - <<'PY'
+          export MANIFEST_PATH WORKFLOW_SHA256
+          python3 -I - <<'PY'
           import hashlib
           import json
           import os
           from pathlib import Path
 
-          manifest_raw = Path("release-manifest.json").read_bytes()
+          manifest_raw = Path(os.environ["MANIFEST_PATH"]).read_bytes()
           manifest = json.loads(manifest_raw)
           artifacts = [
               {"filename": row["name"], "sha256": row["sha256"], "size": row["size"]}

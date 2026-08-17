@@ -594,11 +594,39 @@ overlapping `create` event: Gitea emits both events for one tag, which would
 race duplicate immutable release requests. The tag must equal current
 `develop`; every latest required status must resolve to authenticated
 successful `ci.yml` push-run/run-attempt/job evidence for that exact SHA,
-trusted actor, expected job, and untrusted runner class. That validation job's
+trusted actor, expected job, and the exact sole `ci-untrusted-python312` runner
+label. That validation job's
 built-in token is explicitly limited to `actions: read` and `contents: read`;
 omitting the separate Actions scope would deny the run/job evidence lookup. The
-separate untrusted build job receives only `contents: read` and no Actions-read
-authority.
+separate untrusted build job declares only `contents: read`, never references a
+job token, and fetches the validated public source without checkout credentials.
+Because this repository is public, Gitea's repository permission floor can
+still authorize a job token to read public Actions data even when the job omits
+that scope; do not claim otherwise. Gitea also injects an artifact runtime token
+into the outer job. The enforced boundary therefore runs all candidate-controlled
+dependency installation, PEP 517 build, Twine check, and manifest generation as
+a separate numeric UID with a minimal allowlisted environment, no-new-privileges
+and resource limits, no read access to the root parent's `/proc/.../environ`,
+and post-build process cleanup. A fail-closed x86-64 Landlock ABI 3+ ruleset permits
+filesystem writes only below the per-run build root, so candidate code cannot
+modify runner workflow-command files or consume shared writable temporary
+storage. The `ci-untrusted-python312` activation canary must also prove that its
+dedicated CI VM denies management and production network access; an online
+runner label alone is not that evidence. Only reviewed outer shell/Python code
+regains the runtime-bearing environment. Candidate output is captured with a one-MiB limit
+and is never relayed raw to the runner command parser; legacy `set-env` and
+`add-path` probes must not affect the next step. The job fails closed unless
+cgroup v2 proves hard one-CPU/2-GiB/64-PID ceilings and `/nmc-build` is a hard
+one-GiB/50,000-inode tmpfs. A 900-second wall limit therefore bounds cumulative
+CPU; live-plus-reaped CPU/RSS/PID, logical-size/filesystem-block/file-count,
+per-process memory/CPU/file-size, and descriptor checks provide defense in
+depth. Linux CPU
+records are parsed after the process-name delimiter so whitespace in a candidate
+process name cannot evade aggregate accounting. The outer handoff opens the exact
+two artifacts and manifest through no-follow directory/file descriptors,
+requires bounded regular files only, copies exact names, and independently
+re-hashes the copies before upload. Candidate code receives no package, mirror,
+job, runtime, or write credential.
 
 A disposable `ci-untrusted-python312` job builds the manifest-bound
 wheel/sdist and uploads exactly four data files: wheel, sdist,

@@ -188,8 +188,7 @@ def _validate_job(
     labels = job.get("labels")
     runner_name = job.get("runner_name")
     if (
-        not isinstance(labels, list)
-        or "ci-untrusted-python312" not in labels
+        labels != ["ci-untrusted-python312"]
         or not isinstance(runner_name, str)
         or not runner_name.startswith("ci-untrusted-")
     ):

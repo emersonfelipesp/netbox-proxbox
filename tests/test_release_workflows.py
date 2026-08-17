@@ -2,12 +2,17 @@
 
 from __future__ import annotations
 
+import ast
+import hashlib
 import importlib.util
+import os
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
-import yaml
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GITEA_PUBLISH_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "publish-gitea.yml"
@@ -58,6 +63,7 @@ def test_gitea_tag_workflow_builds_only_a_release_control_request() -> None:
         job["runs-on"] == "ci-untrusted-python312" for job in parsed["jobs"].values()
     )
     assert "refs/heads/develop:refs/remotes/gitea/release-develop" in workflow
+    assert workflow.count("actions/checkout@") == 1
     assert "release-manifest.json" in workflow
     assert "scripts/gitea_ci_gate.py" in workflow
     assert "/commits/${SOURCE_SHA}/statuses" not in workflow
@@ -91,13 +97,36 @@ def test_gitea_tag_workflow_builds_only_a_release_control_request() -> None:
         )
         == 1
     )
-    assert workflow.count("sha256sum --check --strict") == 1
+    assert workflow.count("sha256sum --check --strict") == 2
     assert workflow.count("UV_PYTHON_INSTALL_DIR=%s") == 1
+    assert workflow.count('test ! -L "$BOOTSTRAP_') == 3
     assert workflow.count("--no-config") == 2
     assert workflow.count("--managed-python") == 2
     assert workflow.count("--no-python-downloads") == 1
     assert '"$BUILD_ROOT/venv/bin/python" -m build --no-isolation' in workflow
     assert "uvx --from twine" not in workflow
+
+
+def test_token_bearing_ci_gate_uses_the_pinned_reviewed_script() -> None:
+    workflow = _read(GITEA_PUBLISH_WORKFLOW)
+    parsed = yaml.safe_load(workflow)
+    policy_run = parsed["jobs"]["validate-source"]["steps"][1]["run"]
+    expected_digest = hashlib.sha256(CI_GATE_PATH.read_bytes()).hexdigest()
+    isolated_invocation = "python3 -I scripts/gitea_ci_gate.py"
+
+    assert expected_digest == (
+        "14ef8bdb2c39fd4d239b8541a66b1b4708be6a61d7374b62f660b2673db5d8dd"
+    )
+    assert 'python3 -I - "$VERSION"' in policy_run
+    assert "test -f scripts/gitea_ci_gate.py" in policy_run
+    assert "test ! -L scripts/gitea_ci_gate.py" in policy_run
+    assert expected_digest in policy_run
+    assert "scripts/gitea_ci_gate.py | sha256sum --check --strict" in policy_run
+    assert isolated_invocation in policy_run
+    assert policy_run.index(expected_digest) < policy_run.index(isolated_invocation)
+    assert policy_run.index("sha256sum --check --strict") < policy_run.index(
+        isolated_invocation
+    )
 
 
 def test_release_control_request_binds_exact_repository_run_and_artifacts() -> None:
@@ -108,6 +137,9 @@ def test_release_control_request_binds_exact_repository_run_and_artifacts() -> N
     upload_step = build_job["steps"][-1]
 
     assert build_job["needs"] == "validate-source"
+    assert build_job["name"] == (
+        "Build exact publisher-credential-free release-control request"
+    )
     assert upload_step["with"] == {
         "name": "release-control-request",
         "path": "release-transfer",
@@ -130,10 +162,24 @@ def test_release_control_request_binds_exact_repository_run_and_artifacts() -> N
     )
     assert "secrets." not in build_source
     assert "github.token" not in build_source
+    assert "actions/checkout@" not in build_source
+    assert "https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox.git" in build_source
+    assert (
+        'git fetch --quiet --force --no-tags --depth=1 origin "$SOURCE_SHA"'
+        in build_source
+    )
+    assert 'test "$(git rev-parse HEAD)" = "$SOURCE_SHA"' in build_source
+    assert "export GIT_CONFIG_NOSYSTEM=1" in build_source
+    assert "export GIT_CONFIG_GLOBAL=/dev/null" in build_source
+    assert 'test -z "$(find . -mindepth 1 -maxdepth 1 -print -quit)"' in build_source
+    assert (
+        'test -z "$(git status --porcelain=v1 --untracked-files=all)"' in build_source
+    )
 
 
-def test_gitea_job_token_is_confined_to_source_validation() -> None:
-    parsed = yaml.safe_load(_read(GITEA_PUBLISH_WORKFLOW))
+def test_gitea_candidate_build_isolated_from_runner_tokens() -> None:
+    workflow = _read(GITEA_PUBLISH_WORKFLOW)
+    parsed = yaml.safe_load(workflow)
     validate_source = yaml.safe_dump(parsed["jobs"]["validate-source"])
     build_source = yaml.safe_dump(parsed["jobs"]["build-request"])
 
@@ -147,8 +193,302 @@ def test_gitea_job_token_is_confined_to_source_validation() -> None:
     assert "GITEA_API_TOKEN" in validate_source
     assert "github.token" not in build_source
     assert "GITEA_API_TOKEN" not in build_source
+    boundary_step = parsed["jobs"]["build-request"]["steps"][2]
+    boundary_run = boundary_step["run"]
+    boundary_code = boundary_run.split("<<'PY'\n", 1)[1].rsplit("\nPY\n", 1)[0]
+    compile(boundary_code, "publish-gitea-token-boundary", "exec")
+
+    assert 'test -z "${GITHUB_TOKEN:-}"' in boundary_run
+    assert 'test -z "${GITEA_TOKEN:-}"' in boundary_run
+    assert 'test -z "${ACTIONS_RUNTIME_TOKEN:-}"' in boundary_run
+    assert 'test -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}"' in boundary_run
+    assert 'test ! -r "/proc/$BOUNDARY_PARENT_PID/environ"' in boundary_run
+    assert 'test ! -L "$BUILD_ROOT"' in boundary_run
+    assert "build_root.exists() or build_root.is_symlink()" in boundary_code
+    assert "os.setgroups([])" in boundary_code
+    assert "os.setgid(BUILD_GID)" in boundary_code
+    assert "os.setuid(BUILD_UID)" in boundary_code
+    assert "preexec_fn=drop_privileges" in boundary_code
+    assert "start_new_session=True" in boundary_code
+    assert "kill_remaining_build_processes()" in boundary_code
+    assert "stdout=subprocess.PIPE" in boundary_code
+    assert "stderr=subprocess.STDOUT" in boundary_code
+    assert "selectors.DefaultSelector()" in boundary_code
+    assert "base64.b64encode" in boundary_code
+    assert "output_limit = 1024 * 1024" in boundary_code
+    assert "deadline = time.monotonic() + 900" in boundary_code
+    assert "resource.RLIMIT_AS" in boundary_code
+    assert "resource.RLIMIT_CPU" in boundary_code
+    assert "restrict_writes_to_build_root(build_root)" in boundary_code
+    assert "Landlock ABI 3 or newer is required" in boundary_code
+    assert "Landlock syscall mapping requires x86-64" in boundary_code
+    assert "write_file = 1 << 1" in boundary_code
+    assert "truncate = 1 << 14" in boundary_code
+    assert "build_tree_usage()" in boundary_code
+    assert "build_process_usage()" in boundary_code
+    assert "available_filesystem_bytes(build_root)" in boundary_code
+    assert "consumed_bytes > disk_limit" in boundary_code
+    assert "process_cpu_ticks(stat_row)" in boundary_code
+    assert "verify_kernel_quotas(build_root)" in boundary_code
+    assert 'mount_rows != ["tmpfs"]' in boundary_code
+    assert 'cgroup_root / "cpu.max"' in boundary_code
+    assert 'cgroup_root / "memory.max"' in boundary_code
+    assert 'cgroup_root / "pids.max"' in boundary_code
+    assert "TMPFS_BYTES_MAX = 1024 * 1024 * 1024" in boundary_code
+    assert "TMPFS_INODES_MAX = 50000" in boundary_code
+    assert 'raise SystemExit("Cannot inspect reserved build UID")' in boundary_code
+    assert "::set-env name=NMC_RELEASE_BOUNDARY_INJECTED::yes" in boundary_code
+    assert "::add-path::/tmp/nmc-release-boundary-injected" in boundary_code
+    bind_run = parsed["jobs"]["build-request"]["steps"][3]["run"]
+    assert 'test -z "${NMC_RELEASE_BOUNDARY_INJECTED:-}"' in bind_run
+    assert "*:/tmp/nmc-release-boundary-injected:*) exit 1" in bind_run
+    safe_env = boundary_code.split("safe_env = {", 1)[1].split("\n}", 1)[0]
+    assert "GITHUB_TOKEN" not in safe_env
+    assert "GITEA_TOKEN" not in safe_env
+    assert "ACTIONS_RUNTIME_TOKEN" not in safe_env
+    assert "ACTIONS_ID_TOKEN_REQUEST_TOKEN" not in safe_env
+    assert "python3 -I -" in boundary_run
     assert "persist-credentials: false" in validate_source
-    assert "persist-credentials: false" in build_source
+    assert "persist-credentials: false" not in build_source
+
+
+def test_candidate_process_cpu_accounting_includes_reaped_descendants() -> None:
+    workflow = yaml.safe_load(_read(GITEA_PUBLISH_WORKFLOW))
+    boundary_run = workflow["jobs"]["build-request"]["steps"][2]["run"]
+    boundary_code = boundary_run.split("<<'PY'\n", 1)[1].rsplit("\nPY\n", 1)[0]
+    tree = ast.parse(boundary_code)
+    cpu_function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef) and node.name == "process_cpu_ticks"
+    )
+    namespace: dict[str, object] = {}
+    exec(
+        compile(
+            ast.Module(body=[cpu_function], type_ignores=[]),
+            "publish-gitea-process-accounting",
+            "exec",
+        ),
+        namespace,
+    )
+    process_cpu_ticks = namespace["process_cpu_ticks"]
+
+    assert callable(process_cpu_ticks)
+    assert (
+        process_cpu_ticks("123 (candidate name) R 1 2 3 4 5 6 7 8 9 10 11 12 13 14")
+        == 50
+    )
+    with pytest.raises(ValueError, match="Malformed process stat"):
+        process_cpu_ticks("malformed")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="UID isolation requires POSIX")
+def test_dropped_build_uid_cannot_inherit_or_read_parent_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if os.geteuid() != 0 or not Path("/proc/self/environ").exists():
+        pytest.skip("release runner UID boundary requires root with procfs")
+
+    monkeypatch.setenv("ACTIONS_RUNTIME_TOKEN", "parent-only-sentinel")
+
+    def drop_privileges() -> None:
+        os.setgroups([])
+        os.setgid(65532)
+        os.setuid(65532)
+
+    try:
+        result = subprocess.run(
+            [
+                "/bin/sh",
+                "-c",
+                'test -z "${ACTIONS_RUNTIME_TOKEN:-}" && '
+                'test ! -r "/proc/$BOUNDARY_PARENT_PID/environ"',
+            ],
+            check=False,
+            capture_output=True,
+            env={
+                "BOUNDARY_PARENT_PID": str(os.getpid()),
+                "PATH": "/usr/local/bin:/usr/bin:/bin",
+            },
+            preexec_fn=drop_privileges,
+            text=True,
+        )
+    except subprocess.SubprocessError:
+        pytest.skip("UID transitions are disabled in this test sandbox")
+
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(sys.platform != "linux", reason="Landlock requires Linux")
+def test_candidate_write_boundary_rejects_shared_filesystem_writes(
+    tmp_path: Path,
+) -> None:
+    workflow = yaml.safe_load(_read(GITEA_PUBLISH_WORKFLOW))
+    boundary_run = workflow["jobs"]["build-request"]["steps"][2]["run"]
+    boundary_code = boundary_run.split("<<'PY'\n", 1)[1].rsplit("\nPY\n", 1)[0]
+    tree = ast.parse(boundary_code)
+    boundary_function = next(
+        node
+        for node in tree.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "restrict_writes_to_build_root"
+    )
+    isolated_code = ast.unparse(
+        ast.Module(
+            body=[
+                ast.Import(names=[ast.alias(name="ctypes")]),
+                ast.Import(names=[ast.alias(name="errno")]),
+                ast.Import(names=[ast.alias(name="os")]),
+                ast.Import(names=[ast.alias(name="struct")]),
+                ast.Import(names=[ast.alias(name="sys")]),
+                ast.ImportFrom(
+                    module="pathlib",
+                    names=[ast.alias(name="Path")],
+                    level=0,
+                ),
+                boundary_function,
+            ],
+            type_ignores=[],
+        )
+    )
+    allowed_root = tmp_path / "allowed"
+    denied_root = tmp_path / "denied"
+    allowed_root.mkdir()
+    denied_root.mkdir()
+    probe = (
+        isolated_code
+        + "\nallowed = Path(sys.argv[1])\n"
+        + "denied = Path(sys.argv[2])\n"
+        + "restrict_writes_to_build_root(allowed)\n"
+        + "(allowed / 'allowed.txt').write_text('ok', encoding='utf-8')\n"
+        + "try:\n"
+        + "    (denied / 'denied.txt').write_text('bad', encoding='utf-8')\n"
+        + "except PermissionError:\n"
+        + "    pass\n"
+        + "else:\n"
+        + "    raise SystemExit('Landlock allowed an out-of-bound write')\n"
+    )
+    result = subprocess.run(
+        [sys.executable, "-I", "-c", probe, str(allowed_root), str(denied_root)],
+        check=False,
+        capture_output=True,
+        text=True,
+    )
+
+    if result.returncode != 0 and "OSError: [Errno 95]" in result.stderr:
+        pytest.skip("Landlock is disabled in this test sandbox")
+    assert result.returncode == 0, result.stderr
+    assert (allowed_root / "allowed.txt").read_text(encoding="utf-8") == "ok"
+    assert not (denied_root / "denied.txt").exists()
+
+
+def _artifact_handoff_code() -> str:
+    parsed = yaml.safe_load(_read(GITEA_PUBLISH_WORKFLOW))
+    bind_run = parsed["jobs"]["build-request"]["steps"][3]["run"]
+    return bind_run.split("<<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
+
+
+def test_artifact_handoff_copies_only_exact_regular_files(tmp_path: Path) -> None:
+    handoff_code = _artifact_handoff_code()
+    compile(handoff_code, "publish-gitea-artifact-handoff", "exec")
+    dist_root = tmp_path / "dist"
+    dist_root.mkdir()
+    wheel = dist_root / "netbox_proxbox-0.0.24-py3-none-any.whl"
+    sdist = dist_root / "netbox_proxbox-0.0.24.tar.gz"
+    manifest = tmp_path / "release-manifest.json"
+    wheel.write_bytes(b"wheel")
+    sdist.write_bytes(b"sdist")
+    manifest.write_bytes(b"{}\n")
+    transfer = tmp_path / "transfer"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-",
+            str(dist_root),
+            str(manifest),
+            str(transfer),
+            "0.0.24",
+        ],
+        check=False,
+        capture_output=True,
+        input=handoff_code,
+        text=True,
+        timeout=5,
+    )
+
+    assert result.returncode == 0, result.stderr
+    assert {path.name: path.read_bytes() for path in transfer.iterdir()} == {
+        wheel.name: b"wheel",
+        sdist.name: b"sdist",
+        manifest.name: b"{}\n",
+    }
+
+
+def test_artifact_handoff_rejects_noncanonical_control_filename(
+    tmp_path: Path,
+) -> None:
+    handoff_code = _artifact_handoff_code()
+    dist_root = tmp_path / "dist"
+    dist_root.mkdir()
+    (dist_root / "netbox_proxbox-0.0.24-py3-none-any.whl").write_bytes(b"wheel")
+    control_name = "netbox_proxbox-0.0.24\n::set-env name=BAD::yes.tar.gz"
+    (dist_root / control_name).write_bytes(b"sdist")
+    manifest = tmp_path / "release-manifest.json"
+    manifest.write_bytes(b"{}\n")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-",
+            str(dist_root),
+            str(manifest),
+            str(tmp_path / "transfer"),
+            "0.0.24",
+        ],
+        check=False,
+        capture_output=True,
+        input=handoff_code,
+        text=True,
+        timeout=5,
+    )
+
+    assert result.returncode != 0
+    assert result.stderr.strip() == "Release artifact inventory is invalid"
+    assert "::set-env" not in result.stderr
+
+
+@pytest.mark.skipif(os.name != "posix", reason="FIFO rejection requires POSIX")
+def test_artifact_handoff_rejects_fifo_without_blocking(tmp_path: Path) -> None:
+    handoff_code = _artifact_handoff_code()
+    dist_root = tmp_path / "dist"
+    dist_root.mkdir()
+    (dist_root / "netbox_proxbox-0.0.24-py3-none-any.whl").write_bytes(b"wheel")
+    os.mkfifo(dist_root / "netbox_proxbox-0.0.24.tar.gz")
+    manifest = tmp_path / "release-manifest.json"
+    manifest.write_bytes(b"{}\n")
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "-I",
+            "-",
+            str(dist_root),
+            str(manifest),
+            str(tmp_path / "transfer"),
+            "0.0.24",
+        ],
+        check=False,
+        capture_output=True,
+        input=handoff_code,
+        text=True,
+        timeout=5,
+    )
+
+    assert result.returncode != 0
+    assert "special file" in result.stderr
 
 
 def test_gitea_artifact_v3_compatibility_probe_is_bounded_and_disposable() -> None:
@@ -478,6 +818,23 @@ def test_ci_gate_binds_status_to_authenticated_run_and_job(
     responses["/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34"][
         "run_attempt"
     ] = 1
+
+    responses["/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34"]["labels"] = [
+        "ci-untrusted-python312",
+        "prod-deploy",
+    ]
+    with pytest.raises(gate.CIGateError, match="trusted CI runner class"):
+        gate.validate_ci_gate(
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            source_sha=sha,
+            required_contexts=[context],
+            trusted_actor="emersonfelipesp",
+            token="test-token",
+        )
+    responses["/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34"]["labels"] = [
+        "ci-untrusted-python312"
+    ]
 
     responses["/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34"]["head_sha"] = (
         "b" * 40
