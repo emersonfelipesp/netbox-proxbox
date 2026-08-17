@@ -352,10 +352,62 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 See [COMPATIBILITY.md](COMPATIBILITY.md) for the full version compatibility table.
 
+### NetBox support tiers
+
+`netbox-proxbox` declares two NetBox support tiers, defined once in
+[`netbox_proxbox/compat.py`](netbox_proxbox/compat.py) and shared verbatim
+across the whole Proxbox plugin stack:
+
+| Tier | NetBox range | What it means |
+|---|---|---|
+| **Stable** | `4.5.8` – `4.6.99` | Certified and CI-gated. No warnings. |
+| **Experimental** | `4.7.0` – `4.7.99` | Loads and runs normally; the release line is not yet certified, so the plugin warns once at startup. |
+
+Experimental support needs **no configuration at all** — no setting, no opt-in
+flag, no install step. Upgrade NetBox and the plugin keeps working. On a 4.7
+install you will see one warning per plugin, from `manage.py check` and in the
+startup log:
+
+```
+WARNINGS:
+?: (netbox_proxbox.W001) Proxbox is running on NetBox 4.7.0-beta1, which is
+   supported on an experimental basis only. Certified support covers NetBox
+   4.5.8 through 4.6.99.
+   HINT: The plugin is fully operational; this is a maturity notice, not a
+   fault. Silence it with SILENCED_SYSTEM_CHECKS = ['netbox_proxbox.W001'] in
+   configuration.py once the risk is accepted.
+```
+
+It is a warning, never an error — it cannot block NetBox from starting. Once
+you have accepted the risk, silence it with Django's stock mechanism in
+`configuration.py`:
+
+```python
+SILENCED_SYSTEM_CHECKS = ["netbox_proxbox.W001"]
+```
+
+NetBox releases below `4.5.8` and from `4.8` onward are still refused outright
+by NetBox's own plugin version gate.
+
+> **Upgrading to NetBox 4.7 upgrades the whole plugin stack at once.**
+> `PluginConfig.validate()` raises while `netbox/settings.py` is still
+> executing, so one installed Proxbox-family plugin still capped at `4.6.99`
+> stops NetBox from starting at all — a failed boot, not a disabled plugin.
+> Upgrade `netbox-proxbox`, `netbox-ceph`, `netbox-packer`, `netbox-pbs`, and
+> `netbox-pdm` together before moving an instance to 4.7. On 4.5.8–4.6.x,
+> mixed versions remain fine.
+
+> **On beta version strings.** NetBox splits its release identity: at tag
+> `v4.7.0-beta1`, `release.yaml` carries `version: "4.7.0"` with
+> `designation: "beta1"`, and NetBox passes the bare `"4.7.0"` to the plugin
+> version gate. That is why the declared ceiling is `4.7.99` rather than
+> something pre-release-shaped.
+
 ## Requirements
 
-- NetBox 4.5.8 through 4.5.10, or 4.6.x
-- Verified with NetBox v4.5.8 through v4.5.10 and v4.6.0 through v4.6.6
+- NetBox 4.5.8 through 4.6.x (stable), or 4.7.x (experimental — see above)
+- Verified with NetBox v4.5.8 through v4.5.10, v4.6.0 through v4.6.6, and
+  v4.7.0-beta1 (experimental tier)
 - Python 3.12+
 - Proxmox VE 7.x, 8.x, or 9.x (PVE 9 requires `VM.GuestAgent.Audit` on the API role; see "Troubleshooting" below for the PVE 9 auth checklist)
 - Proxbox API backend as a separately deployed service (see below)

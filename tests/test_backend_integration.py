@@ -201,6 +201,37 @@ def test_proxbox_config_ready_skips_runtime_registration_without_pydantic(
     monkeypatch.setitem(sys.modules, "netbox", netbox_module)
     monkeypatch.setitem(sys.modules, "netbox.plugins", netbox_plugins)
 
+    # ready() registers the NetBox compatibility system check before the
+    # Pydantic guard, so the stubbed environment needs the Django surfaces that
+    # registration touches. Stable versions here, so it registers silently.
+    django_module = types.ModuleType("django")
+    django_module.__path__ = []
+    django_conf = types.ModuleType("django.conf")
+    django_conf.settings = types.SimpleNamespace(
+        RELEASE=types.SimpleNamespace(version="4.6.6", full_version="4.6.6"),
+        VERSION="4.6.6",
+    )
+    django_core = types.ModuleType("django.core")
+    django_core.__path__ = []
+    django_checks = types.ModuleType("django.core.checks")
+
+    class _StubWarning:
+        def __init__(self, msg, hint=None, id=None):
+            self.msg = msg
+            self.hint = hint
+            self.id = id
+
+    django_checks.Warning = _StubWarning
+    django_checks.register = lambda check: check
+
+    for _name, _mod in (
+        ("django", django_module),
+        ("django.conf", django_conf),
+        ("django.core", django_core),
+        ("django.core.checks", django_checks),
+    ):
+        monkeypatch.setitem(sys.modules, _name, _mod)
+
     original_find_spec = importlib.util.find_spec
 
     def fake_find_spec(name, package=None):

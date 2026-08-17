@@ -34,7 +34,12 @@ PLUGINS = ["netbox_proxbox"]
 
 ## Notes
 
-- The plugin declares `min_version = "4.5.8"` and `max_version = "4.6.99"`.
+- The plugin declares `min_version = "4.5.8"` and `max_version = "4.7.99"`,
+  both sourced from `netbox_proxbox/compat.py`. NetBox `4.5.8` - `4.6.99` is
+  the certified **stable** tier; `4.7.0` - `4.7.99` is admitted as
+  **experimental** and warns once at startup (system check
+  `netbox_proxbox.W001`) without requiring any configuration change.
+  Silence it with `SILENCED_SYSTEM_CHECKS = ["netbox_proxbox.W001"]`.
 - Proxbox uses NetBox's JobRunner queue APIs and runs on the default RQ queue (`RQ_QUEUE_DEFAULT`).
 - The project requires Python `>=3.12`.
 - `pip install -e` is useful while the repository is moving faster than packaged releases.

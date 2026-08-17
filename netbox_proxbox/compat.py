@@ -1,0 +1,309 @@
+"""Shared NetBox version-compatibility policy for the Proxbox plugin stack.
+
+**Vendored module.** Byte-identical copies live in every Proxbox-stack NetBox
+plugin — ``netbox-proxbox``, ``netbox-ceph``, ``netbox-packer``,
+``netbox-pbs``, and ``netbox-pdm``. It carries no plugin-specific literals on
+purpose, so the five copies can be diffed for drift; the
+``proxbox-stack-code-review`` skill carries that check. Changing it in one repo
+means changing it in all five, and bumping :data:`CONTRACT_VERSION` when the
+contract itself moves.
+
+Two support tiers:
+
+* **stable** — ``4.5.8`` through ``4.6.99``. Fully supported and CI-gated.
+* **experimental** — ``4.7.0`` through ``4.7.99``. The plugin loads and runs
+  normally, but the release line is not yet certified, so a Django system check
+  warns once at startup.
+
+Admission is left to NetBox's stock :class:`~netbox.plugins.PluginConfig`
+version gate, which compares against ``RELEASE.version``. Nothing here blocks
+startup: an experimental NetBox produces a ``Warning``, never an ``Error``, so
+an operator who upgrades NetBox never has to touch plugin configuration to keep
+running. The warning is silenceable through Django's stock
+``SILENCED_SYSTEM_CHECKS`` — this module deliberately adds no setting of its
+own.
+
+A note on beta version strings, because it is the whole reason the cap moved.
+NetBox splits its release identity in ``release.yaml``: at tag
+``v4.7.0-beta1`` the file reads ``version: "4.7.0"`` with
+``designation: "beta1"``, and ``settings.py`` passes ``RELEASE.version`` — the
+bare ``"4.7.0"`` — to the plugin gate. ``RELEASE.full_version`` carries the
+human-facing ``"4.7.0-beta1"``. So the gate never sees the pre-release
+qualifier, and a cap of ``"4.6.99"`` rejects the beta outright.
+:func:`detect_netbox_version` returns both strings for exactly this reason:
+compare on the first, display the second. :func:`netbox_support_level`
+classifies either form identically, since ``4.7.0b1`` also sorts above
+``4.6.99``.
+
+**Import-time constraint.** NetBox calls ``PluginConfig.validate()`` while
+``netbox/settings.py`` is still executing, and that import reaches this module.
+Nothing here may read ``django.conf.settings`` — or import Django at all — at
+module scope. Every Django touch lives inside a function.
+"""
+
+from __future__ import annotations
+
+import logging
+from enum import StrEnum
+from typing import Any
+
+from packaging import version as _version
+
+__all__ = [
+    "CONTRACT_VERSION",
+    "EXPERIMENTAL_MAX_NETBOX_VERSION",
+    "EXPERIMENTAL_MIN_NETBOX_VERSION",
+    "NetBoxSupportLevel",
+    "PLUGIN_MAX_VERSION",
+    "PLUGIN_MIN_VERSION",
+    "STABLE_MAX_NETBOX_VERSION",
+    "STABLE_MIN_NETBOX_VERSION",
+    "current_netbox_support_level",
+    "detect_netbox_version",
+    "experimental_warning_message",
+    "is_prerelease_netbox",
+    "netbox_support_level",
+    "register_netbox_compatibility_check",
+]
+
+#: Bumped whenever the shared contract below changes shape. All five vendored
+#: copies must agree on this value; a mismatch means one repo was updated alone.
+CONTRACT_VERSION = "netbox-compat-v1"
+
+#: Oldest NetBox release the Proxbox stack supports at all.
+STABLE_MIN_NETBOX_VERSION = "4.5.8"
+#: Newest NetBox release covered by the certified, CI-gated stable tier.
+STABLE_MAX_NETBOX_VERSION = "4.6.99"
+#: First NetBox release admitted on an experimental basis.
+EXPERIMENTAL_MIN_NETBOX_VERSION = "4.7.0"
+#: Newest NetBox release admitted on an experimental basis.
+EXPERIMENTAL_MAX_NETBOX_VERSION = "4.7.99"
+
+#: Consumed by each plugin's ``PluginConfig.min_version``.
+PLUGIN_MIN_VERSION = STABLE_MIN_NETBOX_VERSION
+#: Consumed by each plugin's ``PluginConfig.max_version``. This is the
+#: experimental ceiling, not the stable one — admitting 4.7 without an opt-in
+#: is what makes the upgrade seamless for operators.
+PLUGIN_MAX_VERSION = EXPERIMENTAL_MAX_NETBOX_VERSION
+
+# Guards against a second ``register_netbox_compatibility_check`` call for the
+# same app emitting the warning twice. ``ready()`` is normally called once, but
+# test harnesses and ``manage.py`` re-entry can call it again, and a duplicated
+# startup warning reads as two separate problems.
+_REGISTERED_APP_LABELS: set[str] = set()
+
+
+class NetBoxSupportLevel(StrEnum):
+    """How the running NetBox release relates to the declared support bands.
+
+    ``StrEnum`` rather than ``(str, Enum)``: every plugin in this family
+    declares ``requires-python >= 3.12``, so it is always available, and some
+    of the repos' lint configurations reject the older pairing.
+    """
+
+    #: Older than :data:`STABLE_MIN_NETBOX_VERSION`; the plugin refuses to load.
+    UNSUPPORTED_OLD = "unsupported-old"
+    #: Within the certified, CI-gated band. No warning.
+    STABLE = "stable"
+    #: Admitted, loads and runs, not yet certified. Warns once at startup.
+    EXPERIMENTAL = "experimental"
+    #: Newer than :data:`EXPERIMENTAL_MAX_NETBOX_VERSION`; refuses to load.
+    UNSUPPORTED_NEW = "unsupported-new"
+
+
+def netbox_support_level(netbox_version: str) -> NetBoxSupportLevel:
+    """Classify ``netbox_version`` against the stable and experimental bands.
+
+    Accepts either form of the NetBox release string — the bare ``"4.7.0"``
+    that the plugin gate compares against, or the ``"4.7.0-beta1"`` display
+    form — and classifies both as :attr:`NetBoxSupportLevel.EXPERIMENTAL`,
+    since ``4.7.0b1`` also sorts above the stable ceiling.
+
+    Raises:
+        packaging.version.InvalidVersion: if the string is not a version at
+            all. Callers that must not fail hard — the system check below — are
+            responsible for catching it and reporting the failure to classify,
+            rather than letting it reach startup.
+    """
+    parsed = _version.parse(str(netbox_version))
+
+    if parsed < _version.parse(STABLE_MIN_NETBOX_VERSION):
+        return NetBoxSupportLevel.UNSUPPORTED_OLD
+    if parsed <= _version.parse(STABLE_MAX_NETBOX_VERSION):
+        return NetBoxSupportLevel.STABLE
+    if parsed <= _version.parse(EXPERIMENTAL_MAX_NETBOX_VERSION):
+        return NetBoxSupportLevel.EXPERIMENTAL
+    return NetBoxSupportLevel.UNSUPPORTED_NEW
+
+
+def detect_netbox_version() -> tuple[str, str]:
+    """Return ``(comparison_version, display_version)`` for the running NetBox.
+
+    ``comparison_version`` is what NetBox itself feeds to the plugin version
+    gate (``RELEASE.version`` — ``"4.7.0"`` on a beta). ``display_version`` is
+    the operator-facing string (``RELEASE.full_version`` — ``"4.7.0-beta1"``).
+
+    ``settings.RELEASE`` exists as far back as the oldest supported release, so
+    the ``settings.VERSION`` fallback is belt-and-braces for an unexpected
+    layout rather than a routine path.
+
+    Raises:
+        RuntimeError: if neither attribute yields a usable version string.
+    """
+    from django.conf import settings
+
+    release: Any = getattr(settings, "RELEASE", None)
+    comparison = getattr(release, "version", None)
+    display = getattr(release, "full_version", None)
+
+    if not comparison:
+        fallback = getattr(settings, "VERSION", None)
+        if not fallback:
+            raise RuntimeError(
+                "Unable to determine the running NetBox version: neither "
+                "settings.RELEASE.version nor settings.VERSION is set."
+            )
+        comparison = str(fallback)
+
+    return str(comparison), str(display or comparison)
+
+
+def current_netbox_support_level() -> NetBoxSupportLevel:
+    """Classify the running NetBox release. Thin wrapper for callers and tests."""
+    comparison_version, _display_version = detect_netbox_version()
+    return netbox_support_level(comparison_version)
+
+
+def is_prerelease_netbox(display_version: str) -> bool:
+    """True when ``display_version`` is a NetBox pre-release (beta, rc, alpha).
+
+    Pass the **display** version. The comparison version deliberately strips the
+    designation — ``RELEASE.version`` is a bare ``"4.7.0"`` even at tag
+    ``v4.7.0-beta1`` — so only ``RELEASE.full_version`` can answer this.
+
+    Returns False rather than raising on an unparseable string: this only
+    decorates a warning, and failing to classify maturity must not escalate.
+    """
+    try:
+        return bool(_version.parse(str(display_version)).is_prerelease)
+    except Exception:  # noqa: BLE001 — cosmetic classification only
+        return False
+
+
+def experimental_warning_message(plugin_label: str, display_version: str) -> str:
+    """Compose the operator-facing experimental-support warning.
+
+    A NetBox pre-release gets an extra sentence. Upstream does not support beta
+    and release-candidate builds in production and does not guarantee an upgrade
+    path from a pre-release to the eventual GA release, so an operator who reads
+    only "experimental" could otherwise conclude that silencing the notice is
+    the whole story — and end up on a database state that cannot be upgraded
+    forward. That is a materially different risk from running an uncertified but
+    stable release, so it is said out loud rather than left to the docs.
+    """
+    message = (
+        f"{plugin_label} is running on NetBox {display_version}, which is "
+        f"supported on an experimental basis only. Certified support covers "
+        f"NetBox {STABLE_MIN_NETBOX_VERSION} through "
+        f"{STABLE_MAX_NETBOX_VERSION}."
+    )
+    if is_prerelease_netbox(display_version):
+        message += (
+            f" NetBox {display_version} is also an upstream pre-release: "
+            f"upstream does not support pre-releases in production and does "
+            f"not guarantee an upgrade path from a pre-release to the final "
+            f"release. Use it for evaluation on disposable data only."
+        )
+    return message
+
+
+def register_netbox_compatibility_check(
+    app_config: Any,
+    logger: logging.Logger | None = None,
+) -> None:
+    """Register the experimental-support system check for ``app_config``.
+
+    Call once from the plugin's ``AppConfig.ready()``. Registers a Django
+    system check that emits ``<app_label>.W001`` when the running NetBox sits
+    in the experimental band, and logs the same message immediately so it also
+    reaches operators who never run ``manage.py check``.
+
+    Both surfaces are warnings. Neither can block startup — refusing an
+    out-of-range NetBox stays the job of the stock ``PluginConfig`` gate, which
+    already ran by the time ``ready()`` is called.
+
+    A failure to *classify* the version is reported as ``<app_label>.W002``
+    rather than swallowed: a compatibility check that silently evaluates to
+    "fine" whenever it breaks is worse than no check.
+    """
+    from django.core.checks import Warning as DjangoWarning
+    from django.core.checks import register as register_check
+
+    app_label = str(getattr(app_config, "label", "") or getattr(app_config, "name", ""))
+    plugin_label = str(getattr(app_config, "verbose_name", "") or app_label)
+
+    if app_label in _REGISTERED_APP_LABELS:
+        return
+    _REGISTERED_APP_LABELS.add(app_label)
+
+    def _netbox_compatibility_check(app_configs: Any = None, **kwargs: Any) -> list[Any]:
+        try:
+            _comparison_version, display_version = detect_netbox_version()
+            level = current_netbox_support_level()
+        except Exception as exc:  # noqa: BLE001 — reported, never raised at startup
+            return [
+                DjangoWarning(
+                    f"{plugin_label} could not determine the running NetBox "
+                    f"version, so its compatibility band was not verified.",
+                    hint=f"Underlying error: {exc}",
+                    id=f"{app_label}.W002",
+                )
+            ]
+
+        if level is not NetBoxSupportLevel.EXPERIMENTAL:
+            return []
+
+        if is_prerelease_netbox(display_version):
+            hint = (
+                "The plugin itself is operational on this release; this is a "
+                "maturity notice, not a plugin fault. Do not treat it as "
+                "clearance to run a NetBox pre-release in production — that "
+                "restriction is upstream's, and silencing the check does not "
+                "lift it. Silence it with "
+                f"SILENCED_SYSTEM_CHECKS = ['{app_label}.W001'] in "
+                "configuration.py only on an evaluation install."
+            )
+        else:
+            hint = (
+                "The plugin is fully operational; this is a maturity notice, "
+                "not a fault. Silence it with "
+                f"SILENCED_SYSTEM_CHECKS = ['{app_label}.W001'] in "
+                "configuration.py once the risk is accepted."
+            )
+
+        return [
+            DjangoWarning(
+                experimental_warning_message(plugin_label, display_version),
+                hint=hint,
+                id=f"{app_label}.W001",
+            )
+        ]
+
+    _netbox_compatibility_check.__name__ = f"{app_label}_netbox_compatibility_check"
+    register_check(_netbox_compatibility_check)
+
+    log = logger or logging.getLogger(app_label or __name__)
+    try:
+        _comparison_version, display_version = detect_netbox_version()
+        level = current_netbox_support_level()
+    except Exception as exc:  # noqa: BLE001 — never block startup on a version read
+        log.warning(
+            "%s could not determine the running NetBox version (%s); "
+            "compatibility band not verified.",
+            plugin_label,
+            exc,
+        )
+        return
+
+    if level is NetBoxSupportLevel.EXPERIMENTAL:
+        log.warning("%s", experimental_warning_message(plugin_label, display_version))

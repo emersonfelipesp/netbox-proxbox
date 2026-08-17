@@ -17,6 +17,7 @@ import tomllib
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 INIT_PATH = REPO_ROOT / "netbox_proxbox" / "__init__.py"
+COMPAT_PATH = REPO_ROOT / "netbox_proxbox" / "compat.py"
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 README_PATH = REPO_ROOT / "README.md"
 LLMS_PATH = REPO_ROOT / "llms.txt"
@@ -69,7 +70,13 @@ CURRENT_PAIRING_LINE = (
 )
 PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.20"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
-CURRENT_NETBOX_MAX_VERSION = "4.6.99"
+# Ceiling of the certified, CI-gated tier. Docs that describe *supported*
+# NetBox still quote this range.
+CURRENT_NETBOX_STABLE_MAX_VERSION = "4.6.99"
+# Ceiling actually declared on ProxboxConfig.max_version — the experimental
+# tier. NetBox 4.7 is admitted without an opt-in and warns at startup.
+CURRENT_NETBOX_MAX_VERSION = "4.7.99"
+CURRENT_NETBOX_EXPERIMENTAL_MIN_VERSION = "4.7.0"
 LATEST_CERTIFIED_NETBOX_VERSION = "4.6.6"
 LATEST_CERTIFIED_NETBOX_IMAGE = (
     f"netboxcommunity/netbox:v{LATEST_CERTIFIED_NETBOX_VERSION}"
@@ -92,7 +99,15 @@ SUPPORTED_NETBOX_IMAGE_TAGS = (
 )
 E2E_DEFAULT_INSTALL_SOURCES = ("local", "pypi", "container")
 E2E_EXPLICIT_INSTALL_SOURCES = (*E2E_DEFAULT_INSTALL_SOURCES, "testpypi")
-DJANGO_TESTED_NETBOX_TAGS = ("v4.5.8", "v4.5.10", "v4.6.0", "v4.6.6")
+DJANGO_TESTED_NETBOX_TAGS = (
+    "v4.5.8",
+    "v4.5.10",
+    "v4.6.0",
+    "v4.6.6",
+    # Experimental tier. Pinned to the immutable beta tag and required,
+    # not continue-on-error.
+    "v4.7.0-beta1",
+)
 PREVIOUS_PLUGIN_VERSION = "0.0.22"
 PREVIOUS_PROXBOX_API_VERSION = "0.0.19.post5"
 CURRENT_RELEASE_NOTES_PATH = RELEASE_NOTES_024_PATH
@@ -165,16 +180,75 @@ def test_current_release_version_identity_is_exact():
     )
 
 
+def _compat_constants() -> dict[str, str]:
+    """Module-level string constants declared in netbox_proxbox/compat.py.
+
+    Resolves one level of aliasing, because the values the plugin actually
+    declares (`PLUGIN_MIN_VERSION`, `PLUGIN_MAX_VERSION`) are assigned from the
+    band constants rather than re-typed as literals.
+    """
+    module = ast.parse(COMPAT_PATH.read_text(encoding="utf-8"))
+    constants: dict[str, str] = {}
+    for stmt in module.body:
+        if not isinstance(stmt, ast.Assign):
+            continue
+        if isinstance(stmt.value, ast.Constant) and isinstance(stmt.value.value, str):
+            value = stmt.value.value
+        elif isinstance(stmt.value, ast.Name) and stmt.value.id in constants:
+            value = constants[stmt.value.id]
+        else:
+            continue
+        for target in stmt.targets:
+            if isinstance(target, ast.Name):
+                constants[target.id] = value
+    return constants
+
+
+def _class_constant_names(class_name: str) -> dict[str, str]:
+    """Class attributes assigned from a bare name, e.g. `min_version = X`."""
+    module = ast.parse(INIT_PATH.read_text(encoding="utf-8"))
+    for node in ast.walk(module):
+        if isinstance(node, ast.ClassDef) and node.name == class_name:
+            names: dict[str, str] = {}
+            for stmt in node.body:
+                if isinstance(stmt, ast.Assign) and isinstance(stmt.value, ast.Name):
+                    for target in stmt.targets:
+                        if isinstance(target, ast.Name):
+                            names[target.id] = stmt.value.id
+            return names
+    raise AssertionError(f"class {class_name} not found in {INIT_PATH}")
+
+
 def test_min_max_netbox_versions_are_pinned():
-    constants = _class_constants("ProxboxConfig")
-    assert constants.get("min_version") == CURRENT_NETBOX_MIN_VERSION
-    assert constants.get("max_version") == CURRENT_NETBOX_MAX_VERSION
+    compat = _compat_constants()
+    assert compat["STABLE_MIN_NETBOX_VERSION"] == CURRENT_NETBOX_MIN_VERSION
+    assert compat["STABLE_MAX_NETBOX_VERSION"] == CURRENT_NETBOX_STABLE_MAX_VERSION
+    assert (
+        compat["EXPERIMENTAL_MIN_NETBOX_VERSION"]
+        == CURRENT_NETBOX_EXPERIMENTAL_MIN_VERSION
+    )
+    assert compat["EXPERIMENTAL_MAX_NETBOX_VERSION"] == CURRENT_NETBOX_MAX_VERSION
+    assert compat["PLUGIN_MIN_VERSION"] == CURRENT_NETBOX_MIN_VERSION
+    assert compat["PLUGIN_MAX_VERSION"] == CURRENT_NETBOX_MAX_VERSION
+
+
+def test_plugin_config_bounds_are_wired_to_compat():
+    """The declared bounds must come from compat.py, not a re-typed literal.
+
+    Two copies of the range would drift silently; this asserts there is only one.
+    """
+    names = _class_constant_names("ProxboxConfig")
+    assert names.get("min_version") == "PLUGIN_MIN_VERSION"
+    assert names.get("max_version") == "PLUGIN_MAX_VERSION"
+    literals = _class_constants("ProxboxConfig")
+    assert "min_version" not in literals
+    assert "max_version" not in literals
 
 
 def test_certified_netbox_versions_are_documented():
-    constants = _class_constants("ProxboxConfig")
-    assert constants["min_version"] == CURRENT_NETBOX_MIN_VERSION
-    assert constants["max_version"] == CURRENT_NETBOX_MAX_VERSION
+    compat = _compat_constants()
+    assert compat["PLUGIN_MIN_VERSION"] == CURRENT_NETBOX_MIN_VERSION
+    assert compat["PLUGIN_MAX_VERSION"] == CURRENT_NETBOX_MAX_VERSION
 
     docs_with_explicit_range = (
         CLAUDE_PATH,
@@ -186,7 +260,25 @@ def test_certified_netbox_versions_are_documented():
     for path in docs_with_explicit_range:
         text = _read(path)
         assert CURRENT_NETBOX_MIN_VERSION in text, f"{path} missing min version"
-        assert CURRENT_NETBOX_MAX_VERSION in text, f"{path} missing max version"
+        assert CURRENT_NETBOX_STABLE_MAX_VERSION in text, (
+            f"{path} missing certified max version"
+        )
+
+
+def test_experimental_netbox_tier_is_documented():
+    """The experimental tier must be stated where operators actually look."""
+    for path in (README_PATH, COMPATIBILITY_PATH, CLAUDE_PATH):
+        text = _read(path)
+        assert CURRENT_NETBOX_MAX_VERSION in text, (
+            f"{path} missing experimental ceiling"
+        )
+        assert "experimental" in text.lower(), f"{path} does not name the tier"
+    # And the silencing escape hatch must be discoverable, since the warning is
+    # the one visible change an upgrading operator sees.
+    for path in (README_PATH, COMPATIBILITY_PATH):
+        assert "SILENCED_SYSTEM_CHECKS" in _read(path), (
+            f"{path} does not document how to silence the notice"
+        )
 
 
 def test_certified_netbox_versions_are_in_e2e_matrix():

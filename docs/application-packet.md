@@ -19,8 +19,26 @@ the certification process.
 ## Compatibility Target
 
 The certification matrix covers NetBox `v4.5.8` through `v4.5.10` and `v4.6.0`
-through `v4.6.6`, with compatibility preserved for NetBox `v4.5.8+` where each
-plugin declares `max_version = "4.6.99"`.
+through `v4.6.6` in the **stable** tier, plus `v4.7.0-beta1` in the
+**experimental** tier. `netbox-proxbox` declares `min_version = "4.5.8"` and
+`max_version = "4.7.99"`, sourced from its vendored `compat.py`: NetBox 4.7
+loads with no configuration change and warns once that the line is not yet
+certified.
+
+**This statement is scoped to `netbox-proxbox` alone.** The companion plugins
+(`netbox-ceph`, `netbox-packer`, `netbox-pbs`, `netbox-pdm`) carry the same
+vendored `compat.py`, but only in releases published after this change; every
+earlier companion artifact still declares `max_version = "4.6.99"`.
+Because `PluginConfig.validate()` raises while `netbox/settings.py` is still
+executing, a single companion left at the old ceiling prevents NetBox from
+starting at all on 4.7 — a failed boot, not a disabled plugin. Do not read
+this section as clearance to move a mixed installation to 4.7: upgrade every
+installed Proxbox-family plugin to a 4.7-capable release first.
+
+NetBox `v4.7.0-beta1` is additionally an **upstream pre-release**. Upstream
+does not support pre-releases in production and does not guarantee an upgrade
+path from a pre-release to the final release, so the experimental tier is
+evaluation evidence on disposable data — not a production certification.
 
 ## Evidence
 
