@@ -592,17 +592,19 @@ credentials with `gh auth setup-git`, and pushes only
 Handles `push: tags:` only. It deliberately does not subscribe to Gitea's
 overlapping `create` event: Gitea emits both events for one tag, which would
 race duplicate immutable release requests. The tag must equal current
-`develop`; every latest required status must be server-generated Actions
-evidence and resolve to authenticated successful `ci.yml`
-push-run/run-attempt/job evidence for that exact SHA,
+`develop`; writer-controlled commit statuses are ignored, and the newest
+authenticated `ci.yml` Actions run plus its required jobs must prove a
+successful first push attempt for that exact SHA,
 trusted actor, expected job, and the exact sole `ci-untrusted-python312` runner
 label. The two release-request jobs themselves use the repository-unique
 `ci-release-netbox-proxbox` label so user/organization runners cannot satisfy
-release evidence. That validation job's
-built-in token is explicitly limited to `actions: read` and `contents: read`;
-omitting the separate Actions scope would deny the run/job evidence lookup. The
-separate untrusted build job declares only `contents: read`, never references a
-job token, and fetches the validated public source without checkout credentials.
+release evidence. Before candidate processing, both jobs run a checksum-pinned
+gate that requires the live runner ID, name, and sole label to equal the
+canonical acceptance record; zero/empty identity and all-zero runtime/network
+attestation digests keep tag releases disabled. Both jobs are explicitly
+limited to `actions: read` and `contents: read`, and the build's step-scoped
+Gitea token is not passed across the candidate boundary. The build fetches the
+validated public source without checkout credentials.
 Because this repository is public, Gitea's repository permission floor can
 still authorize a job token to read public Actions data even when the job omits
 that scope; do not claim otherwise. Gitea also injects an artifact runtime token
@@ -615,8 +617,9 @@ filesystem writes only below the per-run build root, so candidate code cannot
 modify runner workflow-command files or consume shared writable temporary
 storage. The `ci-release-netbox-proxbox` activation canary must separately prove
 that the exact repository-scoped release runner/container denies management and
-production network access; an online runner label alone is insufficient
-evidence.
+production network access and bind that immutable result plus the runtime
+digest to the same runner ID in the acceptance record; an online runner label
+alone is insufficient evidence.
 Only reviewed outer shell/Python code
 regains the runtime-bearing environment. Candidate output is captured with a one-MiB limit
 and is never relayed raw to the runner command parser; legacy `set-env` and

@@ -27,6 +27,28 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Prove exact accepted release runner before source validation
+        env:
+          GITEA_API_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -f scripts/gitea_release_runner_gate.py
+          test ! -L scripts/gitea_release_runner_gate.py
+          test -f .gitea/release-runner-acceptance.json
+          test ! -L .gitea/release-runner-acceptance.json
+          printf '%s  %s\n' \
+            ecf6dfda7a0bd6860664db60f4903bf3ecaf50d3ba59da0aa8f2034e5f0829a1 \
+            scripts/gitea_release_runner_gate.py | sha256sum --check --strict
+          printf '%s  %s\n' \
+            dae6af66b3e70dec9412445e326216e9a2934ac6334b66cc1febd0d02c55ca3d \
+            .gitea/release-runner-acceptance.json | sha256sum --check --strict
+          python3 -I scripts/gitea_release_runner_gate.py \
+            --acceptance .gitea/release-runner-acceptance.json \
+            --owner emersonfelipesp --repository netbox-proxbox \
+            --run-id "$GITHUB_RUN_ID" \
+            --job-name "Validate canonical release source" \
+            --source-sha "$(git rev-parse HEAD^{commit})"
+
       - name: Bind tag, version, canonical develop, and successful CI
         id: policy
         env:
@@ -77,7 +99,7 @@ jobs:
           test -f scripts/gitea_ci_gate.py
           test ! -L scripts/gitea_ci_gate.py
           printf '%s  %s\n' \
-            b5d937d9a41c4223ba6f6dd3f8e930f41f1ee4c810be2d552c4ebcf17cc931c4 \
+            6c816e3ec8f1c7d853e2179493f63c40c3dbe43400c0373c4b13433d491aace3 \
             scripts/gitea_ci_gate.py | sha256sum --check --strict
           python3 -I scripts/gitea_ci_gate.py \
             --owner emersonfelipesp --repository netbox-proxbox \
@@ -92,6 +114,7 @@ jobs:
     needs: validate-source
     runs-on: ci-release-netbox-proxbox
     permissions:
+      actions: read
       contents: read
     steps:
       - name: Fetch validated public source without a job token
@@ -110,6 +133,29 @@ jobs:
           git -c advice.detachedHead=false checkout --quiet --detach FETCH_HEAD
           test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
           test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Prove exact accepted release runner before candidate execution
+        env:
+          GITEA_API_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          test -f scripts/gitea_release_runner_gate.py
+          test ! -L scripts/gitea_release_runner_gate.py
+          test -f .gitea/release-runner-acceptance.json
+          test ! -L .gitea/release-runner-acceptance.json
+          printf '%s  %s\n' \
+            ecf6dfda7a0bd6860664db60f4903bf3ecaf50d3ba59da0aa8f2034e5f0829a1 \
+            scripts/gitea_release_runner_gate.py | sha256sum --check --strict
+          printf '%s  %s\n' \
+            dae6af66b3e70dec9412445e326216e9a2934ac6334b66cc1febd0d02c55ca3d \
+            .gitea/release-runner-acceptance.json | sha256sum --check --strict
+          python3 -I scripts/gitea_release_runner_gate.py \
+            --acceptance .gitea/release-runner-acceptance.json \
+            --owner emersonfelipesp --repository netbox-proxbox \
+            --run-id "$GITHUB_RUN_ID" \
+            --job-name "Build exact publisher-credential-free release-control request" \
+            --source-sha "$SOURCE_SHA"
 
       - name: Install checksum-verified uv and managed Python
         env:

@@ -59,27 +59,6 @@ def _request_json(path: str, *, token: str) -> Any:
         raise CIGateError("Gitea CI evidence is not valid JSON") from exc
 
 
-def _job_ids(target_url: object, *, owner: str, repository: str) -> tuple[int, int]:
-    if not isinstance(target_url, str):
-        raise CIGateError("Successful CI status has no job target URL")
-    parsed = urllib.parse.urlsplit(target_url)
-    if parsed.scheme or parsed.netloc:
-        if parsed.scheme != "https" or parsed.netloc != "git.nmulti.cloud":
-            raise CIGateError("CI status target is outside canonical Gitea")
-        path = parsed.path
-    else:
-        path = target_url
-    if parsed.query or parsed.fragment:
-        raise CIGateError("CI status target URL must not contain parameters")
-    match = re.fullmatch(
-        rf"/{re.escape(owner)}/{re.escape(repository)}/actions/runs/([1-9][0-9]*)/jobs/([1-9][0-9]*)",
-        path,
-    )
-    if match is None:
-        raise CIGateError("CI status target is not an exact Gitea Actions job")
-    return int(match.group(1)), int(match.group(2))
-
-
 def _expected_job_name(context: str) -> str:
     prefix, suffix = "CI / ", " (push)"
     if not context.startswith(prefix) or not context.endswith(suffix):
@@ -90,32 +69,89 @@ def _expected_job_name(context: str) -> str:
     return name
 
 
-def _latest_statuses(
-    statuses: object, *, required_contexts: list[str]
-) -> dict[str, dict[str, Any]]:
-    if not isinstance(statuses, list):
-        raise CIGateError("Gitea commit statuses are malformed")
-    latest: dict[str, dict[str, Any]] = {}
-    for row in statuses:
-        if not isinstance(row, dict) or row.get("context") not in required_contexts:
-            continue
-        if "creator" not in row or row["creator"] is not None:
-            raise CIGateError(
-                "Required CI status is not server-generated Actions evidence"
-            )
-        status_id = row.get("id")
+def _latest_workflow_run(
+    payload: object, *, source_sha: str, trusted_actor: str
+) -> dict[str, Any]:
+    runs = payload.get("workflow_runs") if isinstance(payload, dict) else None
+    total_count = payload.get("total_count") if isinstance(payload, dict) else None
+    if (
+        not isinstance(runs, list)
+        or not runs
+        or isinstance(total_count, bool)
+        or not isinstance(total_count, int)
+        or total_count != len(runs)
+        or total_count > 100
+    ):
+        raise CIGateError("Gitea Actions run inventory is incomplete")
+    candidates: list[dict[str, Any]] = []
+    observed_ids: set[int] = set()
+    for run in runs:
+        run_id = run.get("id") if isinstance(run, dict) else None
         if (
-            isinstance(status_id, bool)
-            or not isinstance(status_id, int)
-            or status_id <= 0
+            not isinstance(run, dict)
+            or isinstance(run_id, bool)
+            or not isinstance(run_id, int)
+            or run_id <= 0
+            or run_id in observed_ids
         ):
-            raise CIGateError("Gitea commit status ID is invalid")
-        context = str(row["context"])
-        if context not in latest or status_id > int(latest[context]["id"]):
-            latest[context] = row
-    if set(latest) != set(required_contexts):
-        raise CIGateError("Required CI status context is missing")
+            raise CIGateError("Gitea Actions run inventory is malformed")
+        observed_ids.add(run_id)
+        if (
+            run.get("path") == "ci.yml@refs/heads/develop"
+            and run.get("head_sha") == source_sha
+            and run.get("head_branch") == "develop"
+            and run.get("event") == "push"
+        ):
+            candidates.append(run)
+    if not candidates:
+        raise CIGateError("Required Gitea Actions workflow run is missing")
+    latest = max(candidates, key=lambda row: int(row["id"]))
+    _validate_run(
+        latest,
+        context="latest required workflow run",
+        run_id=int(latest["id"]),
+        source_sha=source_sha,
+        trusted_actor=trusted_actor,
+    )
     return latest
+
+
+def _required_jobs(
+    payload: object, *, required_contexts: list[str]
+) -> dict[str, dict[str, Any]]:
+    jobs = payload.get("jobs") if isinstance(payload, dict) else None
+    total_count = payload.get("total_count") if isinstance(payload, dict) else None
+    if (
+        not isinstance(jobs, list)
+        or not jobs
+        or isinstance(total_count, bool)
+        or not isinstance(total_count, int)
+        or total_count != len(jobs)
+        or total_count > 100
+    ):
+        raise CIGateError("Gitea Actions job inventory is incomplete")
+    expected = {_expected_job_name(context): context for context in required_contexts}
+    selected: dict[str, dict[str, Any]] = {}
+    observed_ids: set[int] = set()
+    for job in jobs:
+        job_id = job.get("id") if isinstance(job, dict) else None
+        if (
+            not isinstance(job, dict)
+            or isinstance(job_id, bool)
+            or not isinstance(job_id, int)
+            or job_id <= 0
+            or job_id in observed_ids
+        ):
+            raise CIGateError("Gitea Actions job inventory is malformed")
+        observed_ids.add(job_id)
+        name = job.get("name")
+        if name in expected:
+            if name in selected:
+                raise CIGateError("Required Gitea Actions job is ambiguous")
+            selected[str(name)] = job
+    if set(selected) != set(expected):
+        raise CIGateError("Required Gitea Actions job is missing")
+    return {expected[name]: job for name, job in selected.items()}
 
 
 def _validate_run(
@@ -215,40 +251,37 @@ def validate_ci_gate(
     trusted_actor: str,
     token: str,
 ) -> dict[str, dict[str, int]]:
-    """Require each latest status to resolve to one trusted successful CI job."""
+    """Require the latest authenticated Actions run and its trusted CI jobs."""
     if SHA_RE.fullmatch(source_sha) is None:
         raise CIGateError("Release source SHA must be canonical lowercase 40-hex")
     if not required_contexts or len(required_contexts) != len(set(required_contexts)):
         raise CIGateError("Required CI contexts must be a non-empty unique set")
-    latest = _latest_statuses(
+    query = urllib.parse.urlencode(
+        {
+            "branch": "develop",
+            "event": "push",
+            "head_sha": source_sha,
+            "limit": 100,
+            "page": 1,
+        }
+    )
+    latest_run = _latest_workflow_run(
+        _request_json(f"/repos/{owner}/{repository}/actions/runs?{query}", token=token),
+        source_sha=source_sha,
+        trusted_actor=trusted_actor,
+    )
+    run_id = int(latest_run["id"])
+    jobs = _required_jobs(
         _request_json(
-            f"/repos/{owner}/{repository}/commits/{source_sha}/statuses?limit=100",
-            token=token,
+            f"/repos/{owner}/{repository}/actions/runs/{run_id}/jobs", token=token
         ),
         required_contexts=required_contexts,
     )
 
     evidence: dict[str, dict[str, int]] = {}
     for context in required_contexts:
-        status = latest[context]
-        if status.get("status") != "success":
-            raise CIGateError(f"Latest required CI status is not successful: {context}")
-        run_id, job_id = _job_ids(
-            status.get("target_url"), owner=owner, repository=repository
-        )
-        run = _request_json(
-            f"/repos/{owner}/{repository}/actions/runs/{run_id}", token=token
-        )
-        job = _request_json(
-            f"/repos/{owner}/{repository}/actions/jobs/{job_id}", token=token
-        )
-        _validate_run(
-            run,
-            context=context,
-            run_id=run_id,
-            source_sha=source_sha,
-            trusted_actor=trusted_actor,
-        )
+        job = jobs[context]
+        job_id = int(job["id"])
         _validate_job(
             job,
             context=context,

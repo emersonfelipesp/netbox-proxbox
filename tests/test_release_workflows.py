@@ -5,6 +5,7 @@ from __future__ import annotations
 import ast
 import hashlib
 import importlib.util
+import json
 import os
 import subprocess
 import sys
@@ -24,6 +25,8 @@ GITEA_DEPLOY_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "deploy-production.
 GITEA_PROMOTE_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "promote-final-tag.yml"
 RELEASE_ARTIFACTS_PATH = REPO_ROOT / "scripts" / "release_artifacts.py"
 CI_GATE_PATH = REPO_ROOT / "scripts" / "gitea_ci_gate.py"
+RUNNER_GATE_PATH = REPO_ROOT / "scripts" / "gitea_release_runner_gate.py"
+RUNNER_ACCEPTANCE_PATH = REPO_ROOT / ".gitea" / "release-runner-acceptance.json"
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 RELEASE_CONTROL_DOC_PATHS = (
     REPO_ROOT / "AGENTS.md",
@@ -50,8 +53,26 @@ def _load_ci_gate():
     return module
 
 
+def _load_runner_gate():
+    spec = importlib.util.spec_from_file_location(
+        "gitea_release_runner_gate", RUNNER_GATE_PATH
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
+
+
+def _step(job: dict[str, object], name: str) -> dict[str, object]:
+    steps = job["steps"]
+    assert isinstance(steps, list)
+    return next(
+        step for step in steps if isinstance(step, dict) and step.get("name") == name
+    )
 
 
 def test_gitea_tag_workflow_builds_only_a_release_control_request() -> None:
@@ -97,7 +118,7 @@ def test_gitea_tag_workflow_builds_only_a_release_control_request() -> None:
         )
         == 1
     )
-    assert workflow.count("sha256sum --check --strict") == 2
+    assert workflow.count("sha256sum --check --strict") == 6
     assert workflow.count("UV_PYTHON_INSTALL_DIR=%s") == 1
     assert workflow.count('test ! -L "$BOOTSTRAP_') == 3
     assert workflow.count("--no-config") == 2
@@ -110,12 +131,15 @@ def test_gitea_tag_workflow_builds_only_a_release_control_request() -> None:
 def test_token_bearing_ci_gate_uses_the_pinned_reviewed_script() -> None:
     workflow = _read(GITEA_PUBLISH_WORKFLOW)
     parsed = yaml.safe_load(workflow)
-    policy_run = parsed["jobs"]["validate-source"]["steps"][1]["run"]
+    policy_run = _step(
+        parsed["jobs"]["validate-source"],
+        "Bind tag, version, canonical develop, and successful CI",
+    )["run"]
     expected_digest = hashlib.sha256(CI_GATE_PATH.read_bytes()).hexdigest()
     isolated_invocation = "python3 -I scripts/gitea_ci_gate.py"
 
     assert expected_digest == (
-        "b5d937d9a41c4223ba6f6dd3f8e930f41f1ee4c810be2d552c4ebcf17cc931c4"
+        "6c816e3ec8f1c7d853e2179493f63c40c3dbe43400c0373c4b13433d491aace3"
     )
     assert 'python3 -I - "$VERSION"' in policy_run
     assert "test -f scripts/gitea_ci_gate.py" in policy_run
@@ -161,7 +185,7 @@ def test_release_control_request_binds_exact_repository_run_and_artifacts() -> N
         in workflow
     )
     assert "secrets." not in build_source
-    assert "github.token" not in build_source
+    assert build_source.count("github.token") == 1
     assert "actions/checkout@" not in build_source
     assert "https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox.git" in build_source
     assert (
@@ -188,12 +212,18 @@ def test_gitea_candidate_build_isolated_from_runner_tokens() -> None:
         "actions": "read",
         "contents": "read",
     }
-    assert parsed["jobs"]["build-request"]["permissions"] == {"contents": "read"}
-    assert validate_source.count("github.token") == 1
+    assert parsed["jobs"]["build-request"]["permissions"] == {
+        "actions": "read",
+        "contents": "read",
+    }
+    assert validate_source.count("github.token") == 2
     assert "GITEA_API_TOKEN" in validate_source
-    assert "github.token" not in build_source
-    assert "GITEA_API_TOKEN" not in build_source
-    boundary_step = parsed["jobs"]["build-request"]["steps"][2]
+    assert build_source.count("github.token") == 1
+    assert build_source.count("GITEA_API_TOKEN") == 1
+    boundary_step = _step(
+        parsed["jobs"]["build-request"],
+        "Build artifacts across a token-free UID boundary",
+    )
     boundary_run = boundary_step["run"]
     boundary_code = boundary_run.split("<<'PY'\n", 1)[1].rsplit("\nPY\n", 1)[0]
     compile(boundary_code, "publish-gitea-token-boundary", "exec")
@@ -244,7 +274,10 @@ def test_gitea_candidate_build_isolated_from_runner_tokens() -> None:
     assert 'raise SystemExit("Cannot inspect reserved build UID")' in boundary_code
     assert "::set-env name=NMC_RELEASE_BOUNDARY_INJECTED::yes" in boundary_code
     assert "::add-path::/tmp/nmc-release-boundary-injected" in boundary_code
-    bind_run = parsed["jobs"]["build-request"]["steps"][3]["run"]
+    bind_run = _step(
+        parsed["jobs"]["build-request"],
+        "Bind exact artifacts into the control request",
+    )["run"]
     assert 'test -z "${NMC_RELEASE_BOUNDARY_INJECTED:-}"' in bind_run
     assert "*:/tmp/nmc-release-boundary-injected:*) exit 1" in bind_run
     safe_env = boundary_code.split("safe_env = {", 1)[1].split("\n}", 1)[0]
@@ -257,9 +290,107 @@ def test_gitea_candidate_build_isolated_from_runner_tokens() -> None:
     assert "persist-credentials: false" not in build_source
 
 
+def test_release_runner_gate_is_pinned_and_precedes_candidate_execution() -> None:
+    workflow = _read(GITEA_PUBLISH_WORKFLOW)
+    parsed = yaml.safe_load(workflow)
+    runner_gate_sha256 = hashlib.sha256(RUNNER_GATE_PATH.read_bytes()).hexdigest()
+    acceptance_sha256 = hashlib.sha256(RUNNER_ACCEPTANCE_PATH.read_bytes()).hexdigest()
+    acceptance = json.loads(RUNNER_ACCEPTANCE_PATH.read_bytes())
+
+    assert runner_gate_sha256 == (
+        "ecf6dfda7a0bd6860664db60f4903bf3ecaf50d3ba59da0aa8f2034e5f0829a1"
+    )
+    assert acceptance_sha256 == (
+        "dae6af66b3e70dec9412445e326216e9a2934ac6334b66cc1febd0d02c55ca3d"
+    )
+    assert workflow.count(runner_gate_sha256) == 2
+    assert workflow.count(acceptance_sha256) == 2
+    assert acceptance["runner_id"] == 0
+    assert acceptance["runner_name"] == ""
+    assert acceptance["runtime_attestation_sha256"] == "0" * 64
+    assert acceptance["network_attestation_sha256"] == "0" * 64
+    build_steps = parsed["jobs"]["build-request"]["steps"]
+    gate_index = next(
+        index
+        for index, step in enumerate(build_steps)
+        if step["name"].startswith("Prove exact accepted release runner")
+    )
+    boundary_index = next(
+        index
+        for index, step in enumerate(build_steps)
+        if step["name"] == "Build artifacts across a token-free UID boundary"
+    )
+    assert gate_index < boundary_index
+
+
+def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -> None:
+    gate = _load_runner_gate()
+    with pytest.raises(gate.RunnerGateError, match="not activated"):
+        gate.validate_release_runner(
+            acceptance_path=RUNNER_ACCEPTANCE_PATH,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            run_id=12,
+            job_name="Build exact publisher-credential-free release-control request",
+            source_sha="a" * 40,
+            token="",
+            jobs_payload={"jobs": [], "total_count": 0},
+        )
+
+    acceptance = {
+        "network_attestation_sha256": "b" * 64,
+        "runner_id": 41,
+        "runner_label": "ci-release-netbox-proxbox",
+        "runner_name": "ci-release-netbox-proxbox-runner",
+        "runtime_attestation_sha256": "a" * 64,
+        "schema": 1,
+    }
+    acceptance_path = tmp_path / "acceptance.json"
+    acceptance_path.write_bytes(gate._canonical_json(acceptance))
+    job = {
+        "conclusion": None,
+        "head_sha": "a" * 40,
+        "id": 34,
+        "labels": ["ci-release-netbox-proxbox"],
+        "name": "Build exact publisher-credential-free release-control request",
+        "run_attempt": 1,
+        "run_id": 12,
+        "runner_id": 41,
+        "runner_name": "ci-release-netbox-proxbox-runner",
+        "status": "in_progress",
+    }
+    assert (
+        gate.validate_release_runner(
+            acceptance_path=acceptance_path,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            run_id=12,
+            job_name=job["name"],
+            source_sha="a" * 40,
+            token="",
+            jobs_payload={"jobs": [job], "total_count": 1},
+        )["runner_id"]
+        == 41
+    )
+    with pytest.raises(gate.RunnerGateError, match="exact accepted"):
+        gate.validate_release_runner(
+            acceptance_path=acceptance_path,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            run_id=12,
+            job_name=job["name"],
+            source_sha="a" * 40,
+            token="",
+            jobs_payload={"jobs": [{**job, "runner_id": 42}], "total_count": 1},
+        )
+
+
 def test_candidate_process_cpu_accounting_includes_reaped_descendants() -> None:
     workflow = yaml.safe_load(_read(GITEA_PUBLISH_WORKFLOW))
-    boundary_run = workflow["jobs"]["build-request"]["steps"][2]["run"]
+    boundary_run = _step(
+        workflow["jobs"]["build-request"],
+        "Build artifacts across a token-free UID boundary",
+    )["run"]
     boundary_code = boundary_run.split("<<'PY'\n", 1)[1].rsplit("\nPY\n", 1)[0]
     tree = ast.parse(boundary_code)
     cpu_function = next(
@@ -329,7 +460,10 @@ def test_candidate_write_boundary_rejects_shared_filesystem_writes(
     tmp_path: Path,
 ) -> None:
     workflow = yaml.safe_load(_read(GITEA_PUBLISH_WORKFLOW))
-    boundary_run = workflow["jobs"]["build-request"]["steps"][2]["run"]
+    boundary_run = _step(
+        workflow["jobs"]["build-request"],
+        "Build artifacts across a token-free UID boundary",
+    )["run"]
     boundary_code = boundary_run.split("<<'PY'\n", 1)[1].rsplit("\nPY\n", 1)[0]
     tree = ast.parse(boundary_code)
     boundary_function = next(
@@ -389,7 +523,10 @@ def test_candidate_write_boundary_rejects_shared_filesystem_writes(
 
 def _artifact_handoff_code() -> str:
     parsed = yaml.safe_load(_read(GITEA_PUBLISH_WORKFLOW))
-    bind_run = parsed["jobs"]["build-request"]["steps"][3]["run"]
+    bind_run = _step(
+        parsed["jobs"]["build-request"],
+        "Bind exact artifacts into the control request",
+    )["run"]
     return bind_run.split("<<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
 
 
@@ -546,11 +683,9 @@ def test_operator_docs_match_the_locked_control_dispatch_contract() -> None:
     assert "request SHA-256" in documentation
     assert "do not merge" in documentation.lower()
     assert "existing publisher" in documentation.lower()
+    assert release_label == "ci-release-netbox-proxbox"
     canary_contract = (
-        f"The `{release_label}` activation canary must separately prove that the "
-        "exact repository-scoped release runner/container denies management and "
-        "production network access; an online runner label alone is insufficient "
-        "evidence."
+        "bind that immutable result plus the runtime digest to the same runner ID"
     )
     for path, text in documentation_by_path.items():
         assert canary_contract in " ".join(text.split()), path
@@ -747,45 +882,43 @@ def test_release_manifest_binds_exact_artifact_bytes(tmp_path: Path) -> None:
         )
 
 
-def test_ci_gate_binds_status_to_authenticated_run_and_job(
+def test_ci_gate_binds_latest_actions_run_to_authenticated_jobs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     gate = _load_ci_gate()
     sha = "a" * 40
     context = "CI / Static checks and mocked regressions (push)"
+    runs_path = (
+        "/repos/emersonfelipesp/netbox-proxbox/actions/runs?"
+        f"branch=develop&event=push&head_sha={sha}&limit=100&page=1"
+    )
+    jobs_path = "/repos/emersonfelipesp/netbox-proxbox/actions/runs/12/jobs"
+    run = {
+        "id": 12,
+        "event": "push",
+        "status": "completed",
+        "conclusion": "success",
+        "head_sha": sha,
+        "head_branch": "develop",
+        "path": "ci.yml@refs/heads/develop",
+        "run_attempt": 0,
+        "actor": {"login": "emersonfelipesp"},
+    }
+    job = {
+        "id": 34,
+        "run_id": 12,
+        "run_attempt": 1,
+        "name": "Static checks and mocked regressions",
+        "status": "completed",
+        "conclusion": "success",
+        "head_sha": sha,
+        "runner_name": "ci-untrusted-netbox-proxbox",
+        "labels": ["ci-untrusted-python312"],
+        "html_url": "https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox/actions/runs/12/jobs/34",
+    }
     responses = {
-        f"/repos/emersonfelipesp/netbox-proxbox/commits/{sha}/statuses?limit=100": [
-            {
-                "creator": None,
-                "id": 8,
-                "context": context,
-                "status": "success",
-                "target_url": "/emersonfelipesp/netbox-proxbox/actions/runs/12/jobs/34",
-            }
-        ],
-        "/repos/emersonfelipesp/netbox-proxbox/actions/runs/12": {
-            "id": 12,
-            "event": "push",
-            "status": "completed",
-            "conclusion": "success",
-            "head_sha": sha,
-            "head_branch": "develop",
-            "path": "ci.yml@refs/heads/develop",
-            "run_attempt": 0,
-            "actor": {"login": "emersonfelipesp"},
-        },
-        "/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34": {
-            "id": 34,
-            "run_id": 12,
-            "run_attempt": 1,
-            "name": "Static checks and mocked regressions",
-            "status": "completed",
-            "conclusion": "success",
-            "head_sha": sha,
-            "runner_name": "ci-untrusted-netbox-proxbox",
-            "labels": ["ci-untrusted-python312"],
-            "html_url": "https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox/actions/runs/12/jobs/34",
-        },
+        runs_path: {"workflow_runs": [run], "total_count": 1},
+        jobs_path: {"jobs": [job], "total_count": 1},
     }
     monkeypatch.setattr(gate, "_request_json", lambda path, *, token: responses[path])
 
@@ -799,20 +932,19 @@ def test_ci_gate_binds_status_to_authenticated_run_and_job(
     )
     assert evidence == {context: {"job_id": 34, "run_attempt": 1, "run_id": 12}}
 
-    status_path = (
-        f"/repos/emersonfelipesp/netbox-proxbox/commits/{sha}/statuses?limit=100"
-    )
-    responses[status_path].insert(
+    runs = responses[runs_path]["workflow_runs"]
+    assert isinstance(runs, list)
+    runs.insert(
         0,
         {
-            "creator": {"id": 2, "login": "emersonfelipesp"},
-            "id": 9,
-            "context": context,
-            "status": "success",
-            "target_url": ("/emersonfelipesp/netbox-proxbox/actions/runs/12/jobs/34"),
+            **run,
+            "id": 13,
+            "status": "completed",
+            "conclusion": "failure",
         },
     )
-    with pytest.raises(gate.CIGateError, match="not server-generated"):
+    responses[runs_path]["total_count"] = 2
+    with pytest.raises(gate.CIGateError, match="run does not match"):
         gate.validate_ci_gate(
             owner="emersonfelipesp",
             repository="netbox-proxbox",
@@ -821,11 +953,10 @@ def test_ci_gate_binds_status_to_authenticated_run_and_job(
             trusted_actor="emersonfelipesp",
             token="test-token",
         )
-    responses[status_path].pop(0)
+    runs.pop(0)
+    responses[runs_path]["total_count"] = 1
 
-    responses["/repos/emersonfelipesp/netbox-proxbox/actions/runs/12"][
-        "run_attempt"
-    ] = 1
+    run["run_attempt"] = 1
     assert gate.validate_ci_gate(
         owner="emersonfelipesp",
         repository="netbox-proxbox",
@@ -835,9 +966,7 @@ def test_ci_gate_binds_status_to_authenticated_run_and_job(
         token="test-token",
     ) == {context: {"job_id": 34, "run_attempt": 1, "run_id": 12}}
 
-    responses["/repos/emersonfelipesp/netbox-proxbox/actions/runs/12"][
-        "run_attempt"
-    ] = 2
+    run["run_attempt"] = 2
     with pytest.raises(gate.CIGateError, match="run attempt is invalid"):
         gate.validate_ci_gate(
             owner="emersonfelipesp",
@@ -847,13 +976,9 @@ def test_ci_gate_binds_status_to_authenticated_run_and_job(
             trusted_actor="emersonfelipesp",
             token="test-token",
         )
-    responses["/repos/emersonfelipesp/netbox-proxbox/actions/runs/12"][
-        "run_attempt"
-    ] = 0
+    run["run_attempt"] = 0
 
-    responses["/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34"][
-        "run_attempt"
-    ] = 2
+    job["run_attempt"] = 2
     with pytest.raises(gate.CIGateError, match="job does not match"):
         gate.validate_ci_gate(
             owner="emersonfelipesp",
@@ -863,14 +988,9 @@ def test_ci_gate_binds_status_to_authenticated_run_and_job(
             trusted_actor="emersonfelipesp",
             token="test-token",
         )
-    responses["/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34"][
-        "run_attempt"
-    ] = 1
+    job["run_attempt"] = 1
 
-    responses["/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34"]["labels"] = [
-        "ci-untrusted-python312",
-        "prod-deploy",
-    ]
+    job["labels"] = ["ci-untrusted-python312", "prod-deploy"]
     with pytest.raises(gate.CIGateError, match="trusted CI runner class"):
         gate.validate_ci_gate(
             owner="emersonfelipesp",
@@ -880,13 +1000,9 @@ def test_ci_gate_binds_status_to_authenticated_run_and_job(
             trusted_actor="emersonfelipesp",
             token="test-token",
         )
-    responses["/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34"]["labels"] = [
-        "ci-untrusted-python312"
-    ]
+    job["labels"] = ["ci-untrusted-python312"]
 
-    responses["/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34"]["head_sha"] = (
-        "b" * 40
-    )
+    job["head_sha"] = "b" * 40
     with pytest.raises(gate.CIGateError, match="job does not match"):
         gate.validate_ci_gate(
             owner="emersonfelipesp",

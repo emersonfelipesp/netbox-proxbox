@@ -95,16 +95,21 @@ sequenceDiagram
   `ci-release-netbox-proxbox` label. The replacement registration must expose
   that label only at repository scope; the broader user-scoped
   `ci-untrusted-python312` runner is not eligible for release evidence.
+  Before either job processes candidate-controlled bytes, a checksum-pinned
+  gate compares the live Gitea job's runner ID, name, and sole label to
+  `.gitea/release-runner-acceptance.json`. Its zero ID, empty name, and all-zero
+  runtime/network attestation digests intentionally disable tag releases until
+  live acceptance replaces every sentinel in one reviewed change.
 - A candidate tag must resolve to the current canonical Gitea `develop` SHA.
-  Each latest required CI status must be server-generated Actions evidence and
-  resolve through authenticated Gitea API records to a successful `ci.yml`
-  push run and run attempt for that exact SHA,
+  The gate ignores writer-controlled commit statuses and selects the newest
+  authenticated `ci.yml` Actions run for that exact SHA directly from Gitea's
+  run inventory. That run and each required job must prove a successful first
+  push attempt for the exact SHA,
   trusted actor, job name, and exact sole `ci-untrusted-python312` job label.
-  Only that validation
-  job's built-in token receives `actions: read` plus `contents: read`; Actions
-  evidence is a separate Gitea permission scope. The separate untrusted build
-  job declares only `contents: read`, fetches the validated public source
-  without checkout credentials, and rejects job-token environment variables.
+  Both jobs receive `actions: read` plus `contents: read` only for their trusted
+  runner/CI evidence gates. The untrusted build fetches the validated public
+  source without checkout credentials, and its step-scoped Gitea token is not
+  passed across the candidate boundary.
   Gitea's public-repository permission floor can still make public Actions data
   readable, so this is not an Actions-read confidentiality boundary. The
   outer job also receives Gitea's artifact runtime token. Candidate-controlled
@@ -118,8 +123,9 @@ sequenceDiagram
   that ABI or the build fails. The
   `ci-release-netbox-proxbox` activation canary must separately prove that the
   exact repository-scoped release runner/container denies management and
-  production network access; an online runner label alone is insufficient
-  evidence.
+  production network access and bind that immutable result plus the runtime
+  digest to the same runner ID in the acceptance record; an online runner label
+  alone is insufficient evidence.
   Candidate stdout/stderr is bounded and captured instead of reaching the runner
   workflow-command parser, with live `set-env`/`add-path` canaries checked in the
   next step. The job fails closed unless cgroup v2 proves hard one-CPU,
