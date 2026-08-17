@@ -298,10 +298,10 @@ def test_release_runner_gate_is_pinned_and_precedes_candidate_execution() -> Non
     acceptance = json.loads(RUNNER_ACCEPTANCE_PATH.read_bytes())
 
     assert runner_gate_sha256 == (
-        "ecf6dfda7a0bd6860664db60f4903bf3ecaf50d3ba59da0aa8f2034e5f0829a1"
+        "bb4a719aa7782b0f185d5b4a2bc7761f213b7b09239d2c76cf44ea9d74b2317b"
     )
     assert acceptance_sha256 == (
-        "dae6af66b3e70dec9412445e326216e9a2934ac6334b66cc1febd0d02c55ca3d"
+        "6a36b55596986686074cc5520ee97367e66b1df2759ae2dac5abdd9bc531a290"
     )
     assert workflow.count(runner_gate_sha256) == 2
     assert workflow.count(acceptance_sha256) == 2
@@ -309,6 +309,14 @@ def test_release_runner_gate_is_pinned_and_precedes_candidate_execution() -> Non
     assert acceptance["runner_name"] == ""
     assert acceptance["runtime_attestation_sha256"] == "0" * 64
     assert acceptance["network_attestation_sha256"] == "0" * 64
+    assert acceptance["attestation_public_key_sha256"] == "0" * 64
+    assert acceptance["runtime_image_digest"] == "0" * 64
+    assert acceptance["supervisor_policy_sha256"] == "0" * 64
+    assert acceptance["registered_labels"] == [
+        "ci-release-netbox-proxbox",
+        "ci-untrusted-netbox46",
+        "ci-untrusted-python312",
+    ]
     build_steps = parsed["jobs"]["build-request"]["steps"]
     gate_index = next(
         index
@@ -338,13 +346,55 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
         )
 
     acceptance = {
+        "attestation_public_key_sha256": "",
         "network_attestation_sha256": "b" * 64,
+        "registered_labels": [
+            "ci-release-netbox-proxbox",
+            "ci-untrusted-netbox46",
+            "ci-untrusted-python312",
+        ],
         "runner_id": 41,
         "runner_label": "ci-release-netbox-proxbox",
         "runner_name": "ci-release-netbox-proxbox-runner",
         "runtime_attestation_sha256": "a" * 64,
+        "runtime_image_digest": "c" * 64,
         "schema": 1,
+        "supervisor_policy_sha256": "d" * 64,
     }
+    private_key = tmp_path / "private.pem"
+    public_key = tmp_path / "public.pem"
+    subprocess.run(
+        [
+            "/usr/bin/openssl",
+            "genpkey",
+            "-algorithm",
+            "RSA",
+            "-pkeyopt",
+            "rsa_keygen_bits:2048",
+            "-out",
+            str(private_key),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.run(
+        [
+            "/usr/bin/openssl",
+            "pkey",
+            "-in",
+            str(private_key),
+            "-pubout",
+            "-out",
+            str(public_key),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    acceptance["attestation_public_key_sha256"] = hashlib.sha256(
+        public_key.read_bytes()
+    ).hexdigest()
     acceptance_path = tmp_path / "acceptance.json"
     acceptance_path.write_bytes(gate._canonical_json(acceptance))
     job = {
@@ -359,6 +409,46 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
         "runner_name": "ci-release-netbox-proxbox-runner",
         "status": "in_progress",
     }
+    attestation_root = tmp_path / "attestations"
+    attestation_root.mkdir()
+    attestation_path = attestation_root / "run-12-job-34.json"
+    signature_path = attestation_root / "run-12-job-34.sig"
+    attestation = {
+        "expires_at": 1200,
+        "issued_at": 1000,
+        "job_id": 34,
+        "network_attestation_sha256": acceptance["network_attestation_sha256"],
+        "registered_labels": acceptance["registered_labels"],
+        "repository": "emersonfelipesp/netbox-proxbox",
+        "run_id": 12,
+        "runner_id": 41,
+        "runner_name": "ci-release-netbox-proxbox-runner",
+        "runtime_attestation_sha256": acceptance["runtime_attestation_sha256"],
+        "runtime_image_digest": acceptance["runtime_image_digest"],
+        "schema": 1,
+        "source_sha": "a" * 40,
+        "supervisor_policy_sha256": acceptance["supervisor_policy_sha256"],
+    }
+
+    def sign(value: dict[str, object]) -> None:
+        attestation_path.write_bytes(gate._canonical_json(value))
+        subprocess.run(
+            [
+                "/usr/bin/openssl",
+                "dgst",
+                "-sha256",
+                "-sign",
+                str(private_key),
+                "-out",
+                str(signature_path),
+                str(attestation_path),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    sign(attestation)
     assert (
         gate.validate_release_runner(
             acceptance_path=acceptance_path,
@@ -369,6 +459,9 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
             source_sha="a" * 40,
             token="",
             jobs_payload={"jobs": [job], "total_count": 1},
+            attestation_root=attestation_root,
+            public_key_path=public_key,
+            now=1100,
         )["runner_id"]
         == 41
     )
@@ -382,7 +475,39 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
             source_sha="a" * 40,
             token="",
             jobs_payload={"jobs": [{**job, "runner_id": 42}], "total_count": 1},
+            attestation_root=attestation_root,
+            public_key_path=public_key,
+            now=1100,
         )
+    for label, changed in (
+        ("stale", {"issued_at": 800, "expires_at": 1000}),
+        ("runtime", {"runtime_image_digest": "e" * 64}),
+        ("network", {"network_attestation_sha256": "f" * 64}),
+        (
+            "labels",
+            {
+                "registered_labels": [
+                    *acceptance["registered_labels"],
+                    "ci-untrusted-extra",
+                ]
+            },
+        ),
+    ):
+        sign({**attestation, **changed})
+        with pytest.raises(gate.RunnerGateError, match="differs"):
+            gate.validate_release_runner(
+                acceptance_path=acceptance_path,
+                owner="emersonfelipesp",
+                repository="netbox-proxbox",
+                run_id=12,
+                job_name=job["name"],
+                source_sha="a" * 40,
+                token="",
+                jobs_payload={"jobs": [job], "total_count": 1},
+                attestation_root=attestation_root,
+                public_key_path=public_key,
+                now=1100,
+            )
 
 
 def test_candidate_process_cpu_accounting_includes_reaped_descendants() -> None:
@@ -684,9 +809,7 @@ def test_operator_docs_match_the_locked_control_dispatch_contract() -> None:
     assert "do not merge" in documentation.lower()
     assert "existing publisher" in documentation.lower()
     assert release_label == "ci-release-netbox-proxbox"
-    canary_contract = (
-        "bind that immutable result plus the runtime digest to the same runner ID"
-    )
+    canary_contract = "historical canary"
     for path, text in documentation_by_path.items():
         assert canary_contract in " ".join(text.split()), path
         assert "dedicated untrusted CI VM" not in text, path

@@ -600,8 +600,10 @@ label. The two release-request jobs themselves use the repository-unique
 `ci-release-netbox-proxbox` label so user/organization runners cannot satisfy
 release evidence. Before candidate processing, both jobs run a checksum-pinned
 gate that requires the live runner ID, name, and sole label to equal the
-canonical acceptance record; zero/empty identity and all-zero runtime/network
-attestation digests keep tag releases disabled. Both jobs are explicitly
+canonical acceptance record plus a fresh signed external-supervisor attestation
+bound to repository/run/job/source, complete registered labels, runtime image,
+and network/runtime policy. Zero/empty identity and all-zero key/image/policy
+digests keep tag releases disabled. Both jobs are explicitly
 limited to `actions: read` and `contents: read`, and the build's step-scoped
 Gitea token is not passed across the candidate boundary. The build fetches the
 validated public source without checkout credentials.
@@ -619,7 +621,8 @@ storage. The `ci-release-netbox-proxbox` activation canary must separately prove
 that the exact repository-scoped release runner/container denies management and
 production network access and bind that immutable result plus the runtime
 digest to the same runner ID in the acceptance record; an online runner label
-alone is insufficient evidence.
+alone is insufficient evidence. The supervisor must sign fresh job-bound
+evidence so a historical canary cannot authorize drift after restart.
 Only reviewed outer shell/Python code
 regains the runtime-bearing environment. Candidate output is captured with a one-MiB limit
 and is never relayed raw to the runner command parser; legacy `set-env` and

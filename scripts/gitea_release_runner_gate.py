@@ -9,6 +9,9 @@ import json
 import os
 from pathlib import Path
 import re
+import stat
+import subprocess
+import time
 import urllib.error
 import urllib.request
 from typing import Any
@@ -18,6 +21,9 @@ API_ORIGIN = "https://git.nmulti.cloud/api/v1"
 MAX_RESPONSE_BYTES = 1024 * 1024
 SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
 ZERO_SHA256 = "0" * 64
+OPENSSL = Path("/usr/bin/openssl")
+DEFAULT_ATTESTATION_ROOT = Path("/run/nmc-release-attestation")
+DEFAULT_PUBLIC_KEY = Path("/etc/nmc-release-runner-attestation-public.pem")
 
 
 class RunnerGateError(ValueError):
@@ -41,18 +47,32 @@ def _load_acceptance(path: Path, repository: str) -> dict[str, Any]:
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as exc:
         raise RunnerGateError("release runner acceptance is unavailable") from exc
     expected_keys = {
+        "attestation_public_key_sha256",
         "network_attestation_sha256",
+        "registered_labels",
         "runner_id",
         "runner_label",
         "runner_name",
         "runtime_attestation_sha256",
+        "runtime_image_digest",
         "schema",
+        "supervisor_policy_sha256",
     }
     runtime_digest = (
         value.get("runtime_attestation_sha256") if isinstance(value, dict) else None
     )
     network_digest = (
         value.get("network_attestation_sha256") if isinstance(value, dict) else None
+    )
+    registered_labels = (
+        value.get("registered_labels") if isinstance(value, dict) else None
+    )
+    pinned_digests = (
+        value.get("attestation_public_key_sha256") if isinstance(value, dict) else None,
+        network_digest,
+        runtime_digest,
+        value.get("runtime_image_digest") if isinstance(value, dict) else None,
+        value.get("supervisor_policy_sha256") if isinstance(value, dict) else None,
     )
     if (
         not path.is_file()
@@ -71,15 +91,149 @@ def _load_acceptance(path: Path, repository: str) -> dict[str, Any]:
         or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", value["runner_name"])
         is None
         or value.get("runner_label") != f"ci-release-{repository}"
-        or not isinstance(runtime_digest, str)
-        or SHA256_RE.fullmatch(runtime_digest) is None
-        or runtime_digest == ZERO_SHA256
-        or not isinstance(network_digest, str)
-        or SHA256_RE.fullmatch(network_digest) is None
-        or network_digest == ZERO_SHA256
+        or not isinstance(registered_labels, list)
+        or registered_labels != sorted(set(registered_labels))
+        or value.get("runner_label") not in registered_labels
+        or any(
+            not isinstance(label, str)
+            or re.fullmatch(r"ci-(?:release|untrusted)-[a-z0-9-]+", label) is None
+            for label in registered_labels
+        )
+        or any(
+            not isinstance(digest, str)
+            or SHA256_RE.fullmatch(digest) is None
+            or digest == ZERO_SHA256
+            for digest in pinned_digests
+        )
     ):
         raise RunnerGateError("release runner acceptance is not activated")
     return value
+
+
+def _read_external_file(path: Path, label: str, maximum: int) -> bytes:
+    try:
+        metadata = path.lstat()
+        raw = path.read_bytes()
+    except OSError as exc:
+        raise RunnerGateError(f"{label} is unavailable") from exc
+    if (
+        not stat.S_ISREG(metadata.st_mode)
+        or stat.S_ISLNK(metadata.st_mode)
+        or metadata.st_uid != 0
+        or metadata.st_nlink != 1
+        or metadata.st_size != len(raw)
+        or not 0 < len(raw) <= maximum
+    ):
+        raise RunnerGateError(f"{label} metadata is unsafe")
+    return raw
+
+
+def _verify_live_attestation(
+    *,
+    acceptance: dict[str, Any],
+    attestation_root: Path,
+    public_key_path: Path,
+    repository_full_name: str,
+    run_id: int,
+    job_id: int,
+    source_sha: str,
+    now: int,
+) -> str:
+    if not attestation_root.is_absolute() or not public_key_path.is_absolute():
+        raise RunnerGateError("runner attestation paths are not absolute")
+    stem = f"run-{run_id}-job-{job_id}"
+    attestation_path = attestation_root / f"{stem}.json"
+    signature_path = attestation_root / f"{stem}.sig"
+    public_key = _read_external_file(public_key_path, "attestation public key", 16384)
+    if (
+        hashlib.sha256(public_key).hexdigest()
+        != acceptance["attestation_public_key_sha256"]
+    ):
+        raise RunnerGateError("attestation public key differs from acceptance")
+    raw = _read_external_file(attestation_path, "live runner attestation", 16384)
+    _read_external_file(signature_path, "live runner attestation signature", 16384)
+    if not OPENSSL.is_file() or OPENSSL.is_symlink():
+        raise RunnerGateError("OpenSSL verifier is unavailable")
+    try:
+        verified = subprocess.run(  # noqa: S603
+            [
+                str(OPENSSL),
+                "dgst",
+                "-sha256",
+                "-verify",
+                str(public_key_path),
+                "-signature",
+                str(signature_path),
+                str(attestation_path),
+            ],
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RunnerGateError("live runner attestation verification failed") from exc
+    if verified.returncode != 0:
+        raise RunnerGateError("live runner attestation signature is invalid")
+    try:
+        attestation = json.loads(raw)
+    except (UnicodeDecodeError, json.JSONDecodeError) as exc:
+        raise RunnerGateError("live runner attestation is invalid JSON") from exc
+    expected_keys = {
+        "expires_at",
+        "issued_at",
+        "job_id",
+        "network_attestation_sha256",
+        "registered_labels",
+        "repository",
+        "run_id",
+        "runner_id",
+        "runner_name",
+        "runtime_attestation_sha256",
+        "runtime_image_digest",
+        "schema",
+        "source_sha",
+        "supervisor_policy_sha256",
+    }
+    issued_at = attestation.get("issued_at") if isinstance(attestation, dict) else None
+    expires_at = (
+        attestation.get("expires_at") if isinstance(attestation, dict) else None
+    )
+    if (
+        not isinstance(attestation, dict)
+        or set(attestation) != expected_keys
+        or raw != _canonical_json(attestation)
+        or isinstance(attestation.get("schema"), bool)
+        or attestation.get("schema") != 1
+        or isinstance(issued_at, bool)
+        or not isinstance(issued_at, int)
+        or isinstance(expires_at, bool)
+        or not isinstance(expires_at, int)
+        or not issued_at <= now < expires_at
+        or not 0 < expires_at - issued_at <= 300
+        or attestation.get("repository") != repository_full_name
+        or attestation.get("run_id") != run_id
+        or isinstance(attestation.get("run_id"), bool)
+        or attestation.get("job_id") != job_id
+        or isinstance(attestation.get("job_id"), bool)
+        or attestation.get("source_sha") != source_sha
+        or attestation.get("runner_id") != acceptance["runner_id"]
+        or isinstance(attestation.get("runner_id"), bool)
+        or attestation.get("runner_name") != acceptance["runner_name"]
+        or attestation.get("registered_labels") != acceptance["registered_labels"]
+        or attestation.get("runtime_image_digest") != acceptance["runtime_image_digest"]
+        or attestation.get("runtime_attestation_sha256")
+        != acceptance["runtime_attestation_sha256"]
+        or attestation.get("network_attestation_sha256")
+        != acceptance["network_attestation_sha256"]
+        or attestation.get("supervisor_policy_sha256")
+        != acceptance["supervisor_policy_sha256"]
+    ):
+        raise RunnerGateError(
+            "live runner attestation differs from this job and acceptance"
+        )
+    return hashlib.sha256(raw).hexdigest()
 
 
 def _request_jobs(owner: str, repository: str, run_id: int, token: str) -> Any:
@@ -123,6 +277,9 @@ def validate_release_runner(
     source_sha: str,
     token: str,
     jobs_payload: object | None = None,
+    attestation_root: Path = DEFAULT_ATTESTATION_ROOT,
+    public_key_path: Path = DEFAULT_PUBLIC_KEY,
+    now: int | None = None,
 ) -> dict[str, Any]:
     acceptance = _load_acceptance(acceptance_path, repository)
     if (
@@ -173,8 +330,19 @@ def validate_release_runner(
         or job.get("labels") != [acceptance["runner_label"]]
     ):
         raise RunnerGateError("job did not use the exact accepted release runner")
+    attestation_sha256 = _verify_live_attestation(
+        acceptance=acceptance,
+        attestation_root=attestation_root,
+        public_key_path=public_key_path,
+        repository_full_name=f"{owner}/{repository}",
+        run_id=run_id,
+        job_id=int(job["id"]),
+        source_sha=source_sha,
+        now=int(time.time()) if now is None else now,
+    )
     return {
         "acceptance_sha256": hashlib.sha256(_canonical_json(acceptance)).hexdigest(),
+        "attestation_sha256": attestation_sha256,
         "job_id": job["id"],
         "runner_id": job["runner_id"],
     }
@@ -188,6 +356,12 @@ def main() -> None:
     parser.add_argument("--run-id", type=int, required=True)
     parser.add_argument("--job-name", required=True)
     parser.add_argument("--source-sha", required=True)
+    parser.add_argument(
+        "--attestation-root", type=Path, default=DEFAULT_ATTESTATION_ROOT
+    )
+    parser.add_argument(
+        "--attestation-public-key", type=Path, default=DEFAULT_PUBLIC_KEY
+    )
     args = parser.parse_args()
     evidence = validate_release_runner(
         acceptance_path=args.acceptance,
@@ -197,6 +371,8 @@ def main() -> None:
         job_name=args.job_name,
         source_sha=args.source_sha,
         token=os.getenv("GITEA_API_TOKEN", ""),
+        attestation_root=args.attestation_root,
+        public_key_path=args.attestation_public_key,
     )
     print(json.dumps(evidence, sort_keys=True, separators=(",", ":")))
 

@@ -98,8 +98,13 @@ sequenceDiagram
   Before either job processes candidate-controlled bytes, a checksum-pinned
   gate compares the live Gitea job's runner ID, name, and sole label to
   `.gitea/release-runner-acceptance.json`. Its zero ID, empty name, and all-zero
-  runtime/network attestation digests intentionally disable tag releases until
-  live acceptance replaces every sentinel in one reviewed change.
+  key/runtime/image/network/supervisor digests intentionally disable tag
+  releases until live acceptance replaces every sentinel in one reviewed
+  change. Even then, the gate requires a root-owned, freshly signed supervisor
+  attestation bound to the repository, run ID, job ID, source SHA, runner
+  identity, complete registered-label set, runtime image, and network/runtime
+  policy digests. Missing, stale, mismatched, or invalidly signed evidence fails
+  before candidate execution.
 - A candidate tag must resolve to the current canonical Gitea `develop` SHA.
   The gate ignores writer-controlled commit statuses and selects the newest
   authenticated `ci.yml` Actions run for that exact SHA directly from Gitea's
@@ -125,7 +130,9 @@ sequenceDiagram
   exact repository-scoped release runner/container denies management and
   production network access and bind that immutable result plus the runtime
   digest to the same runner ID in the acceptance record; an online runner label
-  alone is insufficient evidence.
+  alone is insufficient evidence. The external supervisor must re-attest the
+  live state for each release job; a historical canary cannot authorize a
+  restarted or reconfigured runner.
   Candidate stdout/stderr is bounded and captured instead of reaching the runner
   workflow-command parser, with live `set-env`/`add-path` canaries checked in the
   next step. The job fails closed unless cgroup v2 proves hard one-CPU,
