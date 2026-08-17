@@ -119,6 +119,7 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/netbox/netbox:${{ github.workspace }}/netbox-proxbox
         run: |
           pytest tests/test_netbox_compat_django.py \
+            tests/test_list_view_render_django.py \
             tests/test_sync_state_models.py tests/test_sync_state_contracts.py \
             tests/test_backend_key_adoption_django.py \
             tests/test_encryption_key_recovery_django.py \
