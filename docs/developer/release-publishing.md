@@ -96,8 +96,9 @@ sequenceDiagram
   that label only at repository scope; the broader user-scoped
   `ci-untrusted-python312` runner is not eligible for release evidence.
 - A candidate tag must resolve to the current canonical Gitea `develop` SHA.
-  Each latest required CI status must resolve through authenticated Gitea API
-  records to a successful `ci.yml` push run and run attempt for that exact SHA,
+  Each latest required CI status must be server-generated Actions evidence and
+  resolve through authenticated Gitea API records to a successful `ci.yml`
+  push run and run attempt for that exact SHA,
   trusted actor, job name, and exact sole `ci-untrusted-python312` job label.
   Only that validation
   job's built-in token receives `actions: read` plus `contents: read`; Actions

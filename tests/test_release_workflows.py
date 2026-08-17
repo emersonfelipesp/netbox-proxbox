@@ -115,7 +115,7 @@ def test_token_bearing_ci_gate_uses_the_pinned_reviewed_script() -> None:
     isolated_invocation = "python3 -I scripts/gitea_ci_gate.py"
 
     assert expected_digest == (
-        "14ef8bdb2c39fd4d239b8541a66b1b4708be6a61d7374b62f660b2673db5d8dd"
+        "b5d937d9a41c4223ba6f6dd3f8e930f41f1ee4c810be2d552c4ebcf17cc931c4"
     )
     assert 'python3 -I - "$VERSION"' in policy_run
     assert "test -f scripts/gitea_ci_gate.py" in policy_run
@@ -756,6 +756,7 @@ def test_ci_gate_binds_status_to_authenticated_run_and_job(
     responses = {
         f"/repos/emersonfelipesp/netbox-proxbox/commits/{sha}/statuses?limit=100": [
             {
+                "creator": None,
                 "id": 8,
                 "context": context,
                 "status": "success",
@@ -797,6 +798,30 @@ def test_ci_gate_binds_status_to_authenticated_run_and_job(
         token="test-token",
     )
     assert evidence == {context: {"job_id": 34, "run_attempt": 1, "run_id": 12}}
+
+    status_path = (
+        f"/repos/emersonfelipesp/netbox-proxbox/commits/{sha}/statuses?limit=100"
+    )
+    responses[status_path].insert(
+        0,
+        {
+            "creator": {"id": 2, "login": "emersonfelipesp"},
+            "id": 9,
+            "context": context,
+            "status": "success",
+            "target_url": ("/emersonfelipesp/netbox-proxbox/actions/runs/12/jobs/34"),
+        },
+    )
+    with pytest.raises(gate.CIGateError, match="not server-generated"):
+        gate.validate_ci_gate(
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            source_sha=sha,
+            required_contexts=[context],
+            trusted_actor="emersonfelipesp",
+            token="test-token",
+        )
+    responses[status_path].pop(0)
 
     responses["/repos/emersonfelipesp/netbox-proxbox/actions/runs/12"][
         "run_attempt"

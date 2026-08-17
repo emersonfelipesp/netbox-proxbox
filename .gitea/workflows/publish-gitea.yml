@@ -77,7 +77,7 @@ jobs:
           test -f scripts/gitea_ci_gate.py
           test ! -L scripts/gitea_ci_gate.py
           printf '%s  %s\n' \
-            14ef8bdb2c39fd4d239b8541a66b1b4708be6a61d7374b62f660b2673db5d8dd \
+            b5d937d9a41c4223ba6f6dd3f8e930f41f1ee4c810be2d552c4ebcf17cc931c4 \
             scripts/gitea_ci_gate.py | sha256sum --check --strict
           python3 -I scripts/gitea_ci_gate.py \
             --owner emersonfelipesp --repository netbox-proxbox \

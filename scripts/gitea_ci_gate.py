@@ -99,6 +99,10 @@ def _latest_statuses(
     for row in statuses:
         if not isinstance(row, dict) or row.get("context") not in required_contexts:
             continue
+        if "creator" not in row or row["creator"] is not None:
+            raise CIGateError(
+                "Required CI status is not server-generated Actions evidence"
+            )
         status_id = row.get("id")
         if (
             isinstance(status_id, bool)

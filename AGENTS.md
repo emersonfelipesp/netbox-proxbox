@@ -316,8 +316,9 @@ is never retried; fix forward with the next immutable version.
 ### Security
 
 - `publish-gitea.yml` accepts only a canonical version tag that equals current
-  Gitea `develop`; each latest required status must resolve to authenticated
-  successful `ci.yml` push-run/run-attempt/job evidence for that exact SHA,
+  Gitea `develop`; each latest required status must be server-generated Actions
+  evidence and resolve to authenticated successful `ci.yml`
+  push-run/run-attempt/job evidence for that exact SHA,
   trusted actor, expected job, and untrusted runner class.
 - The target workflow cannot publish. The control builder and publisher use
   separate identities, state, runtime directories, and locked executables; the
