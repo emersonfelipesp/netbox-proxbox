@@ -372,19 +372,40 @@ startup log:
 WARNINGS:
 ?: (netbox_proxbox.W001) Proxbox is running on NetBox 4.7.0-beta1, which is
    supported on an experimental basis only. Certified support covers NetBox
-   4.5.8 through 4.6.99.
-   HINT: The plugin is fully operational; this is a maturity notice, not a
-   fault. Silence it with SILENCED_SYSTEM_CHECKS = ['netbox_proxbox.W001'] in
-   configuration.py once the risk is accepted.
+   4.5.8 through 4.6.99. NetBox 4.7.0-beta1 is also an upstream pre-release:
+   upstream does not support pre-releases in production and does not guarantee
+   an upgrade path from a pre-release to the final release. Use it for
+   evaluation on disposable data only.
+   HINT: The plugin itself is operational on this release; this is a maturity
+   notice, not a plugin fault. Do not treat it as clearance to run a NetBox
+   pre-release in production — that restriction is upstream's, and silencing
+   this notice does not lift it. On an evaluation install you can quiet it with
+   PLUGINS_CONFIG['netbox_proxbox']['silence_netbox_compatibility_warning'] = True.
 ```
 
-It is a warning, never an error — it cannot block NetBox from starting. Once
-you have accepted the risk, silence it with Django's stock mechanism in
-`configuration.py`:
+It is a warning, never an error — it cannot block NetBox from starting.
+
+**On a NetBox pre-release, silencing is for evaluation installs only.** The
+notice above is the only thing telling you the release is unsupported upstream
+and has no guaranteed upgrade path to GA; quieting it does not change either
+fact. A stable `4.7.x` release gets the plain experimental notice without the
+pre-release paragraph, and silencing that one is an ordinary decision.
+
+**To silence it**, set the key in this plugin's `PLUGINS_CONFIG` entry:
 
 ```python
-SILENCED_SYSTEM_CHECKS = ["netbox_proxbox.W001"]
+PLUGINS_CONFIG = {
+    "netbox_proxbox": {"silence_netbox_compatibility_warning": True},
+}
 ```
+
+That silences both the system check and the startup log line.
+
+> Django's own `SILENCED_SYSTEM_CHECKS` is honoured too, but **not from
+> `configuration.py`** — NetBox's `settings.py` imports an explicit list of
+> named settings and that one is not on it, so setting it there has no effect.
+> It only applies through NetBox's `local_settings.py` hatch, which upstream
+> labels unsupported. Use the `PLUGINS_CONFIG` key above.
 
 NetBox releases below `4.5.8` and from `4.8` onward are still refused outright
 by NetBox's own plugin version gate.

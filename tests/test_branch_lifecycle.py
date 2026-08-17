@@ -52,6 +52,22 @@ def _install_branching_stubs(
     models_pkg.ProxboxPluginSettings = _SettingsClass
     monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_pkg)
 
+    # is_branching_available() now requires the Django *app* to be loaded, not
+    # merely the package to be importable: on NetBox 4.7 the branching plugin is
+    # skipped (its max_version is 4.6.99) while remaining perfectly importable.
+    # See tests/test_branching_availability.py.
+    django_pkg = types.ModuleType("django")
+    django_pkg.__path__ = []  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "django", django_pkg)
+    django_apps = types.ModuleType("django.apps")
+
+    class _AppRegistry:
+        def is_installed(self, label: str) -> bool:
+            return available and label == "netbox_branching"
+
+    django_apps.apps = _AppRegistry()  # type: ignore[attr-defined]
+    monkeypatch.setitem(sys.modules, "django.apps", django_apps)
+
     if available:
         nb = types.ModuleType("netbox_branching")
         monkeypatch.setitem(sys.modules, "netbox_branching", nb)

@@ -145,3 +145,70 @@ def test_plugin_is_actually_installed_and_loaded() -> None:
     from django.apps import apps
 
     assert apps.is_installed("netbox_proxbox")
+
+
+def test_ready_registered_the_check_by_injecting_a_4_7_release() -> None:
+    """An independent oracle for the `ready()` registration itself.
+
+    The band-matching test above cannot catch a deleted registration on a
+    *stable* CI cell: its stable branch expects no messages, which is exactly
+    what a plugin that never registered anything produces. It also picks its
+    expected branch with `current_netbox_support_level()` — the same classifier
+    the check itself uses — so both sides move together.
+
+    This test fixes both problems without needing a 4.7 cell. It substitutes
+    **literal** 4.7 release metadata (no classifier involved, no version
+    arithmetic) and re-runs Django's real check registry. The check being
+    exercised is the one `ProxboxConfig.ready()` registered at startup — this test never
+    calls the registration function itself — so deleting that call makes this
+    fail on every cell, stable ones included.
+    """
+    from unittest.mock import patch
+
+    from django.conf import settings
+    from django.core.checks import run_checks
+
+    class _Release:
+        # Transcribed from netbox/release.yaml at tag v4.7.0-beta1; NetBox
+        # assembles full_version as version[-designation][-build].
+        version = "4.7.0"
+        full_version = "4.7.0-beta1"
+        designation = "beta1"
+
+    with patch.object(settings, "RELEASE", _Release()):
+        messages = [
+            message
+            for message in run_checks()
+            if str(getattr(message, "id", "")) == "netbox_proxbox.W001"
+        ]
+
+    assert len(messages) == 1, (
+        "ProxboxConfig.ready() must register the compatibility check exactly once; "
+        f"got {messages} while pretending to run on NetBox 4.7.0-beta1"
+    )
+    assert "4.7.0-beta1" in messages[0].msg
+    assert "experimental" in messages[0].msg.lower()
+    # The pre-release caveat must survive the real registration path too.
+    assert "pre-release" in messages[0].msg.lower()
+
+
+def test_injecting_a_stable_release_produces_no_notice() -> None:
+    """The other direction, so the test above cannot pass by always firing."""
+    from unittest.mock import patch
+
+    from django.conf import settings
+    from django.core.checks import run_checks
+
+    class _Release:
+        version = "4.6.4"
+        full_version = "4.6.4"
+        designation = None
+
+    with patch.object(settings, "RELEASE", _Release()):
+        messages = [
+            message
+            for message in run_checks()
+            if str(getattr(message, "id", "")).startswith("netbox_proxbox.W")
+        ]
+
+    assert messages == [], f"a stable release must emit nothing; got {messages}"

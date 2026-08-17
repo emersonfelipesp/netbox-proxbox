@@ -57,10 +57,12 @@ __all__ = [
     "PLUGIN_MAX_VERSION",
     "PLUGIN_MIN_VERSION",
     "STABLE_MAX_NETBOX_VERSION",
+    "SILENCE_SETTING_NAME",
     "STABLE_MIN_NETBOX_VERSION",
     "current_netbox_support_level",
     "detect_netbox_designation",
     "detect_netbox_version",
+    "experimental_warning_hint",
     "experimental_warning_message",
     "is_prerelease_netbox",
     "netbox_support_level",
@@ -98,6 +100,11 @@ _REGISTERED_APP_LABELS: set[str] = set()
 # build, and a build may itself contain dashes (``Docker-3.4.0``), so a small
 # bound covers every real shape without looping on pathological input.
 _VERSION_SUFFIX_STRIP_LIMIT = 6
+
+#: Key an operator may set in a plugin's ``PLUGINS_CONFIG`` entry to silence
+#: its maturity notice. See :func:`_check_is_silenced` for why this exists
+#: despite the module otherwise adding no settings of its own.
+SILENCE_SETTING_NAME = "silence_netbox_compatibility_warning"
 
 
 class NetBoxSupportLevel(StrEnum):
@@ -238,25 +245,75 @@ def detect_netbox_designation() -> str | None:
         return None
 
 
-def _check_is_silenced(check_id: str) -> bool:
-    """True when ``check_id`` is listed in Django's ``SILENCED_SYSTEM_CHECKS``.
+def _check_is_silenced(app_label: str, check_id: str) -> bool:
+    """True when the operator has asked for this maturity notice to be quiet.
 
-    Django's setting suppresses the *system check framework's* output. It knows
-    nothing about the ``ready()`` log line this module also emits, so without
-    this the documented suppression procedure would only half work: an operator
-    who accepted the risk and silenced the check would still get the warning in
-    every process's startup log, forever. Consulting the same setting is what
-    makes one documented action actually silence both surfaces.
+    Two mechanisms are honoured, and the second is load-bearing rather than a
+    nicety.
 
-    Fails *open* — an unreadable setting means the notice is still shown, which
-    is the safe direction for a maturity warning.
+    ``SILENCED_SYSTEM_CHECKS`` is Django's own mechanism, consulted here as well
+    as by the check framework so that the ``ready()`` log line — which the
+    framework knows nothing about — is silenced by the same action. **But NetBox
+    does not read it from ``configuration.py``**: ``settings.py`` imports an
+    explicit list of roughly a hundred named settings via
+    ``getattr(configuration, ...)`` and this is not one of them, so setting it
+    there changes nothing. It takes effect only through NetBox's
+    ``local_settings.py`` hatch, which upstream labels *unsupported*.
+
+    The supported path is therefore this plugin's own ``PLUGINS_CONFIG`` entry,
+    which NetBox unambiguously does import::
+
+        PLUGINS_CONFIG = {
+            "<plugin>": {"silence_netbox_compatibility_warning": True},
+        }
+
+    That is a setting, and this module otherwise deliberately adds none. The
+    distinction that matters: the plugin **works** with zero configuration on
+    every supported NetBox — nothing here is an opt-in to *function*. This key
+    only quiets an advisory the operator has already read and accepted, which is
+    the one thing they cannot otherwise turn off.
+
+    Fails *open* — an unreadable or malformed setting still shows the notice,
+    the safe direction for a maturity warning.
     """
     try:
         from django.conf import settings
 
-        return check_id in set(getattr(settings, "SILENCED_SYSTEM_CHECKS", None) or ())
+        if check_id in set(getattr(settings, "SILENCED_SYSTEM_CHECKS", None) or ()):
+            return True
+
+        plugins_config = getattr(settings, "PLUGINS_CONFIG", None) or {}
+        entry = plugins_config.get(app_label) or {}
+        return bool(entry.get(SILENCE_SETTING_NAME, False))
     except Exception:  # noqa: BLE001 — suppression must never break startup
         return False
+
+
+def experimental_warning_hint(app_label: str, display_version: str) -> str:
+    """Compose the operator-facing hint that accompanies the maturity notice.
+
+    A NetBox **pre-release** gets different advice, and the difference is the
+    point. On a stable-but-uncertified release, silencing the notice once the
+    risk is accepted is an ordinary decision. On a beta or release candidate it
+    is not: upstream does not support the release in production and guarantees
+    no upgrade path to the final release, so the hint must not read as
+    clearance — silencing changes nothing about either fact.
+    """
+    if is_prerelease_netbox(display_version, detect_netbox_designation()):
+        return (
+            "The plugin itself is operational on this release; this is a "
+            "maturity notice, not a plugin fault. Do not treat it as clearance "
+            "to run a NetBox pre-release in production — that restriction is "
+            "upstream's, and silencing this notice does not lift it. On an "
+            "evaluation install you can quiet it with "
+            f"PLUGINS_CONFIG['{app_label}']['{SILENCE_SETTING_NAME}'] = True."
+        )
+    return (
+        "The plugin is fully operational; this is a maturity notice, not a "
+        "fault. Once the risk is accepted, quiet it with "
+        f"PLUGINS_CONFIG['{app_label}']['{SILENCE_SETTING_NAME}'] = True "
+        "(NetBox does not read SILENCED_SYSTEM_CHECKS from configuration.py)."
+    )
 
 
 def experimental_warning_message(
@@ -322,6 +379,8 @@ def register_netbox_compatibility_check(
             _comparison_version, display_version = detect_netbox_version()
             level = current_netbox_support_level()
         except Exception as exc:  # noqa: BLE001 — reported, never raised at startup
+            if _check_is_silenced(app_label, f"{app_label}.W002"):
+                return []
             return [
                 DjangoWarning(
                     f"{plugin_label} could not determine the running NetBox "
@@ -334,30 +393,18 @@ def register_netbox_compatibility_check(
         if level is not NetBoxSupportLevel.EXPERIMENTAL:
             return []
 
-        if is_prerelease_netbox(display_version, detect_netbox_designation()):
-            hint = (
-                "The plugin itself is operational on this release; this is a "
-                "maturity notice, not a plugin fault. Do not treat it as "
-                "clearance to run a NetBox pre-release in production — that "
-                "restriction is upstream's, and silencing the check does not "
-                "lift it. Silence it with "
-                f"SILENCED_SYSTEM_CHECKS = ['{app_label}.W001'] in "
-                "configuration.py only on an evaluation install."
-            )
-        else:
-            hint = (
-                "The plugin is fully operational; this is a maturity notice, "
-                "not a fault. Silence it with "
-                f"SILENCED_SYSTEM_CHECKS = ['{app_label}.W001'] in "
-                "configuration.py once the risk is accepted."
-            )
+        # Django's check framework only honours SILENCED_SYSTEM_CHECKS, so the
+        # PLUGINS_CONFIG opt-out has to be applied here too — otherwise it would
+        # silence the log line while leaving `manage.py check` noisy.
+        if _check_is_silenced(app_label, f"{app_label}.W001"):
+            return []
 
         return [
             DjangoWarning(
                 experimental_warning_message(
                     plugin_label, display_version, detect_netbox_designation()
                 ),
-                hint=hint,
+                hint=experimental_warning_hint(app_label, display_version),
                 id=f"{app_label}.W001",
             )
         ]
@@ -370,7 +417,7 @@ def register_netbox_compatibility_check(
         _comparison_version, display_version = detect_netbox_version()
         level = current_netbox_support_level()
     except Exception as exc:  # noqa: BLE001 — never block startup on a version read
-        if not _check_is_silenced(f"{app_label}.W002"):
+        if not _check_is_silenced(app_label, f"{app_label}.W002"):
             log.warning(
                 "%s could not determine the running NetBox version (%s); "
                 "compatibility band not verified.",
@@ -380,7 +427,7 @@ def register_netbox_compatibility_check(
         return
 
     if level is NetBoxSupportLevel.EXPERIMENTAL and not _check_is_silenced(
-        f"{app_label}.W001"
+        app_label, f"{app_label}.W001"
     ):
         log.warning(
             "%s",

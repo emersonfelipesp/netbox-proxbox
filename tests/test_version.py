@@ -265,6 +265,20 @@ def test_certified_netbox_versions_are_documented():
         )
 
 
+#: Every page an operator could reasonably consult for "which NetBox does this
+#: support". All of them must agree, because sending someone to a page that
+#: still names the old ceiling is how a mixed upgrade happens.
+COMPATIBILITY_AUTHORITY_PATHS = (
+    README_PATH,
+    COMPATIBILITY_PATH,
+    CLAUDE_PATH,
+    DOCS_INDEX_PATH,
+    INSTALL_GIT_PATH,
+    UPGRADING_PATH,
+    APPLICATION_PACKET_PATH,
+)
+
+
 def test_experimental_netbox_tier_is_documented():
     """The experimental tier must be stated where operators actually look."""
     for path in (README_PATH, COMPATIBILITY_PATH, CLAUDE_PATH):
@@ -274,11 +288,62 @@ def test_experimental_netbox_tier_is_documented():
         )
         assert "experimental" in text.lower(), f"{path} does not name the tier"
     # And the silencing escape hatch must be discoverable, since the warning is
-    # the one visible change an upgrading operator sees.
+    # the one visible change an upgrading operator sees. NetBox does not read
+    # SILENCED_SYSTEM_CHECKS from configuration.py, so the PLUGINS_CONFIG key is
+    # the mechanism that has to be documented.
     for path in (README_PATH, COMPATIBILITY_PATH):
-        assert "SILENCED_SYSTEM_CHECKS" in _read(path), (
+        assert "silence_netbox_compatibility_warning" in _read(path), (
             f"{path} does not document how to silence the notice"
         )
+
+
+def test_every_page_that_discusses_the_ceiling_names_the_current_one():
+    """Presence-somewhere checks are not enough — contradictions have to fail.
+
+    The regression this catches is real: `docs/index.md` named the new tier in a
+    table near the top and then, forty lines later, listed
+    ``max_version = "4.6.99"`` as the declared value. An operator who scrolled
+    to the second statement would conclude 4.7 is unsupported.
+
+    The rule is deliberately shaped to avoid false positives. A page may
+    legitimately quote ``4.6.99`` while describing *something else* — the
+    previously published package, `netbox-branching`, an older companion
+    artifact — so the assertion is not "never mention it". It is: **if a page
+    discusses `max_version` at all, it must name the current declared ceiling**,
+    so the two statements are never available to a reader in isolation.
+    """
+    for path in COMPATIBILITY_AUTHORITY_PATHS:
+        text = _read(path)
+        if "max_version" not in text:
+            continue
+        assert CURRENT_NETBOX_MAX_VERSION in text, (
+            f"{path} discusses max_version but never names the current declared "
+            f"ceiling {CURRENT_NETBOX_MAX_VERSION}; a reader landing there is "
+            f"told the maximum is {CURRENT_NETBOX_STABLE_MAX_VERSION}"
+        )
+
+
+def test_the_beta_example_keeps_the_prerelease_caveat():
+    """A README example showing the stable hint for a beta undoes the warning.
+
+    The pre-release paragraph is the only thing telling an operator that
+    upstream does not support the release in production and offers no upgrade
+    path to GA. An example that quotes the *stable* hint next to a
+    ``4.7.0-beta1`` banner tells them the opposite.
+    """
+    text = _read(README_PATH)
+    beta_marker = "4.7.0-beta1) Proxbox is running on NetBox 4.7.0-beta1"
+    assert beta_marker in text or "W001) Proxbox is running on NetBox 4.7.0-beta1" in text
+    # Locate the fenced example and check the caveat travels with it.
+    start = text.index("W001) Proxbox is running on NetBox 4.7.0-beta1")
+    example = text[start : text.index("```", start)]
+    assert "pre-release" in example.lower(), (
+        "the beta example dropped the pre-release caveat"
+    )
+    assert "fully operational" not in example, (
+        "the beta example quotes the stable hint, which reads as production "
+        "clearance for a pre-release"
+    )
 
 
 def test_certified_netbox_versions_are_in_e2e_matrix():

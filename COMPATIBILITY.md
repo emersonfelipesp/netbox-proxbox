@@ -18,7 +18,7 @@ vendored byte-identically across the whole Proxbox plugin stack
 the **experimental** ceiling (`4.7.99`). Admitting 4.7 without an opt-in is
 deliberate: an operator upgrading NetBox never has to touch plugin
 configuration. The warning is silenceable through Django's stock
-`SILENCED_SYSTEM_CHECKS`; the plugin adds no setting of its own.
+the `silence_netbox_compatibility_warning` key in this plugin's `PLUGINS_CONFIG` entry — see below; NetBox does not read `SILENCED_SYSTEM_CHECKS` from `configuration.py`.
 
 Anything below `4.5.8` or from `4.8` onward is refused by NetBox's own plugin
 version gate.
@@ -51,6 +51,24 @@ python manage.py shell -c "from django.apps import apps; print([p for p in ('net
 ```
 
 On 4.5.8–4.6.x, mixed versions remain fine as before.
+
+### netbox-branching does not support NetBox 4.7 yet
+
+`netboxlabs-netbox-branching` declares `max_version = "4.6.99"` (checked
+through 1.0.3), so on NetBox 4.7 **NetBox skips it** — the package stays
+importable, but its Django app is absent from `INSTALLED_APPS` and its models
+and schemas do not exist.
+
+If you use branch-isolated sync (`branching_enabled = True`), **do not move to
+NetBox 4.7 until a 4.7-capable netbox-branching release exists.** The
+availability detector here now requires the loaded app rather than an
+importable package, so a skipped branching app is correctly reported as
+unavailable; but a sync configured for branch isolation that finds branching
+unavailable currently proceeds against `main` rather than refusing, which
+silently drops the isolation boundary you configured. Tightening that to
+fail closed is tracked separately.
+
+Installations that do not use branching are unaffected.
 
 **Beta version strings.** NetBox's `release.yaml` at tag `v4.7.0-beta1` reads
 `version: "4.7.0"` with `designation: "beta1"`, and `netbox/settings.py` passes

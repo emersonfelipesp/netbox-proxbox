@@ -68,6 +68,7 @@ experimental_warning_message = compat.experimental_warning_message
 register_netbox_compatibility_check = compat.register_netbox_compatibility_check
 is_prerelease_netbox = compat.is_prerelease_netbox
 detect_netbox_designation = compat.detect_netbox_designation
+SILENCE_SETTING_NAME = compat.SILENCE_SETTING_NAME
 
 STABLE_MIN_NETBOX_VERSION = compat.STABLE_MIN_NETBOX_VERSION
 STABLE_MAX_NETBOX_VERSION = compat.STABLE_MAX_NETBOX_VERSION
@@ -341,7 +342,7 @@ def test_experimental_version_emits_exactly_one_warning(
     assert type(results[0]).__name__ == "Warning"
     assert results[0].level == 30
     assert NETBOX_470_BETA1_DISPLAY_VERSION in results[0].msg
-    assert "SILENCED_SYSTEM_CHECKS" in (results[0].hint or "")
+    assert SILENCE_SETTING_NAME in (results[0].hint or "")
 
     # And the same notice reaches operators who never run `manage.py check`.
     assert any(
@@ -503,9 +504,9 @@ def test_prerelease_hint_does_not_read_as_production_clearance(
     register_netbox_compatibility_check(_FakeAppConfig(), logging.getLogger("test.compat"))
 
     hint = _run_registered_check(registered)[0].hint or ""
-    assert "SILENCED_SYSTEM_CHECKS" in hint
+    assert SILENCE_SETTING_NAME in hint
     # Silencing the check must not be presented as lifting upstream's restriction.
-    assert "does not lift it" in hint
+    assert "does not\n" not in hint and "does not lift it" in hint
     assert "fully operational" not in hint
 
 
@@ -583,3 +584,109 @@ def test_a_missing_silenced_setting_still_shows_the_notice(
         )
 
     assert len(caplog.records) == 1
+
+
+# ---------------------------------------------------------------------------
+# PLUGINS_CONFIG is the *supported* suppression path
+# ---------------------------------------------------------------------------
+
+
+def test_plugins_config_silences_both_surfaces(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """NetBox does not import SILENCED_SYSTEM_CHECKS from configuration.py.
+
+    `settings.py` pulls an explicit list of named settings via
+    `getattr(configuration, ...)`, and that one is not on it — so an operator
+    who sets it there changes nothing. `PLUGINS_CONFIG` *is* imported, so the
+    per-plugin key has to work, and it has to silence the system check as well
+    as the log line: Django's framework only honours its own setting, so the
+    check function must apply this opt-out itself.
+    """
+    _reset_registration_guard(monkeypatch)
+    settings = types.SimpleNamespace(
+        RELEASE=_FakeRelease(
+            NETBOX_470_BETA1_COMPARISON_VERSION, NETBOX_470_BETA1_DISPLAY_VERSION
+        ),
+        VERSION=NETBOX_470_BETA1_DISPLAY_VERSION,
+        PLUGINS_CONFIG={"netbox_proxbox": {SILENCE_SETTING_NAME: True}},
+    )
+    registered = _install_fake_django(monkeypatch, settings)
+
+    with caplog.at_level(logging.WARNING):
+        register_netbox_compatibility_check(
+            _FakeAppConfig(), logging.getLogger("test.compat")
+        )
+
+    assert caplog.records == [], "the ready() log line was not silenced"
+    assert _run_registered_check(registered) == [], "the system check was not silenced"
+
+
+def test_plugins_config_opt_out_is_keyed_to_this_plugin(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Another plugin's opt-out must not silence ours."""
+    _reset_registration_guard(monkeypatch)
+    settings = types.SimpleNamespace(
+        RELEASE=_FakeRelease(
+            NETBOX_470_BETA1_COMPARISON_VERSION, NETBOX_470_BETA1_DISPLAY_VERSION
+        ),
+        VERSION=NETBOX_470_BETA1_DISPLAY_VERSION,
+        PLUGINS_CONFIG={"some_other_plugin": {SILENCE_SETTING_NAME: True}},
+    )
+    registered = _install_fake_django(monkeypatch, settings)
+
+    with caplog.at_level(logging.WARNING):
+        register_netbox_compatibility_check(
+            _FakeAppConfig(), logging.getLogger("test.compat")
+        )
+
+    assert len(caplog.records) == 1
+    assert len(_run_registered_check(registered)) == 1
+
+
+@pytest.mark.parametrize("falsy", [False, None, 0, ""])
+def test_a_falsy_opt_out_still_shows_the_notice(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture, falsy: object
+) -> None:
+    """Suppression requires an affirmative value; anything else fails open."""
+    _reset_registration_guard(monkeypatch)
+    settings = types.SimpleNamespace(
+        RELEASE=_FakeRelease(
+            NETBOX_470_BETA1_COMPARISON_VERSION, NETBOX_470_BETA1_DISPLAY_VERSION
+        ),
+        VERSION=NETBOX_470_BETA1_DISPLAY_VERSION,
+        PLUGINS_CONFIG={"netbox_proxbox": {SILENCE_SETTING_NAME: falsy}},
+    )
+    registered = _install_fake_django(monkeypatch, settings)
+
+    with caplog.at_level(logging.WARNING):
+        register_netbox_compatibility_check(
+            _FakeAppConfig(), logging.getLogger("test.compat")
+        )
+
+    assert len(caplog.records) == 1
+    assert len(_run_registered_check(registered)) == 1
+
+
+def test_a_malformed_plugins_config_entry_fails_open(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A junk entry must not crash startup, and must not hide the notice."""
+    _reset_registration_guard(monkeypatch)
+    settings = types.SimpleNamespace(
+        RELEASE=_FakeRelease(
+            NETBOX_470_BETA1_COMPARISON_VERSION, NETBOX_470_BETA1_DISPLAY_VERSION
+        ),
+        VERSION=NETBOX_470_BETA1_DISPLAY_VERSION,
+        PLUGINS_CONFIG={"netbox_proxbox": "not-a-mapping"},
+    )
+    registered = _install_fake_django(monkeypatch, settings)
+
+    with caplog.at_level(logging.WARNING):
+        register_netbox_compatibility_check(
+            _FakeAppConfig(), logging.getLogger("test.compat")
+        )
+
+    assert len(caplog.records) == 1
+    assert len(_run_registered_check(registered)) == 1

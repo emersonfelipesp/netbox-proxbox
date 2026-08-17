@@ -95,4 +95,4 @@ a backend build containing that fix, or the next fixed backend release, before
 re-testing VM IP sync.
 
 
-> **Current release:** netbox-proxbox `0.0.24` pairs with proxbox-api `0.0.20` (NetBox `4.5.8`-`4.6.99`). Current backend-runtime pairing: netbox-proxbox 0.0.24 <-> proxbox-api 0.0.20 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+> **Current release:** netbox-proxbox `0.0.24` pairs with proxbox-api `0.0.20` (NetBox `4.5.8`-`4.6.99` stable, `4.7.x` experimental). Current backend-runtime pairing: netbox-proxbox 0.0.24 <-> proxbox-api 0.0.20 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
