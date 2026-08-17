@@ -828,7 +828,8 @@ def test_from_db_override_forwards_unknown_django_keywords() -> None:
     ]
     assert super_calls, "from_db must delegate to super().from_db()"
     forwarded = any(
-        kw.arg is None and isinstance(kw.value, ast.Name)
+        kw.arg is None
+        and isinstance(kw.value, ast.Name)
         and kw.value.id == override.args.kwarg.arg
         for call in super_calls
         for kw in call.keywords

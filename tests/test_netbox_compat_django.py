@@ -75,7 +75,9 @@ def test_plugin_config_sources_its_bounds_from_compat() -> None:
 
     assert ProxboxConfig.min_version == PLUGIN_MIN_VERSION == STABLE_MIN_NETBOX_VERSION
     assert (
-        ProxboxConfig.max_version == PLUGIN_MAX_VERSION == EXPERIMENTAL_MAX_NETBOX_VERSION
+        ProxboxConfig.max_version
+        == PLUGIN_MAX_VERSION
+        == EXPERIMENTAL_MAX_NETBOX_VERSION
     )
 
 
@@ -122,7 +124,8 @@ def test_system_check_matches_the_running_release_band() -> None:
     messages = [
         message
         for message in run_checks()
-        if getattr(message, "id", None) in {"netbox_proxbox.W001", "netbox_proxbox.W002"}
+        if getattr(message, "id", None)
+        in {"netbox_proxbox.W001", "netbox_proxbox.W002"}
     ]
 
     if level is NetBoxSupportLevel.EXPERIMENTAL:
@@ -132,7 +135,9 @@ def test_system_check_matches_the_running_release_band() -> None:
         # A maturity notice must never block startup.
         assert messages[0].level < 40
     else:
-        assert messages == [], f"stable release must emit no compatibility notice: {messages}"
+        assert messages == [], (
+            f"stable release must emit no compatibility notice: {messages}"
+        )
 
 
 def test_plugin_is_actually_installed_and_loaded() -> None:

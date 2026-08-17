@@ -192,9 +192,7 @@ def current_netbox_support_level() -> NetBoxSupportLevel:
     return netbox_support_level(comparison_version)
 
 
-def is_prerelease_netbox(
-    display_version: str, designation: str | None = None
-) -> bool:
+def is_prerelease_netbox(display_version: str, designation: str | None = None) -> bool:
     """True when the running NetBox is a pre-release (beta, rc, alpha).
 
     ``designation`` is authoritative when supplied: NetBox leaves it unset on a
@@ -395,7 +393,9 @@ def register_netbox_compatibility_check(
         return
     _REGISTERED_APP_LABELS.add(app_label)
 
-    def _netbox_compatibility_check(app_configs: Any = None, **kwargs: Any) -> list[Any]:
+    def _netbox_compatibility_check(
+        app_configs: Any = None, **kwargs: Any
+    ) -> list[Any]:
         try:
             _comparison_version, display_version = detect_netbox_version()
             level = current_netbox_support_level()

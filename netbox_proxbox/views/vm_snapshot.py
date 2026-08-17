@@ -1,7 +1,13 @@
 """Provide NetBox CRUD and tab views for VM snapshot records."""
 
 from django.http import HttpRequest
-from netbox.object_actions import AddObject, BulkImport, BulkExport, BulkEdit, BulkDelete
+from netbox.object_actions import (
+    AddObject,
+    BulkImport,
+    BulkExport,
+    BulkEdit,
+    BulkDelete,
+)
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 from virtualization.models import VirtualMachine

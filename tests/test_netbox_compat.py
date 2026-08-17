@@ -51,7 +51,9 @@ NETBOX_470_BETA1_DISPLAY_VERSION = "4.7.0-beta1"
 def _load_compat_module() -> Any:
     """Load ``netbox_proxbox/compat.py`` without importing the plugin package."""
     module_path = Path(__file__).resolve().parents[1] / "netbox_proxbox" / "compat.py"
-    spec = importlib.util.spec_from_file_location("netbox_compat_under_test", module_path)
+    spec = importlib.util.spec_from_file_location(
+        "netbox_compat_under_test", module_path
+    )
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
@@ -86,13 +88,17 @@ class _FakeRelease:
 
 
 class _FakeAppConfig:
-    def __init__(self, label: str = "netbox_proxbox", verbose_name: str = "Proxbox") -> None:
+    def __init__(
+        self, label: str = "netbox_proxbox", verbose_name: str = "Proxbox"
+    ) -> None:
         self.label = label
         self.name = label
         self.verbose_name = verbose_name
 
 
-def _install_fake_django(monkeypatch: pytest.MonkeyPatch, settings_obj: Any) -> list[Any]:
+def _install_fake_django(
+    monkeypatch: pytest.MonkeyPatch, settings_obj: Any
+) -> list[Any]:
     """Install minimal ``django.conf`` / ``django.core.checks`` modules.
 
     Returns the list registered system-check callables are appended to, so a
@@ -112,7 +118,9 @@ def _install_fake_django(monkeypatch: pytest.MonkeyPatch, settings_obj: Any) -> 
     checks_mod = types.ModuleType("django.core.checks")
 
     class _CheckMessage:
-        def __init__(self, msg: str, hint: str | None = None, id: str | None = None) -> None:
+        def __init__(
+            self, msg: str, hint: str | None = None, id: str | None = None
+        ) -> None:
             self.msg = msg
             self.hint = hint
             self.id = id
@@ -163,7 +171,9 @@ def test_compat_imports_no_django_at_module_scope() -> None:
     Django is configured. The load above already proves it: it succeeded with
     no Django stubs installed.
     """
-    source = (Path(__file__).resolve().parents[1] / "netbox_proxbox" / "compat.py").read_text()
+    source = (
+        Path(__file__).resolve().parents[1] / "netbox_proxbox" / "compat.py"
+    ).read_text()
     module_scope_lines = [
         line
         for line in source.splitlines()
@@ -346,7 +356,8 @@ def test_experimental_version_emits_exactly_one_warning(
 
     # And the same notice reaches operators who never run `manage.py check`.
     assert any(
-        NETBOX_470_BETA1_DISPLAY_VERSION in record.getMessage() for record in caplog.records
+        NETBOX_470_BETA1_DISPLAY_VERSION in record.getMessage()
+        for record in caplog.records
     )
 
 
@@ -380,7 +391,9 @@ def test_undeterminable_version_reports_w002_instead_of_passing_silently(
     settings = types.SimpleNamespace(RELEASE=None, VERSION=None)
     registered = _install_fake_django(monkeypatch, settings)
 
-    register_netbox_compatibility_check(_FakeAppConfig(), logging.getLogger("test.compat"))
+    register_netbox_compatibility_check(
+        _FakeAppConfig(), logging.getLogger("test.compat")
+    )
 
     results = _run_registered_check(registered)
     assert len(results) == 1
@@ -398,8 +411,12 @@ def test_registration_is_idempotent(monkeypatch: pytest.MonkeyPatch) -> None:
     )
     registered = _install_fake_django(monkeypatch, settings)
 
-    register_netbox_compatibility_check(_FakeAppConfig(), logging.getLogger("test.compat"))
-    register_netbox_compatibility_check(_FakeAppConfig(), logging.getLogger("test.compat"))
+    register_netbox_compatibility_check(
+        _FakeAppConfig(), logging.getLogger("test.compat")
+    )
+    register_netbox_compatibility_check(
+        _FakeAppConfig(), logging.getLogger("test.compat")
+    )
 
     assert len(registered) == 1
 
@@ -473,9 +490,7 @@ def test_prerelease_warning_states_the_upstream_restriction() -> None:
     path from a pre-release to GA, so the notice must say so rather than leave
     an operator with only the word "experimental".
     """
-    message = experimental_warning_message(
-        "Proxbox", NETBOX_470_BETA1_DISPLAY_VERSION
-    )
+    message = experimental_warning_message("Proxbox", NETBOX_470_BETA1_DISPLAY_VERSION)
     lowered = message.lower()
     assert "pre-release" in lowered
     assert "production" in lowered
@@ -501,7 +516,9 @@ def test_prerelease_hint_does_not_read_as_production_clearance(
     )
     registered = _install_fake_django(monkeypatch, settings)
 
-    register_netbox_compatibility_check(_FakeAppConfig(), logging.getLogger("test.compat"))
+    register_netbox_compatibility_check(
+        _FakeAppConfig(), logging.getLogger("test.compat")
+    )
 
     hint = _run_registered_check(registered)[0].hint or ""
     assert SILENCE_SETTING_NAME in hint

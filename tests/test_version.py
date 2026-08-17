@@ -333,7 +333,9 @@ def test_the_beta_example_keeps_the_prerelease_caveat():
     """
     text = _read(README_PATH)
     beta_marker = "4.7.0-beta1) Proxbox is running on NetBox 4.7.0-beta1"
-    assert beta_marker in text or "W001) Proxbox is running on NetBox 4.7.0-beta1" in text
+    assert (
+        beta_marker in text or "W001) Proxbox is running on NetBox 4.7.0-beta1" in text
+    )
     # Locate the fenced example and check the caveat travels with it.
     start = text.index("W001) Proxbox is running on NetBox 4.7.0-beta1")
     example = text[start : text.index("```", start)]
