@@ -7,15 +7,14 @@ import argparse
 import hashlib
 import json
 import os
-from pathlib import Path
 import re
 import stat
 import subprocess
 import time
 import urllib.error
 import urllib.request
+from pathlib import Path
 from typing import Any
-
 
 API_ORIGIN = "https://git.nmulti.cloud/api/v1"
 MAX_RESPONSE_BYTES = 1024 * 1024
@@ -111,28 +110,51 @@ def _load_acceptance(path: Path, repository: str) -> dict[str, Any]:
     return value
 
 
-def _read_external_file(
+def _open_external_file(
     path: Path,
     label: str,
     maximum: int,
     *,
     trusted_uid: int = TRUSTED_EXTERNAL_UID,
-) -> bytes:
+) -> tuple[bytes, int]:
+    descriptor = -1
     try:
-        metadata = path.lstat()
-        raw = path.read_bytes()
+        parent_metadata = path.parent.lstat()
+        descriptor = os.open(
+            path,
+            os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW,
+        )
+        metadata = os.fstat(descriptor)
+        chunks = bytearray()
+        while len(chunks) <= maximum:
+            chunk = os.read(descriptor, min(65536, maximum + 1 - len(chunks)))
+            if not chunk:
+                break
+            chunks.extend(chunk)
+        after = os.fstat(descriptor)
     except OSError as exc:
+        if descriptor >= 0:
+            os.close(descriptor)
         raise RunnerGateError(f"{label} is unavailable") from exc
+    raw = bytes(chunks)
     if (
-        not stat.S_ISREG(metadata.st_mode)
-        or stat.S_ISLNK(metadata.st_mode)
+        not stat.S_ISDIR(parent_metadata.st_mode)
+        or stat.S_ISLNK(parent_metadata.st_mode)
+        or parent_metadata.st_uid != trusted_uid
+        or stat.S_IMODE(parent_metadata.st_mode) & 0o022
+        or not stat.S_ISREG(metadata.st_mode)
         or metadata.st_uid != trusted_uid
+        or stat.S_IMODE(metadata.st_mode) & 0o022
         or metadata.st_nlink != 1
         or metadata.st_size != len(raw)
         or not 0 < len(raw) <= maximum
+        or (metadata.st_dev, metadata.st_ino, metadata.st_size, metadata.st_mtime_ns)
+        != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
     ):
+        os.close(descriptor)
         raise RunnerGateError(f"{label} metadata is unsafe")
-    return raw
+    os.lseek(descriptor, 0, os.SEEK_SET)
+    return raw, descriptor
 
 
 def _verify_live_attestation(
@@ -152,7 +174,7 @@ def _verify_live_attestation(
     stem = f"run-{run_id}-job-{job_id}"
     attestation_path = attestation_root / f"{stem}.json"
     signature_path = attestation_root / f"{stem}.sig"
-    public_key = _read_external_file(
+    public_key, public_key_fd = _open_external_file(
         public_key_path,
         "attestation public key",
         16384,
@@ -162,41 +184,62 @@ def _verify_live_attestation(
         hashlib.sha256(public_key).hexdigest()
         != acceptance["attestation_public_key_sha256"]
     ):
+        os.close(public_key_fd)
         raise RunnerGateError("attestation public key differs from acceptance")
-    raw = _read_external_file(
-        attestation_path,
-        "live runner attestation",
-        16384,
-        trusted_uid=trusted_external_uid,
-    )
-    _read_external_file(
-        signature_path,
-        "live runner attestation signature",
-        16384,
-        trusted_uid=trusted_external_uid,
-    )
-    if not OPENSSL.is_file() or OPENSSL.is_symlink():
-        raise RunnerGateError("OpenSSL verifier is unavailable")
+    attestation_fd = -1
+    signature_fd = -1
     try:
-        verified = subprocess.run(  # noqa: S603
-            [
-                str(OPENSSL),
-                "dgst",
-                "-sha256",
-                "-verify",
-                str(public_key_path),
-                "-signature",
-                str(signature_path),
-                str(attestation_path),
-            ],
-            check=False,
-            stdin=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
-            timeout=10,
+        raw, attestation_fd = _open_external_file(
+            attestation_path,
+            "live runner attestation",
+            16384,
+            trusted_uid=trusted_external_uid,
         )
-    except (OSError, subprocess.SubprocessError) as exc:
-        raise RunnerGateError("live runner attestation verification failed") from exc
+        _, signature_fd = _open_external_file(
+            signature_path,
+            "live runner attestation signature",
+            16384,
+            trusted_uid=trusted_external_uid,
+        )
+    except RunnerGateError:
+        os.close(public_key_fd)
+        if attestation_fd >= 0:
+            os.close(attestation_fd)
+        if signature_fd >= 0:
+            os.close(signature_fd)
+        raise
+    try:
+        if not OPENSSL.is_file() or OPENSSL.is_symlink():
+            raise RunnerGateError("OpenSSL verifier is unavailable")
+        try:
+            verified = subprocess.run(  # noqa: S603
+                [
+                    str(OPENSSL),
+                    "dgst",
+                    "-sha256",
+                    "-verify",
+                    f"/proc/self/fd/{public_key_fd}",
+                    "-signature",
+                    f"/proc/self/fd/{signature_fd}",
+                    f"/proc/self/fd/{attestation_fd}",
+                ],
+                check=False,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                pass_fds=(public_key_fd, signature_fd, attestation_fd),
+                timeout=10,
+            )
+        except (OSError, subprocess.SubprocessError) as exc:
+            raise RunnerGateError(
+                "live runner attestation verification failed"
+            ) from exc
+    finally:
+        os.close(public_key_fd)
+        if signature_fd >= 0:
+            os.close(signature_fd)
+        if attestation_fd >= 0:
+            os.close(attestation_fd)
     if verified.returncode != 0:
         raise RunnerGateError("live runner attestation signature is invalid")
     try:

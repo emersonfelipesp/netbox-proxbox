@@ -184,6 +184,13 @@ def test_release_control_request_binds_exact_repository_run_and_artifacts() -> N
         'test "$(find release-transfer -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 4'
         in workflow
     )
+    assert (
+        'test "$(find release-transfer -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 6'
+        in workflow
+    )
+    assert "/usr/local/bin/nmc-release-attestation-client complete" in workflow
+    assert "runner-completion-attestation.json" in workflow
+    assert "runner-completion-attestation.sig" in workflow
     assert "secrets." not in build_source
     assert build_source.count("github.token") == 1
     assert "actions/checkout@" not in build_source
@@ -298,7 +305,7 @@ def test_release_runner_gate_is_pinned_and_precedes_candidate_execution() -> Non
     acceptance = json.loads(RUNNER_ACCEPTANCE_PATH.read_bytes())
 
     assert runner_gate_sha256 == (
-        "ea70134b16de15ae98b0aab2b3dd7df53b2de444d9fc732be85c1a91fd05e5d8"
+        "927220d961c109a5a7abc827b33d3a703cad536bc73c17f15211c6813609a253"
     )
     assert acceptance_sha256 == (
         "6a36b55596986686074cc5520ee97367e66b1df2759ae2dac5abdd9bc531a290"
@@ -397,12 +404,21 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
     ).hexdigest()
     assert gate.TRUSTED_EXTERNAL_UID == 0
     with pytest.raises(gate.RunnerGateError, match="metadata is unsafe"):
-        gate._read_external_file(
+        gate._open_external_file(
             public_key,
             "attestation public key",
             16384,
             trusted_uid=os.geteuid() + 1,
         )
+    public_key.chmod(0o666)
+    with pytest.raises(gate.RunnerGateError, match="metadata is unsafe"):
+        gate._open_external_file(
+            public_key,
+            "attestation public key",
+            16384,
+            trusted_uid=os.geteuid(),
+        )
+    public_key.chmod(0o644)
     acceptance_path = tmp_path / "acceptance.json"
     acceptance_path.write_bytes(gate._canonical_json(acceptance))
     job = {

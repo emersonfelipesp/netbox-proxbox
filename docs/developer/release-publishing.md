@@ -15,7 +15,7 @@ flowchart TD
     Start([Choose target release\nX.Y.Z])
     Bump[Bump package version\npyproject.toml + netbox_proxbox/__init__.py + uv.lock]
     RCTag[Create release-candidate tag\nvX.Y.ZrcN]
-    RCCI[Target CI builds a four-file\npublisher-credential-free control request]
+    RCCI[Target CI builds a six-file\npublisher-credential-free signed request]
     Control[Locked release control verifies\nand publishes exact sealed bytes]
     RCUpload[Upload vX.Y.ZrcN to TestPyPI\nwithout --skip-existing]
     RCValidate[Install rcN from TestPyPI\nrun package checks]
@@ -147,13 +147,16 @@ sequenceDiagram
   mirror, or write credential.
   A disposable target job
   builds one wheel and one sdist after verifying the pinned uv archive and
-  selecting fresh per-run managed-Python/cache roots. It uploads exactly four
-  data files: the wheel, sdist, canonical manifest, and canonical
-  `release-request.json`. The request binds the repository ID, source/tag,
+  selecting fresh per-run managed-Python/cache roots. After candidate process
+  cleanup, the root-only external supervisor signs the exact request/artifact
+  inventory. The job uploads exactly six data files: the wheel, sdist,
+  canonical manifest, canonical `release-request.json`, canonical
+  `runner-completion-attestation.json`, and its detached signature. The request binds the repository ID, source/tag,
   initiating run and attempt, workflow digest, manifest digest, and artifact
   inventory. It has no package or GitHub-mirror credential. The separately
   administered release-control repository fetches that exact first-attempt run,
-  verifies the policy-pinned target workflow and every byte on its isolated
+  verifies the policy-pinned target workflow, supervisor completion signature,
+  and every byte on its isolated
   builder, then seals the handoff. Only its isolated publisher can read the
   package credentials and invoke the fixed, digest-locked publication tooling.
   Public no-authority downloads must match the manifest before the durable

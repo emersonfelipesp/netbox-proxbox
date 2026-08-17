@@ -636,19 +636,23 @@ records are parsed after the process-name delimiter so whitespace in a candidate
 process name cannot evade aggregate accounting. The outer handoff opens the exact
 two artifacts and manifest through no-follow directory/file descriptors,
 requires bounded regular files only, copies exact names, and independently
-re-hashes the copies before upload. Candidate code receives no package, mirror,
-job, runtime, or write credential.
+re-hashes the copies before upload. After candidate process cleanup, the
+root-only external supervisor signs a canonical completion statement binding
+the initial attestation, live job/runner policy, request digest, and every final
+artifact byte; candidate code cannot access its signer socket. Candidate code
+receives no package, mirror, job, runtime, or write credential.
 
 A disposable `ci-release-netbox-proxbox` job builds the manifest-bound
-wheel/sdist and uploads exactly four data files: wheel, sdist,
-`release-manifest.json`, and canonical `release-request.json`. The request
+wheel/sdist and uploads exactly six data files: wheel, sdist,
+`release-manifest.json`, canonical `release-request.json`, canonical
+`runner-completion-attestation.json`, and its detached signature. The request
 binds repository ID, source/tag/version, first-attempt run identity, target
 workflow digest, manifest digest, and artifact inventory. The target workflow
 has no package or GitHub-mirror credential and cannot publish or push tags.
 The separately administered `N-MultiCloud/release-control` workflow must be
 manually dispatched with this repository name, the exact target run ID, and
 the request SHA-256. Its isolated builder independently verifies the
-policy-pinned target workflow and sealed bytes; only its isolated publisher
+policy-pinned target workflow, supervisor completion signature, and sealed bytes; only its isolated publisher
 can read the package/mirror credentials or invoke the fixed digest-locked
 publication tooling. Public no-authority downloads must match the manifest
 before the durable ledger advances.
@@ -739,7 +743,7 @@ This makes the GitHub release creation the **single, authoritative trigger**
 for official PyPI publishing and eliminates the duplicate-run problem the
 old dual-trigger flow created.
 
-`.gitea/workflows/publish-gitea.yml` only emits the four-file data request. The
+`.gitea/workflows/publish-gitea.yml` only emits the six-file signed data request. The
 locked control plane publishes the exact Gitea bytes and pushes RC tags to
 GitHub, but deliberately does not promote final tags or create public
 releases. Final promotion remains an operator action after Gitea-package
@@ -888,7 +892,7 @@ What was done for v0.0.19:
   direct-upload recovery while tag triggers were broken. This history is not a
   current procedure. The current target is tag-push-only, manifest-bound,
   repository-linked, and fail-closed. It verifies pinned uv in fresh per-run
-  managed-Python/cache roots and emits only a canonical four-file request. The
+  managed-Python/cache roots and emits only a canonical six-file signed request. The
   separate locked control plane verifies and seals the bytes before its isolated
   publisher performs registry writes; fixes always advance to a new immutable
   version.

@@ -37,7 +37,7 @@ jobs:
           test -f .gitea/release-runner-acceptance.json
           test ! -L .gitea/release-runner-acceptance.json
           printf '%s  %s\n' \
-            ea70134b16de15ae98b0aab2b3dd7df53b2de444d9fc732be85c1a91fd05e5d8 \
+            927220d961c109a5a7abc827b33d3a703cad536bc73c17f15211c6813609a253 \
             scripts/gitea_release_runner_gate.py | sha256sum --check --strict
           printf '%s  %s\n' \
             6a36b55596986686074cc5520ee97367e66b1df2759ae2dac5abdd9bc531a290 \
@@ -145,7 +145,7 @@ jobs:
           test -f .gitea/release-runner-acceptance.json
           test ! -L .gitea/release-runner-acceptance.json
           printf '%s  %s\n' \
-            ea70134b16de15ae98b0aab2b3dd7df53b2de444d9fc732be85c1a91fd05e5d8 \
+            927220d961c109a5a7abc827b33d3a703cad536bc73c17f15211c6813609a253 \
             scripts/gitea_release_runner_gate.py | sha256sum --check --strict
           printf '%s  %s\n' \
             6a36b55596986686074cc5520ee97367e66b1df2759ae2dac5abdd9bc531a290 \
@@ -807,6 +807,29 @@ jobs:
           Path("release-transfer/release-request.json").write_bytes(raw)
           PY
           test "$(find release-transfer -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 4
+          test "$(find release-transfer -mindepth 1 -maxdepth 1 -type l | wc -l)" -eq 0
+
+      - name: Obtain supervisor-signed completion evidence
+        env:
+          SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          umask 077
+          test -x /usr/local/bin/nmc-release-attestation-client
+          test ! -L /usr/local/bin/nmc-release-attestation-client
+          /usr/local/bin/nmc-release-attestation-client complete \
+            --acceptance .gitea/release-runner-acceptance.json \
+            --repository emersonfelipesp/netbox-proxbox \
+            --run-id "$GITHUB_RUN_ID" \
+            --job-name "Build exact publisher-credential-free release-control request" \
+            --source-sha "$SOURCE_SHA" \
+            --workflow .gitea/workflows/publish-gitea.yml \
+            --request release-transfer/release-request.json \
+            --manifest release-transfer/release-manifest.json \
+            --artifact-root release-transfer \
+            --output-attestation release-transfer/runner-completion-attestation.json \
+            --output-signature release-transfer/runner-completion-attestation.sig
+          test "$(find release-transfer -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 6
           test "$(find release-transfer -mindepth 1 -maxdepth 1 -type l | wc -l)" -eq 0
 
       - name: Upload exact data-only control request
