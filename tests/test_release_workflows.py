@@ -32,7 +32,10 @@ RELEASE_CONTROL_DOC_PATHS = (
     REPO_ROOT / "AGENTS.md",
     REPO_ROOT / "CLAUDE.md",
     REPO_ROOT / "docs" / "developer" / "release-publishing.md",
+    REPO_ROOT / "README.md",
+    REPO_ROOT / "docs" / "release-notes" / "version-0.0.24.md",
 )
+CANARY_DOC_PATHS = RELEASE_CONTROL_DOC_PATHS[:3]
 
 
 def _load_release_artifacts():
@@ -959,18 +962,23 @@ def test_operator_docs_match_the_locked_control_dispatch_contract() -> None:
     assert "existing publisher" in documentation.lower()
     assert release_label == "ci-release-netbox-proxbox"
     canary_contract = "historical canary"
-    for path, text in documentation_by_path.items():
+    for path in CANARY_DOC_PATHS:
+        text = documentation_by_path[path]
         assert canary_contract in " ".join(text.split()), path
         assert "dedicated untrusted CI VM" not in text, path
 
     for path, text in documentation_by_path.items():
+        normalized = " ".join(text.split())
         for filename in (
+            "wheel",
+            "sdist",
             "release-manifest.json",
             "release-request.json",
             "runner-completion-attestation.json",
             "runner-completion-attestation.sig",
         ):
             assert filename in text, (path, filename)
+        assert "signature" in normalized and "verif" in normalized, path
     agent_docs = (REPO_ROOT / "AGENTS.md", REPO_ROOT / "CLAUDE.md")
     for path in agent_docs:
         normalized = " ".join(documentation_by_path[path].split())
