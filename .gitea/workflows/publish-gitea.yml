@@ -671,8 +671,6 @@ jobs:
           test ! -e release-transfer
           python3 -I - \
             "$DIST_ROOT" "$MANIFEST_PATH" release-transfer "$VERSION" <<'PY'
-          import ctypes
-          import fcntl
           import hashlib
           import os
           from pathlib import Path
@@ -818,6 +816,8 @@ jobs:
           set -euo pipefail
           umask 077
           python3 -I - "$GITHUB_RUN_ID" "$SOURCE_SHA" <<'PY'
+          import ctypes
+          import fcntl
           import hashlib
           import os
           import stat

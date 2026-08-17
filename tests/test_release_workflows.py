@@ -159,6 +159,18 @@ def test_release_control_request_binds_exact_repository_run_and_artifacts() -> N
     build_job = parsed["jobs"]["build-request"]
     build_source = yaml.safe_dump(build_job)
     upload_step = build_job["steps"][-1]
+    completion_run = _step(build_job, "Obtain supervisor-signed completion evidence")[
+        "run"
+    ]
+    assert isinstance(completion_run, str)
+    completion_source = completion_run.split("<<'PY'\n", 1)[1].rsplit("\nPY", 1)[0]
+    completion_tree = ast.parse(completion_source)
+    completion_imports = {
+        alias.name.split(".", 1)[0]
+        for node in ast.walk(completion_tree)
+        if isinstance(node, ast.Import)
+        for alias in node.names
+    }
 
     assert build_job["needs"] == "validate-source"
     assert build_job["name"] == (
@@ -203,6 +215,10 @@ def test_release_control_request_binds_exact_repository_run_and_artifacts() -> N
     assert "pass_fds=(snapshot,)" in workflow
     assert 'os.memfd_create("nmc-release-client", flags)' in workflow
     assert "fcntl.fcntl(snapshot, 1033, seals)" in workflow
+    assert {"ctypes", "fcntl", "hashlib", "os", "stat", "subprocess", "sys"} <= (
+        completion_imports
+    )
+    compile(completion_source, "publish-gitea-completion", "exec")
     assert '"--public-key"' in workflow
     assert "runner-completion-attestation.json" in workflow
     assert "runner-completion-attestation.sig" in workflow
