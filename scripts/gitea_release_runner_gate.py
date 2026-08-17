@@ -4,6 +4,8 @@
 from __future__ import annotations
 
 import argparse
+import ctypes
+import fcntl
 import hashlib
 import json
 import os
@@ -24,6 +26,14 @@ OPENSSL = Path("/usr/bin/openssl")
 DEFAULT_ATTESTATION_ROOT = Path("/run/nmc-release-attestation")
 DEFAULT_PUBLIC_KEY = Path("/etc/nmc-release-runner-attestation-public.pem")
 TRUSTED_EXTERNAL_UID = 0
+F_ADD_SEALS = 1033
+F_GET_SEALS = 1034
+F_SEAL_SEAL = 0x0001
+F_SEAL_SHRINK = 0x0002
+F_SEAL_GROW = 0x0004
+F_SEAL_WRITE = 0x0008
+MFD_CLOEXEC = getattr(os, "MFD_CLOEXEC", 0x0001)
+MFD_ALLOW_SEALING = getattr(os, "MFD_ALLOW_SEALING", 0x0002)
 
 
 class RunnerGateError(ValueError):
@@ -153,8 +163,43 @@ def _open_external_file(
     ):
         os.close(descriptor)
         raise RunnerGateError(f"{label} metadata is unsafe")
-    os.lseek(descriptor, 0, os.SEEK_SET)
-    return raw, descriptor
+    os.close(descriptor)
+    return raw, _sealed_snapshot(raw, label)
+
+
+def _sealed_snapshot(raw: bytes, label: str) -> int:
+    descriptor = -1
+    try:
+        name = f"nmc-{label.replace(' ', '-')}"
+        if hasattr(os, "memfd_create"):
+            descriptor = os.memfd_create(name, MFD_CLOEXEC | MFD_ALLOW_SEALING)
+        else:
+            libc = ctypes.CDLL(None, use_errno=True)
+            memfd_create = libc.memfd_create
+            memfd_create.argtypes = (ctypes.c_char_p, ctypes.c_uint)
+            memfd_create.restype = ctypes.c_int
+            descriptor = memfd_create(
+                name.encode("ascii"), MFD_CLOEXEC | MFD_ALLOW_SEALING
+            )
+            if descriptor < 0:
+                error = ctypes.get_errno()
+                raise OSError(error, os.strerror(error))
+        view = memoryview(raw)
+        while view:
+            written = os.write(descriptor, view)
+            if written <= 0:
+                raise OSError("short immutable snapshot write")
+            view = view[written:]
+        seals = F_SEAL_GROW | F_SEAL_SEAL | F_SEAL_SHRINK | F_SEAL_WRITE
+        fcntl.fcntl(descriptor, F_ADD_SEALS, seals)
+        if fcntl.fcntl(descriptor, F_GET_SEALS) != seals:
+            raise OSError("incomplete immutable snapshot seals")
+        os.lseek(descriptor, 0, os.SEEK_SET)
+    except (AttributeError, OSError) as exc:
+        if descriptor >= 0:
+            os.close(descriptor)
+        raise RunnerGateError(f"{label} immutable snapshot failed") from exc
+    return descriptor
 
 
 def _verify_live_attestation(

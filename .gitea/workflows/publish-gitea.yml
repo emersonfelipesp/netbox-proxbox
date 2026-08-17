@@ -37,7 +37,7 @@ jobs:
           test -f .gitea/release-runner-acceptance.json
           test ! -L .gitea/release-runner-acceptance.json
           printf '%s  %s\n' \
-            927220d961c109a5a7abc827b33d3a703cad536bc73c17f15211c6813609a253 \
+            bb00911ba0453736a80e829e0f1806a1d236d32cd7c24c5aa80a4c5a1dd40f90 \
             scripts/gitea_release_runner_gate.py | sha256sum --check --strict
           printf '%s  %s\n' \
             6a36b55596986686074cc5520ee97367e66b1df2759ae2dac5abdd9bc531a290 \
@@ -145,7 +145,7 @@ jobs:
           test -f .gitea/release-runner-acceptance.json
           test ! -L .gitea/release-runner-acceptance.json
           printf '%s  %s\n' \
-            927220d961c109a5a7abc827b33d3a703cad536bc73c17f15211c6813609a253 \
+            bb00911ba0453736a80e829e0f1806a1d236d32cd7c24c5aa80a4c5a1dd40f90 \
             scripts/gitea_release_runner_gate.py | sha256sum --check --strict
           printf '%s  %s\n' \
             6a36b55596986686074cc5520ee97367e66b1df2759ae2dac5abdd9bc531a290 \
@@ -671,6 +671,8 @@ jobs:
           test ! -e release-transfer
           python3 -I - \
             "$DIST_ROOT" "$MANIFEST_PATH" release-transfer "$VERSION" <<'PY'
+          import ctypes
+          import fcntl
           import hashlib
           import os
           from pathlib import Path
@@ -815,20 +817,94 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          test -x /usr/local/bin/nmc-release-attestation-client
-          test ! -L /usr/local/bin/nmc-release-attestation-client
-          /usr/local/bin/nmc-release-attestation-client complete \
-            --acceptance .gitea/release-runner-acceptance.json \
-            --repository emersonfelipesp/netbox-proxbox \
-            --run-id "$GITHUB_RUN_ID" \
-            --job-name "Build exact publisher-credential-free release-control request" \
-            --source-sha "$SOURCE_SHA" \
-            --workflow .gitea/workflows/publish-gitea.yml \
-            --request release-transfer/release-request.json \
-            --manifest release-transfer/release-manifest.json \
-            --artifact-root release-transfer \
-            --output-attestation release-transfer/runner-completion-attestation.json \
-            --output-signature release-transfer/runner-completion-attestation.sig
+          python3 -I - "$GITHUB_RUN_ID" "$SOURCE_SHA" <<'PY'
+          import hashlib
+          import os
+          import stat
+          import subprocess
+          import sys
+
+          path = "/usr/local/bin/nmc-release-attestation-client"
+          descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+          snapshot = -1
+          try:
+              parent = os.stat("/usr/local/bin", follow_symlinks=False)
+              metadata = os.fstat(descriptor)
+              raw = bytearray()
+              while len(raw) <= 131072:
+                  chunk = os.read(descriptor, min(65536, 131073 - len(raw)))
+                  if not chunk:
+                      break
+                  raw.extend(chunk)
+              after = os.fstat(descriptor)
+              if (
+                  not stat.S_ISDIR(parent.st_mode)
+                  or parent.st_uid != 0
+                  or stat.S_IMODE(parent.st_mode) & 0o022
+                  or not stat.S_ISREG(metadata.st_mode)
+                  or metadata.st_uid != 0
+                  or stat.S_IMODE(metadata.st_mode) & 0o022
+                  or metadata.st_nlink != 1
+                  or metadata.st_size != len(raw)
+                  or not 0 < len(raw) <= 131072
+                  or (metadata.st_dev, metadata.st_ino, metadata.st_size, metadata.st_mtime_ns)
+                  != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+                  or hashlib.sha256(raw).hexdigest()
+                  != "05bcef2befff595d403b59b8258a75583bc44d2dfe39cc5b9bc919167725c3f3"
+              ):
+                  raise SystemExit("Release attestation client metadata or digest is unsafe")
+              flags = getattr(os, "MFD_CLOEXEC", 0x0001) | getattr(
+                  os, "MFD_ALLOW_SEALING", 0x0002
+              )
+              if hasattr(os, "memfd_create"):
+                  snapshot = os.memfd_create("nmc-release-client", flags)
+              else:
+                  libc = ctypes.CDLL(None, use_errno=True)
+                  memfd_create = libc.memfd_create
+                  memfd_create.argtypes = (ctypes.c_char_p, ctypes.c_uint)
+                  memfd_create.restype = ctypes.c_int
+                  snapshot = memfd_create(b"nmc-release-client", flags)
+                  if snapshot < 0:
+                      error = ctypes.get_errno()
+                      raise OSError(error, os.strerror(error))
+              view = memoryview(raw)
+              while view:
+                  written = os.write(snapshot, view)
+                  if written <= 0:
+                      raise OSError("short immutable client snapshot write")
+                  view = view[written:]
+              os.fchmod(snapshot, 0o500)
+              seals = 0x0001 | 0x0002 | 0x0004 | 0x0008
+              fcntl.fcntl(snapshot, 1033, seals)
+              if fcntl.fcntl(snapshot, 1034) != seals:
+                  raise OSError("incomplete immutable client snapshot seals")
+              subprocess.run(
+                  [
+                      f"/proc/self/fd/{snapshot}",
+                      "complete",
+                      "--acceptance", ".gitea/release-runner-acceptance.json",
+                      "--repository", "emersonfelipesp/netbox-proxbox",
+                      "--run-id", sys.argv[1],
+                      "--job-name", "Build exact publisher-credential-free release-control request",
+                      "--source-sha", sys.argv[2],
+                      "--workflow", ".gitea/workflows/publish-gitea.yml",
+                      "--request", "release-transfer/release-request.json",
+                      "--manifest", "release-transfer/release-manifest.json",
+                      "--artifact-root", "release-transfer",
+                      "--output-attestation", "release-transfer/runner-completion-attestation.json",
+                      "--output-signature", "release-transfer/runner-completion-attestation.sig",
+                      "--public-key", "/etc/nmc-release-runner-attestation-public.pem",
+                  ],
+                  check=True,
+                  env={"LANG": "C.UTF-8", "PATH": "/usr/local/bin:/usr/bin:/bin"},
+                  pass_fds=(snapshot,),
+                  timeout=60,
+              )
+          finally:
+              if snapshot >= 0:
+                  os.close(snapshot)
+              os.close(descriptor)
+          PY
           test "$(find release-transfer -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 6
           test "$(find release-transfer -mindepth 1 -maxdepth 1 -type l | wc -l)" -eq 0
 
@@ -836,7 +912,13 @@ jobs:
         uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de # v3.2.2-node20
         with:
           name: release-control-request
-          path: release-transfer
+          path: |
+            release-transfer/*.whl
+            release-transfer/*.tar.gz
+            release-transfer/release-manifest.json
+            release-transfer/release-request.json
+            release-transfer/runner-completion-attestation.json
+            release-transfer/runner-completion-attestation.sig
           if-no-files-found: error
           retention-days: 1
           compression-level: 0

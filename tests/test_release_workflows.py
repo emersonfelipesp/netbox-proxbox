@@ -166,7 +166,14 @@ def test_release_control_request_binds_exact_repository_run_and_artifacts() -> N
     )
     assert upload_step["with"] == {
         "name": "release-control-request",
-        "path": "release-transfer",
+        "path": (
+            "release-transfer/*.whl\n"
+            "release-transfer/*.tar.gz\n"
+            "release-transfer/release-manifest.json\n"
+            "release-transfer/release-request.json\n"
+            "release-transfer/runner-completion-attestation.json\n"
+            "release-transfer/runner-completion-attestation.sig\n"
+        ),
         "if-no-files-found": "error",
         "retention-days": 1,
         "compression-level": 0,
@@ -188,7 +195,15 @@ def test_release_control_request_binds_exact_repository_run_and_artifacts() -> N
         'test "$(find release-transfer -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 6'
         in workflow
     )
-    assert "/usr/local/bin/nmc-release-attestation-client complete" in workflow
+    assert "/usr/local/bin/nmc-release-attestation-client" in workflow
+    assert (
+        "05bcef2befff595d403b59b8258a75583bc44d2dfe39cc5b9bc919167725c3f3" in workflow
+    )
+    assert "os.O_NOFOLLOW" in workflow
+    assert "pass_fds=(snapshot,)" in workflow
+    assert 'os.memfd_create("nmc-release-client", flags)' in workflow
+    assert "fcntl.fcntl(snapshot, 1033, seals)" in workflow
+    assert '"--public-key"' in workflow
     assert "runner-completion-attestation.json" in workflow
     assert "runner-completion-attestation.sig" in workflow
     assert "secrets." not in build_source
@@ -305,7 +320,7 @@ def test_release_runner_gate_is_pinned_and_precedes_candidate_execution() -> Non
     acceptance = json.loads(RUNNER_ACCEPTANCE_PATH.read_bytes())
 
     assert runner_gate_sha256 == (
-        "927220d961c109a5a7abc827b33d3a703cad536bc73c17f15211c6813609a253"
+        "bb00911ba0453736a80e829e0f1806a1d236d32cd7c24c5aa80a4c5a1dd40f90"
     )
     assert acceptance_sha256 == (
         "6a36b55596986686074cc5520ee97367e66b1df2759ae2dac5abdd9bc531a290"

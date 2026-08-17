@@ -153,7 +153,10 @@ sequenceDiagram
   canonical manifest, canonical `release-request.json`, canonical
   `runner-completion-attestation.json`, and its detached signature. The request binds the repository ID, source/tag,
   initiating run and attempt, workflow digest, manifest digest, and artifact
-  inventory. It has no package or GitHub-mirror credential. The separately
+  inventory. The job verifies the root-owned completion client digest, executes
+  a sealed in-memory snapshot of those exact bytes, and the client verifies the
+  supervisor signature locally against its policy-pinned public key before the
+  exact six-file upload. It has no package or GitHub-mirror credential. The separately
   administered release-control repository fetches that exact first-attempt run,
   verifies the policy-pinned target workflow, supervisor completion signature,
   and every byte on its isolated
