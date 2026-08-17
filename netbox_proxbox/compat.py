@@ -286,9 +286,26 @@ def _check_is_silenced(app_label: str, check_id: str) -> bool:
         if check_id in set(getattr(settings, "SILENCED_SYSTEM_CHECKS", None) or ()):
             return True
 
+        # The PLUGINS_CONFIG opt-out covers the *maturity notice* only. W002
+        # means "the compatibility band could not be determined at all", which
+        # is a different statement and the one this module exists to make
+        # loudly: an operator who accepted "this release is experimental" has
+        # not thereby accepted "we no longer know whether it is supported".
+        # Silencing W002 requires naming it explicitly in
+        # SILENCED_SYSTEM_CHECKS, handled above.
+        if check_id != f"{app_label}.W001":
+            return False
+
         plugins_config = getattr(settings, "PLUGINS_CONFIG", None) or {}
         entry = plugins_config.get(app_label) or {}
-        return bool(entry.get(SILENCE_SETTING_NAME, False))
+        value = entry.get(SILENCE_SETTING_NAME, False)
+        # Strictly ``True`` — not merely truthy. PLUGINS_CONFIG is frequently
+        # assembled from environment variables, where the string "false" and
+        # the string "0" are both truthy in Python. Accepting them would
+        # suppress the warning for an operator who wrote something that reads
+        # like a refusal, which is the opposite of the documented fail-open
+        # behaviour. Anything that is not the literal boolean shows the notice.
+        return value is True
     except Exception:  # noqa: BLE001 — suppression must never break startup
         return False
 

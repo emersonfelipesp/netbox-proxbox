@@ -87,6 +87,9 @@ def seed_default_vm_roles(apps, schema_editor):
     ProxboxPluginSettings = apps.get_model("netbox_proxbox", "ProxboxPluginSettings")
 
     uses_mptt = _model_has_mptt_columns(DeviceRole)
+    parent_field_available = "parent" in {
+        field.name for field in DeviceRole._meta.get_fields()
+    }
     next_tree_id = 0
     if uses_mptt:
         next_tree_id = (
@@ -104,9 +107,22 @@ def seed_default_vm_roles(apps, schema_editor):
             defaults.update(
                 {"level": 0, "lft": 1, "rght": 2, "tree_id": next_tree_id}
             )
+        # Look up by (parent, slug), not slug alone. NetBox 4.7 makes
+        # DeviceRole.slug unique **per parent**
+        # (``UniqueConstraint(fields=('parent', 'slug'))``) rather than
+        # globally, so a slug-only lookup on an installation that already
+        # nests roles can raise MultipleObjectsReturned and block the
+        # migration, or silently adopt somebody's child role as the seeded
+        # default. These seeds are root roles by construction — the MPTT
+        # defaults above say so explicitly — so scoping the lookup to
+        # ``parent=None`` states that and is correct on both hierarchy
+        # backends.
+        lookup = {"slug": seed["slug"]}
+        if parent_field_available:
+            lookup["parent"] = None
         role, created = DeviceRole.objects.get_or_create(
-            slug=seed["slug"],
             defaults=defaults,
+            **lookup,
         )
         if created and uses_mptt:
             next_tree_id += 1

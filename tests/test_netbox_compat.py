@@ -690,3 +690,92 @@ def test_a_malformed_plugins_config_entry_fails_open(
 
     assert len(caplog.records) == 1
     assert len(_run_registered_check(registered)) == 1
+
+
+# ---------------------------------------------------------------------------
+# The opt-out is W001-only and strictly boolean
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "truthy_but_not_true",
+    ["false", "0", "no", "off", ["x"], {"a": 1}, 1, 2.5, object()],
+)
+def test_only_the_literal_boolean_true_silences_the_notice(
+    monkeypatch: pytest.MonkeyPatch,
+    caplog: pytest.LogCaptureFixture,
+    truthy_but_not_true: object,
+) -> None:
+    """PLUGINS_CONFIG is often assembled from environment variables.
+
+    There, the string "false" and the string "0" are both truthy in Python.
+    Accepting anything truthy would silence the warning for an operator who
+    wrote something that reads like a refusal — the exact opposite of the
+    documented fail-open behaviour.
+    """
+    _reset_registration_guard(monkeypatch)
+    settings = types.SimpleNamespace(
+        RELEASE=_FakeRelease(
+            NETBOX_470_BETA1_COMPARISON_VERSION, NETBOX_470_BETA1_DISPLAY_VERSION
+        ),
+        VERSION=NETBOX_470_BETA1_DISPLAY_VERSION,
+        PLUGINS_CONFIG={"netbox_proxbox": {SILENCE_SETTING_NAME: truthy_but_not_true}},
+    )
+    registered = _install_fake_django(monkeypatch, settings)
+
+    with caplog.at_level(logging.WARNING):
+        register_netbox_compatibility_check(
+            _FakeAppConfig(), logging.getLogger("test.compat")
+        )
+
+    assert len(caplog.records) == 1, f"{truthy_but_not_true!r} must not silence"
+    assert len(_run_registered_check(registered)) == 1
+
+
+def test_the_w001_opt_out_does_not_silence_w002(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Accepting "this release is experimental" is not accepting "we no longer know".
+
+    W002 means the compatibility band could not be determined at all. An
+    operator who opted out of the maturity notice has said nothing about that,
+    and suppressing it would recreate exactly the silent-success state W002 was
+    added to prevent.
+    """
+    _reset_registration_guard(monkeypatch)
+    settings = types.SimpleNamespace(
+        RELEASE=None,
+        VERSION=None,  # detection fails -> W002 territory
+        PLUGINS_CONFIG={"netbox_proxbox": {SILENCE_SETTING_NAME: True}},
+    )
+    registered = _install_fake_django(monkeypatch, settings)
+
+    with caplog.at_level(logging.WARNING):
+        register_netbox_compatibility_check(
+            _FakeAppConfig(), logging.getLogger("test.compat")
+        )
+
+    results = _run_registered_check(registered)
+    assert len(results) == 1 and results[0].id == "netbox_proxbox.W002"
+    assert len(caplog.records) == 1
+
+
+def test_w002_is_still_silenceable_by_naming_it_explicitly(
+    monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The escape hatch stays available — it just has to be deliberate."""
+    _reset_registration_guard(monkeypatch)
+    settings = types.SimpleNamespace(
+        RELEASE=None,
+        VERSION=None,
+        SILENCED_SYSTEM_CHECKS=["netbox_proxbox.W002"],
+    )
+    registered = _install_fake_django(monkeypatch, settings)
+
+    with caplog.at_level(logging.WARNING):
+        register_netbox_compatibility_check(
+            _FakeAppConfig(), logging.getLogger("test.compat")
+        )
+
+    assert _run_registered_check(registered) == []
+    assert caplog.records == []

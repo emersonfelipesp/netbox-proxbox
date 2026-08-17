@@ -126,6 +126,7 @@ class _FakeManager:
     def __init__(self, field_names: tuple[str, ...]) -> None:
         self.field_names = field_names
         self.created_defaults: list[dict[str, Any]] = []
+        self.lookups: list[dict[str, Any]] = []
         self.aggregate_calls: list[tuple[str, ...]] = []
 
     def aggregate(self, *args: Any, **kwargs: Any) -> dict[str, Any]:
@@ -139,13 +140,14 @@ class _FakeManager:
             )
         return {"tree_id__max": 7}
 
-    def get_or_create(self, slug: str, defaults: dict[str, Any]):
-        unknown = set(defaults) - set(self.field_names)
+    def get_or_create(self, defaults: dict[str, Any], **lookup: Any):
+        unknown = (set(defaults) | set(lookup)) - set(self.field_names)
         if unknown:
             # Mirrors Django rejecting unknown kwargs for the historical model.
             raise TypeError(f"invalid field(s) for DeviceRole: {sorted(unknown)}")
         self.created_defaults.append(dict(defaults))
-        return _FakeRole(slug=slug, **defaults), True
+        self.lookups.append(dict(lookup))
+        return _FakeRole(**lookup, **defaults), True
 
     def filter(self, **kwargs: Any) -> "_FakeManager":
         return self
@@ -250,3 +252,35 @@ def test_a_partial_mptt_field_set_is_treated_as_non_mptt(missing_field: str) -> 
     )
     model = _FakeModel(field_names)
     assert migration_data._model_has_mptt_columns(model) is False
+
+
+def test_seed_scopes_the_lookup_to_root_roles() -> None:
+    """NetBox 4.7 makes DeviceRole.slug unique per *parent*, not globally.
+
+    A slug-only `get_or_create` on an installation that already nests roles can
+    raise MultipleObjectsReturned and block the migration, or silently adopt
+    somebody else's child role as the seeded default. These seeds are root roles
+    by construction, so the lookup has to say so.
+    """
+    for field_names in (MPTT_DEVICE_ROLE_FIELDS, LTREE_DEVICE_ROLE_FIELDS):
+        apps = _FakeApps(field_names)
+        migration_data.seed_default_vm_roles(apps, schema_editor=None)
+        lookups = apps.device_role.objects.lookups
+        assert len(lookups) == len(migration_data.VM_ROLE_SEEDS)
+        for lookup in lookups:
+            assert lookup.get("parent", "missing") is None, (
+                f"seed lookup must be scoped to root roles, got {lookup}"
+            )
+            assert "slug" in lookup
+
+
+def test_seed_omits_the_parent_scope_when_the_model_has_no_parent_field() -> None:
+    """A historical model without `parent` must not be handed an unknown kwarg."""
+    field_names = tuple(n for n in LTREE_DEVICE_ROLE_FIELDS if n != "parent")
+    apps = _FakeApps(field_names)
+
+    migration_data.seed_default_vm_roles(apps, schema_editor=None)
+
+    for lookup in apps.device_role.objects.lookups:
+        assert "parent" not in lookup
+        assert "slug" in lookup
