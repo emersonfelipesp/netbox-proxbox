@@ -71,7 +71,11 @@ __all__ = [
 
 #: Bumped whenever the shared contract below changes shape. All five vendored
 #: copies must agree on this value; a mismatch means one repo was updated alone.
-CONTRACT_VERSION = "netbox-compat-v1"
+#:
+#: v2 — added `detect_netbox_designation()`, `experimental_warning_hint()`,
+#: designation-aware `is_prerelease_netbox()`, and the `SILENCE_SETTING_NAME`
+#: PLUGINS_CONFIG opt-out.
+CONTRACT_VERSION = "netbox-compat-v2"
 
 #: Oldest NetBox release the Proxbox stack supports at all.
 STABLE_MIN_NETBOX_VERSION = "4.5.8"
