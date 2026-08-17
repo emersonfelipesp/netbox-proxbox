@@ -34,6 +34,14 @@ F_SEAL_GROW = 0x0004
 F_SEAL_WRITE = 0x0008
 MFD_CLOEXEC = getattr(os, "MFD_CLOEXEC", 0x0001)
 MFD_ALLOW_SEALING = getattr(os, "MFD_ALLOW_SEALING", 0x0002)
+PROXY_ENVIRONMENT_NAMES = frozenset(
+    {"all_proxy", "http_proxy", "https_proxy", "no_proxy"}
+)
+VALIDATION_JOB_NAME = "Validate canonical release source"
+BUILD_JOB_NAMES = {
+    "netbox-proxbox": "Build exact publisher-credential-free release-control request",
+    "proxbox-api": "Build exact credential-free release-control request",
+}
 
 
 class RunnerGateError(ValueError):
@@ -68,6 +76,8 @@ def _load_acceptance(path: Path, repository: str) -> dict[str, Any]:
         "runtime_image_digest",
         "schema",
         "supervisor_policy_sha256",
+        "validation_runner_id",
+        "validation_runner_name",
     }
     runtime_digest = (
         value.get("runtime_attestation_sha256") if isinstance(value, dict) else None
@@ -99,9 +109,19 @@ def _load_acceptance(path: Path, repository: str) -> dict[str, Any]:
         or isinstance(value.get("runner_id"), bool)
         or not isinstance(value.get("runner_id"), int)
         or value["runner_id"] <= 0
+        or isinstance(value.get("validation_runner_id"), bool)
+        or not isinstance(value.get("validation_runner_id"), int)
+        or value["validation_runner_id"] <= 0
+        or value["validation_runner_id"] == value["runner_id"]
         or not isinstance(value.get("runner_name"), str)
         or re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", value["runner_name"])
         is None
+        or not isinstance(value.get("validation_runner_name"), str)
+        or re.fullmatch(
+            r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}", value["validation_runner_name"]
+        )
+        is None
+        or value["validation_runner_name"] == value["runner_name"]
         or value.get("runner_label") != f"ci-release-{repository}"
         or not isinstance(registered_labels, list)
         or registered_labels != [value.get("runner_label")]
@@ -198,38 +218,67 @@ def _sealed_snapshot(raw: bytes, label: str) -> int:
     return descriptor
 
 
-def _verify_live_attestation(
+def _close_descriptors(*descriptors: int) -> None:
+    for descriptor in descriptors:
+        if descriptor >= 0:
+            os.close(descriptor)
+
+
+def _verify_attestation_signature(
+    public_key_fd: int,
+    signature_fd: int,
+    attestation_fd: int,
+) -> None:
+    if not OPENSSL.is_file() or OPENSSL.is_symlink():
+        raise RunnerGateError("OpenSSL verifier is unavailable")
+    try:
+        verified = subprocess.run(  # noqa: S603
+            [
+                str(OPENSSL),
+                "dgst",
+                "-sha256",
+                "-verify",
+                f"/proc/self/fd/{public_key_fd}",
+                "-signature",
+                f"/proc/self/fd/{signature_fd}",
+                f"/proc/self/fd/{attestation_fd}",
+            ],
+            check=False,
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            pass_fds=(public_key_fd, signature_fd, attestation_fd),
+            timeout=10,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        raise RunnerGateError("live runner attestation verification failed") from exc
+    if verified.returncode != 0:
+        raise RunnerGateError("live runner attestation signature is invalid")
+
+
+def _load_verified_attestation(
     *,
     acceptance: dict[str, Any],
-    attestation_root: Path,
+    attestation_path: Path,
+    signature_path: Path,
     public_key_path: Path,
-    repository_full_name: str,
-    run_id: int,
-    job_id: int,
-    source_sha: str,
-    now: int,
     trusted_external_uid: int,
-) -> str:
-    if not attestation_root.is_absolute() or not public_key_path.is_absolute():
-        raise RunnerGateError("runner attestation paths are not absolute")
-    stem = f"run-{run_id}-job-{job_id}"
-    attestation_path = attestation_root / f"{stem}.json"
-    signature_path = attestation_root / f"{stem}.sig"
-    public_key, public_key_fd = _open_external_file(
-        public_key_path,
-        "attestation public key",
-        16384,
-        trusted_uid=trusted_external_uid,
-    )
-    if (
-        hashlib.sha256(public_key).hexdigest()
-        != acceptance["attestation_public_key_sha256"]
-    ):
-        os.close(public_key_fd)
-        raise RunnerGateError("attestation public key differs from acceptance")
+) -> bytes:
+    public_key_fd = -1
     attestation_fd = -1
     signature_fd = -1
     try:
+        public_key, public_key_fd = _open_external_file(
+            public_key_path,
+            "attestation public key",
+            16384,
+            trusted_uid=trusted_external_uid,
+        )
+        if (
+            hashlib.sha256(public_key).hexdigest()
+            != acceptance["attestation_public_key_sha256"]
+        ):
+            raise RunnerGateError("attestation public key differs from acceptance")
         raw, attestation_fd = _open_external_file(
             attestation_path,
             "live runner attestation",
@@ -242,47 +291,42 @@ def _verify_live_attestation(
             16384,
             trusted_uid=trusted_external_uid,
         )
-    except RunnerGateError:
-        os.close(public_key_fd)
-        if attestation_fd >= 0:
-            os.close(attestation_fd)
-        if signature_fd >= 0:
-            os.close(signature_fd)
-        raise
-    try:
-        if not OPENSSL.is_file() or OPENSSL.is_symlink():
-            raise RunnerGateError("OpenSSL verifier is unavailable")
-        try:
-            verified = subprocess.run(  # noqa: S603
-                [
-                    str(OPENSSL),
-                    "dgst",
-                    "-sha256",
-                    "-verify",
-                    f"/proc/self/fd/{public_key_fd}",
-                    "-signature",
-                    f"/proc/self/fd/{signature_fd}",
-                    f"/proc/self/fd/{attestation_fd}",
-                ],
-                check=False,
-                stdin=subprocess.DEVNULL,
-                stdout=subprocess.DEVNULL,
-                stderr=subprocess.DEVNULL,
-                pass_fds=(public_key_fd, signature_fd, attestation_fd),
-                timeout=10,
-            )
-        except (OSError, subprocess.SubprocessError) as exc:
-            raise RunnerGateError(
-                "live runner attestation verification failed"
-            ) from exc
+        _verify_attestation_signature(
+            public_key_fd,
+            signature_fd,
+            attestation_fd,
+        )
+        return raw
     finally:
-        os.close(public_key_fd)
-        if signature_fd >= 0:
-            os.close(signature_fd)
-        if attestation_fd >= 0:
-            os.close(attestation_fd)
-    if verified.returncode != 0:
-        raise RunnerGateError("live runner attestation signature is invalid")
+        _close_descriptors(public_key_fd, signature_fd, attestation_fd)
+
+
+def _verify_live_attestation(
+    *,
+    acceptance: dict[str, Any],
+    attestation_root: Path,
+    public_key_path: Path,
+    repository_full_name: str,
+    run_id: int,
+    job_id: int,
+    expected_runner_id: int,
+    expected_runner_name: str,
+    source_sha: str,
+    now: int,
+    trusted_external_uid: int,
+) -> str:
+    if not attestation_root.is_absolute() or not public_key_path.is_absolute():
+        raise RunnerGateError("runner attestation paths are not absolute")
+    stem = f"run-{run_id}-job-{job_id}"
+    attestation_path = attestation_root / f"{stem}.json"
+    signature_path = attestation_root / f"{stem}.sig"
+    raw = _load_verified_attestation(
+        acceptance=acceptance,
+        attestation_path=attestation_path,
+        signature_path=signature_path,
+        public_key_path=public_key_path,
+        trusted_external_uid=trusted_external_uid,
+    )
     try:
         attestation = json.loads(raw)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -326,9 +370,9 @@ def _verify_live_attestation(
         or attestation.get("job_id") != job_id
         or isinstance(attestation.get("job_id"), bool)
         or attestation.get("source_sha") != source_sha
-        or attestation.get("runner_id") != acceptance["runner_id"]
+        or attestation.get("runner_id") != expected_runner_id
         or isinstance(attestation.get("runner_id"), bool)
-        or attestation.get("runner_name") != acceptance["runner_name"]
+        or attestation.get("runner_name") != expected_runner_name
         or attestation.get("registered_labels") != acceptance["registered_labels"]
         or attestation.get("runner_scope_sha256") != acceptance["runner_scope_sha256"]
         or attestation.get("runtime_image_digest") != acceptance["runtime_image_digest"]
@@ -350,6 +394,11 @@ def _request_jobs(owner: str, repository: str, run_id: int, token: str) -> Any:
         ord(character) <= 0x20 or ord(character) == 0x7F for character in token
     ):
         raise RunnerGateError("Gitea Actions token is unavailable")
+    if any(
+        name.casefold() in PROXY_ENVIRONMENT_NAMES and value
+        for name, value in os.environ.items()
+    ):
+        raise RunnerGateError("ambient proxy configuration is forbidden")
     path = f"/repos/{owner}/{repository}/actions/runs/{run_id}/jobs"
     request = urllib.request.Request(
         f"{API_ORIGIN}{path}",
@@ -360,9 +409,9 @@ def _request_jobs(owner: str, repository: str, run_id: int, token: str) -> Any:
         },
     )
     try:
-        with urllib.request.build_opener(_NoRedirect).open(
-            request, timeout=30
-        ) as response:
+        with urllib.request.build_opener(
+            urllib.request.ProxyHandler({}), _NoRedirect
+        ).open(request, timeout=30) as response:
             if response.status != 200:
                 raise RunnerGateError(f"Gitea returned HTTP {response.status}")
             raw = response.read(MAX_RESPONSE_BYTES + 1)
@@ -405,6 +454,14 @@ def validate_release_runner(
         or trusted_external_uid < 0
     ):
         raise RunnerGateError("release job identity is invalid")
+    if job_name == VALIDATION_JOB_NAME:
+        expected_runner_id = acceptance["validation_runner_id"]
+        expected_runner_name = acceptance["validation_runner_name"]
+    elif job_name == BUILD_JOB_NAMES.get(repository):
+        expected_runner_id = acceptance["runner_id"]
+        expected_runner_name = acceptance["runner_name"]
+    else:
+        raise RunnerGateError("release job name is not authorized")
     payload = (
         _request_jobs(owner, repository, run_id, token)
         if jobs_payload is None
@@ -437,9 +494,9 @@ def validate_release_runner(
         or job.get("head_sha") != source_sha
         or job.get("status") != "in_progress"
         or job.get("conclusion") not in {None, ""}
-        or job.get("runner_id") != acceptance["runner_id"]
+        or job.get("runner_id") != expected_runner_id
         or isinstance(job.get("runner_id"), bool)
-        or job.get("runner_name") != acceptance["runner_name"]
+        or job.get("runner_name") != expected_runner_name
         or job.get("labels") != [acceptance["runner_label"]]
     ):
         raise RunnerGateError("job did not use the exact accepted release runner")
@@ -450,6 +507,8 @@ def validate_release_runner(
         repository_full_name=f"{owner}/{repository}",
         run_id=run_id,
         job_id=int(job["id"]),
+        expected_runner_id=expected_runner_id,
+        expected_runner_name=expected_runner_name,
         source_sha=source_sha,
         now=int(time.time()) if now is None else now,
         trusted_external_uid=trusted_external_uid,

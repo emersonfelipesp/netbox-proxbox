@@ -645,11 +645,14 @@ controller require that signed scope digest to equal the pinned acceptance
 value. Candidate code
 receives no package, mirror, job, runtime, or write credential.
 
-A dedicated ephemeral `ci-release-netbox-proxbox` registration advertises only
-that release label. Its job builds the manifest-bound wheel/sdist and uploads
+Two job-bound ephemeral `ci-release-netbox-proxbox` registrations provide
+distinct validation and build runner identities; each advertises only that
+release label and terminates after its one assigned job. The build job produces
+the manifest-bound wheel/sdist and uploads
 exactly six data files: wheel, sdist,
 `release-manifest.json`, canonical `release-request.json`, canonical
-`runner-completion-attestation.json`, and its detached signature. The request
+`runner-completion-attestation.json`, and
+`runner-completion-attestation.sig`. The request
 binds repository ID, source/tag/version, first-attempt run identity, target
 workflow digest, manifest digest, and artifact inventory. The target workflow
 has no package or GitHub-mirror credential and cannot publish or push tags.

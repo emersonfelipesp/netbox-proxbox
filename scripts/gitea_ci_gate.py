@@ -18,6 +18,9 @@ MAX_RESPONSE_BYTES = 4 * 1024 * 1024
 SHA_RE = re.compile(r"^[a-f0-9]{40}$")
 FIRST_JOB_ATTEMPT = 1
 FIRST_RUN_ATTEMPT_ENCODINGS = frozenset({0, 1})
+PROXY_ENVIRONMENT_NAMES = frozenset(
+    {"all_proxy", "http_proxy", "https_proxy", "no_proxy"}
+)
 
 
 class CIGateError(ValueError):
@@ -34,6 +37,11 @@ def _request_json(path: str, *, token: str) -> Any:
         raise CIGateError("Gitea API token is unavailable")
     if not path.startswith("/repos/") or ".." in path:
         raise CIGateError("Gitea API path is invalid")
+    if any(
+        name.casefold() in PROXY_ENVIRONMENT_NAMES and value
+        for name, value in os.environ.items()
+    ):
+        raise CIGateError("ambient proxy configuration is forbidden")
     request = urllib.request.Request(
         f"{API_ORIGIN}{path}",
         headers={
@@ -43,9 +51,9 @@ def _request_json(path: str, *, token: str) -> Any:
         },
     )
     try:
-        with urllib.request.build_opener(_NoRedirect).open(
-            request, timeout=30
-        ) as response:
+        with urllib.request.build_opener(
+            urllib.request.ProxyHandler({}), _NoRedirect
+        ).open(request, timeout=30) as response:
             if response.status != 200:
                 raise CIGateError(f"Gitea returned HTTP {response.status}")
             raw = response.read(MAX_RESPONSE_BYTES + 1)

@@ -139,7 +139,7 @@ def test_token_bearing_ci_gate_uses_the_pinned_reviewed_script() -> None:
     isolated_invocation = "python3 -I scripts/gitea_ci_gate.py"
 
     assert expected_digest == (
-        "6c816e3ec8f1c7d853e2179493f63c40c3dbe43400c0373c4b13433d491aace3"
+        "1e7f4270ae0d9abc18ea674c71a682a734f448628895e96915fb808d5da41f11"
     )
     assert 'python3 -I - "$VERSION"' in policy_run
     assert "test -f scripts/gitea_ci_gate.py" in policy_run
@@ -336,15 +336,17 @@ def test_release_runner_gate_is_pinned_and_precedes_candidate_execution() -> Non
     acceptance = json.loads(RUNNER_ACCEPTANCE_PATH.read_bytes())
 
     assert runner_gate_sha256 == (
-        "71d7dfc5f2d6013d108fdf0b253091cfae5ffc93692824b081f5354f27f800a6"
+        "c643ee91c8230f9701bed65b80c206852550c8a197becacaa194db1a60910f06"
     )
     assert acceptance_sha256 == (
-        "edeaa049a82ab1a60bc4b7de4452a0c2a8ff5f5af8744f5403c177922fd83f4b"
+        "465cd4fbf16603cfb5412aa70a6ca0f14f16bfe63c3512fbaa6e65d5f86e9dcd"
     )
     assert workflow.count(runner_gate_sha256) == 2
     assert workflow.count(acceptance_sha256) == 2
     assert acceptance["runner_id"] == 0
     assert acceptance["runner_name"] == ""
+    assert acceptance["validation_runner_id"] == 0
+    assert acceptance["validation_runner_name"] == ""
     assert acceptance["runner_scope_sha256"] == "0" * 64
     assert acceptance["runtime_attestation_sha256"] == "0" * 64
     assert acceptance["network_attestation_sha256"] == "0" * 64
@@ -396,6 +398,8 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
         "runtime_image_digest": "c" * 64,
         "schema": 1,
         "supervisor_policy_sha256": "d" * 64,
+        "validation_runner_id": 42,
+        "validation_runner_name": "ci-release-netbox-proxbox-validate",
     }
     private_key = tmp_path / "private.pem"
     public_key = tmp_path / "public.pem"
@@ -565,6 +569,94 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
                 now=1100,
                 trusted_external_uid=os.geteuid(),
             )
+
+
+def test_release_jobs_require_distinct_job_bound_ephemeral_identities(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    gate = _load_runner_gate()
+    acceptance = {
+        "attestation_public_key_sha256": "a" * 64,
+        "network_attestation_sha256": "b" * 64,
+        "registered_labels": ["ci-release-netbox-proxbox"],
+        "runner_id": 41,
+        "runner_label": "ci-release-netbox-proxbox",
+        "runner_name": "ci-release-netbox-proxbox-build",
+        "runner_scope_sha256": "c" * 64,
+        "runtime_attestation_sha256": "d" * 64,
+        "runtime_image_digest": "e" * 64,
+        "schema": 1,
+        "supervisor_policy_sha256": "f" * 64,
+        "validation_runner_id": 42,
+        "validation_runner_name": "ci-release-netbox-proxbox-validate",
+    }
+    acceptance_path = tmp_path / "acceptance.json"
+    acceptance_path.write_bytes(gate._canonical_json(acceptance))
+    monkeypatch.setattr(gate, "_verify_live_attestation", lambda **_kwargs: "0" * 64)
+    jobs = (
+        (
+            gate.VALIDATION_JOB_NAME,
+            acceptance["validation_runner_id"],
+            acceptance["validation_runner_name"],
+        ),
+        (
+            gate.BUILD_JOB_NAMES["netbox-proxbox"],
+            acceptance["runner_id"],
+            acceptance["runner_name"],
+        ),
+    )
+    for index, (job_name, runner_id, runner_name) in enumerate(jobs, start=1):
+        job = {
+            "conclusion": None,
+            "head_sha": "a" * 40,
+            "id": 30 + index,
+            "labels": [acceptance["runner_label"]],
+            "name": job_name,
+            "run_attempt": 1,
+            "run_id": 12,
+            "runner_id": runner_id,
+            "runner_name": runner_name,
+            "status": "in_progress",
+        }
+        evidence = gate.validate_release_runner(
+            acceptance_path=acceptance_path,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            run_id=12,
+            job_name=job_name,
+            source_sha="a" * 40,
+            token="",
+            jobs_payload={"jobs": [job], "total_count": 1},
+        )
+        assert evidence["runner_id"] == runner_id
+    acceptance["validation_runner_id"] = acceptance["runner_id"]
+    acceptance_path.write_bytes(gate._canonical_json(acceptance))
+    with pytest.raises(gate.RunnerGateError, match="not activated"):
+        gate.validate_release_runner(
+            acceptance_path=acceptance_path,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            run_id=12,
+            job_name=gate.BUILD_JOB_NAMES["netbox-proxbox"],
+            source_sha="a" * 40,
+            token="",
+            jobs_payload={"jobs": [], "total_count": 0},
+        )
+
+
+def test_authenticated_release_evidence_rejects_ambient_proxies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ci_gate = _load_ci_gate()
+    runner_gate = _load_runner_gate()
+    for name in tuple(os.environ):
+        if name.casefold() in ci_gate.PROXY_ENVIRONMENT_NAMES:
+            monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("HTTPS_PROXY", "https://proxy.invalid")
+    with pytest.raises(ci_gate.CIGateError, match="ambient proxy"):
+        ci_gate._request_json("/repos/owner/repository/actions/runs", token="token")
+    with pytest.raises(runner_gate.RunnerGateError, match="ambient proxy"):
+        runner_gate._request_jobs("owner", "repository", 1, "token")
 
 
 def test_candidate_process_cpu_accounting_includes_reaped_descendants() -> None:
@@ -871,12 +963,18 @@ def test_operator_docs_match_the_locked_control_dispatch_contract() -> None:
         assert canary_contract in " ".join(text.split()), path
         assert "dedicated untrusted CI VM" not in text, path
 
+    for path, text in documentation_by_path.items():
+        for filename in (
+            "release-manifest.json",
+            "release-request.json",
+            "runner-completion-attestation.json",
+            "runner-completion-attestation.sig",
+        ):
+            assert filename in text, (path, filename)
     agent_docs = (REPO_ROOT / "AGENTS.md", REPO_ROOT / "CLAUDE.md")
     for path in agent_docs:
-        assert (
-            f"dedicated ephemeral `{release_label}` registration"
-            in documentation_by_path[path]
-        )
+        normalized = " ".join(documentation_by_path[path].split())
+        assert f"job-bound ephemeral `{release_label}`" in normalized
 
 
 def test_github_publish_accepts_rc_pushes_and_final_release_events_only() -> None:

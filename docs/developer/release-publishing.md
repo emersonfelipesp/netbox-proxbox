@@ -58,7 +58,7 @@ sequenceDiagram
     participant API as proxbox-api container
 
     Tag->>WF: vX.Y.ZrcN
-    WF->>Control: wheel + sdist + manifest + canonical request
+    WF->>Control: wheel + sdist + release-manifest.json + release-request.json + runner-completion-attestation.json + runner-completion-attestation.sig
     Control->>Control: verify run, workflow, request, and sealed bytes
     Control->>GP: Publish exact sealed package bytes
     Control->>PublicWF: Promote the exact RC tag
@@ -111,7 +111,11 @@ sequenceDiagram
   run inventory. That run and each required job must prove a successful first
   push attempt for the exact SHA,
   trusted actor, job name, and exact sole `ci-untrusted-python312` job label.
-  Both jobs receive `actions: read` plus `contents: read` only for their trusted
+  The two jobs use distinct job-bound ephemeral runner IDs/names. Each
+  registration advertises only `ci-release-netbox-proxbox`, accepts one
+  supervisor-authorized assignment, and terminates; the validation identity
+  cannot service the build job. Both jobs receive `actions: read` plus
+  `contents: read` only for their trusted
   runner/CI evidence gates. The untrusted build fetches the validated public
   source without checkout credentials, and its step-scoped Gitea token is not
   passed across the candidate boundary.
@@ -150,8 +154,9 @@ sequenceDiagram
   selecting fresh per-run managed-Python/cache roots. After candidate process
   cleanup, the root-only external supervisor signs the exact request/artifact
   inventory. The job uploads exactly six data files: the wheel, sdist,
-  canonical manifest, canonical `release-request.json`, canonical
-  `runner-completion-attestation.json`, and its detached signature. The request binds the repository ID, source/tag,
+  canonical `release-manifest.json`, canonical `release-request.json`, canonical
+  `runner-completion-attestation.json`, and
+  `runner-completion-attestation.sig`. The request binds the repository ID, source/tag,
   initiating run and attempt, workflow digest, manifest digest, and artifact
   inventory. The job verifies the root-owned completion client digest, executes
   a sealed in-memory snapshot of those exact bytes, and the client verifies the
