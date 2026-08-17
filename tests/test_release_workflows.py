@@ -233,6 +233,11 @@ def test_gitea_candidate_build_isolated_from_runner_tokens() -> None:
     assert 'mount_rows != ["tmpfs"]' in boundary_code
     assert 'cgroup_root / "cpu.max"' in boundary_code
     assert 'cgroup_root / "memory.max"' in boundary_code
+    assert 'cgroup_root / "memory.swap.max"' in boundary_code
+    assert 'cgroup_root / "memory.current"' in boundary_code
+    assert 'cgroup_root / "memory.swap.current"' in boundary_code
+    assert 'raise SystemExit("Hard cgroup policy must disable swap")' in boundary_code
+    assert "memory_bytes > CGROUP_MEMORY_MAX" in boundary_code
     assert 'cgroup_root / "pids.max"' in boundary_code
     assert "TMPFS_BYTES_MAX = 1024 * 1024 * 1024" in boundary_code
     assert "TMPFS_INODES_MAX = 50000" in boundary_code

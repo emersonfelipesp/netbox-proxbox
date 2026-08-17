@@ -201,6 +201,16 @@ jobs:
                   raise SystemExit(f"Hard {label} cgroup limit is invalid")
               return value
 
+          def nonnegative_limit(path: Path, label: str) -> int:
+              try:
+                  raw = path.read_text(encoding="ascii").strip()
+                  value = int(raw)
+              except (OSError, UnicodeError, ValueError) as exc:
+                  raise SystemExit(f"{label} cgroup value is unavailable") from exc
+              if value < 0:
+                  raise SystemExit(f"{label} cgroup value is invalid")
+              return value
+
           def verify_kernel_quotas(root: Path) -> None:
               quota_root = Path("/nmc-build")
               if root.parent != quota_root or not quota_root.is_dir():
@@ -237,6 +247,8 @@ jobs:
                   raise SystemExit("Hard CPU cgroup limit exceeds one CPU")
               if positive_limit(cgroup_root / "memory.max", "memory") > CGROUP_MEMORY_MAX:
                   raise SystemExit("Hard memory cgroup limit exceeds policy")
+              if nonnegative_limit(cgroup_root / "memory.swap.max", "swap") != 0:
+                  raise SystemExit("Hard cgroup policy must disable swap")
               if positive_limit(cgroup_root / "pids.max", "PID") > CGROUP_PIDS_MAX:
                   raise SystemExit("Hard PID cgroup limit exceeds policy")
 
@@ -507,6 +519,14 @@ jobs:
               clock_ticks = os.sysconf("SC_CLK_TCK")
               return len(pids), total_rss_kib, total_cpu_ticks / clock_ticks
 
+          def cgroup_memory_usage() -> int:
+              cgroup_root = Path("/sys/fs/cgroup")
+              return nonnegative_limit(
+                  cgroup_root / "memory.current", "memory current"
+              ) + nonnegative_limit(
+                  cgroup_root / "memory.swap.current", "swap current"
+              )
+
           process = subprocess.Popen(
               ["/bin/sh", "-c", command],
               cwd=source_root,
@@ -547,6 +567,7 @@ jobs:
                       disk_bytes, entries = build_tree_usage()
                       available_bytes = available_filesystem_bytes(build_root)
                       pids, rss_kib, cpu_seconds = build_process_usage()
+                      memory_bytes = cgroup_memory_usage()
                   except (FileNotFoundError, PermissionError, ProcessLookupError):
                       boundary_error = "Token-free build filesystem changed"
                       break
@@ -554,7 +575,12 @@ jobs:
                   if disk_bytes > disk_limit or consumed_bytes > disk_limit or entries > 50000:
                       boundary_error = "Token-free build exceeded disk quota"
                       break
-                  if pids > 64 or rss_kib > 2 * 1024 * 1024 or cpu_seconds > 900:
+                  if (
+                      pids > 64
+                      or rss_kib > 2 * 1024 * 1024
+                      or memory_bytes > CGROUP_MEMORY_MAX
+                      or cpu_seconds > 900
+                  ):
                       boundary_error = "Token-free build exceeded process quota"
                       break
                   if process.poll() is not None and not events:

@@ -117,7 +117,7 @@ sequenceDiagram
   Candidate stdout/stderr is bounded and captured instead of reaching the runner
   workflow-command parser, with live `set-env`/`add-path` canaries checked in the
   next step. The job fails closed unless cgroup v2 proves hard one-CPU,
-  2-GiB-memory, and 64-PID ceilings and `/nmc-build` is a hard
+  2-GiB-memory, zero-swap, and 64-PID ceilings and `/nmc-build` is a hard
   one-GiB/50,000-inode tmpfs. The 900-second wall bound therefore also caps
   cumulative CPU, while parent accounting includes live and reaped descendants.
   Logical-size, filesystem-block, file-count, and output checks remain defense

@@ -616,7 +616,7 @@ runner label alone is not that evidence. Only reviewed outer shell/Python code
 regains the runtime-bearing environment. Candidate output is captured with a one-MiB limit
 and is never relayed raw to the runner command parser; legacy `set-env` and
 `add-path` probes must not affect the next step. The job fails closed unless
-cgroup v2 proves hard one-CPU/2-GiB/64-PID ceilings and `/nmc-build` is a hard
+cgroup v2 proves hard one-CPU/2-GiB/zero-swap/64-PID ceilings and `/nmc-build` is a hard
 one-GiB/50,000-inode tmpfs. A 900-second wall limit therefore bounds cumulative
 CPU; live-plus-reaped CPU/RSS/PID, logical-size/filesystem-block/file-count,
 per-process memory/CPU/file-size, and descriptor checks provide defense in
