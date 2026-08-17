@@ -598,11 +598,14 @@ successful first push attempt for that exact SHA,
 trusted actor, expected job, and the exact sole `ci-untrusted-python312` runner
 label. The two release-request jobs themselves use the repository-unique
 `ci-release-netbox-proxbox` label so user/organization runners cannot satisfy
-release evidence. Before candidate processing, both jobs run a checksum-pinned
+release evidence. Workflow concurrency is global to this repository, preventing
+different release refs from racing the sole release label. Before candidate
+processing, both jobs run a checksum-pinned
 gate that requires the live runner ID, name, and sole label to equal the
 canonical acceptance record plus a fresh signed external-supervisor attestation
 bound to repository/run/job/source, complete registered labels, runtime image,
-and network/runtime policy. Zero/empty identity and all-zero key/image/policy
+and network/runtime policy. Validation and build have independent pinned
+repository-registration scope digests. Zero/empty identity and all-zero key/image/policy
 digests keep tag releases disabled. Both jobs are explicitly
 limited to `actions: read` and `contents: read`, and the build's step-scoped
 Gitea token is not passed across the candidate boundary. The build fetches the
@@ -647,7 +650,8 @@ receives no package, mirror, job, runtime, or write credential.
 
 Two job-bound ephemeral `ci-release-netbox-proxbox` registrations provide
 distinct validation and build runner identities; each advertises only that
-release label and terminates after its one assigned job. The build job produces
+release label and terminates after its one assigned job. Every RC, final, or
+post request requires a freshly registered and reviewed pair. The build job produces
 the manifest-bound wheel/sdist and uploads
 exactly six data files: wheel, sdist,
 `release-manifest.json`, canonical `release-request.json`, canonical

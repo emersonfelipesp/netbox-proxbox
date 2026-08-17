@@ -78,6 +78,7 @@ def _load_acceptance(path: Path, repository: str) -> dict[str, Any]:
         "supervisor_policy_sha256",
         "validation_runner_id",
         "validation_runner_name",
+        "validation_runner_scope_sha256",
     }
     runtime_digest = (
         value.get("runtime_attestation_sha256") if isinstance(value, dict) else None
@@ -92,6 +93,9 @@ def _load_acceptance(path: Path, repository: str) -> dict[str, Any]:
         value.get("attestation_public_key_sha256") if isinstance(value, dict) else None,
         network_digest,
         value.get("runner_scope_sha256") if isinstance(value, dict) else None,
+        value.get("validation_runner_scope_sha256")
+        if isinstance(value, dict)
+        else None,
         runtime_digest,
         value.get("runtime_image_digest") if isinstance(value, dict) else None,
         value.get("supervisor_policy_sha256") if isinstance(value, dict) else None,
@@ -311,6 +315,7 @@ def _verify_live_attestation(
     job_id: int,
     expected_runner_id: int,
     expected_runner_name: str,
+    expected_runner_scope_sha256: str,
     source_sha: str,
     now: int,
     trusted_external_uid: int,
@@ -374,7 +379,7 @@ def _verify_live_attestation(
         or isinstance(attestation.get("runner_id"), bool)
         or attestation.get("runner_name") != expected_runner_name
         or attestation.get("registered_labels") != acceptance["registered_labels"]
-        or attestation.get("runner_scope_sha256") != acceptance["runner_scope_sha256"]
+        or attestation.get("runner_scope_sha256") != expected_runner_scope_sha256
         or attestation.get("runtime_image_digest") != acceptance["runtime_image_digest"]
         or attestation.get("runtime_attestation_sha256")
         != acceptance["runtime_attestation_sha256"]
@@ -457,9 +462,11 @@ def validate_release_runner(
     if job_name == VALIDATION_JOB_NAME:
         expected_runner_id = acceptance["validation_runner_id"]
         expected_runner_name = acceptance["validation_runner_name"]
+        expected_runner_scope_sha256 = acceptance["validation_runner_scope_sha256"]
     elif job_name == BUILD_JOB_NAMES.get(repository):
         expected_runner_id = acceptance["runner_id"]
         expected_runner_name = acceptance["runner_name"]
+        expected_runner_scope_sha256 = acceptance["runner_scope_sha256"]
     else:
         raise RunnerGateError("release job name is not authorized")
     payload = (
@@ -509,6 +516,7 @@ def validate_release_runner(
         job_id=int(job["id"]),
         expected_runner_id=expected_runner_id,
         expected_runner_name=expected_runner_name,
+        expected_runner_scope_sha256=expected_runner_scope_sha256,
         source_sha=source_sha,
         now=int(time.time()) if now is None else now,
         trusted_external_uid=trusted_external_uid,

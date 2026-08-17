@@ -81,6 +81,10 @@ def _step(job: dict[str, object], name: str) -> dict[str, object]:
 def test_gitea_tag_workflow_builds_only_a_release_control_request() -> None:
     workflow = _read(GITEA_PUBLISH_WORKFLOW)
     parsed = yaml.safe_load(workflow)
+    assert parsed["concurrency"] == {
+        "group": "release-request-${{ github.repository }}",
+        "cancel-in-progress": False,
+    }
 
     assert set(parsed["jobs"]) == {"validate-source", "build-request"}
     assert all(
@@ -339,10 +343,10 @@ def test_release_runner_gate_is_pinned_and_precedes_candidate_execution() -> Non
     acceptance = json.loads(RUNNER_ACCEPTANCE_PATH.read_bytes())
 
     assert runner_gate_sha256 == (
-        "c643ee91c8230f9701bed65b80c206852550c8a197becacaa194db1a60910f06"
+        "95a128f2ead98af911c71d391abf64f28252233bd3a5c141e01814cdc10683ac"
     )
     assert acceptance_sha256 == (
-        "465cd4fbf16603cfb5412aa70a6ca0f14f16bfe63c3512fbaa6e65d5f86e9dcd"
+        "ece0ee3975949f7316a25ca57d87ec5d82894c87fdbd684113def9e288d074e7"
     )
     assert workflow.count(runner_gate_sha256) == 2
     assert workflow.count(acceptance_sha256) == 2
@@ -351,6 +355,7 @@ def test_release_runner_gate_is_pinned_and_precedes_candidate_execution() -> Non
     assert acceptance["validation_runner_id"] == 0
     assert acceptance["validation_runner_name"] == ""
     assert acceptance["runner_scope_sha256"] == "0" * 64
+    assert acceptance["validation_runner_scope_sha256"] == "0" * 64
     assert acceptance["runtime_attestation_sha256"] == "0" * 64
     assert acceptance["network_attestation_sha256"] == "0" * 64
     assert acceptance["attestation_public_key_sha256"] == "0" * 64
@@ -403,6 +408,7 @@ def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -
         "supervisor_policy_sha256": "d" * 64,
         "validation_runner_id": 42,
         "validation_runner_name": "ci-release-netbox-proxbox-validate",
+        "validation_runner_scope_sha256": "f" * 64,
     }
     private_key = tmp_path / "private.pem"
     public_key = tmp_path / "public.pem"
@@ -592,23 +598,34 @@ def test_release_jobs_require_distinct_job_bound_ephemeral_identities(
         "supervisor_policy_sha256": "f" * 64,
         "validation_runner_id": 42,
         "validation_runner_name": "ci-release-netbox-proxbox-validate",
+        "validation_runner_scope_sha256": "a" * 64,
     }
     acceptance_path = tmp_path / "acceptance.json"
     acceptance_path.write_bytes(gate._canonical_json(acceptance))
-    monkeypatch.setattr(gate, "_verify_live_attestation", lambda **_kwargs: "0" * 64)
+    observed_scopes: list[str] = []
+
+    def verify_attestation(**kwargs: object) -> str:
+        observed_scopes.append(str(kwargs["expected_runner_scope_sha256"]))
+        return "0" * 64
+
+    monkeypatch.setattr(gate, "_verify_live_attestation", verify_attestation)
     jobs = (
         (
             gate.VALIDATION_JOB_NAME,
             acceptance["validation_runner_id"],
             acceptance["validation_runner_name"],
+            acceptance["validation_runner_scope_sha256"],
         ),
         (
             gate.BUILD_JOB_NAMES["netbox-proxbox"],
             acceptance["runner_id"],
             acceptance["runner_name"],
+            acceptance["runner_scope_sha256"],
         ),
     )
-    for index, (job_name, runner_id, runner_name) in enumerate(jobs, start=1):
+    for index, (job_name, runner_id, runner_name, runner_scope) in enumerate(
+        jobs, start=1
+    ):
         job = {
             "conclusion": None,
             "head_sha": "a" * 40,
@@ -632,6 +649,7 @@ def test_release_jobs_require_distinct_job_bound_ephemeral_identities(
             jobs_payload={"jobs": [job], "total_count": 1},
         )
         assert evidence["runner_id"] == runner_id
+        assert observed_scopes[-1] == runner_scope
     acceptance["validation_runner_id"] = acceptance["runner_id"]
     acceptance_path.write_bytes(gate._canonical_json(acceptance))
     with pytest.raises(gate.RunnerGateError, match="not activated"):

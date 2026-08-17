@@ -91,13 +91,18 @@ sequenceDiagram
   must move forward to the next `.postN` or `rcN`.
 - The target Gitea workflow listens for tag `push`, not the overlapping
   `create` event, so a tag can start only one immutable release request.
+- Workflow concurrency is global to this repository rather than per ref. A
+  second RC/final/post request cannot race the sole release label while the
+  validation supervisor is sequencing the active request.
 - Both release-request jobs use the repository-unique
   `ci-release-netbox-proxbox` label. The replacement registration must expose
   that label only at repository scope; the broader user-scoped
   `ci-untrusted-python312` runner is not eligible for release evidence.
   Before either job processes candidate-controlled bytes, a checksum-pinned
   gate compares the live Gitea job's runner ID, name, and sole label to
-  `.gitea/release-runner-acceptance.json`. Its zero ID, empty name, and all-zero
+  `.gitea/release-runner-acceptance.json`. Validation and build identities have
+  independent canonical repository-registration scope digests, so evidence for
+  one role cannot authorize the other. Its zero ID, empty name, and all-zero
   key/runtime/image/network/supervisor digests intentionally disable tag
   releases until live acceptance replaces every sentinel in one reviewed
   change. Even then, the gate requires a root-owned, freshly signed supervisor
@@ -114,7 +119,9 @@ sequenceDiagram
   The two jobs use distinct job-bound ephemeral runner IDs/names. Each
   registration advertises only `ci-release-netbox-proxbox`, accepts one
   supervisor-authorized assignment, and terminates; the validation identity
-  cannot service the build job. Both jobs receive `actions: read` plus
+  cannot service the build job. Each RC, final, or post request therefore
+  requires a freshly registered and reviewed identity pair. Both jobs receive
+  `actions: read` plus
   `contents: read` only for their trusted
   runner/CI evidence gates. The untrusted build fetches the validated public
   source without checkout credentials, and its step-scoped Gitea token is not
