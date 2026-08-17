@@ -91,6 +91,10 @@ sequenceDiagram
   must move forward to the next `.postN` or `rcN`.
 - The target Gitea workflow listens for tag `push`, not the overlapping
   `create` event, so a tag can start only one immutable release request.
+- Both release-request jobs use the repository-unique
+  `ci-release-netbox-proxbox` label. The replacement registration must expose
+  that label only at repository scope; the broader user-scoped
+  `ci-untrusted-python312` runner is not eligible for release evidence.
 - A candidate tag must resolve to the current canonical Gitea `develop` SHA.
   Each latest required CI status must resolve through authenticated Gitea API
   records to a successful `ci.yml` push run and run attempt for that exact SHA,

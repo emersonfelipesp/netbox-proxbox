@@ -60,7 +60,7 @@ def test_gitea_tag_workflow_builds_only_a_release_control_request() -> None:
 
     assert set(parsed["jobs"]) == {"validate-source", "build-request"}
     assert all(
-        job["runs-on"] == "ci-untrusted-python312" for job in parsed["jobs"].values()
+        job["runs-on"] == "ci-release-netbox-proxbox" for job in parsed["jobs"].values()
     )
     assert "refs/heads/develop:refs/remotes/gitea/release-develop" in workflow
     assert workflow.count("actions/checkout@") == 1

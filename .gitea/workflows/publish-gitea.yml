@@ -12,7 +12,7 @@ concurrency:
 jobs:
   validate-source:
     name: Validate canonical release source
-    runs-on: ci-untrusted-python312
+    runs-on: ci-release-netbox-proxbox
     permissions:
       actions: read
       contents: read
@@ -90,7 +90,7 @@ jobs:
   build-request:
     name: Build exact publisher-credential-free release-control request
     needs: validate-source
-    runs-on: ci-untrusted-python312
+    runs-on: ci-release-netbox-proxbox
     permissions:
       contents: read
     steps:

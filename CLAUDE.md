@@ -595,7 +595,9 @@ race duplicate immutable release requests. The tag must equal current
 `develop`; every latest required status must resolve to authenticated
 successful `ci.yml` push-run/run-attempt/job evidence for that exact SHA,
 trusted actor, expected job, and the exact sole `ci-untrusted-python312` runner
-label. That validation job's
+label. The two release-request jobs themselves use the repository-unique
+`ci-release-netbox-proxbox` label so user/organization runners cannot satisfy
+release evidence. That validation job's
 built-in token is explicitly limited to `actions: read` and `contents: read`;
 omitting the separate Actions scope would deny the run/job evidence lookup. The
 separate untrusted build job declares only `contents: read`, never references a
