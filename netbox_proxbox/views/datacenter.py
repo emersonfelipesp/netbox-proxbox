@@ -24,7 +24,7 @@ class ProxmoxDatacenterCpuModelListView(ObjectListView):
     table = tables.ProxmoxDatacenterCpuModelTable
     filterset = filtersets.ProxmoxDatacenterCpuModelFilterSet
     filterset_form = forms.ProxmoxDatacenterCpuModelFilterForm
-    actions = {}
+    actions = ()
 
 
 @register_model_view(models.ProxmoxDatacenterCpuModel)

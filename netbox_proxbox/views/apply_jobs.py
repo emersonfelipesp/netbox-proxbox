@@ -9,6 +9,7 @@ from django.urls import reverse
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views import View
+from netbox.object_actions import BulkExport
 from netbox.views import generic
 from utilities.permissions import get_permission_for_model
 from utilities.views import (
@@ -46,9 +47,7 @@ class ProxmoxApplyJobListView(
     queryset = ProxmoxApplyJob.objects.select_related("user")
     table = ProxmoxApplyJobTable
     template_name = "netbox_proxbox/applyjob_list.html"
-    actions = {
-        "export": {"view"},
-    }
+    actions = (BulkExport,)
 
 
 class ProxmoxApplyJobView(

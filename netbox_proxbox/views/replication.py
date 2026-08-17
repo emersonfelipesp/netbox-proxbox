@@ -1,6 +1,13 @@
 """Provide NetBox CRUD views for Replication records."""
 
 from django.http import HttpRequest
+from netbox.object_actions import (
+    AddObject,
+    BulkDelete,
+    BulkEdit,
+    BulkExport,
+    BulkImport,
+)
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 from virtualization.models import VirtualMachine
@@ -39,13 +46,7 @@ class ReplicationListView(generic.ObjectListView):
     filterset = ReplicationFilterSet
     filterset_form = ReplicationFilterForm
     template_name = "netbox_proxbox/replication_list.html"
-    actions = {
-        "add": {"add"},
-        "bulk_edit": {"change"},
-        "bulk_delete": {"delete"},
-        "bulk_import": {"add"},
-        "export": {"view"},
-    }
+    actions = (AddObject, BulkImport, BulkExport, BulkEdit, BulkDelete)
 
 
 @register_model_view(Replication)
@@ -117,11 +118,7 @@ class ReplicationTabView(TableConfigOverrideMixin, generic.ObjectChildrenView):
     table = ReplicationTable
     filterset = ReplicationFilterSet
     filterset_form = ReplicationFilterForm
-    actions = {
-        "bulk_edit": {"change"},
-        "bulk_delete": {"delete"},
-        "export": {"view"},
-    }
+    actions = (BulkExport, BulkEdit, BulkDelete)
     tab = ViewTab(
         label="Replications",
         badge=lambda obj: Replication.objects.filter(virtual_machine=obj).count(),

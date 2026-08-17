@@ -1,6 +1,7 @@
 """Provide NetBox CRUD and tab views for VM task history records."""
 
 from django.http import HttpRequest
+from netbox.object_actions import BulkExport, BulkDelete
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 from virtualization.models import VirtualMachine
@@ -39,9 +40,7 @@ class VMTaskHistoryTabView(TableConfigOverrideMixin, generic.ObjectChildrenView)
     table = VMTaskHistoryTable
     filterset = VMTaskHistoryFilterSet
     filterset_form = VMTaskHistoryFilterForm
-    actions = {
-        "export": {"view"},
-    }
+    actions = (BulkExport,)
     tab = ViewTab(
         label="Task History",
         badge=lambda obj: VMTaskHistory.objects.filter(virtual_machine=obj).count(),
@@ -68,10 +67,7 @@ class VMTaskHistoryListView(generic.ObjectListView):
     table = VMTaskHistoryTable
     filterset = VMTaskHistoryFilterSet
     filterset_form = VMTaskHistoryFilterForm
-    actions = {
-        "bulk_delete": {"delete"},
-        "export": {"view"},
-    }
+    actions = (BulkExport, BulkDelete)
 
 
 @register_model_view(VMTaskHistory, "edit")

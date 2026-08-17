@@ -8,6 +8,7 @@ from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.translation import gettext as _
 from django.views import View
+from netbox.object_actions import BulkExport
 from netbox.views import generic
 from utilities.views import (
     ContentTypePermissionRequiredMixin,
@@ -60,9 +61,7 @@ class DeletionRequestListView(generic.ObjectListView):
     queryset = _deletion_request_queryset()
     table = DeletionRequestTable
     template_name = "netbox_proxbox/deletionrequest_list.html"
-    actions = {
-        "export": {"view"},
-    }
+    actions = (BulkExport,)
 
 
 @register_model_view(DeletionRequest)

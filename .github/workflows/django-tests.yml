@@ -20,12 +20,24 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Declared support is NetBox 4.5.8 - 4.6.99. Gate the minimum,
-        # the latest certified 4.5 patch, and both the 4.6 line floor/latest
-        # validated patch in step with netbox_proxbox/__init__.py. The extra
+        # Declared support is NetBox 4.5.8 - 4.7.99, split into two tiers by
+        # netbox_proxbox/compat.py: a certified stable band (4.5.8 - 4.6.99)
+        # and an experimental band (4.7.0 - 4.7.99). Gate the minimum, the
+        # latest certified 4.5 patch, and both the 4.6 line floor/latest
+        # validated patch in step with netbox_proxbox/compat.py. The extra
         # 4.6.6 cell loads the supported PDM override so its registry identity
         # contract cannot become a permanently skipped optional branch.
-        netbox: ["v4.5.8", "v4.5.10", "v4.6.0", "v4.6.6"]
+        #
+        # v4.7.0-beta1 is the experimental-tier evidence and is a REQUIRED leg,
+        # not continue-on-error: the tag is immutable, so it cannot churn, and
+        # a decorative leg would not actually demonstrate 4.7 support. The
+        # 4.5/4.6 legs alongside it are the backward-compatibility evidence
+        # that admitting 4.7 was a pure widening. NetBox 4.7 needs PostgreSQL
+        # 15+ and Redis 6+ and installs the ltree extension during migrate —
+        # the postgres:16-alpine / redis:7-alpine services below already
+        # satisfy this, and POSTGRES_USER creates a superuser role that can
+        # CREATE EXTENSION.
+        netbox: ["v4.5.8", "v4.5.10", "v4.6.0", "v4.6.6", "v4.7.0-beta1"]
         pdm: [false]
         include:
           - netbox: "v4.6.6"
@@ -106,7 +118,9 @@ jobs:
           NETBOX_PROXBOX_TEST_PDM: ${{ matrix.pdm && '1' || '0' }}
           PYTHONPATH: ${{ github.workspace }}/netbox/netbox:${{ github.workspace }}/netbox-proxbox
         run: |
-          pytest tests/test_sync_state_models.py tests/test_sync_state_contracts.py \
+          pytest tests/test_netbox_compat_django.py \
+            tests/test_list_view_render_django.py \
+            tests/test_sync_state_models.py tests/test_sync_state_contracts.py \
             tests/test_backend_key_adoption_django.py \
             tests/test_encryption_key_recovery_django.py \
             tests/test_job_stream_django.py \
