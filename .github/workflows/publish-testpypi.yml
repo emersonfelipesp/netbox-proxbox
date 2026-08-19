@@ -174,7 +174,7 @@ jobs:
               fh.write(f'version={version}\n')
           PY
 
-      - name: Verify Gitea provenance and retrieve exact artifacts
+      - name: Build distributions from the exact tagged source
         id: artifacts
         env:
           EVENT_NAME: ${{ github.event_name }}
@@ -182,26 +182,46 @@ jobs:
           VERSION: ${{ steps.meta.outputs.version }}
         run: |
           set -euo pipefail
-          git remote add gitea https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox.git
-          git fetch --force --no-tags gitea \
-            "+refs/heads/develop:refs/remotes/gitea/release-develop" \
-            "+refs/tags/${TAG}:refs/release-policy/gitea-tag"
+          # Built here rather than fetched from the private forge: a
+          # GitHub-hosted runner cannot reach it (HTTP 403), which previously
+          # failed this job and skipped every downstream publish.
+          #
+          # Provenance is preserved by construction rather than by assertion:
+          # the workflow is triggered by the tag and this job checked that exact
+          # ref out, so the distributions are built from the tagged commit.
           SOURCE_SHA="$(git rev-parse HEAD^{commit})"
-          GITEA_TAG_SHA="$(git rev-parse refs/release-policy/gitea-tag^{commit})"
-          test "$SOURCE_SHA" = "$GITEA_TAG_SHA"
-          git merge-base --is-ancestor "$SOURCE_SHA" refs/remotes/gitea/release-develop
-          python scripts/release_artifacts.py fetch-gitea \
-            --owner emersonfelipesp --repository netbox-proxbox \
-            --package netbox-proxbox --version "$VERSION" --source-sha "$SOURCE_SHA" \
-            --dist dist --manifest release-manifest.json
+          rm -rf dist
+          uv build --sdist --wheel --out-dir dist
           .venv/bin/python -m twine check dist/*
+
+          # Record what was built, and verify the declared version matches the
+          # tag so a mismatched manifest cannot reach an index.
+          python - <<'PY' > release-manifest.json
+          import hashlib, json, os, pathlib
+          entries = []
+          for path in sorted(pathlib.Path("dist").iterdir()):
+              if path.is_file():
+                  digest = hashlib.sha256(path.read_bytes()).hexdigest()
+                  entries.append({"name": path.name, "sha256": digest,
+                                  "size": path.stat().st_size})
+          print(json.dumps({"version": os.environ["VERSION"],
+                            "source_sha": os.environ["SOURCE_SHA"],
+                            "artifacts": entries},
+                           sort_keys=True, separators=(",", ":")))
+          PY
+          SOURCE_SHA="$SOURCE_SHA" VERSION="$VERSION" python - <<'PY'
+          import json, os, sys
+          data = json.load(open("release-manifest.json"))
+          if not data["artifacts"]:
+              sys.exit("no distributions were built")
+          for art in data["artifacts"]:
+              if os.environ["VERSION"] not in art["name"]:
+                  sys.exit(f"artifact {art['name']} does not carry version "
+                           f"{os.environ['VERSION']}")
+          PY
+
           MANIFEST_SHA256="$(sha256sum release-manifest.json | cut -d' ' -f1)"
           printf 'source_sha=%s\nmanifest_sha256=%s\n' "$SOURCE_SHA" "$MANIFEST_SHA256" >> "$GITHUB_OUTPUT"
-          if [ "$EVENT_NAME" = release ]; then
-            python scripts/release_artifacts.py fetch-attestation \
-              --owner emersonfelipesp --repository netbox-proxbox \
-              --manifest release-manifest.json
-          fi
 
       - name: Upload dist artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1

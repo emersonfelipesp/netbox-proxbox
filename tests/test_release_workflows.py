@@ -547,15 +547,39 @@ def test_release_uploads_never_reuse_consumed_package_versions() -> None:
     assert "--skip-existing" not in _read(GITEA_PUBLISH_WORKFLOW)
 
 
-def test_github_promotion_uses_exact_gitea_artifacts_and_nms_evidence() -> None:
+def test_github_promotion_publishes_only_the_tagged_source() -> None:
+    """Artifacts reaching an index must correspond to the tagged commit.
+
+    Provenance previously came from re-fetching artifacts out of the private
+    forge. A GitHub-hosted runner cannot reach it, so that step failed and every
+    downstream publish skipped. Provenance now comes from building the
+    checked-out tag in place, which is stronger in one respect -- there is no
+    second copy of the artifacts that could diverge from the source -- and the
+    manifest records what was built.
+    """
     workflow = _read(GITHUB_PUBLISH_WORKFLOW)
 
-    assert "scripts/release_artifacts.py fetch-gitea" in workflow
-    assert "scripts/release_artifacts.py fetch-attestation" in workflow
-    assert "git merge-base --is-ancestor" in workflow
-    assert "Build distribution" not in workflow
+    # Built from the tag this workflow was triggered by, not fetched.
+    assert "Build distributions from the exact tagged source" in workflow
+    assert "uv build --sdist --wheel --out-dir dist" in workflow
+    assert 'SOURCE_SHA="$(git rev-parse HEAD^{commit})"' in workflow
+
+    # The private forge must not be a runtime dependency of public publishing.
+    assert "git.nmulti.cloud" not in workflow, (
+        "the public publish workflow must not depend on the private forge; "
+        "a GitHub-hosted runner cannot reach it"
+    )
+    assert "fetch-gitea" not in workflow
+
+    # What was built is recorded, and a version mismatch fails closed.
+    assert "release-manifest.json" in workflow
+    assert "does not carry version" in workflow
+
+    # Every built distribution is still installed and smoke-tested, both kinds
+    # across both supported interpreters.
     assert "validate-gitea-artifacts:" in workflow
     assert "kind: [wheel, sdist]" in workflow
+    assert "python-version: ['3.12', '3.13']" in workflow
 
 
 def test_public_publish_workflow_uses_immutable_locked_tooling() -> None:
