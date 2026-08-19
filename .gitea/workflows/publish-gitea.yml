@@ -1,32 +1,57 @@
-name: Gitea Package Registry — Publish
+name: Gitea Release — Build Control Request
 
 on:
   push:
     tags:
       - "v*"
 
-permissions:
-  contents: read
-
 concurrency:
-  group: private-package-${{ github.repository }}-${{ github.ref }}
+  group: release-request-${{ github.repository }}
   cancel-in-progress: false
 
 jobs:
   validate-source:
     name: Validate canonical release source
-    runs-on: ci-untrusted-python312
+    runs-on: ci-release-netbox-proxbox
+    permissions:
+      actions: read
+      contents: read
     outputs:
-      is_rc: ${{ steps.policy.outputs.is_rc }}
       source_sha: ${{ steps.policy.outputs.source_sha }}
       tag: ${{ steps.policy.outputs.tag }}
       version: ${{ steps.policy.outputs.version }}
     steps:
-      - name: Checkout release source without persisted credentials
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-          persist-credentials: false
+      - name: Checkout exact release source with the image-baked Gitea client
+        env:
+          GITEA_JOB_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -z "$(find . -mindepth 1 -maxdepth 1 -print -quit)"
+          /usr/local/bin/nmc-gitea-checkout \
+            --repository "$GITHUB_REPOSITORY" --ref "$GITHUB_REF" \
+            --sha "$GITHUB_SHA" --destination .
+
+      - name: Prove exact accepted release runner before source validation
+        env:
+          GITEA_API_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test -f scripts/gitea_release_runner_gate.py
+          test ! -L scripts/gitea_release_runner_gate.py
+          test -f .gitea/release-runner-acceptance.json
+          test ! -L .gitea/release-runner-acceptance.json
+          printf '%s  %s\n' \
+            69b9e15913f9530a5427d85736cb95a30197a54fc09b2ce36d0afeabd5a506cd \
+            scripts/gitea_release_runner_gate.py | sha256sum --check --strict
+          printf '%s  %s\n' \
+            ece0ee3975949f7316a25ca57d87ec5d82894c87fdbd684113def9e288d074e7 \
+            .gitea/release-runner-acceptance.json | sha256sum --check --strict
+          python3 -I scripts/gitea_release_runner_gate.py \
+            --acceptance .gitea/release-runner-acceptance.json \
+            --owner emersonfelipesp --repository netbox-proxbox \
+            --run-id "$GITHUB_RUN_ID" \
+            --job-name "Validate canonical release source" \
+            --source-sha "$(git rev-parse HEAD^{commit})"
 
       - name: Bind tag, version, canonical develop, and successful CI
         id: policy
@@ -35,6 +60,7 @@ jobs:
           TAG: ${{ github.ref_name }}
         run: |
           set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
           case "$TAG" in
             v[0-9]*.[0-9]*.[0-9]* | v[0-9]*.[0-9]*.[0-9]*rc[0-9]* | v[0-9]*.[0-9]*.[0-9]*.post[0-9]*) ;;
             *) echo "Invalid release tag: $TAG"; exit 1 ;;
@@ -47,7 +73,7 @@ jobs:
           test "$SOURCE_SHA" = "$DEVELOP_SHA"
           test "$SOURCE_SHA" = "$(git rev-parse HEAD^{commit})"
           VERSION="${TAG#v}"
-          python3 - "$VERSION" <<'PY'
+          python3 -I - "$VERSION" <<'PY'
           import ast
           import pathlib
           import re
@@ -74,430 +100,891 @@ jobs:
           if values != [version]:
               raise SystemExit("Runtime plugin version differs from tag")
           PY
-          python3 scripts/gitea_ci_gate.py \
+          test -f scripts/gitea_ci_gate.py
+          test ! -L scripts/gitea_ci_gate.py
+          printf '%s  %s\n' \
+            1e7f4270ae0d9abc18ea674c71a682a734f448628895e96915fb808d5da41f11 \
+            scripts/gitea_ci_gate.py | sha256sum --check --strict
+          python3 -I scripts/gitea_ci_gate.py \
             --owner emersonfelipesp --repository netbox-proxbox \
             --source-sha "$SOURCE_SHA" --trusted-actor emersonfelipesp \
             --required-context "CI / Static checks and mocked regressions (push)" \
             --required-context "CI / Strict docs and package validation (push)"
-          printf 'tag=%s\nversion=%s\nsource_sha=%s\n' "$TAG" "$VERSION" "$SOURCE_SHA" >> "$GITHUB_OUTPUT"
-          case "$VERSION" in *rc[0-9]*) echo 'is_rc=true' >> "$GITHUB_OUTPUT" ;; *) echo 'is_rc=false' >> "$GITHUB_OUTPUT" ;; esac
+          printf 'tag=%s\nversion=%s\nsource_sha=%s\n' \
+            "$TAG" "$VERSION" "$SOURCE_SHA" >> "$GITHUB_OUTPUT"
 
-  build-candidate:
-    name: Build credential-free candidate
+  build-request:
+    name: Build exact publisher-credential-free release-control request
     needs: validate-source
-    runs-on: ci-untrusted-python312
+    runs-on: ci-release-netbox-proxbox
+    permissions:
+      actions: read
+      contents: read
     steps:
-      - name: Checkout validated source
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ needs.validate-source.outputs.source_sha }}
-          persist-credentials: false
-
-      - name: Install checksum-verified uv and managed Python
+      - name: Fetch validated public source without a job token
         env:
-          BOOTSTRAP_UV_ROOT: ${{ runner.temp }}/netbox-proxbox-uv-build-${{ github.run_id }}-${{ github.run_attempt }}
-          BOOTSTRAP_PYTHON_ROOT: ${{ runner.temp }}/netbox-proxbox-python-build-${{ github.run_id }}-${{ github.run_attempt }}
-          BOOTSTRAP_CACHE_ROOT: ${{ runner.temp }}/netbox-proxbox-uv-cache-build-${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          set -euo pipefail
-          test ! -e "$BOOTSTRAP_UV_ROOT"
-          test ! -e "$BOOTSTRAP_PYTHON_ROOT"
-          test ! -e "$BOOTSTRAP_CACHE_ROOT"
-          mkdir -m 0700 "$BOOTSTRAP_UV_ROOT"
-          mkdir -m 0700 "$BOOTSTRAP_PYTHON_ROOT"
-          mkdir -m 0700 "$BOOTSTRAP_CACHE_ROOT"
-          curl --fail --location --proto '=https' --tlsv1.2 \
-            --output "$BOOTSTRAP_UV_ROOT/uv.tar.gz" \
-            https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-unknown-linux-gnu.tar.gz
-          printf '%s  %s\n' \
-            e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224 \
-            "$BOOTSTRAP_UV_ROOT/uv.tar.gz" | sha256sum --check --strict
-          tar --extract --gzip --file "$BOOTSTRAP_UV_ROOT/uv.tar.gz" \
-            --directory "$BOOTSTRAP_UV_ROOT" --strip-components=1 \
-            uv-x86_64-unknown-linux-gnu/uv
-          chmod 0555 "$BOOTSTRAP_UV_ROOT/uv"
-          printf 'UV_BIN=%s\n' "$BOOTSTRAP_UV_ROOT/uv" >> "$GITHUB_ENV"
-          printf 'UV_PYTHON_INSTALL_DIR=%s\n' "$BOOTSTRAP_PYTHON_ROOT" >> "$GITHUB_ENV"
-          while IFS='=' read -r VARIABLE _; do
-            case "$VARIABLE" in UV_*) unset "$VARIABLE" ;; esac
-          done < <(env)
-          "$BOOTSTRAP_UV_ROOT/uv" python install \
-            --no-config \
-            --cache-dir "$BOOTSTRAP_CACHE_ROOT" \
-            --install-dir "$BOOTSTRAP_PYTHON_ROOT" \
-            --managed-python \
-            --no-bin \
-            3.12.13
-
-      - name: Prepare locked release tools
-        env:
-          BUILD_ROOT: ${{ runner.temp }}/netbox-proxbox-build-${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          set -euo pipefail
-          umask 077
-          PUBLISHER_UV="$UV_BIN"
-          MANAGED_PYTHON_ROOT="$UV_PYTHON_INSTALL_DIR"
-          while IFS='=' read -r VARIABLE _; do
-            case "$VARIABLE" in UV_*) unset "$VARIABLE" ;; esac
-          done < <(env)
-          test ! -e "$BUILD_ROOT"
-          mkdir -p "$BUILD_ROOT"
-          UV_PYTHON_INSTALL_DIR="$MANAGED_PYTHON_ROOT" \
-            UV_PROJECT_ENVIRONMENT="$BUILD_ROOT/venv" \
-            "$PUBLISHER_UV" sync \
-            --no-config \
-            --cache-dir "$BUILD_ROOT/uv-cache" \
-            --managed-python \
-            --no-python-downloads \
-            --python 3.12.13 \
-            --locked --only-group publish --no-install-project
-          test "$("$PUBLISHER_UV" --version)" = "uv 0.11.28 (x86_64-unknown-linux-gnu)"
-          test "$("$BUILD_ROOT/venv/bin/python" -c 'import platform; print(platform.python_version())')" = 3.12.13
-          case "$(readlink -f "$BUILD_ROOT/venv/bin/python")" in
-            "$MANAGED_PYTHON_ROOT"/*) ;;
-            *) exit 1 ;;
-          esac
-
-      - name: Build and bind exact artifacts
-        env:
-          BUILD_ROOT: ${{ runner.temp }}/netbox-proxbox-build-${{ github.run_id }}-${{ github.run_attempt }}
           SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          test -z "${GITHUB_TOKEN:-}"
+          test -z "${GITEA_TOKEN:-}"
+          test -z "$(find . -mindepth 1 -maxdepth 1 -print -quit)"
+          export GIT_CONFIG_NOSYSTEM=1
+          export GIT_CONFIG_GLOBAL=/dev/null
+          git init --quiet
+          git remote add origin https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox.git
+          git fetch --quiet --force --no-tags --depth=1 origin "$SOURCE_SHA"
+          git -c advice.detachedHead=false checkout --quiet --detach FETCH_HEAD
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test -z "$(git status --porcelain=v1 --untracked-files=all)"
+
+      - name: Prove exact accepted release runner before candidate execution
+        env:
+          GITEA_API_TOKEN: ${{ github.token }}
+          SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          test -f scripts/gitea_release_runner_gate.py
+          test ! -L scripts/gitea_release_runner_gate.py
+          test -f .gitea/release-runner-acceptance.json
+          test ! -L .gitea/release-runner-acceptance.json
+          printf '%s  %s\n' \
+            69b9e15913f9530a5427d85736cb95a30197a54fc09b2ce36d0afeabd5a506cd \
+            scripts/gitea_release_runner_gate.py | sha256sum --check --strict
+          printf '%s  %s\n' \
+            ece0ee3975949f7316a25ca57d87ec5d82894c87fdbd684113def9e288d074e7 \
+            .gitea/release-runner-acceptance.json | sha256sum --check --strict
+          python3 -I scripts/gitea_release_runner_gate.py \
+            --acceptance .gitea/release-runner-acceptance.json \
+            --owner emersonfelipesp --repository netbox-proxbox \
+            --run-id "$GITHUB_RUN_ID" \
+            --job-name "Build exact publisher-credential-free release-control request" \
+            --source-sha "$SOURCE_SHA"
+
+      - name: Bind the image-baked offline release toolchain
+        run: |
+          set -euo pipefail
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test ! -L /usr/local/bin/python3
+          test ! -L /usr/local/bin/uv
+          test "$(stat -c '%u:%g:%a:%h:%F' /usr/local/bin/python3)" = '0:0:755:1:regular file'
+          test "$(stat -c '%u:%g:%a:%h:%F' /usr/local/bin/uv)" = '0:0:755:1:regular file'
+          test "$(/usr/local/bin/python3 -I -c 'import platform; print(platform.python_version())')" = 3.12.14
+          test "$(/usr/local/bin/uv --version)" = "uv 0.12.5 (x86_64-unknown-linux-gnu)"
+          printf '%s  %s\n' \
+            69b19f4dc09452bdc01e1ac469c92116e7be7abbced766fd3a8109b2df1faa99 \
+            uv.lock | sha256sum --check --strict
+          test "$(cat /opt/nmc-release/netbox-proxbox/uv.lock.sha256)" = \
+            69b19f4dc09452bdc01e1ac469c92116e7be7abbced766fd3a8109b2df1faa99
+          test -d /opt/nmc-release/netbox-proxbox/publish-wheels
+          test ! -L /opt/nmc-release/netbox-proxbox/publish-wheels
+          /usr/local/bin/nmc-verify-release-wheelhouse \
+            --wheelhouse /opt/nmc-release/netbox-proxbox/publish-wheels \
+            --manifest /opt/nmc-release/netbox-proxbox/publish-wheels.sha256
+          printf '%s\n' \
+            'UV_BIN=/usr/local/bin/uv' \
+            'UV_PYTHON=/usr/local/bin/python3' \
+            'NMC_PUBLISH_WHEELHOUSE=/opt/nmc-release/netbox-proxbox/publish-wheels' \
+            >> "$GITHUB_ENV"
+
+      - name: Build artifacts across a token-free UID boundary
+        env:
+          BUILD_ROOT: /nmc-build/netbox-proxbox-${{ github.run_id }}-${{ github.run_attempt }}
+          SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
+          TAG: ${{ needs.validate-source.outputs.tag }}
           VERSION: ${{ needs.validate-source.outputs.version }}
         run: |
           set -euo pipefail
+          umask 077
+          test "$GITHUB_RUN_ATTEMPT" = 1
+          test ! -e "$BUILD_ROOT"
+          test ! -L "$BUILD_ROOT"
+          python3 -I - \
+            "$BUILD_ROOT" "$UV_BIN" "$UV_PYTHON" "$NMC_PUBLISH_WHEELHOUSE" \
+            "$SOURCE_SHA" "$TAG" "$VERSION" \
+            "$GITHUB_RUN_ATTEMPT" <<'PY'
+          import base64
+          import ctypes
+          import errno
+          import os
+          from pathlib import Path
+          import resource
+          import selectors
+          import shutil
+          import signal
+          import stat
+          import struct
+          import subprocess
+          import sys
+          import time
+
+          BUILD_UID = 65532
+          BUILD_GID = 65532
+          CGROUP_MEMORY_MAX = 2 * 1024 * 1024 * 1024
+          CGROUP_PIDS_MAX = 64
+          TMPFS_BYTES_MAX = 1024 * 1024 * 1024
+          TMPFS_INODES_MAX = 50000
+          build_root = Path(sys.argv[1]).resolve()
+          uv_bin = Path(sys.argv[2]).resolve(strict=True)
+          python_bin = Path(sys.argv[3]).resolve(strict=True)
+          publish_wheelhouse = Path(sys.argv[4]).resolve(strict=True)
+          source_sha, tag, version, run_attempt = sys.argv[5:]
+
+          if os.geteuid() != 0:
+              raise SystemExit("Token boundary requires a root job container")
+          if run_attempt != "1":
+              raise SystemExit("Release builds must be first-attempt jobs")
+          if build_root.exists() or build_root.is_symlink():
+              raise SystemExit("Build root already exists")
+
+          def positive_limit(path: Path, label: str) -> int:
+              try:
+                  raw = path.read_text(encoding="ascii").strip()
+                  value = int(raw)
+              except (OSError, UnicodeError, ValueError) as exc:
+                  raise SystemExit(f"Hard {label} cgroup limit is unavailable") from exc
+              if value <= 0:
+                  raise SystemExit(f"Hard {label} cgroup limit is invalid")
+              return value
+
+          def nonnegative_limit(path: Path, label: str) -> int:
+              try:
+                  raw = path.read_text(encoding="ascii").strip()
+                  value = int(raw)
+              except (OSError, UnicodeError, ValueError) as exc:
+                  raise SystemExit(f"{label} cgroup value is unavailable") from exc
+              if value < 0:
+                  raise SystemExit(f"{label} cgroup value is invalid")
+              return value
+
+          def verify_kernel_quotas(root: Path) -> None:
+              quota_root = Path("/nmc-build")
+              if root.parent != quota_root or not quota_root.is_dir():
+                  raise SystemExit("Build root is outside the hard quota mount")
+              mount_rows = []
+              for row in Path("/proc/self/mountinfo").read_text(encoding="utf-8").splitlines():
+                  fields = row.split()
+                  try:
+                      separator = fields.index("-")
+                  except ValueError:
+                      continue
+                  if len(fields) > separator + 1 and fields[4] == str(quota_root):
+                      mount_rows.append(fields[separator + 1])
+              if mount_rows != ["tmpfs"]:
+                  raise SystemExit("Build root lacks an exact tmpfs quota mount")
+              filesystem = os.statvfs(quota_root)
+              total_bytes = filesystem.f_blocks * filesystem.f_frsize
+              if not 0 < total_bytes <= TMPFS_BYTES_MAX:
+                  raise SystemExit("Build tmpfs byte quota is unavailable")
+              if not 0 < filesystem.f_files <= TMPFS_INODES_MAX:
+                  raise SystemExit("Build tmpfs inode quota is unavailable")
+
+              cgroup_root = Path("/sys/fs/cgroup")
+              if not (cgroup_root / "cgroup.controllers").is_file():
+                  raise SystemExit("Unified cgroup v2 limits are unavailable")
+              cpu_fields = (cgroup_root / "cpu.max").read_text(encoding="ascii").split()
+              if len(cpu_fields) != 2 or cpu_fields[0] == "max":
+                  raise SystemExit("Hard CPU cgroup limit is unavailable")
+              try:
+                  cpu_quota, cpu_period = map(int, cpu_fields)
+              except ValueError as exc:
+                  raise SystemExit("Hard CPU cgroup limit is invalid") from exc
+              if cpu_quota <= 0 or cpu_period <= 0 or cpu_quota > cpu_period:
+                  raise SystemExit("Hard CPU cgroup limit exceeds one CPU")
+              if positive_limit(cgroup_root / "memory.max", "memory") > CGROUP_MEMORY_MAX:
+                  raise SystemExit("Hard memory cgroup limit exceeds policy")
+              if nonnegative_limit(cgroup_root / "memory.swap.max", "swap") != 0:
+                  raise SystemExit("Hard cgroup policy must disable swap")
+              if positive_limit(cgroup_root / "pids.max", "PID") > CGROUP_PIDS_MAX:
+                  raise SystemExit("Hard PID cgroup limit exceeds policy")
+
+          verify_kernel_quotas(build_root)
+
+          def processes_for_uid(uid: int) -> list[int]:
+              matches: list[int] = []
+              for status_path in Path("/proc").glob("[0-9]*/status"):
+                  try:
+                      rows = status_path.read_text(encoding="utf-8").splitlines()
+                  except (FileNotFoundError, ProcessLookupError):
+                      continue
+                  except PermissionError as exc:
+                      raise SystemExit("Cannot inspect reserved build UID") from exc
+                  uid_row = next((row for row in rows if row.startswith("Uid:")), "")
+                  fields = uid_row.split()
+                  if len(fields) >= 2 and fields[1] == str(uid):
+                      matches.append(int(status_path.parent.name))
+              return matches
+
+          if processes_for_uid(BUILD_UID):
+              raise SystemExit("Reserved build UID is already active")
+
+          source_root = build_root / "source"
+          home_root = build_root / "home"
+          temp_root = build_root / "tmp"
+          ignored = shutil.ignore_patterns(
+              ".git", ".pytest_cache", ".ruff_cache", ".venv", "dist", "release-transfer"
+          )
+          for source_path in Path.cwd().rglob("*"):
+              if source_path.is_symlink():
+                  raise SystemExit("Source symlinks are forbidden")
+          shutil.copytree(Path.cwd(), source_root, ignore=ignored)
+          home_root.mkdir(mode=0o700)
+          temp_root.mkdir(mode=0o700)
+
+          def checked_tree(root: Path) -> tuple[Path, list[Path]]:
+              resolved_root = root.resolve(strict=True)
+              candidates = [resolved_root, *resolved_root.rglob("*")]
+              for candidate in candidates:
+                  if candidate.is_symlink():
+                      target = candidate.resolve(strict=True)
+                      if not target.is_relative_to(resolved_root):
+                          raise SystemExit("External tree symlinks are forbidden")
+              return resolved_root, candidates
+
+          def hand_tree_to_build_user(root: Path) -> None:
+              _, candidates = checked_tree(root)
+              for candidate in candidates:
+                  os.chown(candidate, BUILD_UID, BUILD_GID, follow_symlinks=False)
+
+          def expose_read_only_tree(root: Path) -> None:
+              _, candidates = checked_tree(root)
+              for candidate in candidates:
+                  if candidate.is_symlink():
+                      continue
+                  mode = candidate.stat(follow_symlinks=False).st_mode
+                  if stat.S_ISDIR(mode):
+                      os.chmod(candidate, 0o555, follow_symlinks=False)
+                  elif stat.S_ISREG(mode):
+                      read_mode = 0o555 if mode & 0o111 else 0o444
+                      os.chmod(candidate, read_mode, follow_symlinks=False)
+                  else:
+                      raise SystemExit("Python runtime contains a special file")
+
+          hand_tree_to_build_user(build_root)
+          if not python_bin.is_file() or python_bin.is_symlink():
+              raise SystemExit("Image-baked Python interpreter is unsafe")
+          expose_read_only_tree(publish_wheelhouse)
+          os.chmod(uv_bin.parent, 0o555)
+          os.chmod(uv_bin, 0o555)
+
+          safe_env = {
+              "BOUNDARY_PARENT_PID": str(os.getpid()),
+              "BUILD_ROOT": str(build_root),
+              "HOME": str(home_root),
+              "LANG": "C",
+              "LC_ALL": "C",
+              "PATH": "/usr/local/bin:/usr/bin:/bin",
+              "PYTHONNOUSERSITE": "1",
+              "RUN_ATTEMPT": run_attempt,
+              "SOURCE_SHA": source_sha,
+              "TAG": tag,
+              "TMPDIR": str(temp_root),
+              "UV_BIN": str(uv_bin),
+              "UV_PYTHON": str(python_bin),
+              "NMC_PUBLISH_WHEELHOUSE": str(publish_wheelhouse),
+              "VERSION": version,
+          }
+          command = r'''
+          set -eu
+          printf '%s\n' '::set-env name=NMC_RELEASE_BOUNDARY_INJECTED::yes'
+          printf '%s\n' '::add-path::/tmp/nmc-release-boundary-injected'
+          test "$RUN_ATTEMPT" = 1
+          test -z "${GITHUB_TOKEN:-}"
+          test -z "${GITEA_TOKEN:-}"
+          test -z "${ACTIONS_RUNTIME_TOKEN:-}"
+          test -z "${ACTIONS_ID_TOKEN_REQUEST_TOKEN:-}"
+          test ! -r "/proc/$BOUNDARY_PARENT_PID/environ"
+          "$UV_PYTHON" -c 'import ctypes, errno, socket
+          try:
+              socket.socket()
+          except PermissionError as exc:
+              assert exc.errno == errno.EPERM
+          else:
+              raise SystemExit("candidate network syscall remained available")
+          libc = ctypes.CDLL(None, use_errno=True)
+          for syscall_number, arguments in (
+              (425, (ctypes.c_uint(1), ctypes.c_void_p())),
+              (
+                  0x40000000 | 41,
+                  (ctypes.c_int(socket.AF_INET), ctypes.c_int(socket.SOCK_STREAM), ctypes.c_int(0)),
+              ),
+          ):
+              ctypes.set_errno(0)
+              result = libc.syscall(ctypes.c_long(syscall_number), *arguments)
+              assert result == -1 and ctypes.get_errno() == errno.EPERM'
+          cd "$BUILD_ROOT/source"
+          UV_PROJECT_ENVIRONMENT="$BUILD_ROOT/venv" \
+            "$UV_BIN" sync --no-config --cache-dir "$BUILD_ROOT/uv-cache" \
+            --offline --no-index --find-links "$NMC_PUBLISH_WHEELHOUSE" \
+            --no-python-downloads --python "$UV_PYTHON" \
+            --locked --only-group publish --no-install-project
           "$BUILD_ROOT/venv/bin/python" -m build --no-isolation --outdir dist
           "$BUILD_ROOT/venv/bin/python" -m twine check dist/*
           "$BUILD_ROOT/venv/bin/python" scripts/release_artifacts.py manifest \
             --dist dist --package netbox-proxbox --version "$VERSION" \
             --source-sha "$SOURCE_SHA" --manifest release-manifest.json
-          mkdir release-transfer
-          cp dist/*.whl dist/*.tar.gz release-manifest.json \
-            scripts/release_artifacts.py release-transfer/
+          '''
 
-      - name: Transfer bounded candidate
-        uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de # v3.2.2-node20
-        with:
-          name: private-release-${{ github.run_id }}-${{ github.run_attempt }}
-          path: release-transfer
-          if-no-files-found: error
-          retention-days: 1
+          def restrict_writes_to_build_root(root: Path) -> None:
+              # Landlock ABI 3 is the first version that also mediates truncate(2).
+              if os.uname().machine != "x86_64":
+                  raise OSError(errno.ENOTSUP, "Landlock syscall mapping requires x86-64")
+              create_ruleset = 444
+              add_rule = 445
+              restrict_self = 446
+              create_ruleset_version = 1
+              rule_path_beneath = 1
+              write_file = 1 << 1
+              remove_dir = 1 << 4
+              remove_file = 1 << 5
+              make_char = 1 << 6
+              make_dir = 1 << 7
+              make_reg = 1 << 8
+              make_sock = 1 << 9
+              make_fifo = 1 << 10
+              make_block = 1 << 11
+              make_sym = 1 << 12
+              refer = 1 << 13
+              truncate = 1 << 14
+              write_access = (
+                  write_file
+                  | remove_dir
+                  | remove_file
+                  | make_char
+                  | make_dir
+                  | make_reg
+                  | make_sock
+                  | make_fifo
+                  | make_block
+                  | make_sym
+                  | refer
+                  | truncate
+              )
 
-  verify-candidate:
-    name: Verify candidate without package authority
-    needs: [validate-source, build-candidate]
-    runs-on: ci-untrusted-python312
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - name: Fetch validated publisher tool anonymously
+              class RulesetAttr(ctypes.Structure):
+                  _fields_ = [("handled_access_fs", ctypes.c_uint64)]
+
+              libc = ctypes.CDLL(None, use_errno=True)
+              libc.syscall.restype = ctypes.c_long
+
+              def checked_syscall(number: int, *args: object) -> int:
+                  result = libc.syscall(number, *args)
+                  if result < 0:
+                      error_number = ctypes.get_errno()
+                      raise OSError(error_number, os.strerror(error_number))
+                  return int(result)
+
+              abi = checked_syscall(
+                  create_ruleset,
+                  ctypes.c_void_p(),
+                  0,
+                  create_ruleset_version,
+              )
+              if abi < 3:
+                  raise OSError(errno.ENOTSUP, "Landlock ABI 3 or newer is required")
+
+              ruleset_attr = RulesetAttr(handled_access_fs=write_access)
+              ruleset_fd = checked_syscall(
+                  create_ruleset,
+                  ctypes.byref(ruleset_attr),
+                  ctypes.sizeof(ruleset_attr),
+                  0,
+              )
+              root_fd = os.open(root, os.O_PATH | os.O_CLOEXEC)
+              try:
+                  path_rule_raw = struct.pack("=Qi", write_access, root_fd)
+                  path_rule = ctypes.create_string_buffer(
+                      path_rule_raw,
+                      len(path_rule_raw),
+                  )
+                  checked_syscall(
+                      add_rule,
+                      ruleset_fd,
+                      rule_path_beneath,
+                      path_rule,
+                      0,
+                  )
+                  if libc.prctl(38, 1, 0, 0, 0) != 0:  # PR_SET_NO_NEW_PRIVS
+                      error_number = ctypes.get_errno()
+                      raise OSError(error_number, os.strerror(error_number))
+                  checked_syscall(restrict_self, ruleset_fd, 0)
+              finally:
+                  os.close(root_fd)
+                  os.close(ruleset_fd)
+
+          def deny_network_syscalls() -> None:
+              # No socket or io_uring operation may be used by candidate code.
+              if os.uname().machine != "x86_64":
+                  raise OSError(errno.ENOTSUP, "Seccomp mapping requires x86-64")
+
+              class SockFilter(ctypes.Structure):
+                  _fields_ = [
+                      ("code", ctypes.c_ushort),
+                      ("jt", ctypes.c_ubyte),
+                      ("jf", ctypes.c_ubyte),
+                      ("k", ctypes.c_uint32),
+                  ]
+
+              class SockFprog(ctypes.Structure):
+                  _fields_ = [
+                      ("length", ctypes.c_ushort),
+                      ("filters", ctypes.POINTER(SockFilter)),
+                  ]
+
+              instructions = [
+                  SockFilter(0x20, 0, 0, 4),
+                  SockFilter(0x15, 1, 0, 0xC000003E),
+                  SockFilter(0x06, 0, 0, 0x80000000),
+                  SockFilter(0x20, 0, 0, 0),
+                  # Reject the x32 ABI tag before any syscall allow path.
+                  SockFilter(0x45, 0, 1, 0x40000000),
+                  SockFilter(0x06, 0, 0, 0x00050000 | errno.EPERM),
+              ]
+              for syscall_number in (
+                  41, 42, 43, 44, 45, 46, 47, 48, 49,
+                  50, 51, 52, 53, 54, 55, 288, 299, 307,
+                  425, 426, 427,
+              ):
+                  instructions.extend(
+                      (
+                          SockFilter(0x15, 0, 1, syscall_number),
+                          SockFilter(0x06, 0, 0, 0x00050000 | errno.EPERM),
+                      )
+                  )
+              instructions.append(SockFilter(0x06, 0, 0, 0x7FFF0000))
+              filters = (SockFilter * len(instructions))(*instructions)
+              program = SockFprog(len(instructions), filters)
+              libc = ctypes.CDLL(None, use_errno=True)
+              if libc.prctl(38, 1, 0, 0, 0) != 0:  # PR_SET_NO_NEW_PRIVS
+                  error_number = ctypes.get_errno()
+                  raise OSError(error_number, os.strerror(error_number))
+              if libc.prctl(22, 2, ctypes.byref(program), 0, 0) != 0:
+                  error_number = ctypes.get_errno()
+                  raise OSError(error_number, os.strerror(error_number))
+
+          def drop_privileges() -> None:
+              restrict_writes_to_build_root(build_root)
+              deny_network_syscalls()
+              resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
+              resource.setrlimit(resource.RLIMIT_AS, (2 * 1024 * 1024 * 1024,) * 2)
+              resource.setrlimit(resource.RLIMIT_CPU, (900, 900))
+              resource.setrlimit(resource.RLIMIT_FSIZE, (128 * 1024 * 1024,) * 2)
+              resource.setrlimit(resource.RLIMIT_NOFILE, (256, 256))
+              resource.setrlimit(resource.RLIMIT_NPROC, (64, 64))
+              os.setgroups([])
+              os.setgid(BUILD_GID)
+              os.setuid(BUILD_UID)
+              os.umask(0o077)
+
+          def kill_remaining_build_processes() -> None:
+              for _ in range(4):
+                  pids = processes_for_uid(BUILD_UID)
+                  if not pids:
+                      return
+                  for pid in pids:
+                      try:
+                          os.kill(pid, signal.SIGKILL)
+                      except OSError as exc:
+                          if exc.errno not in {errno.ESRCH}:
+                              raise
+                  time.sleep(0.05)
+              if processes_for_uid(BUILD_UID):
+                  raise SystemExit("Untrusted build process survived cleanup")
+
+          def build_tree_usage() -> tuple[int, int]:
+              total_size = 0
+              total_entries = 0
+              for candidate in build_root.rglob("*"):
+                  metadata = candidate.lstat()
+                  total_entries += 1
+                  if stat.S_ISREG(metadata.st_mode):
+                      total_size += metadata.st_size
+              return total_size, total_entries
+
+          def process_cpu_ticks(stat_row: str) -> int:
+              # The parenthesized comm field can contain spaces and closing
+              # parentheses, so split only after its final delimiter.
+              _, delimiter, remaining = stat_row.rpartition(") ")
+              if not delimiter:
+                  raise ValueError("Malformed process stat record")
+              fields = remaining.split()
+              if len(fields) <= 14:
+                  raise ValueError("Incomplete process stat record")
+              # Include reaped descendants accumulated in cutime/cstime so a
+              # fork-and-reap loop cannot reset aggregate CPU accounting.
+              return sum(int(field) for field in fields[11:15])
+
+          def available_filesystem_bytes(root: Path) -> int:
+              usage = os.statvfs(root)
+              return usage.f_bavail * usage.f_frsize
+
+          def build_process_usage() -> tuple[int, int, float]:
+              total_rss_kib = 0
+              total_cpu_ticks = 0
+              pids = processes_for_uid(BUILD_UID)
+              for pid in pids:
+                  try:
+                      status_rows = Path(f"/proc/{pid}/status").read_text().splitlines()
+                      stat_row = Path(f"/proc/{pid}/stat").read_text()
+                  except (FileNotFoundError, PermissionError, ProcessLookupError):
+                      continue
+                  rss_row = next(
+                      (row for row in status_rows if row.startswith("VmRSS:")), ""
+                  )
+                  rss_fields = rss_row.split()
+                  if len(rss_fields) >= 2:
+                      total_rss_kib += int(rss_fields[1])
+                  total_cpu_ticks += process_cpu_ticks(stat_row)
+              clock_ticks = os.sysconf("SC_CLK_TCK")
+              return len(pids), total_rss_kib, total_cpu_ticks / clock_ticks
+
+          def cgroup_memory_usage() -> int:
+              cgroup_root = Path("/sys/fs/cgroup")
+              return nonnegative_limit(
+                  cgroup_root / "memory.current", "memory current"
+              ) + nonnegative_limit(
+                  cgroup_root / "memory.swap.current", "swap current"
+              )
+
+          process = subprocess.Popen(
+              ["/bin/sh", "-c", command],
+              cwd=source_root,
+              env=safe_env,
+              preexec_fn=drop_privileges,
+              start_new_session=True,
+              stdout=subprocess.PIPE,
+              stderr=subprocess.STDOUT,
+          )
+          output = bytearray()
+          output_limit = 1024 * 1024
+          disk_limit = 1024 * 1024 * 1024
+          baseline_available_bytes = available_filesystem_bytes(build_root)
+          deadline = time.monotonic() + 900
+          boundary_error: str | None = None
+          selector = selectors.DefaultSelector()
+          assert process.stdout is not None
+          os.set_blocking(process.stdout.fileno(), False)
+          selector.register(process.stdout, selectors.EVENT_READ)
+          try:
+              while selector.get_map():
+                  if time.monotonic() >= deadline:
+                      boundary_error = "Token-free build exceeded wall-clock limit"
+                      break
+                  events = selector.select(timeout=0.25)
+                  for key, _ in events:
+                      chunk = os.read(key.fd, 65536)
+                      if not chunk:
+                          selector.unregister(key.fileobj)
+                          continue
+                      if len(output) + len(chunk) > output_limit:
+                          boundary_error = "Token-free build output exceeded limit"
+                          break
+                      output.extend(chunk)
+                  if boundary_error is not None:
+                      break
+                  try:
+                      disk_bytes, entries = build_tree_usage()
+                      available_bytes = available_filesystem_bytes(build_root)
+                      pids, rss_kib, cpu_seconds = build_process_usage()
+                      memory_bytes = cgroup_memory_usage()
+                  except (FileNotFoundError, PermissionError, ProcessLookupError):
+                      boundary_error = "Token-free build filesystem changed"
+                      break
+                  consumed_bytes = max(0, baseline_available_bytes - available_bytes)
+                  if disk_bytes > disk_limit or consumed_bytes > disk_limit or entries > 50000:
+                      boundary_error = "Token-free build exceeded disk quota"
+                      break
+                  if (
+                      pids > 64
+                      or rss_kib > 2 * 1024 * 1024
+                      or memory_bytes > CGROUP_MEMORY_MAX
+                      or cpu_seconds > 900
+                  ):
+                      boundary_error = "Token-free build exceeded process quota"
+                      break
+                  if process.poll() is not None and not events:
+                      break
+              if boundary_error is not None:
+                  try:
+                      os.killpg(process.pid, signal.SIGKILL)
+                  except OSError as exc:
+                      if exc.errno not in {errno.ESRCH}:
+                          raise
+              return_code = process.wait(timeout=10)
+          finally:
+              selector.close()
+              try:
+                  os.killpg(process.pid, signal.SIGKILL)
+              except OSError as exc:
+                  if exc.errno not in {errno.ESRCH}:
+                      raise
+              kill_remaining_build_processes()
+          if boundary_error is not None or return_code != 0:
+              encoded_output = base64.b64encode(bytes(output)).decode("ascii")
+              if encoded_output:
+                  print(f"candidate-output-base64:{encoded_output}", file=sys.stderr)
+              raise SystemExit(boundary_error or "Token-free build failed")
+          PY
+
+      - name: Bind exact artifacts into the control request
         env:
-          TOOL_SHA: ${{ needs.validate-source.outputs.source_sha }}
-        run: |
-          set -euo pipefail
-          test ! -e publisher-tool
-          git init publisher-tool
-          git -C publisher-tool remote add origin \
-            https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox.git
-          git -C publisher-tool fetch --force --no-tags origin "$TOOL_SHA"
-          git -C publisher-tool checkout --detach FETCH_HEAD
-          test "$(git -C publisher-tool rev-parse HEAD)" = "$TOOL_SHA"
-
-      - name: Install checksum-verified uv and managed Python
-        env:
-          BOOTSTRAP_UV_ROOT: ${{ runner.temp }}/netbox-proxbox-uv-publish-${{ github.run_id }}-${{ github.run_attempt }}
-          BOOTSTRAP_PYTHON_ROOT: ${{ runner.temp }}/netbox-proxbox-python-publish-${{ github.run_id }}-${{ github.run_attempt }}
-          BOOTSTRAP_CACHE_ROOT: ${{ runner.temp }}/netbox-proxbox-uv-cache-publish-${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          set -euo pipefail
-          test ! -e "$BOOTSTRAP_UV_ROOT"
-          test ! -e "$BOOTSTRAP_PYTHON_ROOT"
-          test ! -e "$BOOTSTRAP_CACHE_ROOT"
-          mkdir -m 0700 "$BOOTSTRAP_UV_ROOT"
-          mkdir -m 0700 "$BOOTSTRAP_PYTHON_ROOT"
-          mkdir -m 0700 "$BOOTSTRAP_CACHE_ROOT"
-          curl --fail --location --proto '=https' --tlsv1.2 \
-            --output "$BOOTSTRAP_UV_ROOT/uv.tar.gz" \
-            https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-unknown-linux-gnu.tar.gz
-          printf '%s  %s\n' \
-            e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224 \
-            "$BOOTSTRAP_UV_ROOT/uv.tar.gz" | sha256sum --check --strict
-          tar --extract --gzip --file "$BOOTSTRAP_UV_ROOT/uv.tar.gz" \
-            --directory "$BOOTSTRAP_UV_ROOT" --strip-components=1 \
-            uv-x86_64-unknown-linux-gnu/uv
-          chmod 0555 "$BOOTSTRAP_UV_ROOT/uv"
-          printf 'UV_BIN=%s\n' "$BOOTSTRAP_UV_ROOT/uv" >> "$GITHUB_ENV"
-          printf 'UV_PYTHON_INSTALL_DIR=%s\n' "$BOOTSTRAP_PYTHON_ROOT" >> "$GITHUB_ENV"
-          while IFS='=' read -r VARIABLE _; do
-            case "$VARIABLE" in UV_*) unset "$VARIABLE" ;; esac
-          done < <(env)
-          "$BOOTSTRAP_UV_ROOT/uv" python install \
-            --no-config \
-            --cache-dir "$BOOTSTRAP_CACHE_ROOT" \
-            --install-dir "$BOOTSTRAP_PYTHON_ROOT" \
-            --managed-python \
-            --no-bin \
-            3.12.13
-
-      - name: Download bounded candidate
-        uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b # v3.1.0-node20
-        with:
-          name: private-release-${{ github.run_id }}-${{ github.run_attempt }}
-          path: release-transfer
-
-      - name: Install locked publisher toolchain without package authority
-        env:
-          PUBLISH_ROOT: ${{ runner.temp }}/netbox-proxbox-publish-${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          set -euo pipefail
-          umask 077
-          PUBLISHER_UV="$UV_BIN"
-          MANAGED_PYTHON_ROOT="$UV_PYTHON_INSTALL_DIR"
-          while IFS='=' read -r VARIABLE _; do
-            case "$VARIABLE" in UV_*) unset "$VARIABLE" ;; esac
-          done < <(env)
-          test ! -e "$PUBLISH_ROOT"
-          mkdir -p "$PUBLISH_ROOT"
-          UV_PYTHON_INSTALL_DIR="$MANAGED_PYTHON_ROOT" \
-            UV_PROJECT_ENVIRONMENT="$PUBLISH_ROOT/venv" \
-            "$PUBLISHER_UV" sync \
-            --directory publisher-tool \
-            --no-config \
-            --cache-dir "$PUBLISH_ROOT/uv-cache" \
-            --managed-python \
-            --no-python-downloads \
-            --python 3.12.13 \
-            --locked --only-group publish --no-install-project
-          test "$("$PUBLISHER_UV" --version)" = "uv 0.11.28 (x86_64-unknown-linux-gnu)"
-          test "$("$PUBLISH_ROOT/venv/bin/python" -c 'import platform; print(platform.python_version())')" = 3.12.13
-          case "$(readlink -f "$PUBLISH_ROOT/venv/bin/python")" in
-            "$MANAGED_PYTHON_ROOT"/*) ;;
-            *) exit 1 ;;
-          esac
-          printf 'PUBLISHER_PYTHON=%s\n' "$PUBLISH_ROOT/venv/bin/python" >> "$GITHUB_ENV"
-
-      - name: Verify candidate with its reviewed release tooling
-        env:
+          BUILD_ROOT: /nmc-build/netbox-proxbox-${{ github.run_id }}-${{ github.run_attempt }}
           SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
-          VERSION: ${{ needs.validate-source.outputs.version }}
-        run: |
-          set -euo pipefail
-          mkdir dist
-          mv release-transfer/*.whl release-transfer/*.tar.gz dist/
-          cmp publisher-tool/scripts/release_artifacts.py \
-            release-transfer/release_artifacts.py
-          "$PUBLISHER_PYTHON" publisher-tool/scripts/release_artifacts.py verify \
-            --dist dist --package netbox-proxbox --version "$VERSION" \
-            --source-sha "$SOURCE_SHA" --manifest release-transfer/release-manifest.json
-
-      - name: Transfer data-only verified candidate
-        run: |
-          set -euo pipefail
-          mkdir verified-transfer
-          cp dist/*.whl dist/*.tar.gz release-transfer/release-manifest.json \
-            verified-transfer/
-
-      - name: Upload data-only verified candidate
-        uses: actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de # v3.2.2-node20
-        with:
-          name: verified-private-release-${{ github.run_id }}-${{ github.run_attempt }}
-          path: verified-transfer
-          if-no-files-found: error
-          retention-days: 1
-
-  publish-gitea:
-    name: Publish from isolated credential boundary
-    needs: [validate-source, verify-candidate]
-    runs-on: release-publisher
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - name: Install checksum-verified uv and managed Python
-        env:
-          BOOTSTRAP_UV_ROOT: ${{ runner.temp }}/netbox-proxbox-uv-credential-${{ github.run_id }}-${{ github.run_attempt }}
-          BOOTSTRAP_PYTHON_ROOT: ${{ runner.temp }}/netbox-proxbox-python-credential-${{ github.run_id }}-${{ github.run_attempt }}
-          BOOTSTRAP_CACHE_ROOT: ${{ runner.temp }}/netbox-proxbox-uv-cache-credential-${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          set -euo pipefail
-          test ! -e "$BOOTSTRAP_UV_ROOT"
-          test ! -e "$BOOTSTRAP_PYTHON_ROOT"
-          test ! -e "$BOOTSTRAP_CACHE_ROOT"
-          mkdir -m 0700 "$BOOTSTRAP_UV_ROOT"
-          mkdir -m 0700 "$BOOTSTRAP_PYTHON_ROOT"
-          mkdir -m 0700 "$BOOTSTRAP_CACHE_ROOT"
-          curl --fail --location --proto '=https' --tlsv1.2 \
-            --output "$BOOTSTRAP_UV_ROOT/uv.tar.gz" \
-            https://github.com/astral-sh/uv/releases/download/0.11.28/uv-x86_64-unknown-linux-gnu.tar.gz
-          printf '%s  %s\n' \
-            e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224 \
-            "$BOOTSTRAP_UV_ROOT/uv.tar.gz" | sha256sum --check --strict
-          tar --extract --gzip --file "$BOOTSTRAP_UV_ROOT/uv.tar.gz" \
-            --directory "$BOOTSTRAP_UV_ROOT" --strip-components=1 \
-            uv-x86_64-unknown-linux-gnu/uv
-          chmod 0555 "$BOOTSTRAP_UV_ROOT/uv"
-          printf 'UV_BIN=%s\n' "$BOOTSTRAP_UV_ROOT/uv" >> "$GITHUB_ENV"
-          printf 'UV_PYTHON_INSTALL_DIR=%s\n' "$BOOTSTRAP_PYTHON_ROOT" >> "$GITHUB_ENV"
-          while IFS='=' read -r VARIABLE _; do
-            case "$VARIABLE" in UV_*) unset "$VARIABLE" ;; esac
-          done < <(env)
-          "$BOOTSTRAP_UV_ROOT/uv" python install \
-            --no-config \
-            --cache-dir "$BOOTSTRAP_CACHE_ROOT" \
-            --install-dir "$BOOTSTRAP_PYTHON_ROOT" \
-            --managed-python \
-            --no-bin \
-            3.12.13
-
-      - name: Install fixed publisher executable without candidate files
-        env:
-          PUBLISH_ROOT: ${{ runner.temp }}/netbox-proxbox-credential-tool-${{ github.run_id }}-${{ github.run_attempt }}
-        run: |
-          set -euo pipefail
-          umask 077
-          PUBLISHER_UV="$UV_BIN"
-          MANAGED_PYTHON_ROOT="$UV_PYTHON_INSTALL_DIR"
-          while IFS='=' read -r VARIABLE _; do
-            case "$VARIABLE" in UV_*) unset "$VARIABLE" ;; esac
-          done < <(env)
-          test ! -e "$PUBLISH_ROOT"
-          mkdir -p "$PUBLISH_ROOT/bin" "$PUBLISH_ROOT/tools" "$PUBLISH_ROOT/cache"
-          UV_PYTHON_INSTALL_DIR="$MANAGED_PYTHON_ROOT" \
-            UV_TOOL_BIN_DIR="$PUBLISH_ROOT/bin" \
-            UV_TOOL_DIR="$PUBLISH_ROOT/tools" \
-            "$PUBLISHER_UV" tool install \
-            --no-config \
-            --cache-dir "$PUBLISH_ROOT/cache" \
-            --managed-python \
-            --no-python-downloads \
-            --python 3.12.13 \
-            twine==6.2.0
-          case "$("$PUBLISH_ROOT/bin/twine" --version)" in
-            "twine version 6.2.0 "*) ;;
-            *) exit 1 ;;
-          esac
-          printf 'PUBLISHER_TWINE=%s\n' "$PUBLISH_ROOT/bin/twine" >> "$GITHUB_ENV"
-
-      - name: Download data-only verified candidate
-        uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b # v3.1.0-node20
-        with:
-          name: verified-private-release-${{ github.run_id }}-${{ github.run_attempt }}
-          path: verified-transfer
-
-      - name: Enforce bounded credential-job input
-        run: |
-          set -euo pipefail
-          test "$(find verified-transfer -maxdepth 1 -type l | wc -l)" -eq 0
-          test "$(find verified-transfer -maxdepth 1 -type f -name '*.whl' | wc -l)" -eq 1
-          test "$(find verified-transfer -maxdepth 1 -type f -name '*.tar.gz' | wc -l)" -eq 1
-          test "$(find verified-transfer -maxdepth 1 -type f -name 'release-manifest.json' | wc -l)" -eq 1
-          test "$(find verified-transfer -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 3
-
-      - name: Publish exact files with package-only authority
-        env:
-          AUTH_PARENT: ${{ runner.temp }}
-          GITEA_TOKEN: ${{ secrets.PKG_TOKEN }}
-          TWINE_REPOSITORY_URL: https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi
-          TWINE_USERNAME: emersonfelipesp
-          VERSION: ${{ needs.validate-source.outputs.version }}
-        run: |
-          set -euo pipefail
-          umask 077
-          AUTH_ROOT="$(mktemp -d "${AUTH_PARENT}/netbox-proxbox-auth.XXXXXX")"
-          trap 'rm -f "$AUTH_ROOT/netrc"; rmdir "$AUTH_ROOT"' EXIT
-          printf 'machine git.nmulti.cloud\nlogin %s\npassword %s\n' \
-            "$TWINE_USERNAME" "$GITEA_TOKEN" > "$AUTH_ROOT/netrc"
-          chmod 0600 "$AUTH_ROOT/netrc"
-          export TWINE_PASSWORD="$GITEA_TOKEN"
-          unset GITEA_TOKEN
-          "$PUBLISHER_TWINE" upload --non-interactive \
-            verified-transfer/*.whl verified-transfer/*.tar.gz
-          unset TWINE_PASSWORD
-          curl --fail --silent --show-error --request POST \
-            --netrc-file "$AUTH_ROOT/netrc" \
-            "https://git.nmulti.cloud/api/v1/packages/emersonfelipesp/pypi/netbox-proxbox/-/link/netbox-proxbox"
-          curl --fail --silent --show-error \
-            --netrc-file "$AUTH_ROOT/netrc" \
-            --upload-file verified-transfer/release-manifest.json \
-            "https://git.nmulti.cloud/api/packages/emersonfelipesp/generic/netbox-proxbox-release-manifest/${VERSION}/release-manifest.json"
-          curl --fail --silent --show-error --request POST \
-            --netrc-file "$AUTH_ROOT/netrc" \
-            "https://git.nmulti.cloud/api/v1/packages/emersonfelipesp/generic/netbox-proxbox-release-manifest/-/link/netbox-proxbox"
-
-  verify-registry:
-    name: Re-download and verify registry bytes without authority
-    needs: [validate-source, publish-gitea]
-    runs-on: ci-untrusted-python312
-    permissions:
-      contents: read
-      packages: read
-    steps:
-      - name: Fetch reviewed verification tool anonymously
-        env:
-          TOOL_SHA: ${{ needs.validate-source.outputs.source_sha }}
-        run: |
-          set -euo pipefail
-          test ! -e verifier-tool
-          git init verifier-tool
-          git -C verifier-tool remote add origin \
-            https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox.git
-          git -C verifier-tool fetch --force --no-tags origin "$TOOL_SHA"
-          git -C verifier-tool checkout --detach FETCH_HEAD
-          test "$(git -C verifier-tool rev-parse HEAD)" = "$TOOL_SHA"
-
-      - name: Download data-only verified candidate
-        uses: actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b # v3.1.0-node20
-        with:
-          name: verified-private-release-${{ github.run_id }}-${{ github.run_attempt }}
-          path: verified-transfer
-
-      - name: Re-download and compare registry bytes
-        env:
-          SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
-          VERSION: ${{ needs.validate-source.outputs.version }}
-        run: |
-          set -euo pipefail
-          mkdir verified-dist
-          python3 verifier-tool/scripts/release_artifacts.py fetch-gitea \
-            --owner emersonfelipesp --repository netbox-proxbox \
-            --package netbox-proxbox --version "$VERSION" --source-sha "$SOURCE_SHA" \
-            --dist verified-dist --manifest verified-manifest.json
-          cmp verified-transfer/release-manifest.json verified-manifest.json
-
-  push-to-github:
-    name: Promote verified RC tag to GitHub
-    needs: [validate-source, verify-registry]
-    if: ${{ needs.validate-source.outputs.is_rc == 'true' }}
-    runs-on: ci-untrusted-python312
-    steps:
-      - name: Checkout verified tag
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-          ref: ${{ needs.validate-source.outputs.tag }}
-
-      - name: Push immutable RC tag to the authorized GitHub destination
-        env:
-          GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
           TAG: ${{ needs.validate-source.outputs.tag }}
+          VERSION: ${{ needs.validate-source.outputs.version }}
         run: |
           set -euo pipefail
           umask 077
-          test "$(git rev-parse HEAD^{commit})" = "${{ needs.validate-source.outputs.source_sha }}"
-          git remote add github https://github.com/emersonfelipesp/netbox-proxbox.git
-          SECRET_ROOT="${RUNNER_TEMP}/netbox-proxbox-github-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          test ! -e "$SECRET_ROOT"
-          mkdir -m 0700 "$SECRET_ROOT"
-          trap 'rm -rf -- "$SECRET_ROOT"' EXIT
-          cat > "$SECRET_ROOT/askpass" <<'EOF'
-          #!/bin/sh
-          case "$1" in
-            *Username*) printf '%s\n' x-access-token ;;
-            *Password*) printf '%s\n' "$GH_TOKEN" ;;
-            *) exit 1 ;;
+          test -z "${NMC_RELEASE_BOUNDARY_INJECTED:-}"
+          case ":$PATH:" in
+            *:/tmp/nmc-release-boundary-injected:*) exit 1 ;;
           esac
-          EOF
-          chmod 0500 "$SECRET_ROOT/askpass"
-          GIT_ASKPASS="$SECRET_ROOT/askpass" GIT_TERMINAL_PROMPT=0 \
-            git push github "refs/tags/${TAG}:refs/tags/${TAG}"
+          DIST_ROOT="$BUILD_ROOT/source/dist"
+          MANIFEST_PATH="$BUILD_ROOT/source/release-manifest.json"
+          test ! -e release-transfer
+          python3 -I - \
+            "$DIST_ROOT" "$MANIFEST_PATH" release-transfer "$VERSION" <<'PY'
+          import hashlib
+          import os
+          from pathlib import Path
+          import stat
+          import sys
+
+          dist_root = Path(sys.argv[1])
+          manifest_path = Path(sys.argv[2])
+          transfer_root = Path(sys.argv[3])
+          version = sys.argv[4]
+          nofollow = getattr(os, "O_NOFOLLOW", 0)
+          if not nofollow:
+              raise SystemExit("No-follow artifact handoff is unavailable")
+
+          dist_fd = os.open(dist_root, os.O_RDONLY | os.O_DIRECTORY | nofollow)
+          manifest_parent_fd = os.open(
+              manifest_path.parent, os.O_RDONLY | os.O_DIRECTORY | nofollow
+          )
+          transfer_root.mkdir(mode=0o700)
+          transfer_fd = os.open(transfer_root, os.O_RDONLY | os.O_DIRECTORY | nofollow)
+
+          def copy_regular(
+              source_dir_fd: int, name: str, maximum_size: int
+          ) -> tuple[str, int]:
+              metadata = os.stat(name, dir_fd=source_dir_fd, follow_symlinks=False)
+              if not stat.S_ISREG(metadata.st_mode):
+                  raise SystemExit("Release handoff contains a special file")
+              if metadata.st_size <= 0 or metadata.st_size > maximum_size:
+                  raise SystemExit("Release handoff file size is invalid")
+              source_fd = os.open(name, os.O_RDONLY | nofollow, dir_fd=source_dir_fd)
+              source_open = os.fstat(source_fd)
+              if (source_open.st_dev, source_open.st_ino) != (
+                  metadata.st_dev,
+                  metadata.st_ino,
+              ):
+                  raise SystemExit("Release handoff source changed")
+              destination_fd = os.open(
+                  name,
+                  os.O_WRONLY | os.O_CREAT | os.O_EXCL | nofollow,
+                  0o600,
+                  dir_fd=transfer_fd,
+              )
+              digest = hashlib.sha256()
+              written = 0
+              try:
+                  while True:
+                      chunk = os.read(source_fd, 1024 * 1024)
+                      if not chunk:
+                          break
+                      digest.update(chunk)
+                      written += len(chunk)
+                      pending = memoryview(chunk)
+                      while pending:
+                          count = os.write(destination_fd, pending)
+                          if count <= 0:
+                              raise SystemExit("Release handoff write failed")
+                          pending = pending[count:]
+                  os.fsync(destination_fd)
+              finally:
+                  os.close(source_fd)
+                  os.close(destination_fd)
+              if written != metadata.st_size:
+                  raise SystemExit("Release handoff copy size changed")
+              copied_fd = os.open(name, os.O_RDONLY | nofollow, dir_fd=transfer_fd)
+              copied_digest = hashlib.sha256()
+              try:
+                  while True:
+                      chunk = os.read(copied_fd, 1024 * 1024)
+                      if not chunk:
+                          break
+                      copied_digest.update(chunk)
+              finally:
+                  os.close(copied_fd)
+              if copied_digest.digest() != digest.digest():
+                  raise SystemExit("Release handoff copy digest changed")
+              return digest.hexdigest(), written
+
+          try:
+              names = sorted(os.listdir(dist_fd))
+              expected_wheel = f"netbox_proxbox-{version}-py3-none-any.whl"
+              expected_sdist = f"netbox_proxbox-{version}.tar.gz"
+              expected_names = sorted([expected_wheel, expected_sdist])
+              if names != expected_names:
+                  raise SystemExit("Release artifact inventory is invalid")
+              copy_regular(dist_fd, expected_wheel, 128 * 1024 * 1024)
+              copy_regular(dist_fd, expected_sdist, 128 * 1024 * 1024)
+              if manifest_path.name != "release-manifest.json":
+                  raise SystemExit("Release manifest identity is invalid")
+              copy_regular(
+                  manifest_parent_fd, manifest_path.name, 1024 * 1024
+              )
+              if sorted(os.listdir(transfer_fd)) != sorted(
+                  [expected_wheel, expected_sdist, manifest_path.name]
+              ):
+                  raise SystemExit("Release transfer inventory changed")
+          finally:
+              os.close(dist_fd)
+              os.close(manifest_parent_fd)
+              os.close(transfer_fd)
+          PY
+          MANIFEST_PATH="release-transfer/release-manifest.json"
+          WORKFLOW_SHA256="$(sha256sum .gitea/workflows/publish-gitea.yml | cut -d' ' -f1)"
+          export MANIFEST_PATH WORKFLOW_SHA256
+          python3 -I - <<'PY'
+          import hashlib
+          import json
+          import os
+          from pathlib import Path
+
+          manifest_raw = Path(os.environ["MANIFEST_PATH"]).read_bytes()
+          manifest = json.loads(manifest_raw)
+          artifacts = [
+              {"filename": row["name"], "sha256": row["sha256"], "size": row["size"]}
+              for row in manifest["artifacts"]
+          ]
+          request = {
+              "artifacts": artifacts,
+              "initiating_run_attempt": int(os.environ["GITHUB_RUN_ATTEMPT"]),
+              "initiating_run_id": int(os.environ["GITHUB_RUN_ID"]),
+              "owner": "emersonfelipesp",
+              "package": manifest["package"],
+              "release_manifest_sha256": hashlib.sha256(manifest_raw).hexdigest(),
+              "repository": "netbox-proxbox",
+              "repository_id": 38,
+              "schema": 1,
+              "source_sha": os.environ["SOURCE_SHA"],
+              "tag": os.environ["TAG"],
+              "version": os.environ["VERSION"],
+              "workflow_sha256": os.environ["WORKFLOW_SHA256"],
+          }
+          if artifacts != sorted(artifacts, key=lambda row: row["filename"]):
+              raise SystemExit("Artifact inventory is not sorted")
+          raw = json.dumps(request, sort_keys=True, separators=(",", ":")).encode() + b"\n"
+          Path("release-transfer/release-request.json").write_bytes(raw)
+          PY
+          test "$(find release-transfer -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 4
+          test "$(find release-transfer -mindepth 1 -maxdepth 1 -type l | wc -l)" -eq 0
+
+      - name: Obtain supervisor-signed completion evidence
+        env:
+          SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
+        run: |
+          set -euo pipefail
+          umask 077
+          python3 -I - "$GITHUB_RUN_ID" "$SOURCE_SHA" <<'PY'
+          import ctypes
+          import fcntl
+          import hashlib
+          import os
+          import stat
+          import subprocess
+          import sys
+
+          path = "/usr/local/bin/nmc-release-attestation-client"
+          descriptor = os.open(path, os.O_RDONLY | os.O_CLOEXEC | os.O_NOFOLLOW)
+          snapshot = -1
+          try:
+              parent = os.stat("/usr/local/bin", follow_symlinks=False)
+              metadata = os.fstat(descriptor)
+              raw = bytearray()
+              while len(raw) <= 131072:
+                  chunk = os.read(descriptor, min(65536, 131073 - len(raw)))
+                  if not chunk:
+                      break
+                  raw.extend(chunk)
+              after = os.fstat(descriptor)
+              if (
+                  not stat.S_ISDIR(parent.st_mode)
+                  or parent.st_uid != 0
+                  or stat.S_IMODE(parent.st_mode) & 0o022
+                  or not stat.S_ISREG(metadata.st_mode)
+                  or metadata.st_uid != 0
+                  or stat.S_IMODE(metadata.st_mode) & 0o022
+                  or metadata.st_nlink != 1
+                  or metadata.st_size != len(raw)
+                  or not 0 < len(raw) <= 131072
+                  or (metadata.st_dev, metadata.st_ino, metadata.st_size, metadata.st_mtime_ns)
+                  != (after.st_dev, after.st_ino, after.st_size, after.st_mtime_ns)
+                  or hashlib.sha256(raw).hexdigest()
+                  != "2b0bee25d755f284b5e8eee3b8a84536825328913040c8757374efe51c57f75f"
+              ):
+                  raise SystemExit("Release attestation client metadata or digest is unsafe")
+              flags = getattr(os, "MFD_CLOEXEC", 0x0001) | getattr(
+                  os, "MFD_ALLOW_SEALING", 0x0002
+              )
+              if hasattr(os, "memfd_create"):
+                  snapshot = os.memfd_create("nmc-release-client", flags)
+              else:
+                  libc = ctypes.CDLL(None, use_errno=True)
+                  memfd_create = libc.memfd_create
+                  memfd_create.argtypes = (ctypes.c_char_p, ctypes.c_uint)
+                  memfd_create.restype = ctypes.c_int
+                  snapshot = memfd_create(b"nmc-release-client", flags)
+                  if snapshot < 0:
+                      error = ctypes.get_errno()
+                      raise OSError(error, os.strerror(error))
+              view = memoryview(raw)
+              while view:
+                  written = os.write(snapshot, view)
+                  if written <= 0:
+                      raise OSError("short immutable client snapshot write")
+                  view = view[written:]
+              os.fchmod(snapshot, 0o500)
+              seals = 0x0001 | 0x0002 | 0x0004 | 0x0008
+              fcntl.fcntl(snapshot, 1033, seals)
+              if fcntl.fcntl(snapshot, 1034) != seals:
+                  raise OSError("incomplete immutable client snapshot seals")
+              subprocess.run(
+                  [
+                      f"/proc/self/fd/{snapshot}",
+                      "complete",
+                      "--acceptance", ".gitea/release-runner-acceptance.json",
+                      "--repository", "emersonfelipesp/netbox-proxbox",
+                      "--run-id", sys.argv[1],
+                      "--job-name", "Build exact publisher-credential-free release-control request",
+                      "--source-sha", sys.argv[2],
+                      "--workflow", ".gitea/workflows/publish-gitea.yml",
+                      "--request", "release-transfer/release-request.json",
+                      "--manifest", "release-transfer/release-manifest.json",
+                      "--artifact-root", "release-transfer",
+                      "--output-attestation", "release-transfer/runner-completion-attestation.json",
+                      "--output-signature", "release-transfer/runner-completion-attestation.sig",
+                      "--public-key", "/etc/nmc-release-runner-attestation-public.pem",
+                  ],
+                  check=True,
+                  env={"LANG": "C.UTF-8", "PATH": "/usr/local/bin:/usr/bin:/bin"},
+                  pass_fds=(snapshot,),
+                  timeout=60,
+              )
+          finally:
+              if snapshot >= 0:
+                  os.close(snapshot)
+              os.close(descriptor)
+          PY
+          test "$(find release-transfer -mindepth 1 -maxdepth 1 -type f | wc -l)" -eq 6
+          test "$(find release-transfer -mindepth 1 -maxdepth 1 -type l | wc -l)" -eq 0
+
+      - name: Upload exact data-only control request
+        run: |
+          set -euo pipefail
+          test -z "${GITHUB_TOKEN:-}"
+          test -z "${GITEA_TOKEN:-}"
+          /usr/local/bin/nmc-upload-gitea-artifact \
+            --root release-transfer --run-id "$GITHUB_RUN_ID"

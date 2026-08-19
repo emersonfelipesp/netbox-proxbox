@@ -15,7 +15,8 @@ flowchart TD
     Start([Choose target release\nX.Y.Z])
     Bump[Bump package version\npyproject.toml + netbox_proxbox/__init__.py + uv.lock]
     RCTag[Create release-candidate tag\nvX.Y.ZrcN]
-    RCCI[CI builds dist\nvalidates tag/version/lockfile]
+    RCCI[Target CI builds a six-file\npublisher-credential-free signed request]
+    Control[Locked release control verifies\nand publishes exact sealed bytes]
     RCUpload[Upload vX.Y.ZrcN to TestPyPI\nwithout --skip-existing]
     RCValidate[Install rcN from TestPyPI\nrun package checks]
     RCE2E[E2E Docker\nnetbox-proxbox rcN from TestPyPI\nproxbox-api rcN from TestPyPI]
@@ -30,7 +31,7 @@ flowchart TD
     Post[Bump to vX.Y.Z.postN\npublish .postN to PyPI]
     Done([Release is green])
 
-    Start --> Bump --> RCTag --> RCCI --> RCUpload --> RCValidate --> RCE2E --> RCFailed
+    Start --> Bump --> RCTag --> RCCI --> Control --> RCUpload --> RCValidate --> RCE2E --> RCFailed
     RCFailed -- yes --> NextRC --> RCTag
     RCFailed -- no --> FinalPrivate --> Deploy --> PublicRelease --> FinalUpload --> FinalValidate --> FinalFailed
     FinalFailed -- yes --> Post --> FinalPrivate
@@ -46,7 +47,10 @@ E2E rather than package metadata.
 ```mermaid
 sequenceDiagram
     participant Tag as Release Tag
-    participant WF as netbox-proxbox publish workflow
+    participant WF as netbox-proxbox request workflow
+    participant Control as Locked release control
+    participant GP as Gitea package registry
+    participant PublicWF as GitHub public-publish workflow
     participant TP as TestPyPI
     participant PY as PyPI
     participant E2E as e2e-docker.yml
@@ -54,18 +58,22 @@ sequenceDiagram
     participant API as proxbox-api container
 
     Tag->>WF: vX.Y.ZrcN
-    WF->>TP: Upload netbox-proxbox package
-    WF->>E2E: install_source=testpypi, dependency_mode=testpypi-package
+    WF->>Control: wheel + sdist + release-manifest.json + release-request.json + runner-completion-attestation.json + runner-completion-attestation.sig
+    Control->>Control: verify run, workflow, request, and sealed bytes
+    Control->>GP: Publish exact sealed package bytes
+    Control->>PublicWF: Promote the exact RC tag
+    PublicWF->>TP: Upload the exact Gitea package bytes
+    PublicWF->>E2E: install_source=testpypi, dependency_mode=testpypi-package
     E2E->>NB: pip install netbox-proxbox==X.Y.ZrcN from TestPyPI
     E2E->>API: validate proxbox-api Python and PyO3/Rust runtimes
-    E2E-->>WF: Release-candidate checks pass for both runtimes
+    E2E-->>PublicWF: Release-candidate checks pass for both runtimes
 
-    Tag->>WF: published GitHub Release for vX.Y.Z or vX.Y.Z.postN
-    WF->>PY: Upload netbox-proxbox package
-    WF->>E2E: install_source=pypi, dependency_mode=pypi-package
+    Tag->>PublicWF: published GitHub Release for vX.Y.Z or vX.Y.Z.postN
+    PublicWF->>PY: Upload netbox-proxbox package
+    PublicWF->>E2E: install_source=pypi, dependency_mode=pypi-package
     E2E->>NB: pip install netbox-proxbox==X.Y.Z or X.Y.Z.postN from PyPI
     E2E->>API: validate proxbox-api Python and PyO3/Rust runtimes
-    E2E-->>WF: Post-publish checks pass for both runtimes
+    E2E-->>PublicWF: Post-publish checks pass for both runtimes
 ```
 
 ## Workflow Rules
@@ -81,24 +89,104 @@ sequenceDiagram
   and requires an RC version.
 - Package uploads intentionally omit `twine --skip-existing`; a consumed version
   must move forward to the next `.postN` or `rcN`.
-- The Gitea package workflow listens for tag `push`, not the overlapping
-  `create` event, so a tag can start only one immutable registry upload.
+- The target Gitea workflow listens for tag `push`, not the overlapping
+  `create` event, so a tag can start only one immutable release request.
+- Workflow concurrency is global to this repository rather than per ref. A
+  second RC/final/post request cannot race the sole release label while the
+  validation supervisor is sequencing the active request.
+- Both release-request jobs use the repository-unique
+  `ci-release-netbox-proxbox` label. The replacement registration must expose
+  that label only at repository scope; the broader user-scoped
+  `ci-untrusted-python312` runner is not eligible for release evidence.
+  Before either job processes candidate-controlled bytes, a checksum-pinned
+  gate compares the live Gitea job's runner ID, name, and sole label to
+  `.gitea/release-runner-acceptance.json`. Validation and build identities have
+  independent canonical repository-registration scope digests, so evidence for
+  one role cannot authorize the other. Its zero ID, empty name, and all-zero
+  key/runtime/image/network/supervisor digests intentionally disable tag
+  releases until live acceptance replaces every sentinel in one reviewed
+  change. Even then, the gate requires a root-owned, freshly signed supervisor
+  attestation bound to the repository, first run attempt, run ID, job ID,
+  source SHA, exact workflow path and digest, runner identity, complete
+  registered-label set, runtime image, and network/runtime policy digests.
+  Missing, stale, mismatched, or invalidly signed evidence fails
+  before candidate execution.
 - A candidate tag must resolve to the current canonical Gitea `develop` SHA.
-  Each latest required CI status must resolve through authenticated Gitea API
-  records to a successful `ci.yml` push run and run attempt for that exact SHA,
-  trusted actor, job name, and untrusted runner class. A credential-free disposable job builds
-  one wheel and one sdist after directly verifying the pinned uv archive,
-  clearing inherited `UV_*` state, disabling discovered configuration, and
-  selecting fresh per-run managed-Python/cache roots. A separate disposable
-  verifier anonymously fetches the exact validated source and validates the
-  manifest with a locked toolchain. It transfers only the wheel, sdist, and
-  manifest into a fresh credential job on the dedicated protected
-  `release-publisher` runner, so candidate processes and source files cannot
-  persist into the `PKG_TOKEN` boundary. That job invokes fixed Twine
-  tooling with environment credentials, uses a mode-0600 netrc for package
-  linking, and never places the token in process arguments. A final no-authority
-  job downloads the registry bytes again to prove their hashes. The built-in
-  token stays package-read-only.
+  The gate ignores writer-controlled commit statuses and selects the newest
+  authenticated `ci.yml` Actions run for that exact SHA directly from Gitea's
+  run inventory. That run and each required job must prove a successful first
+  push attempt for the exact SHA,
+  trusted actor, job name, and exact sole `ci-untrusted-python312` job label.
+  The two jobs use distinct job-bound ephemeral runner IDs/names. Each
+  registration advertises only `ci-release-netbox-proxbox`, accepts one
+  supervisor-authorized assignment, and terminates; the validation identity
+  cannot service the build job. Each RC, final, or post request therefore
+  requires a freshly registered and reviewed identity pair. Both jobs receive
+  `actions: read` plus
+  `contents: read` only for their trusted
+  runner/CI evidence gates. The untrusted build fetches the validated public
+  source without checkout credentials, and its step-scoped Gitea token is not
+  passed across the candidate boundary.
+  Gitea's public-repository permission floor can still make public Actions data
+  readable, so this is not an Actions-read confidentiality boundary. The
+  outer job also receives Gitea's artifact runtime token. Candidate-controlled
+  dependency installation, PEP 517 build, Twine check, and manifest generation
+  therefore run as a separate numeric UID with an allowlisted token-free
+  environment, no-new-privileges/resource limits, denial of the root parent's
+  `/proc/.../environ`, and cleanup of every surviving process for that UID. A
+  fail-closed x86-64 Landlock ABI 3+ rule permits writes only below the per-run
+  build root, preventing candidate writes to runner workflow-command files and
+  shared temporary storage; the runner must match that architecture and expose
+  that ABI or the build fails. A fail-closed x86-64 seccomp filter also returns
+  `EPERM` for every socket syscall, all `io_uring` entry points, and every
+  x32-tagged syscall; the candidate probes all three paths before dependency or
+  build code runs. The
+  `ci-release-netbox-proxbox` activation canary must separately prove that the
+  exact repository-scoped release runner/container denies management and
+  production network access and bind that immutable result plus the runtime
+  digest to the same runner ID in the acceptance record; an online runner label
+  alone is insufficient evidence. The external supervisor must re-attest the
+  live state for each release job; a historical canary cannot authorize a
+  restarted or reconfigured runner.
+  Candidate stdout/stderr is bounded and captured instead of reaching the runner
+  workflow-command parser, with live `set-env`/`add-path` canaries checked in the
+  next step. The job fails closed unless cgroup v2 proves hard one-CPU,
+  2-GiB-memory, zero-swap, and 64-PID ceilings and `/nmc-build` is a hard
+  one-GiB/50,000-inode tmpfs. The 900-second wall bound therefore also caps
+  cumulative CPU, while parent accounting includes live and reaped descendants.
+  Logical-size, filesystem-block, file-count, and output checks remain defense
+  in depth; CPU parsing does not trust whitespace in Linux process names.
+  Reviewed outer code uses exact no-follow file
+  descriptors, bounded regular-file inventory, and copy re-hashing before it
+  invokes artifact upload; candidate code receives no job, runtime, package,
+  mirror, or write credential.
+  A disposable target job builds one wheel and one sdist with the runner
+  image's exact Python 3.12.14 and uv 0.12.5 after verifying the baked
+  interpreter/tool versions, the policy-pinned `uv.lock` digest, and the
+  build-lock checksum manifest for its read-only wheelhouse. The job revalidates
+  the exact immutable wheel inventory in-container; the publish lock includes
+  Hatchling so the project's configured PEP 517 backend is available without
+  network access. Dependency
+  resolution is offline (`--no-index`, no Python downloads). The trusted outer
+  steps use image-baked Gitea checkout and artifact clients, so their only
+  network authority is same-origin Gitea access. After candidate process
+  cleanup, the root-only external supervisor signs the exact request/artifact
+  inventory. The job uploads exactly six data files: the wheel, sdist,
+  canonical `release-manifest.json`, canonical `release-request.json`, canonical
+  `runner-completion-attestation.json`, and
+  `runner-completion-attestation.sig`. The request binds the repository ID, source/tag,
+  initiating run and attempt, workflow digest, manifest digest, and artifact
+  inventory. The job verifies the root-owned completion client digest, executes
+  a sealed in-memory snapshot of those exact bytes, and the client verifies the
+  supervisor signature locally against its policy-pinned public key before the
+  exact six-file upload. It has no package or GitHub-mirror credential. The separately
+  administered release-control repository fetches that exact first-attempt run,
+  verifies the policy-pinned target workflow, supervisor completion signature,
+  and every byte on its isolated
+  builder, then seals the handoff. Only its isolated publisher can read the
+  package credentials and invoke the fixed, digest-locked publication tooling.
+  Public no-authority downloads must match the manifest before the durable
+  publication ledger advances.
 - GitHub never rebuilds release artifacts. It downloads that exact linked
   Gitea wheel/sdist, installs both artifact forms on Python 3.12 and 3.13, and
   uploads the same bytes to TestPyPI or PyPI.
@@ -123,17 +211,28 @@ sequenceDiagram
 
 ## Operator Checklist
 
-1. Publish and validate `proxbox-api` on TestPyPI first.
-2. Publish and validate `netbox-proxbox` on TestPyPI using that TestPyPI
+1. Before merging the target cutover, require the private control repository's
+   positive policy-pinned ID plus ready protected workflows, host boundaries,
+   sockets, and repository-scoped runners. If readiness is incomplete, leave
+   the existing publisher active and stop.
+2. Push the reviewed tag and wait for `publish-gitea.yml` to produce the
+   `release-control-request` artifact. Record its run ID and the SHA-256 of its
+   canonical `release-request.json`.
+3. Dispatch `validate.yml` with exactly the repository name, target run ID, and
+   request SHA-256. After it succeeds, dispatch the separate irreversible
+   `publish.yml` with those same three inputs. For RCs, the control publishes
+   the Gitea package and promotes only that exact RC tag to GitHub.
+4. Publish and validate `proxbox-api` on TestPyPI first.
+5. Publish and validate `netbox-proxbox` on TestPyPI using that TestPyPI
    `proxbox-api` version.
-3. Publish each final package in Gitea, link/verify it, and deploy the exact pair
+6. Publish each final package in Gitea, link/verify it, and deploy the exact pair
    through NMS using `latest_package` by default.
-4. After production integration and health checks pass, dispatch each
+7. After production integration and health checks pass, dispatch each
    repository's `promote-final-tag.yml` from canonical Gitea `main`. The
    workflow verifies the exact package and protected host-issued deployment receipt before
    pushing only that tag to the authorized GitHub repository. Then create the
    proxbox-api and netbox-proxbox GitHub Releases with `--verify-tag`; those
    final tags and protected Gitea deployment receipts authorize
    PyPI/Docker Hub publication.
-5. If any published validation fails, bump to the next `.postN` or `rcN`; never
+8. If any published validation fails, bump to the next `.postN` or `rcN`; never
    retry the same artifact version.
