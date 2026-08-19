@@ -58,25 +58,36 @@ shipped as an **experimental** tier, not a certified one.
 
 ## Release integrity
 
-- Builds one wheel and one sdist in an untrusted job and binds them to a
-  canonical, repository-linked Gitea release manifest.
-- Uses checksum-pinned uv with fresh per-run tool and managed-Python roots. The
-  data-only handoff contains exactly six files: one wheel, one sdist,
-  `release-manifest.json`, `release-request.json`,
-  `runner-completion-attestation.json`, and
-  `runner-completion-attestation.sig`; it carries no package or mirror
-  credential. The separately administered control plane verifies the pinned
-  workflow, exact first-attempt run, supervisor completion signature, request,
-  manifest, and artifact bytes on an isolated builder before sealing them for
-  its isolated publisher. Only fixed digest-locked publisher tooling can read
-  publication credentials.
-- Requires authenticated Gitea CI run, run-attempt, and job evidence for the
-  exact canonical `develop` commit before accepting a tag.
+- Builds one wheel and one sdist from the exact tagged commit and publishes them
+  to the Gitea Package Registry, which remains the artifact of record.
+- Validates the tag against a strict version pattern before anything is built,
+  and verifies the package is present in the registry after upload.
+- Subscribes to the tag `push` event only. Gitea emits both `create` and `push`
+  for a tag, and subscribing to both would start two immutable uploads for one
+  version.
+- Creates the public GitHub Release for final tags only. A release candidate
+  never produces one, because that event is the sole trigger for the public PyPI
+  upload and an rc must not reach PyPI as though it were final.
 - Reuses the exact Gitea bytes for TestPyPI and PyPI; uploads never use
-  `--skip-existing`, so failures always advance to a new immutable version.
-- Promotes a final tag to the authorized GitHub repository only from canonical
-  `main`, after exact package and host-issued production deployment evidence
-  are verified.
+  `--skip-existing`, so a failure always advances to a new immutable version.
+- Pushes tags and creates releases only against the single authorised GitHub
+  repository.
+
+### Known limitation: publication hardening is deferred
+
+This release publishes through in-repository jobs on the existing shared
+runners — the same path used by `0.0.23` and every currently published version.
+The locked release control plane developed during this cycle is **not** in this
+release, because the isolated runner fleet it requires does not exist yet.
+
+Specifically, this version does **not** yet have: credential-free target builds,
+an exact-byte sealed handoff to a separately administered isolated publisher,
+supervisor-signed runner attestation, or egress-denied build isolation. Those
+controls are implemented and reviewed in-tree, and re-land once the isolated
+runners are provisioned.
+
+This is a deliberate, tracked deferral rather than a regression: `0.0.24` ships
+at the same publication posture as every release before it.
 
 ## Upgrade
 
