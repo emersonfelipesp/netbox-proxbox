@@ -68,8 +68,10 @@ shipped as an **experimental** tier, not a certified one.
 - Creates the public GitHub Release for final tags only. A release candidate
   never produces one, because that event is the sole trigger for the public PyPI
   upload and an rc must not reach PyPI as though it were final.
-- Reuses the exact Gitea bytes for TestPyPI and PyPI; uploads never use
-  `--skip-existing`, so a failure always advances to a new immutable version.
+- Builds the public-index distributions from the same tagged commit, so what
+  reaches TestPyPI and PyPI corresponds to the published source rather than a
+  separately fetched copy. Uploads never use `--skip-existing`, so a failure
+  always advances to a new immutable version rather than silently succeeding.
 - Pushes tags and creates releases only against the single authorised GitHub
   repository.
 
