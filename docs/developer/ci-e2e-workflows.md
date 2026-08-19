@@ -188,10 +188,14 @@ candidate-supplied version claim is not identity evidence. Until then, a public
 workflow success proves only the Proxbox producer contract, not MCP consumer
 compatibility.
 
-The Gitea package workflow subscribes to tag `push` only (plus manual
-dispatch), not the overlapping `create` event. Gitea emits both events for one
-tag, and accepting both would race two immutable uploads of the same version.
-`tests/test_pytest_django_scope.py` pins both workflow contracts.
+The target Gitea release-request workflow subscribes to tag `push` only, not
+manual dispatch or the overlapping `create` event. Gitea emits both tag events,
+and accepting both would race duplicate immutable requests. It uploads exactly
+the wheel, sdist, manifest, canonical request, supervisor completion statement,
+and detached signature. The separately administered locked release-control
+workflow verifies that signed completion before sealing and is the sole manual
+publication entry point.
+`tests/test_pytest_django_scope.py` pins the target trigger contract.
 
 ## Docker E2E Stack
 

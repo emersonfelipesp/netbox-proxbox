@@ -276,15 +276,36 @@ boundary.
 
 The official release pipeline runs in this order:
 
-1. **Gitea tag push** — push an annotated RC or final tag to Gitea.
-2. **Gitea package** — `.gitea/workflows/publish-gitea.yml` builds and uploads the exact package. It pushes only RC tags to GitHub for TestPyPI.
-3. **Production gate** — link and verify the final Gitea package, then deploy through NMS with `latest_package` by default (or explicitly selected `main_branch`).
-4. **Public promotion** — after production health validation, promote the final tag and create the GitHub Release; `release: published` authorizes PyPI.
+1. **Activation gate** — do not merge the target cutover until the private control repository has a positive policy-pinned ID and its protected workflows, host boundaries, sockets, and repository-scoped runners pass readiness. Leave the existing publisher active until then.
+2. **Gitea tag push** — push an annotated RC or final tag to Gitea.
+3. **Data-only request** — `.gitea/workflows/publish-gitea.yml` gives both release jobs `actions: read` plus `contents: read` only for checksum-pinned runner/CI evidence gates. Both jobs use repository-unique `ci-release-netbox-proxbox`, and before candidate processing their trusted gate requires the live runner ID, name, and sole label to equal `.gitea/release-runner-acceptance.json` plus a fresh signed external-supervisor attestation bound to repository/run/job/source, complete registered labels, runtime image, and network/runtime policy. Zero/empty identity and all-zero key/image/policy digests keep tag releases disabled until exact live acceptance is reviewed; missing, stale, invalidly signed, or mismatched job evidence fails before candidate execution. The build fetches validated public source without checkout credentials and never passes its step-scoped Gitea token across the candidate boundary. Gitea's public-repository floor can still make public Actions data readable, and the outer job receives an artifact runtime token. All candidate-controlled dependency installation/build/check/manifest work therefore runs behind a separate numeric UID, minimal token-free environment, no-new-privileges, a fail-closed x86-64 Landlock ABI 3+ write allowlist limited to the per-run build root, a fail-closed x86-64 seccomp deny for every socket syscall, all `io_uring` entry points, and every x32-tagged syscall, exact immutable wheelhouse revalidation, hard cgroup-v2 one-CPU/2-GiB/zero-swap/64-PID ceilings, a hard one-GiB/50,000-inode `/nmc-build` tmpfs, parent-enforced 900-second-wall/live-plus-reaped-CPU/RSS/PID/logical-size/filesystem-block/file-count/output checks, root-parent `/proc` denial, and surviving-process cleanup. Linux CPU records are parsed after the process-name delimiter so whitespace in candidate names cannot evade aggregate accounting. The filesystem boundary prevents candidate writes to runner workflow-command files and shared temporary storage. The activation canary must prove that the exact accepted runner/container denies management and production network access, bind that result and runtime digest to the same runner ID, and re-attest the live state for every job; a label or historical canary is insufficient evidence. Candidate output is captured rather than passed to the runner command parser; live legacy command probes must not affect the next step. Reviewed outer code copies an exact bounded regular-file inventory with no-follow descriptors and re-hashes each copy. After candidate process cleanup, the root-only external supervisor signs a canonical completion statement binding the initial attestation, live job/runner policy, request digest, and every final artifact byte; candidate code cannot access the signer socket. The controller independently verifies that signature before sealing. Candidate code receives no job, runtime, package, mirror, or write credential and cannot publish or push tags.
+   The workflow is globally serialized per repository. Validation and build have independent pinned repository-registration scope digests, and the completion statement binds the supervisor-derived build digest; the target client and controller require each role's evidence to equal its pinned acceptance value. Every RC, final, or post request consumes its ephemeral validation/build pair, so the next request requires freshly registered and reviewed identities.
+> **Current state — publication is restored to in-repository jobs.**
+> The locked control plane described below is **implemented and reviewed
+> in-tree but not active**, because the isolated runner fleet it requires
+> (`ci-release-netbox-proxbox`, `release-builder`, `release-publisher`) does not
+> exist — no runner in the estate advertises those labels, and
+> `N-MultiCloud/release-control` has zero runners. `.gitea/workflows/publish-gitea.yml`
+> therefore publishes directly on the existing `mirror-host` runner: it builds
+> the wheel/sdist, uploads to the Gitea Package Registry, verifies the package,
+> pushes the tag to the authorised GitHub repository, and creates the GitHub
+> Release for final tags only.
+>
+> This restores the path that shipped `0.0.23`. It is a deliberate, tracked
+> deferral of the hardening, not a regression, and it is consistent with the
+> rule stated below: an unprovisioned control repository is a release freeze,
+> not a reason to remove publication. Re-landing the control plane is tracked as
+> a follow-up and requires the runner fleet first.
+
+4. **Locked validation and publication** — dispatch `validate.yml` first, then the separate irreversible `publish.yml`, each with exactly the repository name, first-attempt target run ID, and request SHA-256. The isolated builder verifies and seals the bytes; the isolated publisher uploads the exact package and promotes only RC tags to GitHub.
+5. **Production gate** — link and verify the final Gitea package, then deploy through NMS with `latest_package` by default (or explicitly selected `main_branch`).
+6. **Public promotion** — after production health validation, promote the final tag and create the GitHub Release; `release: published` authorizes PyPI.
 
 ### RC (release-candidate) pipeline
 
-1. Push a `vX.Y.ZrcN` tag to Gitea; the private publisher promotes that RC tag to GitHub.
-2. `.github/workflows/publish-testpypi.yml` fires on `push: tags: v*rc*` → publishes to TestPyPI.
+1. Push a `vX.Y.ZrcN` tag to Gitea and wait for its `release-control-request` artifact.
+2. Hash `release-request.json`; dispatch `validate.yml`, then `publish.yml`, with exactly `repository=netbox-proxbox`, the target run ID, and that SHA-256. The control publisher publishes the Gitea bytes and promotes only that RC tag to GitHub.
+3. `.github/workflows/publish-testpypi.yml` fires on `push: tags: v*rc*` → publishes the exact Gitea bytes to TestPyPI.
 
 ### Immutable-version guarantee
 
@@ -294,15 +315,27 @@ PyPI must never be replaced with different bytes; advance to the next `rcN` or
 
 ### Gitea Package Registry
 
-The private publisher directly downloads and verifies the pinned uv archive,
-clears inherited `UV_*` state, disables discovered configuration, and uses fresh
-per-run managed-Python and cache roots. Candidate build and verification run in
-disposable `ci-untrusted-python312` jobs, then transfer only the wheel, sdist,
-and manifest to a fresh credential job on the dedicated protected
-`release-publisher` runner. Candidate source and processes cannot persist into
-that boundary. The built-in token stays package-read-only, and the
-repository `PKG_TOKEN` reaches only the package-write step through Twine's
-environment and a protected netrc, never a process argument. The registry URL is
+The target workflow uses the runner image's exact Python 3.12.14 and uv 0.12.5
+after verifying the baked interpreter/tool versions, the policy-pinned
+`uv.lock` digest, and the build-lock checksum manifest for its read-only
+wheelhouse. Dependency resolution is offline (`--no-index`, no Python
+downloads). The trusted outer steps use image-baked Gitea checkout and artifact
+clients, so their only network authority is same-origin Gitea access. Two
+job-bound ephemeral
+`ci-release-netbox-proxbox` registrations provide distinct validation and build
+runner identities; each advertises only that release label and terminates after
+its one assigned job.
+The job produces exactly the package wheel, package sdist,
+`release-manifest.json`, `release-request.json`,
+`runner-completion-attestation.json`, and
+`runner-completion-attestation.sig`. The request
+binds the repository ID, source/tag/version, first-attempt run identity,
+workflow digest, manifest digest, and artifact inventory. The target repository
+holds no package or mirror credential. The separately administered control
+plane verifies the policy-pinned target workflow and every byte on an isolated
+builder, seals the handoff, and lets only an isolated publisher read credentials
+or invoke fixed digest-locked publication tooling. Public no-authority downloads
+must match the manifest before the durable ledger advances. The registry URL is
 `https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi`.
 The publish workflow deliberately accepts tag `push` events, not Gitea's
 overlapping `create` event. Gitea emits both for a tag; subscribing to both
@@ -312,11 +345,14 @@ is never retried; fix forward with the next immutable version.
 ### Security
 
 - `publish-gitea.yml` accepts only a canonical version tag that equals current
-  Gitea `develop`; each latest required status must resolve to authenticated
-  successful `ci.yml` push-run/run-attempt/job evidence for that exact SHA,
+  Gitea `develop`; writer-controlled commit statuses are ignored, and the
+  newest authenticated `ci.yml` Actions run plus its required jobs must prove
+  a successful first push attempt for that exact SHA,
   trusted actor, expected job, and untrusted runner class.
-- Build credentials and package credentials are separated; the registry package
-  is linked to this repository and byte-compared with its canonical manifest.
+- The target workflow cannot publish. The control builder and publisher use
+  separate identities, state, runtime directories, and locked executables; the
+  registry package is linked to this repository and byte-compared with its
+  canonical manifest.
 
 ## Gitea-to-GitHub Mirror
 

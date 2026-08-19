@@ -2,12 +2,18 @@
 
 from __future__ import annotations
 
+import ast
+import hashlib
 import importlib.util
+import json
+import os
+import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
-import yaml
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GITEA_PUBLISH_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "publish-gitea.yml"
@@ -19,7 +25,17 @@ GITEA_DEPLOY_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "deploy-production.
 GITEA_PROMOTE_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "promote-final-tag.yml"
 RELEASE_ARTIFACTS_PATH = REPO_ROOT / "scripts" / "release_artifacts.py"
 CI_GATE_PATH = REPO_ROOT / "scripts" / "gitea_ci_gate.py"
+RUNNER_GATE_PATH = REPO_ROOT / "scripts" / "gitea_release_runner_gate.py"
+RUNNER_ACCEPTANCE_PATH = REPO_ROOT / ".gitea" / "release-runner-acceptance.json"
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
+RELEASE_CONTROL_DOC_PATHS = (
+    REPO_ROOT / "AGENTS.md",
+    REPO_ROOT / "CLAUDE.md",
+    REPO_ROOT / "docs" / "developer" / "release-publishing.md",
+    REPO_ROOT / "README.md",
+    REPO_ROOT / "docs" / "release-notes" / "version-0.0.24.md",
+)
+CANARY_DOC_PATHS = RELEASE_CONTROL_DOC_PATHS[:3]
 
 
 def _load_release_artifacts():
@@ -40,130 +56,398 @@ def _load_ci_gate():
     return module
 
 
+def _load_runner_gate():
+    spec = importlib.util.spec_from_file_location(
+        "gitea_release_runner_gate", RUNNER_GATE_PATH
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _read(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
-def test_gitea_publish_promotes_only_rc_tags_to_github() -> None:
-    workflow = _read(GITEA_PUBLISH_WORKFLOW)
+def _step(job: dict[str, object], name: str) -> dict[str, object]:
+    steps = job["steps"]
+    assert isinstance(steps, list)
+    return next(
+        step for step in steps if isinstance(step, dict) and step.get("name") == name
+    )
 
-    assert "needs.validate-source.outputs.is_rc == 'true'" in workflow
-    assert "gh release create" not in workflow
-    assert "Create GitHub Release" not in workflow
-    assert "refs/heads/develop:refs/remotes/gitea/release-develop" in workflow
-    assert "release-manifest.json" in workflow
-    assert "fetch-gitea" in workflow
-    assert "scripts/release_artifacts.py release-transfer/" in workflow
-    assert "release-transfer/release_artifacts.py" in workflow
-    assert "/-/link/netbox-proxbox" in workflow
-    assert "generic/netbox-proxbox-release-manifest/${VERSION}" in workflow
-    assert "scripts/gitea_ci_gate.py" in workflow
-    assert "/commits/${SOURCE_SHA}/statuses" not in workflow
-    assert (
-        "actions/upload-artifact@c6a3b2bd78b3985e4b2f15397fec357f0fd808de" in workflow
-    )
-    assert (
-        "actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b" in workflow
-    )
-    parsed = yaml.safe_load(workflow)
-    assert parsed["jobs"]["publish-gitea"]["runs-on"] == "release-publisher"
-    assert all(
-        job["runs-on"] == "ci-untrusted-python312"
-        for name, job in parsed["jobs"].items()
-        if name != "publish-gitea"
-    )
-    assert parsed["jobs"]["publish-gitea"]["permissions"] == {
-        "contents": "read",
-        "packages": "read",
+
+def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -> None:
+    gate = _load_runner_gate()
+    with pytest.raises(gate.RunnerGateError, match="not activated"):
+        gate.validate_release_runner(
+            acceptance_path=RUNNER_ACCEPTANCE_PATH,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            run_id=12,
+            job_name="Build exact publisher-credential-free release-control request",
+            source_sha="a" * 40,
+            token="",
+            jobs_payload={"jobs": [], "total_count": 0},
+        )
+
+    acceptance = {
+        "attestation_public_key_sha256": "",
+        "network_attestation_sha256": "b" * 64,
+        "registered_labels": [
+            "ci-release-netbox-proxbox",
+        ],
+        "runner_id": 41,
+        "runner_label": "ci-release-netbox-proxbox",
+        "runner_name": "ci-release-netbox-proxbox-runner",
+        "runner_scope_sha256": "e" * 64,
+        "runtime_attestation_sha256": "a" * 64,
+        "runtime_image_digest": "c" * 64,
+        "schema": 1,
+        "supervisor_policy_sha256": "d" * 64,
+        "validation_runner_id": 42,
+        "validation_runner_name": "ci-release-netbox-proxbox-validate",
+        "validation_runner_scope_sha256": "f" * 64,
     }
-    assert "astral-sh/setup-uv@" not in workflow
-    assert "RUNNER_TOOL_CACHE" not in workflow
-    assert "UV_MANAGED_PYTHON" not in workflow
-    assert "mirror-host" not in workflow
-    assert "packages: write" not in workflow
-    assert (
-        workflow.count(
-            "https://github.com/astral-sh/uv/releases/download/0.11.28/"
-            "uv-x86_64-unknown-linux-gnu.tar.gz"
-        )
-        == 3
+    private_key = tmp_path / "private.pem"
+    public_key = tmp_path / "public.pem"
+    subprocess.run(
+        [
+            "/usr/bin/openssl",
+            "genpkey",
+            "-algorithm",
+            "RSA",
+            "-pkeyopt",
+            "rsa_keygen_bits:2048",
+            "-out",
+            str(private_key),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
-    assert (
-        workflow.count(
-            "e490a6464492183c5d4534a5527fb4440f7f2bb2f228162ad7e4afe076dc0224"
-        )
-        == 3
+    subprocess.run(
+        [
+            "/usr/bin/openssl",
+            "pkey",
+            "-in",
+            str(private_key),
+            "-pubout",
+            "-out",
+            str(public_key),
+        ],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
     )
-    assert workflow.count("sha256sum --check --strict") == 3
-    assert workflow.count("UV_PYTHON_INSTALL_DIR=%s") == 3
-    assert workflow.count("while IFS='=' read -r VARIABLE _; do") == 6
-    assert workflow.count('case "$VARIABLE" in UV_*) unset "$VARIABLE" ;; esac') == 6
-    assert workflow.count("--no-config") == 6
-    assert workflow.count("--managed-python") == 6
-    assert workflow.count("--no-python-downloads") == 3
-    assert workflow.count('"$MANAGED_PYTHON_ROOT"/*) ;;') == 2
-    assert "GITEA_TOKEN: ${{ secrets.PKG_TOKEN }}" in workflow
-    assert "GITEA_TOKEN: ${{ github.token }}" not in workflow
-    assert "Fetch validated publisher tool anonymously" in workflow
-    assert '"$PUBLISHER_UV" sync' in workflow
-    assert '"$PUBLISHER_TWINE" upload --non-interactive' in workflow
-    assert '"$BUILD_ROOT/venv/bin/python" -m build --no-isolation' in workflow
-    assert "uvx --from twine" not in workflow
+    acceptance["attestation_public_key_sha256"] = hashlib.sha256(
+        public_key.read_bytes()
+    ).hexdigest()
+    assert gate.TRUSTED_EXTERNAL_UID == 0
+    with pytest.raises(gate.RunnerGateError, match="metadata is unsafe"):
+        gate._open_external_file(
+            public_key,
+            "attestation public key",
+            16384,
+            trusted_uid=os.geteuid() + 1,
+        )
+    public_key.chmod(0o666)
+    with pytest.raises(gate.RunnerGateError, match="metadata is unsafe"):
+        gate._open_external_file(
+            public_key,
+            "attestation public key",
+            16384,
+            trusted_uid=os.geteuid(),
+        )
+    public_key.chmod(0o644)
+    acceptance_path = tmp_path / "acceptance.json"
+    acceptance_path.write_bytes(gate._canonical_json(acceptance))
+    job = {
+        "conclusion": None,
+        "head_sha": "a" * 40,
+        "id": 34,
+        "labels": ["ci-release-netbox-proxbox"],
+        "name": "Build exact publisher-credential-free release-control request",
+        "run_attempt": 1,
+        "run_id": 12,
+        "runner_id": 41,
+        "runner_name": "ci-release-netbox-proxbox-runner",
+        "status": "in_progress",
+    }
+    attestation_root = tmp_path / "attestations"
+    attestation_root.mkdir()
+    attestation_path = attestation_root / "run-12-job-34.json"
+    signature_path = attestation_root / "run-12-job-34.sig"
+    attestation = {
+        "expires_at": 1200,
+        "issued_at": 1000,
+        "job_id": 34,
+        "network_attestation_sha256": acceptance["network_attestation_sha256"],
+        "registered_labels": acceptance["registered_labels"],
+        "repository": "emersonfelipesp/netbox-proxbox",
+        "run_attempt": 1,
+        "run_id": 12,
+        "runner_id": 41,
+        "runner_name": "ci-release-netbox-proxbox-runner",
+        "runner_scope_sha256": acceptance["runner_scope_sha256"],
+        "runtime_attestation_sha256": acceptance["runtime_attestation_sha256"],
+        "runtime_image_digest": acceptance["runtime_image_digest"],
+        "schema": 1,
+        "source_sha": "a" * 40,
+        "supervisor_policy_sha256": acceptance["supervisor_policy_sha256"],
+        "workflow_path": gate.WORKFLOW_RELATIVE_PATH,
+        "workflow_sha256": hashlib.sha256(gate.WORKFLOW_PATH.read_bytes()).hexdigest(),
+    }
+
+    def sign(value: dict[str, object]) -> None:
+        attestation_path.write_bytes(gate._canonical_json(value))
+        subprocess.run(
+            [
+                "/usr/bin/openssl",
+                "dgst",
+                "-sha256",
+                "-sign",
+                str(private_key),
+                "-out",
+                str(signature_path),
+                str(attestation_path),
+            ],
+            check=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+
+    sign(attestation)
+    assert (
+        gate.validate_release_runner(
+            acceptance_path=acceptance_path,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            run_id=12,
+            job_name=job["name"],
+            source_sha="a" * 40,
+            token="",
+            jobs_payload={"jobs": [job], "total_count": 1},
+            attestation_root=attestation_root,
+            public_key_path=public_key,
+            now=1100,
+            trusted_external_uid=os.geteuid(),
+        )["runner_id"]
+        == 41
+    )
+    with pytest.raises(gate.RunnerGateError, match="exact accepted"):
+        gate.validate_release_runner(
+            acceptance_path=acceptance_path,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            run_id=12,
+            job_name=job["name"],
+            source_sha="a" * 40,
+            token="",
+            jobs_payload={"jobs": [{**job, "runner_id": 42}], "total_count": 1},
+            attestation_root=attestation_root,
+            public_key_path=public_key,
+            now=1100,
+        )
+    for label, changed in (
+        ("stale", {"issued_at": 800, "expires_at": 1000}),
+        ("runtime", {"runtime_image_digest": "e" * 64}),
+        ("network", {"network_attestation_sha256": "f" * 64}),
+        ("repository-scope", {"runner_scope_sha256": "f" * 64}),
+        ("run-attempt", {"run_attempt": 2}),
+        ("workflow-path", {"workflow_path": ".gitea/workflows/other.yml"}),
+        ("workflow-digest", {"workflow_sha256": "f" * 64}),
+        (
+            "labels",
+            {
+                "registered_labels": [
+                    *acceptance["registered_labels"],
+                    "ci-untrusted-extra",
+                ]
+            },
+        ),
+    ):
+        sign({**attestation, **changed})
+        with pytest.raises(gate.RunnerGateError, match="differs"):
+            gate.validate_release_runner(
+                acceptance_path=acceptance_path,
+                owner="emersonfelipesp",
+                repository="netbox-proxbox",
+                run_id=12,
+                job_name=job["name"],
+                source_sha="a" * 40,
+                token="",
+                jobs_payload={"jobs": [job], "total_count": 1},
+                attestation_root=attestation_root,
+                public_key_path=public_key,
+                now=1100,
+                trusted_external_uid=os.geteuid(),
+            )
 
 
-def test_gitea_package_secret_isolated_from_candidate_execution() -> None:
+def test_release_jobs_require_distinct_job_bound_ephemeral_identities(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    gate = _load_runner_gate()
+    acceptance = {
+        "attestation_public_key_sha256": "a" * 64,
+        "network_attestation_sha256": "b" * 64,
+        "registered_labels": ["ci-release-netbox-proxbox"],
+        "runner_id": 41,
+        "runner_label": "ci-release-netbox-proxbox",
+        "runner_name": "ci-release-netbox-proxbox-build",
+        "runner_scope_sha256": "c" * 64,
+        "runtime_attestation_sha256": "d" * 64,
+        "runtime_image_digest": "e" * 64,
+        "schema": 1,
+        "supervisor_policy_sha256": "f" * 64,
+        "validation_runner_id": 42,
+        "validation_runner_name": "ci-release-netbox-proxbox-validate",
+        "validation_runner_scope_sha256": "a" * 64,
+    }
+    acceptance_path = tmp_path / "acceptance.json"
+    acceptance_path.write_bytes(gate._canonical_json(acceptance))
+    observed_scopes: list[str] = []
+
+    def verify_attestation(**kwargs: object) -> str:
+        observed_scopes.append(str(kwargs["expected_runner_scope_sha256"]))
+        return "0" * 64
+
+    monkeypatch.setattr(gate, "_verify_live_attestation", verify_attestation)
+    jobs = (
+        (
+            gate.VALIDATION_JOB_NAME,
+            acceptance["validation_runner_id"],
+            acceptance["validation_runner_name"],
+            acceptance["validation_runner_scope_sha256"],
+        ),
+        (
+            gate.BUILD_JOB_NAMES["netbox-proxbox"],
+            acceptance["runner_id"],
+            acceptance["runner_name"],
+            acceptance["runner_scope_sha256"],
+        ),
+    )
+    for index, (job_name, runner_id, runner_name, runner_scope) in enumerate(
+        jobs, start=1
+    ):
+        job = {
+            "conclusion": None,
+            "head_sha": "a" * 40,
+            "id": 30 + index,
+            "labels": [acceptance["runner_label"]],
+            "name": job_name,
+            "run_attempt": 1,
+            "run_id": 12,
+            "runner_id": runner_id,
+            "runner_name": runner_name,
+            "status": "in_progress",
+        }
+        evidence = gate.validate_release_runner(
+            acceptance_path=acceptance_path,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            run_id=12,
+            job_name=job_name,
+            source_sha="a" * 40,
+            token="",
+            jobs_payload={"jobs": [job], "total_count": 1},
+        )
+        assert evidence["runner_id"] == runner_id
+        assert observed_scopes[-1] == runner_scope
+    acceptance["validation_runner_id"] = acceptance["runner_id"]
+    acceptance_path.write_bytes(gate._canonical_json(acceptance))
+    with pytest.raises(gate.RunnerGateError, match="not activated"):
+        gate.validate_release_runner(
+            acceptance_path=acceptance_path,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            run_id=12,
+            job_name=gate.BUILD_JOB_NAMES["netbox-proxbox"],
+            source_sha="a" * 40,
+            token="",
+            jobs_payload={"jobs": [], "total_count": 0},
+        )
+
+
+def test_authenticated_release_evidence_rejects_ambient_proxies(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    ci_gate = _load_ci_gate()
+    runner_gate = _load_runner_gate()
+    for name in tuple(os.environ):
+        if name.casefold() in ci_gate.PROXY_ENVIRONMENT_NAMES:
+            monkeypatch.delenv(name, raising=False)
+    monkeypatch.setenv("HTTPS_PROXY", "https://proxy.invalid")
+    with pytest.raises(ci_gate.CIGateError, match="ambient proxy"):
+        ci_gate._request_json("/repos/owner/repository/actions/runs", token="token")
+    with pytest.raises(runner_gate.RunnerGateError, match="ambient proxy"):
+        runner_gate._request_jobs("owner", "repository", 1, "token")
+
+
+@pytest.mark.skipif(os.name != "posix", reason="UID isolation requires POSIX")
+def test_dropped_build_uid_cannot_inherit_or_read_parent_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    if os.geteuid() != 0 or not Path("/proc/self/environ").exists():
+        pytest.skip("release runner UID boundary requires root with procfs")
+
+    monkeypatch.setenv("ACTIONS_RUNTIME_TOKEN", "parent-only-sentinel")
+
+    def drop_privileges() -> None:
+        os.setgroups([])
+        os.setgid(65532)
+        os.setuid(65532)
+
+    try:
+        result = subprocess.run(
+            [
+                "/bin/sh",
+                "-c",
+                'test -z "${ACTIONS_RUNTIME_TOKEN:-}" && '
+                'test ! -r "/proc/$BOUNDARY_PARENT_PID/environ"',
+            ],
+            check=False,
+            capture_output=True,
+            env={
+                "BOUNDARY_PARENT_PID": str(os.getpid()),
+                "PATH": "/usr/local/bin:/usr/bin:/bin",
+            },
+            preexec_fn=drop_privileges,
+            text=True,
+        )
+    except subprocess.SubprocessError:
+        pytest.skip("UID transitions are disabled in this test sandbox")
+
+    assert result.returncode == 0, result.stderr
+
+
+@pytest.mark.skipif(
+    sys.platform != "linux" or os.uname().machine != "x86_64",
+    reason="release seccomp contract requires x86-64 Linux",
+)
+@pytest.mark.skipif(
+    sys.platform != "linux" or os.uname().machine != "x86_64",
+    reason="release seccomp contract requires x86-64 Linux",
+)
+@pytest.mark.parametrize(
+    ("syscall_number", "arguments"),
+    [
+        (425, "ctypes.c_uint(1), ctypes.c_void_p()"),
+        (
+            0x40000000 | 41,
+            "ctypes.c_int(socket.AF_INET), ctypes.c_int(socket.SOCK_STREAM), ctypes.c_int(0)",
+        ),
+    ],
+)
+def _artifact_handoff_code() -> str:
     parsed = yaml.safe_load(_read(GITEA_PUBLISH_WORKFLOW))
-    jobs = parsed["jobs"]
-    verify_job = jobs["verify-candidate"]
-    publish_job = jobs["publish-gitea"]
-    verify_source = yaml.safe_dump(verify_job)
-    publish_source = yaml.safe_dump(publish_job)
-
-    assert publish_job["needs"] == ["validate-source", "verify-candidate"]
-    assert publish_job["runs-on"] == "release-publisher"
-    assert verify_job["runs-on"] == "ci-untrusted-python312"
-    assert "secrets.PKG_TOKEN" not in verify_source
-    assert "publisher-tool" in verify_source
-    assert "release_artifacts.py verify" in verify_source
-    assert "verified-transfer" in publish_source
-    assert "publisher-tool" not in publish_source
-    assert "verifier-tool" not in publish_source
-    assert "release_artifacts.py" not in publish_source
-    assert "actions/checkout@" not in publish_source
-    assert "git fetch" not in publish_source
-    assert publish_source.count("secrets.PKG_TOKEN") == 1
-    assert "TWINE_PASSWORD" in publish_source
-    assert "--netrc-file" in publish_source
-    assert "--password" not in publish_source
-    assert 'header "Authorization:' not in publish_source
-
-    secret_steps = [
-        step
-        for step in publish_job["steps"]
-        if "secrets.PKG_TOKEN" in yaml.safe_dump(step)
-    ]
-    assert [step["name"] for step in secret_steps] == [
-        "Publish exact files with package-only authority"
-    ]
-    secret_run = secret_steps[0]["run"]
-    assert secret_run.index("unset TWINE_PASSWORD") < secret_run.index("curl --fail")
-
-
-def test_gitea_registry_verification_runs_after_credential_job() -> None:
-    workflow = _read(GITEA_PUBLISH_WORKFLOW)
-    parsed = yaml.safe_load(workflow)
-    verify_job = parsed["jobs"]["verify-registry"]
-    verify_source = yaml.safe_dump(verify_job)
-
-    assert verify_job["needs"] == ["validate-source", "publish-gitea"]
-    assert "secrets.PKG_TOKEN" not in verify_source
-    assert "fetch-gitea" in verify_source
-    assert parsed["jobs"]["push-to-github"]["needs"] == [
-        "validate-source",
-        "verify-registry",
-    ]
-    assert 'GIT_ASKPASS="$SECRET_ROOT/askpass"' in workflow
-    assert "http.https://github.com/.extraheader" not in workflow
+    bind_run = _step(
+        parsed["jobs"]["build-request"],
+        "Bind exact artifacts into the control request",
+    )["run"]
+    return bind_run.split("<<'PY'\n", 1)[1].split("\nPY\n", 1)[0]
 
 
 def test_gitea_artifact_v3_compatibility_probe_is_bounded_and_disposable() -> None:
@@ -190,14 +474,6 @@ def test_gitea_artifact_v3_compatibility_probe_is_bounded_and_disposable() -> No
         "actions/download-artifact@ad191675b41f6a5b46da9a048cb6893812da158b" in workflow
     )
     assert "mirror-host" not in workflow
-
-
-def test_gitea_publish_does_not_bypass_nms_production_deployment() -> None:
-    workflow = _read(GITEA_PUBLISH_WORKFLOW)
-
-    assert "Deploy to production" not in workflow
-    assert "deploy-netbox-plugin" not in workflow
-    assert "nmc-prod-207" not in workflow
 
 
 def test_github_publish_accepts_rc_pushes_and_final_release_events_only() -> None:
@@ -307,6 +583,7 @@ def test_public_publish_workflow_uses_immutable_locked_tooling() -> None:
 
     assert project["dependency-groups"]["publish"] == [
         "build==1.5.0",
+        "hatchling==1.31.0",
         "packaging==26.0",
         "setuptools==80.9.0",
         "twine==6.2.0",
@@ -386,44 +663,43 @@ def test_release_manifest_binds_exact_artifact_bytes(tmp_path: Path) -> None:
         )
 
 
-def test_ci_gate_binds_status_to_authenticated_run_and_job(
+def test_ci_gate_binds_latest_actions_run_to_authenticated_jobs(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     gate = _load_ci_gate()
     sha = "a" * 40
     context = "CI / Static checks and mocked regressions (push)"
+    runs_path = (
+        "/repos/emersonfelipesp/netbox-proxbox/actions/runs?"
+        f"branch=develop&event=push&head_sha={sha}&limit=100&page=1"
+    )
+    jobs_path = "/repos/emersonfelipesp/netbox-proxbox/actions/runs/12/jobs"
+    run = {
+        "id": 12,
+        "event": "push",
+        "status": "completed",
+        "conclusion": "success",
+        "head_sha": sha,
+        "head_branch": "develop",
+        "path": "ci.yml@refs/heads/develop",
+        "run_attempt": 0,
+        "actor": {"login": "emersonfelipesp"},
+    }
+    job = {
+        "id": 34,
+        "run_id": 12,
+        "run_attempt": 1,
+        "name": "Static checks and mocked regressions",
+        "status": "completed",
+        "conclusion": "success",
+        "head_sha": sha,
+        "runner_name": "ci-untrusted-netbox-proxbox",
+        "labels": ["ci-untrusted-python312"],
+        "html_url": "https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox/actions/runs/12/jobs/34",
+    }
     responses = {
-        f"/repos/emersonfelipesp/netbox-proxbox/commits/{sha}/statuses?limit=100": [
-            {
-                "id": 8,
-                "context": context,
-                "status": "success",
-                "target_url": "/emersonfelipesp/netbox-proxbox/actions/runs/12/jobs/34",
-            }
-        ],
-        "/repos/emersonfelipesp/netbox-proxbox/actions/runs/12": {
-            "id": 12,
-            "event": "push",
-            "status": "completed",
-            "conclusion": "success",
-            "head_sha": sha,
-            "head_branch": "develop",
-            "path": "ci.yml@refs/heads/develop",
-            "run_attempt": 2,
-            "actor": {"login": "emersonfelipesp"},
-        },
-        "/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34": {
-            "id": 34,
-            "run_id": 12,
-            "run_attempt": 2,
-            "name": "Static checks and mocked regressions",
-            "status": "completed",
-            "conclusion": "success",
-            "head_sha": sha,
-            "runner_name": "ci-untrusted-netbox-proxbox",
-            "labels": ["ci-untrusted-python312"],
-            "html_url": "https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox/actions/runs/12/jobs/34",
-        },
+        runs_path: {"workflow_runs": [run], "total_count": 1},
+        jobs_path: {"jobs": [job], "total_count": 1},
     }
     monkeypatch.setattr(gate, "_request_json", lambda path, *, token: responses[path])
 
@@ -435,11 +711,55 @@ def test_ci_gate_binds_status_to_authenticated_run_and_job(
         trusted_actor="emersonfelipesp",
         token="test-token",
     )
-    assert evidence == {context: {"job_id": 34, "run_attempt": 2, "run_id": 12}}
+    assert evidence == {context: {"job_id": 34, "run_attempt": 1, "run_id": 12}}
 
-    responses["/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34"][
-        "run_attempt"
-    ] = 1
+    runs = responses[runs_path]["workflow_runs"]
+    assert isinstance(runs, list)
+    runs.insert(
+        0,
+        {
+            **run,
+            "id": 13,
+            "status": "completed",
+            "conclusion": "failure",
+        },
+    )
+    responses[runs_path]["total_count"] = 2
+    with pytest.raises(gate.CIGateError, match="run does not match"):
+        gate.validate_ci_gate(
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            source_sha=sha,
+            required_contexts=[context],
+            trusted_actor="emersonfelipesp",
+            token="test-token",
+        )
+    runs.pop(0)
+    responses[runs_path]["total_count"] = 1
+
+    run["run_attempt"] = 1
+    assert gate.validate_ci_gate(
+        owner="emersonfelipesp",
+        repository="netbox-proxbox",
+        source_sha=sha,
+        required_contexts=[context],
+        trusted_actor="emersonfelipesp",
+        token="test-token",
+    ) == {context: {"job_id": 34, "run_attempt": 1, "run_id": 12}}
+
+    run["run_attempt"] = 2
+    with pytest.raises(gate.CIGateError, match="run attempt is invalid"):
+        gate.validate_ci_gate(
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            source_sha=sha,
+            required_contexts=[context],
+            trusted_actor="emersonfelipesp",
+            token="test-token",
+        )
+    run["run_attempt"] = 0
+
+    job["run_attempt"] = 2
     with pytest.raises(gate.CIGateError, match="job does not match"):
         gate.validate_ci_gate(
             owner="emersonfelipesp",
@@ -449,13 +769,21 @@ def test_ci_gate_binds_status_to_authenticated_run_and_job(
             trusted_actor="emersonfelipesp",
             token="test-token",
         )
-    responses["/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34"][
-        "run_attempt"
-    ] = 2
+    job["run_attempt"] = 1
 
-    responses["/repos/emersonfelipesp/netbox-proxbox/actions/jobs/34"]["head_sha"] = (
-        "b" * 40
-    )
+    job["labels"] = ["ci-untrusted-python312", "prod-deploy"]
+    with pytest.raises(gate.CIGateError, match="trusted CI runner class"):
+        gate.validate_ci_gate(
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            source_sha=sha,
+            required_contexts=[context],
+            trusted_actor="emersonfelipesp",
+            token="test-token",
+        )
+    job["labels"] = ["ci-untrusted-python312"]
+
+    job["head_sha"] = "b" * 40
     with pytest.raises(gate.CIGateError, match="job does not match"):
         gate.validate_ci_gate(
             owner="emersonfelipesp",
