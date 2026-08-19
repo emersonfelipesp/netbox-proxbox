@@ -61,7 +61,7 @@ APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
 CURRENT_PLUGIN_VERSION = "0.0.24"
 CURRENT_RELEASE_VERSION = "0.0.24"
-CURRENT_PACKAGE_VERSION = "0.0.24rc2"
+CURRENT_PACKAGE_VERSION = "0.0.24rc3"
 CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.20"
 CURRENT_PAIRING_LINE = (
     "Current backend-runtime pairing: netbox-proxbox 0.0.24 <-> proxbox-api "
