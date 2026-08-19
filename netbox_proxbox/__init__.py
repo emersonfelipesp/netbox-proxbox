@@ -174,7 +174,7 @@ class ProxboxConfig(PluginConfig):
     name = "netbox_proxbox"
     verbose_name = "Proxbox"
     description = "Integrates Proxmox and Netbox"
-    version = "0.0.24rc3"
+    version = "0.0.24rc4"
     author = "Emerson Felipe (@emersonfelipesp)"
     author_email = "emersonfelipe.2003@gmail.com"
     # Sourced from .compat so the stable/experimental bands are declared in one
