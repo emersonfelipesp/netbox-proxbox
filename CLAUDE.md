@@ -657,6 +657,23 @@ receives no package, mirror, job, runtime, or write credential.
 Two job-bound ephemeral `ci-release-netbox-proxbox` registrations provide
 distinct validation and build runner identities; each advertises only that
 release label and terminates after its one assigned job. Every RC, final, or
+> **Current state — publication is restored to in-repository jobs.**
+> The locked control plane described below is **implemented and reviewed
+> in-tree but not active**, because the isolated runner fleet it requires
+> (`ci-release-netbox-proxbox`, `release-builder`, `release-publisher`) does not
+> exist — no runner in the estate advertises those labels, and
+> `N-MultiCloud/release-control` has zero runners. `.gitea/workflows/publish-gitea.yml`
+> therefore publishes directly on the existing `mirror-host` runner: it builds
+> the wheel/sdist, uploads to the Gitea Package Registry, verifies the package,
+> pushes the tag to the authorised GitHub repository, and creates the GitHub
+> Release for final tags only.
+>
+> This restores the path that shipped `0.0.23`. It is a deliberate, tracked
+> deferral of the hardening, not a regression, and it is consistent with the
+> rule stated below: an unprovisioned control repository is a release freeze,
+> not a reason to remove publication. Re-landing the control plane is tracked as
+> a follow-up and requires the runner fleet first.
+
 post request requires a freshly registered and reviewed pair. The build job produces
 the manifest-bound wheel/sdist and uploads
 exactly six data files: wheel, sdist,
