@@ -189,35 +189,49 @@ jobs:
           # Provenance is preserved by construction rather than by assertion:
           # the workflow is triggered by the tag and this job checked that exact
           # ref out, so the distributions are built from the tagged commit.
-          SOURCE_SHA="$(git rev-parse HEAD^{commit})"
+          export SOURCE_SHA="$(git rev-parse HEAD^{commit})"
           rm -rf dist
           uv build --sdist --wheel --out-dir dist
           .venv/bin/python -m twine check dist/*
 
-          # Record what was built, and verify the declared version matches the
-          # tag so a mismatched manifest cannot reach an index.
-          python - <<'PY' > release-manifest.json
-          import hashlib, json, os, pathlib
+          # Record what was built and validate it in one pass, so the manifest
+          # and the check cannot disagree about which artifacts they describe.
+          # A distribution whose filename does not carry the tagged version
+          # fails here rather than reaching an index.
+          python - <<'PY'
+          import hashlib, json, os, pathlib, sys
+
+          version = os.environ["VERSION"]
           entries = []
+          # uv writes a .gitignore into dist/; only real distributions count.
           for path in sorted(pathlib.Path("dist").iterdir()):
-              if path.is_file():
-                  digest = hashlib.sha256(path.read_bytes()).hexdigest()
-                  entries.append({"name": path.name, "sha256": digest,
-                                  "size": path.stat().st_size})
-          print(json.dumps({"version": os.environ["VERSION"],
-                            "source_sha": os.environ["SOURCE_SHA"],
-                            "artifacts": entries},
-                           sort_keys=True, separators=(",", ":")))
-          PY
-          SOURCE_SHA="$SOURCE_SHA" VERSION="$VERSION" python - <<'PY'
-          import json, os, sys
-          data = json.load(open("release-manifest.json"))
-          if not data["artifacts"]:
+              if not path.is_file():
+                  continue
+              if path.suffix not in {".whl", ".gz"}:
+                  continue
+              data = path.read_bytes()
+              entries.append({
+                  "name": path.name,
+                  "sha256": hashlib.sha256(data).hexdigest(),
+                  "size": len(data),
+              })
+
+          if not entries:
               sys.exit("no distributions were built")
-          for art in data["artifacts"]:
-              if os.environ["VERSION"] not in art["name"]:
-                  sys.exit(f"artifact {art['name']} does not carry version "
-                           f"{os.environ['VERSION']}")
+          missing = [e["name"] for e in entries if version not in e["name"]]
+          if missing:
+              sys.exit(f"artifacts do not carry version {version}: {missing}")
+
+          manifest = {
+              "version": version,
+              "source_sha": os.environ["SOURCE_SHA"],
+              "artifacts": entries,
+          }
+          pathlib.Path("release-manifest.json").write_text(
+              json.dumps(manifest, sort_keys=True, separators=(",", ":")) + "\n",
+              encoding="utf-8",
+          )
+          print(f"built {len(entries)} distribution(s) for {version}")
           PY
 
           MANIFEST_SHA256="$(sha256sum release-manifest.json | cut -d' ' -f1)"
