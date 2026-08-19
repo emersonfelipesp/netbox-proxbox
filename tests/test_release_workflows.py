@@ -573,7 +573,7 @@ def test_github_promotion_publishes_only_the_tagged_source() -> None:
 
     # What was built is recorded, and a version mismatch fails closed.
     assert "release-manifest.json" in workflow
-    assert "does not carry version" in workflow
+    assert "do not carry version" in workflow
 
     # Every built distribution is still installed and smoke-tested, both kinds
     # across both supported interpreters.
