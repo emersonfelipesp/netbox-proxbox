@@ -1,5 +1,28 @@
 # Agent Entry Points
 
+## Installation Docs: Two Traps
+
+**Endpoint addresses depend on which container dials.** The `FastAPIEndpoint`
+record is consumed by the NetBox container; the `NetBoxEndpoint` record is
+consumed by the backend container. Both are filled in from the NetBox UI, which
+makes the browser-visible address the tempting wrong answer for both. In a
+single Compose project each needs the peer's **service name** and
+**container-internal** port — never `localhost`, never a `127.0.0.1`-published
+host port. The `8800` default on `FastAPIEndpoint.port` is correct only for a
+standalone published container; keep both cases documented side by side rather
+than replacing one with the other.
+
+**The credential encryption key is an install-path prerequisite**, not a
+configuration detail. The backend refuses to store a Proxmox credential without
+one and says so only when the first endpoint is created. Keep the generate-and-
+supply steps in `docs/installation/backend-setup.md` and cross-link the setting
+semantics in `docs/configuration/plugin-settings.md`; do not duplicate them.
+Answer key-change questions from `services/encryption_recovery.py`, not from
+memory — rotation is verified and all-or-nothing, a lost key needs the
+permission-gated destructive reset, and a backend still on the old key blocks
+plugin rotation through the `/admin/encryption/status` attestation.
+
+
 ## Repository Destination Policy (Hard Rule)
 
 This project is owned and changed only through the Emerson repositories:
