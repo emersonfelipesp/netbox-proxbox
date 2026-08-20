@@ -391,41 +391,6 @@ def _failed_batch_object_detail(batch_result: dict[str, object]) -> str:
     return f"failed object(s): {detail}"
 
 
-# A full run is up to 13 stages per endpoint. Joining every stage's description --
-# each of which already quotes up to three errors -- would put tens of kilobytes into a
-# single job-log line. Name a bounded number and say how many were elided; the complete
-# per-stage detail is always in ``job.data``.
-_MAX_DESCRIBED_STAGES = 5
-
-
-def _describe_stage_failures(stages: list[dict[str, object]]) -> str:
-    """Join stage descriptions without letting the line grow with the estate."""
-    described = "; ".join(
-        _describe_stage_failure(stage) for stage in stages[:_MAX_DESCRIBED_STAGES]
-    )
-    remaining = len(stages) - _MAX_DESCRIBED_STAGES
-    if remaining > 0:
-        described = f"{described}; and {remaining} more (see the job's Data tab for all of them)"
-    return described
-
-
-def _describe_stage_failure(stage: dict[str, object]) -> str:
-    """One-line operator-facing description of a stage that recorded failures."""
-    summary = stage.get("result_summary") or {}
-    if not isinstance(summary, dict):
-        summary = {}
-    endpoint = stage.get("endpoint_id")
-    where = f"endpoint {endpoint}" if endpoint is not None else "unscoped"
-    detail = (
-        f"stage '{stage.get('sync_type')}' on {where}: "
-        f"{summary.get('failed', 0)} failed, {summary.get('succeeded', 0)} succeeded"
-    )
-    errors = summary.get("errors")
-    if isinstance(errors, list) and errors:
-        detail = f"{detail} ({'; '.join(str(error) for error in errors)})"
-    return detail
-
-
 def _runtime_summary(
     *,
     runtime_seconds: float,
@@ -1537,16 +1502,11 @@ class ProxboxSyncJob(JobRunner):
                 )
                 cluster_runtime = _runtime_seconds_since(cluster_started)
                 if cluster_result.success:
-                    # These count ProxmoxCluster/ProxmoxNode rows in the plugin's own
-                    # tables, written by update_or_create(). They say nothing about
-                    # whether the corresponding NetBox objects exist, and the previous
-                    # wording read as though NetBox had been populated.
                     cluster_summary = (
-                        f"{cluster_result.clusters_created} Proxbox cluster record(s) "
-                        f"created, {cluster_result.clusters_updated} updated, "
-                        f"{cluster_result.nodes_created} Proxbox node record(s) created, "
-                        f"{cluster_result.nodes_updated} updated "
-                        f"(plugin records — NetBox objects are created by the sync stages)"
+                        f"{cluster_result.clusters_created} cluster(s) created, "
+                        f"{cluster_result.clusters_updated} updated, "
+                        f"{cluster_result.nodes_created} node(s) created, "
+                        f"{cluster_result.nodes_updated} updated"
                     )
                     self.logger.info(
                         f"Cluster/node sync for endpoint {eid}: {cluster_summary}"
@@ -1762,32 +1722,6 @@ class ProxboxSyncJob(JobRunner):
             # no-op this preflight work exists to eliminate. Raise here, after
             # ``job.data`` is saved, so the per-endpoint reasons survive on the job
             # and the JobRunner still marks the run errored.
-            # A stage can return HTTP 200 with a terminal ``complete`` frame whose
-            # ``ok`` is true and still have had every NetBox write rejected: the
-            # backend's SSE generator sets ``ok`` from "the coroutine returned without
-            # raising", not from "objects landed". ``sync_stages`` now tallies the
-            # per-object frames the stream already carried, so act on that verdict here
-            # -- after ``job.data`` is saved, mirroring the endpoint-scope ordering
-            # below, so the per-stage counts survive on the errored row.
-            failed_stages = [
-                stage
-                for stage in stages_out
-                if (stage.get("result_summary") or {}).get("status") == "failed"
-            ]
-            warning_stages = [
-                stage
-                for stage in stages_out
-                if (stage.get("result_summary") or {}).get("status") == "warning"
-            ]
-            if warning_stages:
-                # Partial failures do not error the run: one unreachable guest must not
-                # fail an estate-wide scheduled sync. They must still be *stated*,
-                # because the whole defect being fixed is a run that looks clean.
-                self.logger.warning(
-                    f"{len(warning_stages)} stage(s) completed with failures: "
-                    + _describe_stage_failures(warning_stages)
-                )
-
             failed_scopes = [
                 stage
                 for stage in stages_out
@@ -1831,15 +1765,6 @@ class ProxboxSyncJob(JobRunner):
                     )
                 self.logger.error(scope_error)
                 raise RuntimeError(scope_error)
-
-            if failed_stages:
-                stage_error = (
-                    f"{len(failed_stages)} sync stage(s) reported HTTP success but "
-                    f"synced nothing to NetBox — "
-                    + _describe_stage_failures(failed_stages)
-                )
-                self.logger.error(stage_error)
-                raise RuntimeError(stage_error)
 
             self.logger.info(
                 f"All sync stages completed ({len(stages_out)}), runtime {runtime_seconds:.3f}s"

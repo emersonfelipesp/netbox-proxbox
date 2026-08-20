@@ -262,6 +262,133 @@ curl -X DELETE http://localhost:8800/auth/keys/1 \
   -H "X-Proxbox-API-Key: your-key"
 ```
 
+## Credential Encryption Key (required before the first Proxmox endpoint)
+
+**Do this before creating the Proxmox endpoint.** The backend refuses to store any
+Proxmox credential until it has an encryption key, and it says so only at the moment you
+try:
+
+```
+Credential encryption is not configured, so this secret cannot be stored.
+Set PROXBOX_ENCRYPTION_KEY, configure the ProxboxPluginSettings 'encryption_key' field,
+create a local key via POST /admin/encryption/key, or set PROXBOX_ALLOW_PLAINTEXT_CREDENTIALS=1
+```
+
+That message lists every option; it simply arrives after you believe setup is finished.
+
+### Generate a key
+
+```bash
+python3 -c "from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())"
+```
+
+This is the same value `generate_encryption_key()` produces inside the backend: a
+canonical URL-safe base64 Fernet key. Credentials are encrypted with Fernet
+(AES-128-CBC with HMAC), and the encrypted fields are the NetBox endpoint token and
+token key plus the Proxmox endpoint password and token value.
+
+### Supply it to the backend
+
+Pick **one** source. `PROXBOX_ENCRYPTION_KEY` is the recommended one because the key then
+lives with the backend that uses it.
+
+=== "Docker"
+
+    ```bash
+    docker run -d --name proxbox-api \
+      -p 8800:8000 \
+      -e PROXBOX_ENCRYPTION_KEY='<paste the generated key>' \
+      emersonfelipesp/proxbox-api:latest
+    ```
+
+=== "systemd / pip install"
+
+    ```ini
+    # /etc/systemd/system/proxbox-api.service
+    [Service]
+    Environment=PROXBOX_ENCRYPTION_KEY=<paste the generated key>
+    ```
+
+    Then `systemctl daemon-reload && systemctl restart proxbox-api`.
+
+=== "Backend-local key"
+
+    Have the backend generate a key and persist it to its own key file. The response
+    returns the key **once** — store it somewhere safe, because losing it strands every
+    credential encrypted with it:
+
+    ```bash
+    curl -X POST http://localhost:8800/admin/encryption/generate \
+      -H "X-Proxbox-API-Key: your-key"
+    ```
+
+    To persist a key you generated yourself instead, `POST /admin/encryption/key` takes
+    it in the body:
+
+    ```bash
+    curl -X POST http://localhost:8800/admin/encryption/key \
+      -H "X-Proxbox-API-Key: your-key" \
+      -H "Content-Type: application/json" \
+      -d '{"key": "<paste the generated key>"}'
+    ```
+
+    `GET /admin/encryption/status` reports whether a key is configured and which source
+    it came from (`env`, `plugin`, or `local`).
+
+    !!! danger "In Docker, set `PROXBOX_ENCRYPTION_KEY_FILE` as well"
+        The key file defaults to `data/encryption.key` **next to the installed
+        package** — inside the container that is `/app/data/encryption.key`, which is
+        *not* on the image's declared `/data` volume. Recreating the container therefore
+        destroys the key while the database on `/data` survives, stranding every
+        credential encrypted with it. Point the key at the volume:
+
+        ```bash
+        -e PROXBOX_ENCRYPTION_KEY_FILE=/data/encryption.key
+        ```
+
+        `PROXBOX_ENCRYPTION_KEY` has no such problem, which is one more reason to prefer
+        it for containerised deployments.
+
+The remaining option, `PROXBOX_ALLOW_PLAINTEXT_CREDENTIALS=1`, stores Proxmox passwords
+and tokens **unencrypted** in the backend's SQLite database. It exists for local
+experimentation; do not use it anywhere real.
+
+!!! warning "This is not the same key as the plugin's"
+    Proxbox has three separate key domains and they must never be cross-copied:
+    the **proxbox-api-at-rest** key covered here, the **plugin-at-rest Fernet key** that
+    protects encrypted fields in NetBox's own database, and the **FastAPI endpoint API
+    key** that authenticates HTTP requests. See
+    [Plugin Settings — Three separate security domains](../configuration/plugin-settings.md)
+    for the full comparison.
+
+### What happens if the key changes
+
+Fernet ciphertext can only be decrypted by the key that produced it, so changing the key
+without re-encrypting makes every stored credential unreadable. Both key domains are
+protected against that, and neither silently discards data:
+
+**Plugin-at-rest key (NetBox database).** Rotation is supported and verified. Ordinary
+form saves, model saves, and API `PATCH` requests cannot replace the key while any
+registered ciphertext exists; direct `QuerySet.update()` / `bulk_update()` / upsert writes
+to the key are rejected outright. Use **Verified plugin key rotation** on the settings
+page: it locks the settings row and every registered ciphertext table, verifies **every**
+non-empty ciphertext against the current key, and only then re-encrypts everything and
+stores the new key — all in one transaction. A wrong current key, or a single corrupt row,
+aborts the whole thing without changing any ciphertext or any setting. If the old key is
+genuinely lost, a separate `netbox_proxbox.reset_encrypted_secrets` permission gates a
+**destructive reset** that clears the affected secrets so they can be re-entered; there is
+no way to recover the plaintext without the key.
+
+**proxbox-api-at-rest key (backend SQLite).** Re-point `PROXBOX_ENCRYPTION_KEY` and
+re-encrypt the backend database before restarting. Verified plugin rotation additionally
+requires every enabled, adopted, operational backend to return a successful authenticated
+`GET /admin/encryption/status` attestation confirming that its active key decrypts every
+stored credential — so a backend left on the old key **blocks** the plugin-side rotation
+rather than being silently stranded.
+
+Full detail:
+[Plugin Settings — Verified rotation and lost-key reset](../configuration/plugin-settings.md).
+
 ## Next Step In NetBox
 
 After the backend is reachable, create these objects in the Proxbox UI:

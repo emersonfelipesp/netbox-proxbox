@@ -789,201 +789,6 @@ def _is_retryable_stage_failure(status: int, payload: object) -> bool:
     return _names_transport_failure(payload)
 
 
-class StageOutcome:
-    """Per-stage tally of object-level results observed on the backend SSE stream.
-
-    A stage used to be called successful whenever the stream returned an HTTP status
-    below 400. That is not the same question: the backend's shared SSE generator sets the
-    terminal ``complete`` frame's ``ok`` to true whenever its sync coroutine returns
-    without raising, and a coroutine that reconciled 0 of N objects returns perfectly
-    normally. So a run in which NetBox rejected every single write finished ``completed``
-    with a green stage summary, and the failures were visible only in the backend log.
-
-    The evidence was already on the wire and simply dropped. Three frame kinds carry it,
-    in descending order of authority:
-
-    ``phase_summary``
-        The stage's own terminal tally -- ``result`` carries
-        ``{created, updated, deleted, failed, skipped, total}`` and ``status`` is
-        ``completed_with_errors`` when ``failed`` is non-zero. Authoritative when present.
-
-    ``item_progress``
-        Per-object frames whose ``status``/``operation`` is ``failed``. Counted only when
-        no ``phase_summary`` arrived, so a stage that emits both is not double-counted.
-
-    ``error_detail``
-        Categorized failures. Counted only when neither of the other two produced
-        evidence, for the same reason.
-
-    Only counts observed *within one stage on one endpoint* land here. The caller binds a
-    fresh instance per stage **and per stream path**, and ``_execute_stage_sync()`` calls
-    :meth:`reset` before **each retry attempt**, so nothing leaks between stages, between
-    endpoints, or from an attempt that was superseded by a successful retry.
-    """
-
-    __slots__ = (
-        "_summary_failed",
-        "_summary_succeeded",
-        "_summary_seen",
-        "_item_failed",
-        "_item_succeeded",
-        "_error_details",
-        "_first_errors",
-    )
-
-    #: How many distinct failure messages to keep for the operator-facing summary.
-    _MAX_SAMPLED_ERRORS = 3
-
-    def __init__(self) -> None:
-        self.reset()
-
-    def reset(self) -> None:
-        """Discard everything observed so far.
-
-        ``_execute_stage_sync()`` retries a retryable stage failure, and every attempt
-        replays its own frames through the same callback. Without a reset between
-        attempts, an attempt that failed and then succeeded on retry would still be
-        tallied as failed -- with its counts added to the successful attempt's.
-        """
-        self._summary_failed = 0
-        self._summary_succeeded = 0
-        self._summary_seen = False
-        self._item_failed = 0
-        self._item_succeeded = 0
-        self._error_details = 0
-        self._first_errors: list[str] = []
-
-    # -- frame ingestion -------------------------------------------------------------
-
-    def observe(self, event: str, data: dict[str, object]) -> None:
-        """Fold one SSE frame into the tally. Never raises."""
-        try:
-            if event == "phase_summary":
-                self._observe_phase_summary(data)
-            elif event == "item_progress":
-                self._observe_item_progress(data)
-            elif event == "error_detail":
-                self._error_details += 1
-                self._sample_error(data.get("message") or data.get("detail"))
-        except Exception:  # noqa: BLE001
-            # This runs inside the SSE read loop. A malformed frame must never abort a
-            # sync that is otherwise succeeding -- degrading to "no evidence from this
-            # frame" is strictly better than losing the stage.
-            return
-
-    def _observe_phase_summary(self, data: dict[str, object]) -> None:
-        result = data.get("result")
-        if not isinstance(result, dict):
-            return
-        self._summary_seen = True
-        self._summary_failed += _as_count(result.get("failed"))
-        self._summary_succeeded += (
-            _as_count(result.get("created"))
-            + _as_count(result.get("updated"))
-            + _as_count(result.get("deleted"))
-        )
-        if _as_count(result.get("failed")):
-            self._sample_error(data.get("message"))
-
-    def _observe_item_progress(self, data: dict[str, object]) -> None:
-        status = str(data.get("status") or "").strip().lower()
-        operation = str(data.get("operation") or "").strip().lower()
-        if status == "failed" or operation == "failed":
-            self._item_failed += 1
-            self._sample_error(data.get("error") or data.get("message"))
-        elif status == "completed":
-            self._item_succeeded += 1
-
-    def _sample_error(self, value: object) -> None:
-        if not value:
-            return
-        text = str(value).strip()
-        if not text or text in self._first_errors:
-            return
-        if len(self._first_errors) < self._MAX_SAMPLED_ERRORS:
-            self._first_errors.append(text[:300])
-
-    # -- verdict ---------------------------------------------------------------------
-
-    @property
-    def failed(self) -> int:
-        if self._summary_seen:
-            return self._summary_failed
-        if self._item_failed:
-            return self._item_failed
-        return self._error_details
-
-    @property
-    def succeeded(self) -> int:
-        return self._summary_succeeded if self._summary_seen else self._item_succeeded
-
-    @property
-    def _has_countable_evidence(self) -> bool:
-        """True when a frame carrying a *denominator* was seen.
-
-        ``phase_summary`` and ``item_progress`` both say how many objects the stage
-        handled. ``error_detail`` does not -- it reports that something went wrong
-        without saying how much of the stage that was.
-        """
-        return self._summary_seen or bool(self._item_failed or self._item_succeeded)
-
-    def status(self) -> str:
-        """``success`` | ``warning`` (partial) | ``failed`` (nothing landed).
-
-        The three-way split is what keeps this useful. A single unreachable guest must
-        not error an estate-wide scheduled sync, but a stage in which nothing at all
-        landed is exactly the silent green run this exists to eliminate.
-
-        ``failed`` requires *countable* evidence. An ``error_detail`` frame on its own
-        carries no denominator, and several backend paths emit one for a condition that
-        does not abort the stage -- classifying that as "nothing landed" would fail runs
-        that actually synced. Without a denominator the strongest honest verdict is
-        ``warning``.
-        """
-        if self.failed <= 0:
-            return "success"
-        if self.succeeded > 0:
-            return "warning"
-        return "failed" if self._has_countable_evidence else "warning"
-
-    def as_result_summary(self) -> dict[str, object]:
-        """Additive keys for the persisted stage record."""
-        summary: dict[str, object] = {
-            "status": self.status(),
-            "failed": self.failed,
-            "succeeded": self.succeeded,
-        }
-        if self._first_errors:
-            summary["errors"] = list(self._first_errors)
-        return summary
-
-    def describe(self) -> str:
-        detail = f"{self.failed} failed, {self.succeeded} succeeded"
-        if self._first_errors:
-            detail = f"{detail} -- {'; '.join(self._first_errors)}"
-        return detail
-
-
-def _as_count(value: object) -> int:
-    """Coerce a backend-supplied counter to a non-negative int, defaulting to 0.
-
-    The frame is external data: a string, ``None``, a float, or a bool are all shapes a
-    backend version could send, and none of them may raise here.
-    """
-    if isinstance(value, bool):
-        return 0
-    if isinstance(value, int):
-        return max(0, value)
-    if isinstance(value, float):
-        return max(0, int(value))
-    if isinstance(value, str):
-        try:
-            return max(0, int(value.strip()))
-        except (TypeError, ValueError):
-            return 0
-    return 0
-
-
 def _execute_stage_sync(
     job: "ProxboxSyncJob",
     sync_type: str,
@@ -992,7 +797,6 @@ def _execute_stage_sync(
     on_frame: Callable[[str, dict[str, object]], None],
     endpoint_id: int | None = None,
     preflight_hint: str | None = None,
-    outcome: "StageOutcome | None" = None,
 ) -> tuple[dict[str, object], float]:
     """Execute a single stage sync and return payload.
 
@@ -1028,11 +832,6 @@ def _execute_stage_sync(
     last_payload: dict[str, object] = {}
     last_status: int = 0
     for _attempt in range(_STAGE_RETRY_MAX + 1):
-        # Each attempt replays its own frames. Only the attempt that actually returns
-        # may contribute to the stage's tally, or a transient failure that later
-        # succeeded would still be reported as a failure.
-        if outcome is not None:
-            outcome.reset()
         job.logger.info(f"Checking backend readiness for stage '{sync_type}'...")
         last_payload, last_status = run_sync_stream(
             stream_path,
@@ -1433,14 +1232,8 @@ def _run_all_stages_sync(
     last_flush = time.monotonic()
     last_progress_log = time.monotonic()
 
-    # The accumulator for the stage currently streaming. Rebound to a fresh instance
-    # before each stage so counts never leak between stages or between endpoints.
-    current_outcome: StageOutcome | None = None
-
     def on_frame(event: str, data: dict[str, object]) -> None:
         nonlocal last_flush, last_progress_log
-        if current_outcome is not None:
-            current_outcome.observe(event, data)
         if event == "complete":
             return
         now = time.monotonic()
@@ -1591,9 +1384,6 @@ def _run_all_stages_sync(
             stage_paths = _sync_stream_paths_for_stage(st, target_vm_ids)
 
             for stream_path in stage_paths:
-                # One accumulator per stage *and* per stream path: a stage split across
-                # several paths must not attribute one path's failures to another.
-                current_outcome = StageOutcome()
                 try:
                     payload, stage_runtime = _execute_stage_sync(
                         job,
@@ -1603,10 +1393,8 @@ def _run_all_stages_sync(
                         on_frame,
                         fastapi_endpoint_id,
                         preflight_hint=preflight_hint,
-                        outcome=current_outcome,
                     )
                 except RuntimeError as exc:
-                    current_outcome = None
                     if st in _SKIPPABLE_STAGES:
                         job.logger.warning(
                             f"Optional stage '{st}' failed and was skipped: {exc}"
@@ -1614,32 +1402,17 @@ def _run_all_stages_sync(
                         job.job.save(update_fields=["log_entries"])
                         continue
                     raise
-                outcome = current_outcome
-                current_outcome = None
                 response = payload.get("response") or {}
-                result_summary: dict[str, object] = {
-                    "path": payload.get("path"),
-                    "ok": response.get("ok"),
-                }
-                # Additive only: `path` and `ok` keep their meaning for existing readers.
-                result_summary.update(outcome.as_result_summary())
-                if outcome.status() == "failed":
-                    job.logger.error(
-                        f"Stage '{st}' for endpoint {endpoint_id or 'unscoped'} "
-                        f"reported HTTP success but synced nothing: {outcome.describe()}"
-                    )
-                elif outcome.status() == "warning":
-                    job.logger.warning(
-                        f"Stage '{st}' for endpoint {endpoint_id or 'unscoped'} "
-                        f"partially failed: {outcome.describe()}"
-                    )
                 stages_out.append(
                     {
                         "sync_type": st,
                         "endpoint_id": endpoint_id,
                         "stream_path": stream_path,
                         "runtime_seconds": stage_runtime,
-                        "result_summary": result_summary,
+                        "result_summary": {
+                            "path": payload.get("path"),
+                            "ok": response.get("ok"),
+                        },
                     }
                 )
 
