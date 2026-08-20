@@ -5661,3 +5661,431 @@ def test_preflight_result_defaults_are_not_shared(proxbox_sync_job_module):
     first.phases.append({"kind": "preflight"})
 
     assert second.phases == []
+
+
+# --------------------------------------------------------------------------------------
+# Stage failure reporting
+#
+# A stage used to be called successful on any HTTP status below 400. The backend's SSE
+# generator sets the terminal ``complete`` frame's ``ok`` to true whenever its coroutine
+# returns without raising, so a run in which NetBox rejected every write finished
+# ``completed`` with a green summary and the errors appeared only in the backend log.
+#
+# These drive the real ``ProxboxSyncJob.run()`` with a fake stream that replays the
+# frames the backend genuinely emits, so a regression in the wiring -- not just in the
+# accumulator -- turns them red.
+# --------------------------------------------------------------------------------------
+
+
+def _replaying_services_module(frames, status=200, ok=True):
+    """A ``netbox_proxbox.services`` stub whose stream replays ``frames``."""
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, on_frame=None, **stream_kwargs):
+        if on_frame is not None:
+            for event, data in frames:
+                on_frame(event, data)
+        return ({"stream": True, "path": path, "response": {"ok": ok}}, status)
+
+    services_mod.run_sync_stream = run_sync_stream
+    return services_mod
+
+
+def _phase_summary_frame(*, created=0, updated=0, failed=0, skipped=0):
+    return (
+        "phase_summary",
+        {
+            "phase": "devices",
+            "status": "completed" if failed == 0 else "completed_with_errors",
+            "message": f"Phase devices completed: {created} created, {failed} failed",
+            "result": {
+                "created": created,
+                "updated": updated,
+                "deleted": 0,
+                "failed": failed,
+                "skipped": skipped,
+                "total": created + updated + failed + skipped,
+            },
+        },
+    )
+
+
+def _run_devices_stage(monkeypatch, module, services_mod, logger_name):
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+    monkeypatch.setattr(
+        module.sync_stages,
+        "_resolve_wire_endpoint_ids",
+        lambda scopes, **kwargs: (
+            {scope[0]: scope[0] for scope in scopes if scope},
+            None,
+        ),
+    )
+    ProxboxSyncJob = module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger(logger_name)
+    job.job = MagicMock()
+    job.job.data = None
+    ProxboxSyncJob.run(
+        job, sync_type=module.SyncTypeChoices.DEVICES, proxmox_endpoint_ids=["1"]
+    )
+    return job
+
+
+def _stage_summaries(job):
+    data = job.job.data or {}
+    stages = data.get("proxbox_sync", {}).get("response", {}).get("stages", [])
+    return [
+        s.get("result_summary") or {} for s in stages if s.get("sync_type") == "devices"
+    ]
+
+
+def test_stage_reporting_stays_green_when_everything_landed(
+    monkeypatch, proxbox_sync_job_module
+):
+    services_mod = _replaying_services_module([_phase_summary_frame(created=2)])
+    job = _run_devices_stage(
+        monkeypatch, proxbox_sync_job_module, services_mod, "test_stage_green"
+    )
+    summaries = _stage_summaries(job)
+    assert summaries and summaries[0]["status"] == "success"
+    assert summaries[0]["failed"] == 0
+
+
+def test_run_errors_when_a_stage_synced_nothing_despite_http_success(
+    monkeypatch, proxbox_sync_job_module
+):
+    """The reported defect, end to end: HTTP 200, ok=true, zero objects created."""
+    services_mod = _replaying_services_module(
+        [_phase_summary_frame(created=0, failed=2)]
+    )
+    with pytest.raises(RuntimeError) as excinfo:
+        _run_devices_stage(
+            monkeypatch, proxbox_sync_job_module, services_mod, "test_stage_failed"
+        )
+    assert "synced nothing" in str(excinfo.value)
+
+
+def test_failed_stage_detail_is_persisted_before_the_run_errors(
+    monkeypatch, proxbox_sync_job_module
+):
+    """Raising before ``job.data`` is saved would lose the counts on the errored row."""
+    services_mod = _replaying_services_module(
+        [_phase_summary_frame(created=0, failed=2)]
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+    monkeypatch.setattr(
+        proxbox_sync_job_module.sync_stages,
+        "_resolve_wire_endpoint_ids",
+        lambda scopes, **kwargs: (
+            {scope[0]: scope[0] for scope in scopes if scope},
+            None,
+        ),
+    )
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_stage_persist")
+    job.job = MagicMock()
+    job.job.data = None
+    with pytest.raises(RuntimeError):
+        ProxboxSyncJob.run(
+            job,
+            sync_type=proxbox_sync_job_module.SyncTypeChoices.DEVICES,
+            proxmox_endpoint_ids=["1"],
+        )
+    summaries = _stage_summaries(job)
+    assert summaries, "job.data must be persisted before the run raises"
+    assert summaries[0]["status"] == "failed"
+    assert summaries[0]["failed"] == 2
+
+
+def test_partially_failed_stage_completes_but_is_stated(
+    monkeypatch, proxbox_sync_job_module, caplog
+):
+    """A single unreachable guest must not error an estate-wide scheduled sync."""
+    services_mod = _replaying_services_module(
+        [_phase_summary_frame(created=5, failed=1)]
+    )
+    with caplog.at_level(logging.WARNING):
+        job = _run_devices_stage(
+            monkeypatch, proxbox_sync_job_module, services_mod, "test_stage_warning"
+        )
+    summaries = _stage_summaries(job)
+    assert summaries and summaries[0]["status"] == "warning"
+    # ...but a run that looks clean is the entire defect, so it must be said out loud.
+    assert any("completed with failures" in record.message for record in caplog.records)
+
+
+def test_existing_result_summary_keys_keep_their_meaning(
+    monkeypatch, proxbox_sync_job_module
+):
+    """The new keys are additive; ``path`` and ``ok`` must not change for old readers."""
+    services_mod = _replaying_services_module([_phase_summary_frame(created=1)])
+    job = _run_devices_stage(
+        monkeypatch, proxbox_sync_job_module, services_mod, "test_stage_additive"
+    )
+    summary = _stage_summaries(job)[0]
+    assert summary["path"] == "dcim/devices/create/stream"
+    assert summary["ok"] is True
+    assert {"status", "failed", "succeeded"} <= set(summary)
+
+
+def test_cluster_summary_says_the_counts_are_plugin_records(
+    monkeypatch, proxbox_sync_job_module, caplog
+):
+    """The counts are ProxmoxCluster/ProxmoxNode rows, not NetBox objects."""
+    services_mod = _replaying_services_module([_phase_summary_frame(created=1)])
+    sync_cluster_mod = sys.modules["netbox_proxbox.services.sync_cluster"]
+    sync_cluster_mod.sync_cluster_and_nodes = lambda endpoint_id=None, **kwargs: (
+        SimpleNamespace(
+            success=True,
+            clusters_created=1,
+            clusters_updated=0,
+            nodes_created=2,
+            nodes_updated=0,
+            error=None,
+        )
+    )
+    with caplog.at_level(logging.INFO):
+        _run_devices_stage(
+            monkeypatch, proxbox_sync_job_module, services_mod, "test_cluster_wording"
+        )
+    cluster_lines = [
+        r.message for r in caplog.records if "Cluster/node sync" in r.message
+    ]
+    assert cluster_lines
+    joined = " ".join(cluster_lines)
+    assert "plugin records" in joined
+    assert "Proxbox cluster record" in joined
+
+
+def test_stage_counters_do_not_leak_from_one_stage_into_the_next(
+    monkeypatch, proxbox_sync_job_module
+):
+    """A clean stage that follows a failing one must still be recorded clean.
+
+    This is the guard that a unit test over two separate accumulator instances cannot
+    provide: instantiating two objects and finding they differ proves nothing about
+    whether the *stage loop* actually rebinds one per stage. Reusing a single
+    accumulator across stages passed every other test in this file.
+    """
+    frames_by_path = {
+        "dcim/devices/interfaces/create/stream": [
+            _phase_summary_frame(created=1, failed=1)
+        ],
+        "virtualization/virtual-machines/interfaces/create/stream": [
+            _phase_summary_frame(created=3, failed=0)
+        ],
+    }
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, on_frame=None, **stream_kwargs):
+        if on_frame is not None:
+            for event, data in frames_by_path.get(path, []):
+                on_frame(event, data)
+        return ({"stream": True, "path": path, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+    monkeypatch.setattr(
+        proxbox_sync_job_module.sync_stages,
+        "_resolve_wire_endpoint_ids",
+        lambda scopes, **kwargs: (
+            {scope[0]: scope[0] for scope in scopes if scope},
+            None,
+        ),
+    )
+
+    ProxboxSyncJob = proxbox_sync_job_module.ProxboxSyncJob
+    job = ProxboxSyncJob()
+    job.logger = logging.getLogger("test_stage_no_leak")
+    job.job = MagicMock()
+    job.job.data = None
+    ProxboxSyncJob.run(
+        job,
+        sync_type=proxbox_sync_job_module.SyncTypeChoices.NETWORK_INTERFACES,
+        proxmox_endpoint_ids=["1"],
+    )
+
+    stages = (
+        (job.job.data or {})
+        .get("proxbox_sync", {})
+        .get("response", {})
+        .get("stages", [])
+    )
+    by_path = {s.get("stream_path"): (s.get("result_summary") or {}) for s in stages}
+    assert len(frames_by_path) == 2
+    assert set(frames_by_path) <= set(by_path), (
+        f"expected both stream paths, got {list(by_path)}"
+    )
+
+    failing = by_path["dcim/devices/interfaces/create/stream"]
+    clean = by_path["virtualization/virtual-machines/interfaces/create/stream"]
+    assert failing["status"] == "warning"
+    assert failing["failed"] == 1
+    assert clean["status"] == "success", (
+        "the first stage's failure leaked into the second"
+    )
+    assert clean["failed"] == 0
+    assert clean["succeeded"] == 3, "the first stage's successes leaked into the second"
+
+
+def test_a_retried_stage_is_judged_on_the_attempt_that_succeeded(
+    monkeypatch, proxbox_sync_job_module
+):
+    """A transient 503 that succeeds on retry must not leave the stage marked failed.
+
+    ``_execute_stage_sync`` replays every attempt's frames through the same callback, so
+    without a reset between attempts the first attempt's failures are still tallied --
+    and summed with the successful attempt's counts. Driving the real retry path is what
+    makes this visible; calling ``reset()`` directly in a unit test proves only that the
+    method works, not that the retry loop uses it.
+    """
+    attempts: list[str] = []
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+
+    def run_sync_stream(path, query_params=None, on_frame=None, **stream_kwargs):
+        attempts.append(path)
+        first = len(attempts) == 1
+        if on_frame is not None:
+            event, data = (
+                _phase_summary_frame(created=0, failed=7)
+                if first
+                else _phase_summary_frame(created=4)
+            )
+            on_frame(event, data)
+        if first:
+            # 503 is retryable by definition.
+            return ({"stream": True, "path": path, "detail": "backend restarting"}, 503)
+        return ({"stream": True, "path": path, "response": {"ok": True}}, 200)
+
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+    monkeypatch.setattr(proxbox_sync_job_module.sync_stages, "_STAGE_RETRY_DELAY", 0.0)
+    monkeypatch.setattr(
+        proxbox_sync_job_module.sync_stages,
+        "_resolve_wire_endpoint_ids",
+        lambda scopes, **kwargs: (
+            {scope[0]: scope[0] for scope in scopes if scope},
+            None,
+        ),
+    )
+
+    job = proxbox_sync_job_module.ProxboxSyncJob()
+    job.logger = logging.getLogger("test_stage_retry_reset")
+    job.job = MagicMock()
+    job.job.data = None
+    proxbox_sync_job_module.ProxboxSyncJob.run(
+        job,
+        sync_type=proxbox_sync_job_module.SyncTypeChoices.DEVICES,
+        proxmox_endpoint_ids=["1"],
+    )
+
+    assert len(attempts) == 2, "the retry path did not run; this test proves nothing"
+    summary = _stage_summaries(job)[0]
+    assert summary["status"] == "success", "the discarded attempt's failures leaked"
+    assert summary["failed"] == 0
+    assert summary["succeeded"] == 4, "counts from both attempts were summed"
+
+
+def test_a_stage_that_synced_nothing_blocks_the_branch_merge(
+    monkeypatch, proxbox_sync_job_module
+):
+    """A run that wrote nothing must not promote its branch into main.
+
+    Branching is deliberately enabled here: asserting the merge did not happen only
+    means something when it would otherwise have run.
+    """
+    merge_calls: list[dict] = []
+
+    services_mod = _replaying_services_module(
+        [_phase_summary_frame(created=0, failed=3)]
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+    monkeypatch.setattr(
+        proxbox_sync_job_module.sync_stages,
+        "_resolve_wire_endpoint_ids",
+        lambda scopes, **kwargs: (
+            {scope[0]: scope[0] for scope in scopes if scope},
+            None,
+        ),
+    )
+
+    branch_mod = types.ModuleType("netbox_proxbox.services.branch_lifecycle")
+    branch_mod.branching_enabled_settings = lambda: {
+        "prefix": "proxbox-sync",
+        "on_conflict": "abort",
+    }
+    branch_mod.create_and_provision_branch = lambda **kwargs: SimpleNamespace(
+        name=kwargs["name"], schema_id="branch-schema-1"
+    )
+
+    def _merge_branch(**kwargs):  # pragma: no cover - must not run
+        merge_calls.append(kwargs)
+        return True, "merged"
+
+    branch_mod.merge_branch = _merge_branch
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.services.branch_lifecycle", branch_mod
+    )
+
+    job = proxbox_sync_job_module.ProxboxSyncJob()
+    job.logger = logging.getLogger("test_stage_failed_blocks_merge")
+    job.job = MagicMock()
+    job.job.data = None
+
+    with pytest.raises(RuntimeError, match="synced nothing"):
+        proxbox_sync_job_module.ProxboxSyncJob.run(
+            job,
+            sync_type=proxbox_sync_job_module.SyncTypeChoices.DEVICES,
+            proxmox_endpoint_ids=["1"],
+        )
+
+    assert merge_calls == [], "an empty sync result must never be promoted into main"
+
+
+def test_stage_failure_descriptions_are_bounded(proxbox_sync_job_module) -> None:
+    """A full run is up to 13 stages per endpoint; the log line cannot scale with it."""
+    jobs_module = proxbox_sync_job_module
+
+    stages = [
+        {
+            "sync_type": f"stage-{index}",
+            "endpoint_id": 1,
+            "result_summary": {
+                "status": "failed",
+                "failed": 3,
+                "succeeded": 0,
+                "errors": ["a" * 200, "b" * 200, "c" * 200],
+            },
+        }
+        for index in range(20)
+    ]
+    described = jobs_module._describe_stage_failures(stages)
+    assert "stage-0" in described
+    assert "stage-19" not in described
+    # Never drop findings silently.
+    assert "and 15 more" in described
+    assert "Data tab" in described
+
+
+def test_a_short_failure_list_is_described_in_full(proxbox_sync_job_module) -> None:
+    jobs_module = proxbox_sync_job_module
+
+    stages = [
+        {
+            "sync_type": "devices",
+            "endpoint_id": 1,
+            "result_summary": {"failed": 1, "succeeded": 0},
+        },
+        {
+            "sync_type": "storage",
+            "endpoint_id": 1,
+            "result_summary": {"failed": 2, "succeeded": 0},
+        },
+    ]
+    described = jobs_module._describe_stage_failures(stages)
+    assert "devices" in described
+    assert "storage" in described
+    assert "more" not in described
