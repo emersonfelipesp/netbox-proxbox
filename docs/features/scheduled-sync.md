@@ -179,8 +179,6 @@ the backend happened to try first.
 | `<n> Proxmox endpoint(s) were skipped and did not sync — endpoint <id>: ...` or `No sync stage ran: every selected Proxmox endpoint was skipped — ...` — job fails at the end | An endpoint in the run's scope never resolved to a backend id, so no stage ever ran for it. The run used to finish green while silently syncing nothing for that endpoint. | The message names each endpoint and its error. Usually the endpoint was never pushed to proxbox-api — re-check the preflight lines above it for a failed or budget-skipped push, or for the retargeted-endpoint case in the next row. The **Endpoint runtime** breakdown is saved before the failure, so it stays readable on the failed row. |
 | `Skipping Proxmox endpoint <id>: ... the backend's stored copy points at <host:port> instead of <host:port>` | You changed this endpoint's domain, IP address, or port in NetBox, and the push that would have told proxbox-api about it failed. The backend still holds the **previous** host under this endpoint's name, so syncing through it would reflect the *old* Proxmox host's VMs, nodes, and storage into NetBox under the renamed endpoint. The endpoint is refused instead, and the message names both hosts. | Get the endpoint push to succeed, then re-run: confirm proxbox-api is reachable, and that the endpoint's `domain` (or its `ip_address` when no domain is set) plus `port` are what you intend. The same check protects the endpoint's **Templates** tab and the **Create new instance** wizard, so both will report the mismatch rather than list or provision onto the wrong host. |
 | `Preflight: ...` warnings, then the sync completes | The backend already held a usable record, so the failed push did not matter. | No action needed, though the backend's stored configuration may be stale. |
-| `<n> sync stage(s) reported HTTP success but synced nothing to NetBox — stage '<name>' on endpoint <id>: <n> failed, 0 succeeded (...)` — job fails at the end | The stage's stream returned HTTP 200 and its terminal frame said `ok`, but every object in it was rejected by NetBox. The backend marks a stream `ok` when its sync coroutine returns without raising, which a coroutine that reconciled 0 of N objects does. The run used to finish **`completed`** with a green stage summary while nothing at all had been written. | The message quotes up to three distinct per-object errors from the stream. A first-install run whose `devices` stage fails this way is almost always the missing-custom-field case — check the proxbox-api log for `Custom field 'proxmox_last_updated' does not exist for this object type`. The per-stage counts are saved on the failed row before the error is raised, so the **Data** tab stays readable. |
-| `<n> stage(s) completed with failures: stage '<name>' on endpoint <id>: <n> failed, <m> succeeded (...)` — warning, job completes | Some objects in the stage synced and some did not. A partial failure does not error the run: one unreachable guest must not fail an estate-wide scheduled sync. | Not fatal, but do not ignore it — the same line names up to three distinct errors, and `failed` in the stage's `result_summary` is the authoritative count. If the same objects fail on every run, treat it as a real defect rather than a transient. |
 
 !!! tip "A backend that is still starting up"
     proxbox-api spends its first few seconds opening its database and resolving
@@ -189,61 +187,6 @@ the backend happened to try first.
     calls time out repeatedly, the backend is genuinely unreachable — check the
     URL, TLS settings, and firewall rules between NetBox and proxbox-api rather
     than raising timeouts.
-
-### Stage Status: `success`, `warning`, `failed`
-
-Every stage that runs records an explicit status in its `result_summary`, alongside the
-counts it was derived from:
-
-| Status | Meaning | Effect on the run |
-|---|---|---|
-| `success` | No object-level failures observed. | None. |
-| `warning` | At least one failure **and** at least one success — a partial sync. | The run still completes, and a warning naming the stage and its counts is logged. |
-| `failed` | At least one failure and **no** successes — nothing landed. | The run **errors**, after the per-stage detail is persisted. |
-
-The counts come from the frames the backend already emits on the SSE stream, in
-descending order of authority: the stage's terminal `phase_summary` frame when present,
-otherwise its per-object `item_progress` frames with `status: failed`, otherwise
-`error_detail` frames. Only one source is used per stage, so a stage that emits several
-is never double-counted.
-
-Two rules keep the verdict from swinging too far the other way:
-
-- **`failed` requires a denominator.** `error_detail` frames say something went wrong
-  without saying how much of the stage that was, and several backend paths emit one for
-  a condition that does not abort the stage. A stage whose only evidence is
-  `error_detail` is therefore a `warning`, never a `failure` — replacing a false green
-  with a false red would be no better.
-- **A retried stage is judged on the attempt that returned.** A retryable failure (5xx,
-  429, or a 400 naming a transport failure) is retried up to twice, and each attempt
-  replays its own frames; the tally is discarded before each attempt, so a transient
-  error that succeeded on retry does not leave the stage marked failed.
-
-`result_summary` therefore carries `status`, `failed`, `succeeded`, and up to three
-distinct `errors` samples, in addition to the existing `path` and `ok` keys — which keep
-their previous meaning. Counts are scoped to one stage on one endpoint and never carry
-over.
-
-The aggregate log lines name at most five stages and say how many were elided; a full run
-is up to thirteen stages per endpoint, and the complete per-stage detail is always in the
-job's **Data** tab.
-
-!!! note "Why `ok: true` was not enough"
-    `ok` on the terminal frame answers "did the backend's sync coroutine return without
-    raising", not "did objects reach NetBox". Those are different questions, and a run
-    where NetBox rejected every write answers yes to the first and no to the second.
-
-!!! warning "Branching"
-    When branching is enabled, a run that errors on a `failed` stage does **not** merge
-    its branch. An empty or partial sync result is never promoted into main.
-
-### Cluster and node counts are plugin records
-
-The `Cluster/node sync for endpoint <id>: N Proxbox cluster record(s) created, ...` line
-counts rows in the plugin's **own** `ProxmoxCluster` / `ProxmoxNode` tables. It says
-nothing about whether the corresponding NetBox objects exist — those are created by the
-sync stages that run afterwards. The wording used to omit that distinction, which made a
-run that had written no NetBox objects at all read as though it had.
 
 ## How Recurring Jobs Work
 

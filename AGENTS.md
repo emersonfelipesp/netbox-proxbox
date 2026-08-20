@@ -1,43 +1,26 @@
 # Agent Entry Points
 
-## Sync Stage Failure Reporting
+## Installation Docs: Two Traps
 
-A stage's HTTP status is not its verdict. The backend's SSE generator sets the
-terminal `complete` frame's `ok` from "the sync coroutine returned without
-raising", so a stage in which NetBox rejected every write still returns 200 with
-`ok: true`. Never treat `ok` or `status < 400` as "objects landed".
+**Endpoint addresses depend on which container dials.** The `FastAPIEndpoint`
+record is consumed by the NetBox container; the `NetBoxEndpoint` record is
+consumed by the backend container. Both are filled in from the NetBox UI, which
+makes the browser-visible address the tempting wrong answer for both. In a
+single Compose project each needs the peer's **service name** and
+**container-internal** port — never `localhost`, never a `127.0.0.1`-published
+host port. The `8800` default on `FastAPIEndpoint.port` is correct only for a
+standalone published container; keep both cases documented side by side rather
+than replacing one with the other.
 
-`sync_stages.StageOutcome` is the single place that reads per-object frames.
-Feed it only through the existing `on_frame()` callback, keep its evidence
-precedence single-source (`phase_summary` > failed `item_progress` >
-`error_detail`, never summed), and bind a fresh instance per stage **and per
-stream path** — counts must never leak between stages or endpoints.
-
-Verdicts: `success`, `warning` (partial — the run completes but logs the counts),
-`failed` (failures with zero successes — the run errors). Raise the run-level
-error **after** `job.save(update_fields=["data"])`, matching the endpoint-scope
-ordering, or the per-stage counts are lost on the errored row.
-
-`failed` requires countable evidence — a frame carrying a denominator. An
-`error_detail`-only stage caps at `warning`: those frames say something went
-wrong without saying how much of the stage it was, and several backend paths
-emit one non-fatally. Replacing a false green with a false red is not progress.
-
-Reset the tally before **each retry attempt** in `_execute_stage_sync()`, not
-just per stage. Every attempt replays its own frames, so without the reset a
-transient failure that succeeded on retry stays marked failed and both attempts'
-counts are summed.
-
-`result_summary` keys are additive. `path` and `ok` keep their meaning for
-existing readers; `status`, `failed`, `succeeded`, and `errors` are new.
-
-Frames are external data. Every read must be total: coerce counters through
-`_as_count()` and let `observe()` swallow malformed frames. A frame parser that
-throws inside the SSE read loop loses a sync that was otherwise succeeding.
-
-Cluster/node counts in the job log count `ProxmoxCluster`/`ProxmoxNode` rows in
-the plugin's own tables, not NetBox objects. Keep the wording explicit about
-that.
+**The credential encryption key is an install-path prerequisite**, not a
+configuration detail. The backend refuses to store a Proxmox credential without
+one and says so only when the first endpoint is created. Keep the generate-and-
+supply steps in `docs/installation/backend-setup.md` and cross-link the setting
+semantics in `docs/configuration/plugin-settings.md`; do not duplicate them.
+Answer key-change questions from `services/encryption_recovery.py`, not from
+memory — rotation is verified and all-or-nothing, a lost key needs the
+permission-gated destructive reset, and a backend still on the old key blocks
+plugin rotation through the `/admin/encryption/status` attestation.
 
 
 ## Repository Destination Policy (Hard Rule)
