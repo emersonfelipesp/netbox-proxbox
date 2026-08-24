@@ -40,7 +40,9 @@ __all__ = (
     "AUTH_SCHEMES",
     "SCHEME_PATTERN",
     "SENSITIVE_KEY_MARKERS",
+    "VALUE_ECHO_KEYS",
     "is_sensitive_key",
+    "is_sensitive_or_echo_key",
     "redact_assignments",
     "normalize_key",
 )
@@ -145,17 +147,47 @@ def is_sensitive_key(key: object) -> bool:
 # a single-word marker like ``sshkeys`` in prose. A key containing a space is
 # still recognised where it actually occurs: as a *mapping* key, which
 # :func:`normalize_key` folds before matching.
+_COMPOUND_HEADS = "|".join(
+    sorted(
+        {words[0] for words in _MARKER_WORDS if len(words) > 1},
+        key=len,
+        reverse=True,
+    )
+)
+
 ASSIGNMENT_KEY_RE = re.compile(
     r"""(?ix)
-    (?<![a-z0-9_\-])
-    (?P<key>[a-z0-9_\-]++)
+    (?P<key>
+        # A two-word marker spelled with a space (``API key``, ``private key``).
+        # Both halves are literals, so this can never join arbitrary prose the
+        # way a general space-joined name did -- and the previous design *did*
+        # match these, so forbidding a space outright was a regression.
+        #
+        # No identifier-start guard on this branch: the marker may begin
+        # part-way through a longer name, and any characters before it stay
+        # outside the match and are reproduced untouched.
+        (?:%s)[ _\-]++key[a-z0-9_\-]*+
+        # Otherwise a plain identifier, anchored at its start. The run is
+        # possessive, so a name that never reaches a separator fails at once
+        # instead of re-trying every length.
+        #
+        # It may not span a space. Allowing arbitrary space-joined words
+        # redacted the tail of ordinary prose (``token_version mismatch:
+        # expected 2 got 1``, where the key becomes "token_version mismatch")
+        # and produced candidates that overlapped the next real assignment and
+        # hid it. A spaced name that is not a compound marker is still
+        # recognised where it occurs -- as a *mapping* key, which
+        # :func:`normalize_key` folds before matching.
+      | (?<![a-z0-9_\-])[a-z0-9_\-]++
+    )
     (?P<quote_end>\\?['"]?)
     (?P<sep>\s*[:=]\s*)
     """
+    % _COMPOUND_HEADS
 )
 
 
-def redact_assignments(text, value_re, render):
+def redact_assignments(text, value_re, render, predicate=is_sensitive_key):
     """Replace the value of every credential-named assignment in *text*.
 
     *value_re* matches a value at a given offset; *render* receives the matched
@@ -177,7 +209,8 @@ def redact_assignments(text, value_re, render):
         match = ASSIGNMENT_KEY_RE.search(text, position)
         if match is None:
             break
-        if not is_sensitive_key(match.group("key")):
+        key = match.group("key")
+        if not predicate(key):
             # Resume immediately after the separator, never after the value: a
             # value may itself contain an assignment, and consuming it hid the
             # credential in ``input_value={'token': 'nbt_...'}`` entirely. The
@@ -188,8 +221,35 @@ def redact_assignments(text, value_re, render):
         if value is None:
             position = match.end()
             continue
+        if not is_sensitive_key(key) and value.group(0)[:1] in "{[":
+            # An *echo* key (see ``VALUE_ECHO_KEYS``) whose value is a structure
+            # rather than a scalar. Redacting here would replace only the
+            # opening fragment the value pattern can reach and leave the rest
+            # exposed, so descend instead: the assignment inside it carries a
+            # real name and is matched on its own terms.
+            position = match.end()
+            continue
         out.append(text[written : match.end()])
         out.append(render(value.group(0)))
         written = position = value.end()
     out.append(text[written:])
     return "".join(out)
+
+
+# Keys whose *value* is an echo of something submitted elsewhere. A Pydantic
+# validation error renders ``input_value='nbt_...'`` on its own line, with the
+# rejected field's name on a *preceding* line, so free text carries no way to
+# correlate the two. The structural redactor can, and does, by reading ``loc``.
+#
+# In free text the choice is therefore between publishing an echoed value that
+# may be a credential and redacting one that may be diagnostic. This module
+# fails closed: the free-text callers pass :func:`is_sensitive_or_echo_key`,
+# while the structural path keeps its precise correlation and is unaffected.
+VALUE_ECHO_KEYS: frozenset[str] = frozenset({"input", "inputvalue"})
+
+
+def is_sensitive_or_echo_key(key: object) -> bool:
+    """``is_sensitive_key``, plus the value echoes free text cannot resolve."""
+    if is_sensitive_key(key):
+        return True
+    return isinstance(key, str) and normalize_key(key) in VALUE_ECHO_KEYS

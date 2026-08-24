@@ -321,3 +321,195 @@ def test_prose_around_a_credential_name_is_not_swallowed(monkeypatch):
     line = "token_version mismatch: expected 2 got 1"
     assert load_anonymize(monkeypatch).Anonymizer().scrub(line) == line
     assert load_error_utils(monkeypatch).redact_sensitive_text(line) == line
+
+
+# ---------------------------------------------------------------------------
+# The shapes a credential actually arrives in
+#
+# The per-marker sweeps above vary the *name*. This varies how the assignment is
+# written, which is where the previous implementations kept failing: a JSON
+# quote, a doubly-escaped quote, a colon instead of an equals, surrounding prose.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("name", ["token", "api_key", "X-Proxbox-API-Key", "password"])
+@pytest.mark.parametrize("separator", ["=", ":", ": ", " = ", " : "])
+@pytest.mark.parametrize("quoting", ["", "'", '"'])
+@pytest.mark.parametrize("surround", [False, True])
+def test_assignment_shapes_are_redacted_by_both(
+    monkeypatch, name, separator, quoting, surround
+):
+    line = f"{name}{separator}{quoting}{_SECRET}{quoting}"
+    if surround:
+        line = f"backend rejected {line} while syncing"
+
+    assert _SECRET not in load_anonymize(monkeypatch).Anonymizer().scrub(line), line
+    assert _SECRET not in load_error_utils(monkeypatch).redact_sensitive_text(line), (
+        line
+    )
+
+
+def test_a_second_assignment_on_the_same_line_is_still_found(monkeypatch):
+    """A non-credential assignment must not consume the one after it.
+
+    The scan resumes after a skipped key's *separator*, not its value, so an
+    ordinary field in front of a credential cannot hide it.
+    """
+    line = f"vmid=100 password={_SECRET} node=pve1"
+    for redact in (
+        load_anonymize(monkeypatch).Anonymizer().scrub,
+        load_error_utils(monkeypatch).redact_sensitive_text,
+    ):
+        out = redact(line)
+        assert _SECRET not in out
+        assert "vmid=100" in out
+
+
+def test_a_credential_nested_inside_another_assignment_is_found(monkeypatch):
+    """The shape a Pydantic validation error renders into ``msg``.
+
+    ``input_value`` is not itself a credential name, so an implementation that
+    consumed its value never looked inside it -- and that value is precisely
+    where the rejected secret is.
+    """
+    line = "rejected input_value={'token': '" + _SECRET + "'}"
+    assert _SECRET not in load_anonymize(monkeypatch).Anonymizer().scrub(line)
+    assert _SECRET not in load_error_utils(monkeypatch).redact_sensitive_text(line)
+
+
+@pytest.mark.parametrize(
+    "label, payload",
+    [
+        ("no separators", "a" * 200000),
+        ("colon chain", "a:" * 100000),
+        ("equals chain", "a=" * 100000),
+        ("quote storm", '"' * 100000),
+        ("separator run", "api" + "_" * 100000 + "x"),
+        ("assignment chain", "k=v," * 50000),
+        ("unterminated quote", 'password="' + "a" * 100000),
+        ("marker storm", "token" * 40000),
+    ],
+)
+def test_neither_matcher_is_superlinear(monkeypatch, label, payload):
+    """Both redactors see attacker-influenced text; neither may blow up.
+
+    ``marker storm`` is the shape that cost ~34 s when the matcher searched for
+    a marker inside the key, and ``colon chain`` is the one that cost minutes
+    when a skipped key consumed its own value.
+    """
+    for redact in (
+        load_anonymize(monkeypatch).Anonymizer().scrub,
+        load_error_utils(monkeypatch).redact_sensitive_text,
+    ):
+        started = time.perf_counter()
+        redact(payload)
+        assert time.perf_counter() - started < 10.0, label
+
+
+# ---------------------------------------------------------------------------
+# Round-three disclosure paths
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "API key: {secret}",
+        "private key={secret}",
+        "Private Key: {secret}",
+        "ssh key = {secret}",
+        "secret key: {secret}",
+        "encryption key: {secret}",
+        "host key = {secret}",
+        "myapi key={secret}",
+    ],
+)
+def test_compound_markers_spelled_with_a_space(monkeypatch, line):
+    """``API key`` is a field name, and the previous design matched it.
+
+    Forbidding spaces outright to stop a space-joined key from eating prose was
+    a regression: these are two fixed words, so recognising them cannot join
+    arbitrary text the way a general rule did.
+    """
+    text = line.format(secret=_SECRET)
+    assert _SECRET not in load_anonymize(monkeypatch).Anonymizer().scrub(text), text
+    assert _SECRET not in load_error_utils(monkeypatch).redact_sensitive_text(text), (
+        text
+    )
+
+
+@pytest.mark.parametrize(
+    "label, template",
+    [
+        ("unterminated quote", 'password="first {secret}'),
+        ("doubly escaped", '{{\\"password\\":\\"{secret}\\"}}'),
+        # ``\\`` is an escaped *backslash*, not a delimiter; reading it as one
+        # ended the value early and published everything after it.
+        ("escaped backslash", '{{\\"password\\":\\"a\\\\"{secret}\\"}}'),
+        ("oversized scheme value", "Bearer " + "a" * 4100 + "{secret}"),
+    ],
+)
+def test_malformed_and_oversized_values_do_not_leak_a_tail(
+    monkeypatch, label, template
+):
+    """A value that is truncated, nested or long must not publish its remainder.
+
+    Each of these redacted only a leading fragment: an unterminated quote fell
+    through to the unquoted alternative, nested escaping ended the value early,
+    and a capped scheme sweep replaced exactly the cap and left the rest.
+    """
+    text = template.format(secret=_SECRET)
+    assert _SECRET not in load_anonymize(monkeypatch).Anonymizer().scrub(text), label
+    assert _SECRET not in load_error_utils(monkeypatch).redact_sensitive_text(text), (
+        label
+    )
+
+
+def test_a_rendered_validation_error_echo_is_redacted(monkeypatch):
+    """Free text cannot correlate an echo with its field name, so it fails closed.
+
+    A Pydantic error prints the rejected field on one line and
+    ``input_value='...'`` on another. The structural redactor reads ``loc`` and
+    correlates them precisely; free text has nothing to correlate with, and the
+    echoed value is exactly where the rejected credential is.
+    """
+    rendered = (
+        "1 validation error for Endpoint\n"
+        "token\n"
+        "  Input should be a valid string\n"
+        f"    input_value='nbt_{_SECRET}', input_type=str"
+    )
+    assert _SECRET not in load_anonymize(monkeypatch).Anonymizer().scrub(rendered)
+    assert _SECRET not in load_error_utils(monkeypatch).redact_sensitive_text(rendered)
+
+
+def test_an_echo_of_a_structure_is_descended_not_redacted(monkeypatch):
+    """The echo rule must not shadow the nested-assignment rule.
+
+    ``input_value={'token': '...'}`` is an echo *and* a structure. Redacting it
+    replaces only the opening fragment the value pattern reaches and leaves the
+    credential behind it exposed, so the scanner descends instead and matches
+    the inner name on its own terms.
+    """
+    line = "rejected input_value={'token': '" + _SECRET + "'}"
+    for redact in (
+        load_anonymize(monkeypatch).Anonymizer().scrub,
+        load_error_utils(monkeypatch).redact_sensitive_text,
+    ):
+        out = redact(line)
+        assert _SECRET not in out
+        assert "token" in out, "the field name is diagnosis and should survive"
+
+
+def test_structured_redaction_keeps_its_precise_correlation(monkeypatch):
+    """Only *free text* fails closed on echoes; the structural path does not.
+
+    It reads ``loc``, so it can tell a rejected credential from a rejected
+    integer, and an ordinary validation error keeps the value that explains it.
+    """
+    module = load_error_utils(monkeypatch)
+    harmless = {"detail": [{"loc": ["body", "vmid"], "msg": "bad", "input": 4200}]}
+    assert "4200" in repr(module.redact_sensitive(harmless))
+
+    sensitive = {"detail": [{"loc": ["body", "token"], "msg": "bad", "input": _SECRET}]}
+    assert _SECRET not in repr(module.redact_sensitive(sensitive))

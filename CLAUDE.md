@@ -377,11 +377,30 @@ payload before it is rendered. Three invariants are load-bearing:
   assignment nested inside a non-credential one still be found:
   `input_value={'token': 'nbt_...'}` is exactly that shape, and consuming the
   outer value hid the credential completely.
-- **A name may not span a space.** Allowing even a few space-joined words
-  redacted the tail of ordinary prose (`token_version mismatch: expected 2 got
-  1`) and produced candidates that overlapped the next real assignment and hid
-  it. Such a name is still recognised where it actually occurs -- as a mapping
-  key, which `normalize_key` folds before matching.
+- **A name may not span a space, except in a two-word marker.** Allowing
+  arbitrary space-joined words redacted the tail of ordinary prose
+  (`token_version mismatch: expected 2 got 1`) and produced candidates that
+  overlapped the next real assignment and hid it. But forbidding spaces
+  outright dropped `API key:` and `private key=`, which the previous
+  implementation did match -- so the two-word markers are recognised as fixed
+  literal pairs, which cannot join arbitrary text. Any other spaced name is
+  still caught where it occurs, as a mapping key.
+- **A value that is truncated, nested or long must not publish its remainder.**
+  An unterminated quote fell through to the unquoted alternative and redacted
+  only the first fragment; a JSON document embedded inside a JSON string is
+  doubly escaped, where `\\` is an escaped backslash and reading it as a
+  delimiter ended the value early; and a capped scheme sweep replaced exactly
+  the cap and left the rest. Once a quote opens the value now runs to its real
+  terminator or the end of the line, and the scheme sweep is uncapped.
+- **Free text fails closed on a value echo; structured payloads do not.** A
+  Pydantic error prints the rejected field on one line and `input_value='...'`
+  on another, so free text has nothing to correlate them with -- and the echoed
+  value is exactly where a rejected credential is. `is_sensitive_or_echo_key`
+  therefore redacts it, while `redact_sensitive` keeps reading `loc` and can
+  still tell a rejected token from a rejected integer. The one exception is an
+  echo whose value is a *structure*: redacting there would replace only the
+  opening fragment and expose the rest, so the scanner descends and matches the
+  real name inside it.
 - **An `Authorization` value is consumed whole, whatever the scheme.**
   Enumerating known schemes in the value branch matched `Token` alone and
   published the credential behind it -- and `Token` is the scheme NetBox's own

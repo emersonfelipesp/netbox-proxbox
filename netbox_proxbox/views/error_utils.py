@@ -11,6 +11,7 @@ import requests
 from netbox_proxbox.redaction import (
     SCHEME_PATTERN,
     is_sensitive_key,
+    is_sensitive_or_echo_key,
     normalize_key,
     redact_assignments,
 )
@@ -64,7 +65,16 @@ _ASSIGNMENT_VALUE_RE = re.compile(
     r"""(?ix)
     (?:"""
     + SCHEME_PATTERN
-    + r""")\s+[^\s,;)}\]]+|'[^']*'|"[^"]*"|[^\s,;)}\]]+
+    + r""")\s+[^\s,;)}\]]+
+    |'[^']*'
+    |"[^"]*"
+    # Once a quote *opens*, the value runs to the end of the line even if it
+    # never closes. Falling through to the unquoted alternative below redacted
+    # only the first whitespace-delimited fragment and published the rest --
+    # ``password="first S3CRET`` leaked, and a truncated log is exactly where an
+    # unterminated quote comes from.
+    |["'][^\r\n]*
+    |[^\s,;)}\]]+
     """
 )
 
@@ -104,7 +114,16 @@ def redact_sensitive_text(value: str) -> str:
     Structural redaction cannot reach a secret that has already been rendered
     into prose, and both Pydantic and proxbox-api do exactly that.
     """
-    redacted = redact_assignments(value, _ASSIGNMENT_VALUE_RE, _render_redacted_value)
+    # ``is_sensitive_or_echo_key`` rather than ``is_sensitive_key``: free text
+    # cannot correlate a rendered ``input_value=`` echo with the field name on
+    # the preceding line, so it fails closed. ``redact_sensitive`` below keeps
+    # the precise ``loc``-based correlation and is unaffected.
+    redacted = redact_assignments(
+        value,
+        _ASSIGNMENT_VALUE_RE,
+        _render_redacted_value,
+        predicate=is_sensitive_or_echo_key,
+    )
     return _BEARER_RE.sub(lambda m: f"{m.group(1)} {_REDACTED}", redacted)
 
 

@@ -35,7 +35,11 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
-from netbox_proxbox.redaction import SCHEME_PATTERN, redact_assignments
+from netbox_proxbox.redaction import (
+    SCHEME_PATTERN,
+    is_sensitive_or_echo_key,
+    redact_assignments,
+)
 
 __all__ = (
     "Anonymizer",
@@ -81,8 +85,20 @@ _ASSIGNMENT_VALUE_RE = re.compile(
     (?:"""
     + SCHEME_PATTERN
     + r""")\s+[^\s,;)}\]]+
-    |\\?"(?:\\.|[^"\\])*+\\?"
-    |\\?'(?:\\.|[^'\\])*+\\?'
+    # A JSON document embedded *inside* a JSON string arrives doubly escaped, and
+    # there ``\\`` is an escaped backslash rather than a delimiter. Treating it
+    # as one ended the value early and published the rest:
+    # ``\\"password\\":\\"a\\\\"SECRET\\"`` matched only ``\\"a\\\\"``.
+    |\\\\"(?:\\\\\\\\.|(?!\\\\").)*+\\\\"
+    |\\\\'(?:\\\\\\\\.|(?!\\\\').)*+\\\\'
+    |"(?:\\.|[^"\\])*+"
+    |'(?:\\.|[^'\\])*+'
+    # Once a quote *opens*, the value runs to the end of the line even if it
+    # never closes. Falling through to the unquoted alternative below redacted
+    # only the first whitespace-delimited fragment and published the rest --
+    # ``password="first S3CRET`` leaked, and a truncated log is exactly where an
+    # unterminated quote comes from.
+    |\\?["'][^\r\n]*
     |[^\s,;&)}\]]+
     """
 )
@@ -117,8 +133,11 @@ _AUTH_HEADER_RE = re.compile(
 
 # A scheme plus credential with no credential-named key in front of it -- a
 # request header quoted into prose, say. The assignment sweep cannot see those.
+# Unbounded on purpose: a cap replaced exactly that many characters and
+# published the remainder of a longer credential. The run sits at the end of
+# the match, so a greedy scan needs no backtracking.
 _SCHEME_CREDENTIAL_RE = re.compile(
-    rf"(?i)\b({SCHEME_PATTERN})\s+([a-z0-9._\-+/=]{{8,4096}})"
+    rf"(?i)\b({SCHEME_PATTERN})\s+([a-z0-9._\-+/=]{{8,}})"
 )
 
 # Key material spans lines, and the assignment rule's value stops at the first
@@ -349,7 +368,10 @@ class Anonymizer:
             value,
         )
         value = redact_assignments(
-            value, _ASSIGNMENT_VALUE_RE, lambda _matched: REDACTED
+            value,
+            _ASSIGNMENT_VALUE_RE,
+            lambda _matched: REDACTED,
+            predicate=is_sensitive_or_echo_key,
         )
         value = _SCHEME_CREDENTIAL_RE.sub(lambda m: f"{m.group(1)} {REDACTED}", value)
         value = _URL_RE.sub(self._sub_url, value)
