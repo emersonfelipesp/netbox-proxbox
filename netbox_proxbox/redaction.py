@@ -21,12 +21,14 @@ and nothing else -- because ``anonymize`` must remain importable without Django
 stubbed), and ``error_utils`` is reached through a package whose ``__init__``
 does need Django.
 
-**Both representations are generated from one list.** A marker is needed twice,
-in two shapes: normalised (``apikey``) for comparing against a separator-folded
-mapping key, and as a regex fragment (``api[_\\-\\s]?key``) for finding an
-assignment in raw text. Writing those out separately is the same drift problem
-one level down, so :data:`SENSITIVE_KEY_MARKERS` and
-:data:`KEY_MARKER_PATTERN` are both derived from :data:`_MARKER_WORDS`.
+**There is deliberately only one matcher.** An earlier design also published a
+regex fragment so a marker could be found *inside* a larger string, which meant
+maintaining two spellings of the same idea -- and they disagreed: the fragment
+allowed at most one separator between compound words while :func:`normalize_key`
+strips a run of any length, so ``api__key`` was a sensitive key that no raw-text
+matcher recognised. Both consumers now capture a whole candidate identifier and
+ask :func:`is_sensitive_key` about it, so there is one definition of what a
+credential-bearing name looks like and nothing to keep in step.
 """
 
 from __future__ import annotations
@@ -34,12 +36,12 @@ from __future__ import annotations
 import re
 
 __all__ = (
+    "ASSIGNMENT_KEY_RE",
     "AUTH_SCHEMES",
-    "KEY_MARKER_PATTERN",
-    "MAX_SEPARATOR_RUN",
     "SCHEME_PATTERN",
     "SENSITIVE_KEY_MARKERS",
     "is_sensitive_key",
+    "redact_assignments",
     "normalize_key",
 )
 
@@ -84,22 +86,6 @@ SENSITIVE_KEY_MARKERS: tuple[str, ...] = tuple(
 # Regex alternation for matching a marker in raw text, where the separators are
 # still present. Longest first so ``authorization`` is preferred over ``auth``
 # and the captured key reads naturally in the output.
-# One separator language, used by both representations. ``normalize_key``
-# strips a run of *any* length, so the regex has to accept a run too -- an
-# earlier version allowed at most one character, which made ``api__key`` a
-# sensitive *key* that the raw-text matchers ignored, and the secret behind it
-# reached the public issue body. The run is bounded because an unbounded one in
-# front of a required literal is the quadratic shape documented in
-# ``anonymize.py``; a field name with more than this many consecutive
-# separators between words is still caught as a mapping key, just not in prose.
-MAX_SEPARATOR_RUN = 8
-_SEPARATOR_RUN_PATTERN = r"[_\-\s]{0,%d}" % MAX_SEPARATOR_RUN
-
-KEY_MARKER_PATTERN: str = "|".join(
-    _SEPARATOR_RUN_PATTERN.join(re.escape(word) for word in words)
-    for words in sorted(_MARKER_WORDS, key=lambda w: -len("".join(w)))
-)
-
 # HTTP authentication schemes whose credential follows the scheme keyword.
 # ``token`` matters specifically: it is the scheme NetBox's own API uses, and
 # omitting it meant ``Authorization: Token nbt_...`` redacted the keyword and
@@ -134,3 +120,76 @@ def is_sensitive_key(key: object) -> bool:
         return False
     normalized = normalize_key(key)
     return any(marker in normalized for marker in SENSITIVE_KEY_MARKERS)
+
+
+# A candidate field name followed by its assignment separator. The *marker* is
+# deliberately not part of this pattern: :func:`redact_assignments` captures a
+# whole name and asks :func:`is_sensitive_key` about it.
+#
+# Searching for the marker inside the key is what made the previous design both
+# wrong and slow. Slow, because every occurrence of ``token`` inside a long
+# identifier run started a fresh scan to the end of it -- quadratic, and
+# ``"token_aaaa" * 20000`` took ~34 s. Wrong, because the caps added to hide
+# that cost silently dropped longer names, and because the marker fragment and
+# :func:`normalize_key` disagreed about separators.
+#
+# The run is possessive, so a name that never reaches a separator fails at once
+# instead of re-trying every length.
+#
+# A name may **not** span a space. Allowing even a few space-joined words looked
+# like it would catch ``SSH Keys``, and instead did two bad things: it redacted
+# the tail of ordinary prose (``token_version mismatch: expected 2 got 1``,
+# where the key becomes "token_version mismatch"), and it produced candidates
+# that overlapped the next real assignment and hid it. Nothing is lost against
+# the previous design either -- its marker fragment could not cross a space for
+# a single-word marker like ``sshkeys`` in prose. A key containing a space is
+# still recognised where it actually occurs: as a *mapping* key, which
+# :func:`normalize_key` folds before matching.
+ASSIGNMENT_KEY_RE = re.compile(
+    r"""(?ix)
+    (?<![a-z0-9_\-])
+    (?P<key>[a-z0-9_\-]++)
+    (?P<quote_end>\\?['"]?)
+    (?P<sep>\s*[:=]\s*)
+    """
+)
+
+
+def redact_assignments(text, value_re, render):
+    """Replace the value of every credential-named assignment in *text*.
+
+    *value_re* matches a value at a given offset; *render* receives the matched
+    value text and returns its replacement.
+
+    The scan is a single left-to-right pass. A name that is not a credential is
+    simply skipped, and scanning resumes immediately **after its separator** --
+    not after its value. That matters twice over: it is what keeps the pass
+    linear on input like ``a:a:a:...`` (where a value would otherwise swallow
+    the rest of the string), and it is what lets an assignment nested inside a
+    non-credential one still be found. A Pydantic error rendering
+    ``input_value={'token': 'nbt_...'}`` is exactly that shape, and consuming
+    the outer value hid the inner credential completely.
+    """
+    out: list[str] = []
+    written = 0
+    position = 0
+    while True:
+        match = ASSIGNMENT_KEY_RE.search(text, position)
+        if match is None:
+            break
+        if not is_sensitive_key(match.group("key")):
+            # Resume immediately after the separator, never after the value: a
+            # value may itself contain an assignment, and consuming it hid the
+            # credential in ``input_value={'token': 'nbt_...'}`` entirely. The
+            # key holds no separator of its own, so nothing can be skipped past.
+            position = match.end()
+            continue
+        value = value_re.match(text, match.end())
+        if value is None:
+            position = match.end()
+            continue
+        out.append(text[written : match.end()])
+        out.append(render(value.group(0)))
+        written = position = value.end()
+    out.append(text[written:])
+    return "".join(out)

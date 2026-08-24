@@ -351,32 +351,37 @@ payload before it is rendered. Three invariants are load-bearing:
   credential quoted into prose has no key in front of it. Marker matching
   deliberately over-redacts (`tokenizer=` is redacted too): losing a word from
   a report is recoverable, publishing a credential is not.
-- **One module owns the vocabulary.** `netbox_proxbox/redaction.py` holds the
-  markers and authentication schemes, and both redactors import them:
-  `anonymize.py` for the public report, and `views/error_utils.py` for the job
-  log. They previously each carried a copy and drifted -- `error_utils` matched
-  by marker while `anonymize` matched exact names, which is precisely how
-  `token_value` was caught in the job log and published to GitHub. The module
-  is dependency-free (`re` and nothing else) because `anonymize` must stay
-  importable without Django, and `error_utils` is only reachable through a
-  package whose `__init__` needs it. Its two representations -- the normalised
-  `apikey` for key comparison and a regex fragment for text matching -- are
-  **generated from one word list**, so they cannot drift from each other
-  either, and they share **one separator language** (`MAX_SEPARATOR_RUN`).
-  Allowing at most a single separator made `api__key` a sensitive *key* that
-  neither text matcher recognised, so the secret behind it reached the public
-  issue body; the run is bounded rather than unbounded only because an
-  unbounded run before a required literal is the quadratic shape documented
-  below. Past the bound the field is still caught as a mapping key.
-- **`error_utils`' assignment matcher carries the same guards as
-  `anonymize`'s.** It previously paired two unbounded key runs around the
-  alternation, which is quadratic on marker-free text -- 8 KB of one repeated
-  character took ~12.8 s, and SSE error frames are redacted there *before* the
-  600-character log truncation, so a modest frame could pin an RQ worker.
-  Widening the vocabulary amplified it. With the identifier-start guard and the
-  bounded and possessive runs the same input takes ~0.4 ms. The output shapes stay separate on purpose:
-  `error_utils` walks structured payloads and writes `[redacted]`;
-  `anonymize` rewrites free text and assigns stable placeholders.
+- **One module owns the vocabulary, and there is only one matcher.**
+  `netbox_proxbox/redaction.py` holds the markers, the authentication schemes,
+  and the single-pass scanner both redactors use: `anonymize.py` for the public
+  report, `views/error_utils.py` for the job log. They previously each carried a
+  copy and drifted -- `error_utils` matched by marker while `anonymize` matched
+  exact names, which is how `token_value` was caught in the job log and
+  published to GitHub. The module is dependency-free (`re` and nothing else)
+  because `anonymize` must stay importable without Django, and `error_utils` is
+  only reachable through a package whose `__init__` needs it.
+- **The marker is not searched for inside the key.** The scanner captures a
+  whole candidate name and asks `is_sensitive_key` about it. Matching the marker
+  inside the key was both slow and wrong: every occurrence of `token` in a long
+  identifier run started a fresh scan to the end of it -- quadratic, and
+  `"token_aaaa" * 20000` took ~34 s -- while the caps added to hide that cost
+  silently dropped longer names, which is a disclosure regression because a
+  Pydantic 422 renders arbitrary field names into `msg` and those land in the
+  job log. It also needed a second spelling of the vocabulary as a regex
+  fragment, and the two disagreed about separators, so `api__key` was a
+  sensitive *key* that no text matcher caught. One matcher removes all three
+  problems, and every length and separator cap with them.
+- **A non-credential name is skipped by resuming after its separator, never
+  after its value.** That keeps the pass linear on input like `a:a:a:...`, where
+  a value would otherwise swallow the rest of the string, and it is what lets an
+  assignment nested inside a non-credential one still be found:
+  `input_value={'token': 'nbt_...'}` is exactly that shape, and consuming the
+  outer value hid the credential completely.
+- **A name may not span a space.** Allowing even a few space-joined words
+  redacted the tail of ordinary prose (`token_version mismatch: expected 2 got
+  1`) and produced candidates that overlapped the next real assignment and hid
+  it. Such a name is still recognised where it actually occurs -- as a mapping
+  key, which `normalize_key` folds before matching.
 - **An `Authorization` value is consumed whole, whatever the scheme.**
   Enumerating known schemes in the value branch matched `Token` alone and
   published the credential behind it -- and `Token` is the scheme NetBox's own

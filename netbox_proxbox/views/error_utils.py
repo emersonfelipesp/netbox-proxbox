@@ -9,10 +9,10 @@ import re
 import requests
 
 from netbox_proxbox.redaction import (
-    KEY_MARKER_PATTERN,
     SCHEME_PATTERN,
     is_sensitive_key,
     normalize_key,
+    redact_assignments,
 )
 
 logger = logging.getLogger(__name__)
@@ -54,34 +54,28 @@ _LOC_ECHO_KEYS: frozenset[str] = frozenset({"input", "input_value"})
 # Credential assignments embedded in a *string* — Pydantic renders the rejected
 # object into ``msg``/``python_exception`` text (``input_value={'token': 'nbt_…'}``),
 # which no amount of key matching can reach because there is no mapping left.
-_SENSITIVE_ASSIGNMENT_RE = re.compile(
+# The value of an assignment, matched at the offset just past its separator.
+# The scheme alternative must come first.  ``Authorization: Bearer <jwt>``
+# otherwise matches with the value ``Bearer`` alone, which redacts the
+# *keyword* and leaves the token behind it in the clear — and, worse, then
+# hides it from the bearer sweep below, which no longer sees a scheme to
+# anchor on.
+_ASSIGNMENT_VALUE_RE = re.compile(
     r"""(?ix)
-    # An identifier-start guard plus bounded runs, matching ``anonymize.py``.
-    # Without them this pairs two unbounded scans around a 21-way alternation
-    # and is quadratic on marker-free text: 8 KB of ``a`` took ~12.8 s, which is
-    # long enough to pin an RQ worker, and SSE error frames are redacted here
-    # *before* the 600-character log truncation. The trailing run is possessive
-    # -- its class excludes ``:`` and ``=``, so it can never need to give a
-    # character back for the separator to match -- while the leading run must
-    # still backtrack so the marker itself can match (``mytoken=x``).
-    (?<![a-z0-9_\-])
-    (?P<key>[a-z0-9_\-]{0,256}
-        (?:"""
-    + KEY_MARKER_PATTERN
-    + r""")
-        [a-z0-9_\-]{0,64}+)
-    (?P<quote_end>['"]?)
-    (?P<sep>\s*[:=]\s*)
-    # The scheme alternative must come first.  ``Authorization: Bearer <jwt>``
-    # otherwise matches with the value ``Bearer`` alone, which redacts the
-    # *keyword* and leaves the token behind it in the clear — and, worse, then
-    # hides it from the bearer sweep below, which no longer sees a scheme to
-    # anchor on.
-    (?P<value>(?:"""
+    (?:"""
     + SCHEME_PATTERN
-    + r""")\s+[^\s,;)}\]]+|'[^']*'|"[^"]*"|[^\s,;)}\]]+)
+    + r""")\s+[^\s,;)}\]]+|'[^']*'|"[^"]*"|[^\s,;)}\]]+
     """
 )
+
+
+def _render_redacted_value(value: str) -> str:
+    """Keep a quoted value quoted, so the surrounding text still parses."""
+    if value[:1] in {"'", '"'}:
+        return f"{value[0]}{_REDACTED}{value[0]}"
+    return _REDACTED
+
+
 # ``Bearer <jwt>`` rendered into a message with no credential-named key in front
 # of it — a quoted request header, say.  The assignment sweep cannot see those.
 _BEARER_RE = re.compile(rf"(?i)\b({SCHEME_PATTERN})\s+([a-z0-9._\-+/=]{{8,}})")
@@ -110,17 +104,7 @@ def redact_sensitive_text(value: str) -> str:
     Structural redaction cannot reach a secret that has already been rendered
     into prose, and both Pydantic and proxbox-api do exactly that.
     """
-    redacted = _SENSITIVE_ASSIGNMENT_RE.sub(
-        lambda m: (
-            f"{m.group('key')}{m.group('quote_end')}{m.group('sep')}"
-            + (
-                f"{m.group('value')[0]}{_REDACTED}{m.group('value')[0]}"
-                if m.group("value")[:1] in {"'", '"'}
-                else _REDACTED
-            )
-        ),
-        value,
-    )
+    redacted = redact_assignments(value, _ASSIGNMENT_VALUE_RE, _render_redacted_value)
     return _BEARER_RE.sub(lambda m: f"{m.group(1)} {_REDACTED}", redacted)
 
 

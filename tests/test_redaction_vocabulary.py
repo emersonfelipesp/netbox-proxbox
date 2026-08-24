@@ -248,30 +248,15 @@ def test_separator_runs_agree_across_both_representations(monkeypatch, separator
 
 
 @pytest.mark.parametrize(
-    "key", ["api-_key", "api _key", "API__Key", "X-Proxbox-API-Key", "api-key"]
+    "key", ["api-_key", "API__Key", "X-Proxbox-API-Key", "api-key", "api___key"]
 )
 def test_mixed_separator_spellings_are_matched_in_text(monkeypatch, key):
-    """Real field names mix ``-``, ``_`` and spaces, in any case."""
+    """Real field names mix ``-`` and ``_``, in any case and any run length."""
     assert _SECRET not in load_anonymize(monkeypatch).Anonymizer().scrub(
         f"{key}={_SECRET}"
     )
     assert _SECRET not in load_error_utils(monkeypatch).redact_sensitive_text(
         f"{key}={_SECRET}"
-    )
-
-
-def test_the_separator_bound_is_documented_not_accidental(monkeypatch):
-    """Past the bound the key is still caught as a *key*, just not in prose.
-
-    The run is bounded because an unbounded one in front of a required literal
-    is the quadratic shape this module already fixed elsewhere. That trade-off
-    is deliberate, so it is pinned rather than left to be rediscovered.
-    """
-    redaction = load_redaction(monkeypatch)
-    over = "api" + ("_" * (redaction.MAX_SEPARATOR_RUN + 1)) + "key"
-    assert redaction.is_sensitive_key(over), "key matching is unbounded by design"
-    assert _SECRET in load_anonymize(monkeypatch).Anonymizer().scrub(
-        f"{over}={_SECRET}"
     )
 
 
@@ -304,3 +289,35 @@ def test_job_log_redaction_still_redacts_after_the_speedup(monkeypatch):
     assert module.redact_sensitive_text("vmid=100 status=stopped") == (
         "vmid=100 status=stopped"
     )
+
+
+def test_a_name_containing_a_space_is_matched_where_it_occurs(monkeypatch):
+    """Spaces are folded for *keys*; free prose is matched name by name.
+
+    A name is not allowed to span a space in prose. Permitting even a few
+    space-joined words redacted the tail of ordinary text -- ``token_version
+    mismatch: expected 2 got 1`` becomes a "key" of ``token_version mismatch``
+    -- and produced candidates overlapping the next real assignment, hiding it.
+
+    Nothing is lost where such a name actually appears. JSON and Python payloads
+    carry it as a *mapping key*, and the structural redactor folds the space
+    before matching, which is what this pins.
+    """
+    redaction = load_redaction(monkeypatch)
+    assert redaction.is_sensitive_key("SSH Keys")
+    assert redaction.is_sensitive_key("api key")
+
+    module = load_error_utils(monkeypatch)
+    assert _SECRET not in repr(module.redact_sensitive({"SSH Keys": _SECRET}))
+    assert _SECRET not in repr(module.redact_sensitive({"api key": _SECRET}))
+
+
+def test_prose_around_a_credential_name_is_not_swallowed(monkeypatch):
+    """A marker-bearing word followed by prose is not an assignment.
+
+    ``token_version mismatch:`` names a field and then describes it; the value
+    after the colon is diagnosis, not a secret.
+    """
+    line = "token_version mismatch: expected 2 got 1"
+    assert load_anonymize(monkeypatch).Anonymizer().scrub(line) == line
+    assert load_error_utils(monkeypatch).redact_sensitive_text(line) == line

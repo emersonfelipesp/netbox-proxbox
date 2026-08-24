@@ -35,7 +35,7 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
-from netbox_proxbox.redaction import KEY_MARKER_PATTERN, SCHEME_PATTERN
+from netbox_proxbox.redaction import SCHEME_PATTERN, redact_assignments
 
 __all__ = (
     "Anonymizer",
@@ -67,53 +67,26 @@ REDACTED = "<redacted>"
 #   the prefix a real log line has.
 # * **A bare ``Bearer <jwt>`` is swept independently**, because a credential
 #   quoted into prose has no key in front of it to match on.
-_SENSITIVE_ASSIGNMENT_RE = re.compile(
+# The value of an assignment, matched at the offset just past its separator.
+# The scheme alternative must come first: ``Authorization: Bearer <jwt>``
+# otherwise matches the value ``Bearer`` alone, which redacts the *keyword* and
+# leaves the token behind it in the clear -- and then hides it from the scheme
+# sweep below, which no longer sees a scheme to anchor on.
+#
+# The quoted alternatives are escape-aware (a plain ``"[^"]*"`` ends at the
+# first ``\"`` inside a JSON-escaped value and publishes the remainder) and
+# possessive, so an unterminated quote fails at once instead of re-scanning.
+_ASSIGNMENT_VALUE_RE = re.compile(
     r"""(?ix)
-    # A key starts at an identifier boundary, never part-way through one. That
-    # is what it means for something to be a field name, and it also collapses
-    # the search: without it the leading run is retried at every character of a
-    # long marker-bearing string, and ``"token_aaaa" * 20000`` cost seconds.
-    (?<![a-z0-9_\-])
-    # The trailing run is *possessive*. Its character class excludes ``:`` and
-    # ``=``, so it can never need to give a character back for the separator to
-    # match -- but a backtracking suffix multiplied against the prefix. The
-    # leading run must stay backtracking: it has to be able to give ground for
-    # the marker itself to match (``mytoken=x``).
-    # 256, not 64: the bound only has to accommodate a namespaced field name,
-    # and the boundary lookbehind above already limits how often this is tried.
-    (?P<key>[a-z0-9_\-]{0,256}
-        (?:"""
-    + KEY_MARKER_PATTERN
-    + r""")
-        [a-z0-9_\-]{0,64}+)
-    # ``\\?`` because a JSON document embedded *inside* a JSON string arrives
-    # doubly escaped -- ``{\"password\":\"...\"}`` -- and the backslash sits
-    # between the key and its quote, so a bare ``['"]?`` never reached the
-    # separator and the whole assignment was published.
-    (?P<quote_end>\\?['"]?)
-    (?P<sep>\s*[:=]\s*)
-    # The scheme alternative must come first. ``Authorization: Bearer <jwt>``
-    # otherwise matches with the value ``Bearer`` alone, which redacts the
-    # *keyword* and leaves the token behind it in the clear -- and then hides it
-    # from the scheme sweep below, which no longer sees a scheme to anchor on.
-    #
-    # The quoted alternatives are escape-aware: a plain ``"[^"]*"`` ends at the
-    # first ``\"`` inside a JSON-escaped value and publishes the remainder.
-    # The quantifiers here are unbounded on purpose. A cap left the tail of an
-    # over-long value in the clear -- an assignment beyond the old 4096 limit
-    # was matched only up to the cap and the remainder published -- and each of
-    # these sits at the end of the match, where a greedy run needs no
-    # backtracking. The quoted bodies are *possessive* so that an unterminated
-    # quote fails immediately instead of re-scanning: their classes exclude the
-    # closing delimiter, so they can never need to give a character back.
-    (?P<value>(?:"""
+    (?:"""
     + SCHEME_PATTERN
     + r""")\s+[^\s,;)}\]]+
-        |\\?"(?:\\.|[^"\\])*+\\?"
-        |\\?'(?:\\.|[^'\\])*+\\?'
-        |[^\s,;&)}\]]+)
+    |\\?"(?:\\.|[^"\\])*+\\?"
+    |\\?'(?:\\.|[^'\\])*+\\?'
+    |[^\s,;&)}\]]+
     """
 )
+
 
 # An ``Authorization`` *header* value is opaque and may contain spaces, so it is
 # consumed whole whatever the scheme is. Enumerating schemes in the value branch
@@ -375,11 +348,8 @@ class Anonymizer:
             ),
             value,
         )
-        value = _SENSITIVE_ASSIGNMENT_RE.sub(
-            lambda m: (
-                f"{m.group('key')}{m.group('quote_end')}{m.group('sep')}{REDACTED}"
-            ),
-            value,
+        value = redact_assignments(
+            value, _ASSIGNMENT_VALUE_RE, lambda _matched: REDACTED
         )
         value = _SCHEME_CREDENTIAL_RE.sub(lambda m: f"{m.group(1)} {REDACTED}", value)
         value = _URL_RE.sub(self._sub_url, value)
