@@ -4,7 +4,7 @@ This is the recommended installation path for the current repository state.
 
 ## Why This Is Recommended
 
-The code in this repository is `0.0.24` and targets NetBox `4.5.8` through
+The code in this repository is `0.0.25` and targets NetBox `4.5.8` through
 `4.5.10` and `4.6.x` (validated against `v4.5.8` through `v4.5.10` and `v4.6.0`
 through `v4.6.6`). That is the version line reflected by the docs in this
 repository.
