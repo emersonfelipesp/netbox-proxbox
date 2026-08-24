@@ -19,6 +19,7 @@ standing assertion that neither has acquired a Django dependency.
 from __future__ import annotations
 
 import sys
+import time
 
 import pytest
 
@@ -217,3 +218,89 @@ def test_the_loader_leaves_no_modules_behind(monkeypatch):
     after = {name: sys.modules.get(name) for name in names}
     changed = [name for name in names if after[name] is not before[name]]
     assert not changed, f"the loader left {changed} altered in sys.modules"
+
+
+# ---------------------------------------------------------------------------
+# The two representations must agree in practice, not just in principle
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("separator_run", list(range(0, 9)))
+def test_separator_runs_agree_across_both_representations(monkeypatch, separator_run):
+    """``normalize_key`` strips a run of any length; the regex must accept one.
+
+    An earlier version joined compound markers with ``[_\\-\\s]?`` -- at most one
+    character -- so ``api__key`` was a sensitive *key* that neither raw-text
+    matcher recognised, and the secret behind it reached the decoded public
+    issue body. Key matching and text matching have to describe the same field
+    names or the stricter one is decorative.
+    """
+    redaction = load_redaction(monkeypatch)
+    key = "api" + ("_" * separator_run) + "key"
+
+    assert redaction.is_sensitive_key(key)
+    assert _SECRET not in load_anonymize(monkeypatch).Anonymizer().scrub(
+        f"{key}={_SECRET}"
+    )
+    assert _SECRET not in load_error_utils(monkeypatch).redact_sensitive_text(
+        f"{key}={_SECRET}"
+    )
+
+
+@pytest.mark.parametrize(
+    "key", ["api-_key", "api _key", "API__Key", "X-Proxbox-API-Key", "api-key"]
+)
+def test_mixed_separator_spellings_are_matched_in_text(monkeypatch, key):
+    """Real field names mix ``-``, ``_`` and spaces, in any case."""
+    assert _SECRET not in load_anonymize(monkeypatch).Anonymizer().scrub(
+        f"{key}={_SECRET}"
+    )
+    assert _SECRET not in load_error_utils(monkeypatch).redact_sensitive_text(
+        f"{key}={_SECRET}"
+    )
+
+
+def test_the_separator_bound_is_documented_not_accidental(monkeypatch):
+    """Past the bound the key is still caught as a *key*, just not in prose.
+
+    The run is bounded because an unbounded one in front of a required literal
+    is the quadratic shape this module already fixed elsewhere. That trade-off
+    is deliberate, so it is pinned rather than left to be rediscovered.
+    """
+    redaction = load_redaction(monkeypatch)
+    over = "api" + ("_" * (redaction.MAX_SEPARATOR_RUN + 1)) + "key"
+    assert redaction.is_sensitive_key(over), "key matching is unbounded by design"
+    assert _SECRET in load_anonymize(monkeypatch).Anonymizer().scrub(
+        f"{over}={_SECRET}"
+    )
+
+
+# ---------------------------------------------------------------------------
+# Neither matcher may be quadratic
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("length", [4000, 32000])
+def test_job_log_redaction_stays_linear(monkeypatch, length):
+    """Marker-free text must not cost more than a scan.
+
+    Pairing two unbounded key runs around the 21-way alternation was quadratic:
+    8 KB of one repeated character took ~12.8 s, and SSE error frames are
+    redacted here *before* the 600-character log truncation, so a modest error
+    frame could pin an RQ worker. The identifier-start guard and the bounded and
+    possessive runs bring it to ~0.4 ms.
+    """
+    module = load_error_utils(monkeypatch)
+    started = time.perf_counter()
+    module.redact_sensitive_text("a" * length)
+    assert time.perf_counter() - started < 5.0
+
+
+def test_job_log_redaction_still_redacts_after_the_speedup(monkeypatch):
+    """The bounds must not have been bought by matching less."""
+    module = load_error_utils(monkeypatch)
+    for line in (f"password={_SECRET}", f"Authorization: Token {_SECRET}"):
+        assert _SECRET not in module.redact_sensitive_text(line)
+    assert module.redact_sensitive_text("vmid=100 status=stopped") == (
+        "vmid=100 status=stopped"
+    )

@@ -360,9 +360,21 @@ payload before it is rendered. Three invariants are load-bearing:
   is dependency-free (`re` and nothing else) because `anonymize` must stay
   importable without Django, and `error_utils` is only reachable through a
   package whose `__init__` needs it. Its two representations -- the normalised
-  `apikey` for key comparison and the regex fragment `api[_\-\s]?key` for text
-  matching -- are **generated from one word list**, so they cannot drift from
-  each other either. The output shapes stay separate on purpose:
+  `apikey` for key comparison and a regex fragment for text matching -- are
+  **generated from one word list**, so they cannot drift from each other
+  either, and they share **one separator language** (`MAX_SEPARATOR_RUN`).
+  Allowing at most a single separator made `api__key` a sensitive *key* that
+  neither text matcher recognised, so the secret behind it reached the public
+  issue body; the run is bounded rather than unbounded only because an
+  unbounded run before a required literal is the quadratic shape documented
+  below. Past the bound the field is still caught as a mapping key.
+- **`error_utils`' assignment matcher carries the same guards as
+  `anonymize`'s.** It previously paired two unbounded key runs around the
+  alternation, which is quadratic on marker-free text -- 8 KB of one repeated
+  character took ~12.8 s, and SSE error frames are redacted there *before* the
+  600-character log truncation, so a modest frame could pin an RQ worker.
+  Widening the vocabulary amplified it. With the identifier-start guard and the
+  bounded and possessive runs the same input takes ~0.4 ms. The output shapes stay separate on purpose:
   `error_utils` walks structured payloads and writes `[redacted]`;
   `anonymize` rewrites free text and assigns stable placeholders.
 - **An `Authorization` value is consumed whole, whatever the scheme.**

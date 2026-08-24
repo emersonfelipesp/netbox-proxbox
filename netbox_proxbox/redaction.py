@@ -36,6 +36,7 @@ import re
 __all__ = (
     "AUTH_SCHEMES",
     "KEY_MARKER_PATTERN",
+    "MAX_SEPARATOR_RUN",
     "SCHEME_PATTERN",
     "SENSITIVE_KEY_MARKERS",
     "is_sensitive_key",
@@ -83,8 +84,19 @@ SENSITIVE_KEY_MARKERS: tuple[str, ...] = tuple(
 # Regex alternation for matching a marker in raw text, where the separators are
 # still present. Longest first so ``authorization`` is preferred over ``auth``
 # and the captured key reads naturally in the output.
+# One separator language, used by both representations. ``normalize_key``
+# strips a run of *any* length, so the regex has to accept a run too -- an
+# earlier version allowed at most one character, which made ``api__key`` a
+# sensitive *key* that the raw-text matchers ignored, and the secret behind it
+# reached the public issue body. The run is bounded because an unbounded one in
+# front of a required literal is the quadratic shape documented in
+# ``anonymize.py``; a field name with more than this many consecutive
+# separators between words is still caught as a mapping key, just not in prose.
+MAX_SEPARATOR_RUN = 8
+_SEPARATOR_RUN_PATTERN = r"[_\-\s]{0,%d}" % MAX_SEPARATOR_RUN
+
 KEY_MARKER_PATTERN: str = "|".join(
-    r"[_\-\s]?".join(re.escape(word) for word in words)
+    _SEPARATOR_RUN_PATTERN.join(re.escape(word) for word in words)
     for words in sorted(_MARKER_WORDS, key=lambda w: -len("".join(w)))
 )
 

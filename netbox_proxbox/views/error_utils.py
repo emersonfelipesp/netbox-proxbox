@@ -56,11 +56,20 @@ _LOC_ECHO_KEYS: frozenset[str] = frozenset({"input", "input_value"})
 # which no amount of key matching can reach because there is no mapping left.
 _SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"""(?ix)
-    (?P<key>[a-z0-9_\-]*
+    # An identifier-start guard plus bounded runs, matching ``anonymize.py``.
+    # Without them this pairs two unbounded scans around a 21-way alternation
+    # and is quadratic on marker-free text: 8 KB of ``a`` took ~12.8 s, which is
+    # long enough to pin an RQ worker, and SSE error frames are redacted here
+    # *before* the 600-character log truncation. The trailing run is possessive
+    # -- its class excludes ``:`` and ``=``, so it can never need to give a
+    # character back for the separator to match -- while the leading run must
+    # still backtrack so the marker itself can match (``mytoken=x``).
+    (?<![a-z0-9_\-])
+    (?P<key>[a-z0-9_\-]{0,256}
         (?:"""
     + KEY_MARKER_PATTERN
     + r""")
-        [a-z0-9_\-]*)
+        [a-z0-9_\-]{0,64}+)
     (?P<quote_end>['"]?)
     (?P<sep>\s*[:=]\s*)
     # The scheme alternative must come first.  ``Authorization: Bearer <jwt>``
