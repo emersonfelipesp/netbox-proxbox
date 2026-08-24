@@ -94,32 +94,46 @@ jobs:
           ref: ${{ needs.validate-version.outputs.tag }}
 
       - name: Install build tools
+        env:
+          # Pinned deliberately. The previous bootstrap fetched whatever the
+          # unversioned installer served and then accepted whatever answered
+          # `uv --version`, so two builds of one tag could come from different
+          # toolchains -- and this path is live: the runner that failed this
+          # release had no uv at all.
+          UV_VERSION: "0.12.5"
         run: |
           set -euo pipefail
-          if ! command -v uv >/dev/null 2>&1; then
-            # Best-effort, deliberately. `apt-get update` exits 100 when *any*
-            # configured repository is unusable, and a third-party Adoptium
-            # source on the runner had no Release file for its suite -- which
-            # failed the whole release under `set -e` before a single artifact
-            # was built. The install on the next line was already best-effort;
-            # refreshing the index is no more essential than it is, and uv is
-            # fetched over curl regardless.
-            apt-get update -qq || true
-            apt-get install -y curl python3 2>/dev/null || true
-            curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --no-modify-path
+          # Assert the tools the *post-upload* verification needs, on the
+          # default PATH it will actually run with, before anything is built.
+          # The verifier is a fresh shell -- it does not inherit the PATH export
+          # below -- and it uses both curl and python3. A user-local python3
+          # visible only to this step would pass a naive check here and be
+          # missing there, after an immutable version had been consumed.
+          for tool in python3 curl; do
+            command -v "${tool}" >/dev/null 2>&1 || {
+              echo "ERROR: ${tool} is required by the post-upload registry verification"
+              exit 1
+            }
+          done
+          python3 --version
+          curl --version | head -1
+
+          uv_is_pinned() {
+            command -v uv >/dev/null 2>&1 && \
+              [ "$(uv --version 2>/dev/null | awk '{print $2}')" = "${UV_VERSION}" ]
+          }
+          if ! uv_is_pinned; then
+            curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" \
+              | sh -s -- --no-modify-path
             export PATH="${HOME}/.local/bin:${PATH}"
           fi
           export PATH="${HOME}/.local/bin:${PATH}"
-          uv --version
-          # uv can build using a Python it manages itself, so a successful
-          # build proves nothing about the interpreter the *post-upload*
-          # verifier needs. Assert it now: failing here costs nothing, while
-          # failing after the upload would consume an immutable version.
-          command -v python3 >/dev/null 2>&1 || {
-            echo "ERROR: python3 is required by the post-upload registry verification"
+          ACTUAL_UV="$(uv --version | awk '{print $2}')"
+          if [ "${ACTUAL_UV}" != "${UV_VERSION}" ]; then
+            echo "ERROR: expected uv ${UV_VERSION}, got ${ACTUAL_UV}"
             exit 1
-          }
-          python3 --version
+          fi
+          uv --version
 
       - name: Build distributions
         run: |
