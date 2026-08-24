@@ -348,11 +348,23 @@ payload before it is rendered. Three invariants are load-bearing:
   `X-Proxbox-API-Key`; anchoring the `:` form to the start of a line made it
   dead code, because `_format_log_lines` prepends `[timestamp] LEVEL ` before
   anything is scrubbed. A bare `Bearer <jwt>` is swept separately, since a
-  credential quoted into prose has no key in front of it. This mirrors
-  `views/error_utils.py`, which cannot be imported here (it needs Django) --
-  keep the two in step. Marker matching deliberately over-redacts
-  (`tokenizer=` is redacted too): losing a word from a report is recoverable,
-  publishing a credential is not.
+  credential quoted into prose has no key in front of it. Marker matching
+  deliberately over-redacts (`tokenizer=` is redacted too): losing a word from
+  a report is recoverable, publishing a credential is not.
+- **One module owns the vocabulary.** `netbox_proxbox/redaction.py` holds the
+  markers and authentication schemes, and both redactors import them:
+  `anonymize.py` for the public report, and `views/error_utils.py` for the job
+  log. They previously each carried a copy and drifted -- `error_utils` matched
+  by marker while `anonymize` matched exact names, which is precisely how
+  `token_value` was caught in the job log and published to GitHub. The module
+  is dependency-free (`re` and nothing else) because `anonymize` must stay
+  importable without Django, and `error_utils` is only reachable through a
+  package whose `__init__` needs it. Its two representations -- the normalised
+  `apikey` for key comparison and the regex fragment `api[_\-\s]?key` for text
+  matching -- are **generated from one word list**, so they cannot drift from
+  each other either. The output shapes stay separate on purpose:
+  `error_utils` walks structured payloads and writes `[redacted]`;
+  `anonymize` rewrites free text and assigns stable placeholders.
 - **An `Authorization` value is consumed whole, whatever the scheme.**
   Enumerating known schemes in the value branch matched `Token` alone and
   published the credential behind it -- and `Token` is the scheme NetBox's own

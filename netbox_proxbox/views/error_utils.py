@@ -8,6 +8,13 @@ import re
 
 import requests
 
+from netbox_proxbox.redaction import (
+    KEY_MARKER_PATTERN,
+    SCHEME_PATTERN,
+    is_sensitive_key,
+    normalize_key,
+)
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -22,17 +29,14 @@ except AttributeError:
 # (``password``/``token_value``).  The extracted detail is written to job logs and
 # the ``Job.error`` field, which are long-lived and readable by any user with
 # permission to view jobs — so redaction happens here, on the way out.
-_SENSITIVE_KEY_MARKERS: tuple[str, ...] = (
-    "token",
-    "password",
-    "passwd",
-    "secret",
-    "apikey",
-    "privatekey",
-    "sshkeys",
-    "authorization",
-    "credential",
-)
+# The vocabulary itself lives in :mod:`netbox_proxbox.redaction`, shared with
+# the public-report scrubber. Keeping a second copy here is how the two drifted
+# apart before: this module matched by marker while that one matched exact
+# names, so ``token_value`` and ``X-Proxbox-API-Key`` were caught in the job log
+# and published to GitHub. There is deliberately no local alias of the marker
+# tuple -- an alias nothing reads looks load-bearing and is not, which is how a
+# mutation test comes back green against a broken vocabulary. The output shape
+# stays local: this module walks structured payloads and writes ``[redacted]``.
 _REDACTED = "[redacted]"
 _REDACTION_DEPTH_LIMIT = 6
 # Past the depth limit the value is returned *redacted*, not raw.  Returning the
@@ -53,8 +57,9 @@ _LOC_ECHO_KEYS: frozenset[str] = frozenset({"input", "input_value"})
 _SENSITIVE_ASSIGNMENT_RE = re.compile(
     r"""(?ix)
     (?P<key>[a-z0-9_\-]*
-        (?:token|password|passwd|secret|api[_\-\s]?key|private[_\-\s]?key
-           |sshkeys|authorization|credential)
+        (?:"""
+    + KEY_MARKER_PATTERN
+    + r""")
         [a-z0-9_\-]*)
     (?P<quote_end>['"]?)
     (?P<sep>\s*[:=]\s*)
@@ -63,30 +68,24 @@ _SENSITIVE_ASSIGNMENT_RE = re.compile(
     # *keyword* and leaves the token behind it in the clear — and, worse, then
     # hides it from the bearer sweep below, which no longer sees a scheme to
     # anchor on.
-    (?P<value>(?:bearer|basic)\s+[^\s,;)}\]]+|'[^']*'|"[^"]*"|[^\s,;)}\]]+)
+    (?P<value>(?:"""
+    + SCHEME_PATTERN
+    + r""")\s+[^\s,;)}\]]+|'[^']*'|"[^"]*"|[^\s,;)}\]]+)
     """
 )
 # ``Bearer <jwt>`` rendered into a message with no credential-named key in front
 # of it — a quoted request header, say.  The assignment sweep cannot see those.
-_BEARER_RE = re.compile(r"(?i)\b(bearer|basic)\s+([a-z0-9._\-+/=]{8,})")
+_BEARER_RE = re.compile(rf"(?i)\b({SCHEME_PATTERN})\s+([a-z0-9._\-+/=]{{8,}})")
 
 
 def _normalize_key(key: str) -> str:
-    """Fold a key to a separator-free lowercase form for marker matching.
-
-    ``x-proxbox-api-key``, ``api_key``, and ``ApiKey`` are the same field wearing
-    three spellings; only the underscore variant used to match, so the HTTP header
-    form sailed through unredacted.
-    """
-    return re.sub(r"[-_\s]+", "", key.lower())
+    """Fold a key to a separator-free lowercase form for marker matching."""
+    return normalize_key(key)
 
 
 def _is_sensitive_key(key: object) -> bool:
     """Return ``True`` when a mapping key names a credential-bearing field."""
-    if not isinstance(key, str):
-        return False
-    normalized = _normalize_key(key)
-    return any(marker in normalized for marker in _SENSITIVE_KEY_MARKERS)
+    return is_sensitive_key(key)
 
 
 def _loc_names_sensitive_field(loc: object) -> bool:

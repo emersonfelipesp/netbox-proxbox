@@ -13,34 +13,25 @@ import, the anonymizer has grown a dependency it must not have.
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 import time
-from pathlib import Path
 
 import pytest
 
-_ROOT = Path(__file__).resolve().parents[1]
+from tests.pure_loader import load_anonymize
 
 # Assembled at runtime so the literal never appears in the source; a bare
 # "scheme://host" literal here trips this workspace's managed-system guard.
 _S = "ht" + "tps://"
 
 
-def _load():
-    """Import ``netbox_proxbox.anonymize`` from disk, with no Django present."""
-    path = _ROOT / "netbox_proxbox" / "anonymize.py"
-    spec = importlib.util.spec_from_file_location("netbox_proxbox.anonymize", path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec and spec.loader
-    sys.modules["netbox_proxbox.anonymize"] = module
-    spec.loader.exec_module(module)
-    return module
-
-
 @pytest.fixture()
-def anonymize():
-    return _load()
+def anonymize(monkeypatch):
+    """Import ``netbox_proxbox.anonymize`` from disk, with no Django present.
+
+    It imports ``netbox_proxbox.redaction``, so the shared loader seeds that
+    sibling rather than letting the real package ``__init__`` run.
+    """
+    return load_anonymize(monkeypatch)
 
 
 @pytest.fixture()

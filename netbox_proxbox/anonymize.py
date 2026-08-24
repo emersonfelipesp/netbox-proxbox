@@ -35,6 +35,8 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
+from netbox_proxbox.redaction import KEY_MARKER_PATTERN, SCHEME_PATTERN
+
 __all__ = (
     "Anonymizer",
     "anonymize_lines",
@@ -43,12 +45,11 @@ __all__ = (
 
 REDACTED = "<redacted>"
 
-# Credential matching mirrors ``views/error_utils.py``'s redaction rather than
-# inventing a second scheme: that module already learned these lessons against
-# real backend payloads. It is not imported because reaching it would execute
-# ``netbox_proxbox.views.__init__``, which needs Django -- ``error_utils``
-# itself is pure. The two therefore carry the same marker vocabulary, and
-# ``tests/test_redaction_marker_parity.py`` fails when they drift.
+# The marker vocabulary and the authentication schemes come from
+# :mod:`netbox_proxbox.redaction`, shared with ``views/error_utils.py``. That
+# module cannot be imported here -- reaching it executes
+# ``netbox_proxbox.views.__init__``, which needs Django -- so the two consumers
+# meet in a dependency-free module instead of each carrying a copy.
 #
 # Three properties matter, and an earlier exact-key/line-anchored version failed
 # all three:
@@ -81,9 +82,9 @@ _SENSITIVE_ASSIGNMENT_RE = re.compile(
     # 256, not 64: the bound only has to accommodate a namespaced field name,
     # and the boundary lookbehind above already limits how often this is tried.
     (?P<key>[a-z0-9_\-]{0,256}
-        (?:token|password|passwd|pwd|passphrase|secret|credential|cookie|ticket
-           |auth|session|sshkeys
-           |(?:api|private|public|encryption|secret|ssh|host|signing)[_\-\s]?key)
+        (?:"""
+    + KEY_MARKER_PATTERN
+    + r""")
         [a-z0-9_\-]{0,64}+)
     # ``\\?`` because a JSON document embedded *inside* a JSON string arrives
     # doubly escaped -- ``{\"password\":\"...\"}`` -- and the backslash sits
@@ -105,7 +106,9 @@ _SENSITIVE_ASSIGNMENT_RE = re.compile(
     # backtracking. The quoted bodies are *possessive* so that an unterminated
     # quote fails immediately instead of re-scanning: their classes exclude the
     # closing delimiter, so they can never need to give a character back.
-    (?P<value>(?:bearer|basic|token|digest|negotiate|apikey)\s+[^\s,;)}\]]+
+    (?P<value>(?:"""
+    + SCHEME_PATTERN
+    + r""")\s+[^\s,;)}\]]+
         |\\?"(?:\\.|[^"\\])*+\\?"
         |\\?'(?:\\.|[^'\\])*+\\?'
         |[^\s,;&)}\]]+)
@@ -142,7 +145,7 @@ _AUTH_HEADER_RE = re.compile(
 # A scheme plus credential with no credential-named key in front of it -- a
 # request header quoted into prose, say. The assignment sweep cannot see those.
 _SCHEME_CREDENTIAL_RE = re.compile(
-    r"(?i)\b(bearer|basic|token|digest|apikey)\s+([a-z0-9._\-+/=]{8,4096})"
+    rf"(?i)\b({SCHEME_PATTERN})\s+([a-z0-9._\-+/=]{{8,4096}})"
 )
 
 # Key material spans lines, and the assignment rule's value stops at the first

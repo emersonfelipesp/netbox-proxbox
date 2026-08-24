@@ -126,7 +126,7 @@ per node, or issuing an authenticated request for every membership entry.
 > readable by anyone with permission to view jobs. Redaction runs **three
 > passes**, because key matching alone leaks:
 >
-> 1. **Keys** (`_SENSITIVE_KEY_MARKERS`), not values — so the payload keeps its
+> 1. **Keys** (the shared vocabulary in `netbox_proxbox/redaction.py`), not values — so the payload keeps its
 >    shape and the operator still learns *which* field the backend rejected; a
 >    value that merely mentions a password is not a secret and is left intact.
 >    Keys are folded through `_normalize_key()` (lowercase, `-`/`_`/space

@@ -2,43 +2,29 @@
 
 from __future__ import annotations
 
-import importlib.util
 import sys
 import types
 from datetime import datetime, timezone
-from pathlib import Path
 from types import SimpleNamespace
 from urllib.parse import parse_qs, urlparse
 
-_ROOT = Path(__file__).resolve().parents[1]
+from tests.pure_loader import install_pure_package, load_anonymize, load_pure_module
 
 
 def _load(monkeypatch):
     """Load netbox_proxbox.bug_report with a minimal core.choices stub.
 
     Its external dependencies are ``core.choices.JobStatusChoices`` and the
-    sibling ``netbox_proxbox.anonymize`` module, so a stub for the former plus
-    a by-path load of the latter keeps the test independent of NetBox/Django
-    being importable.
+    sibling ``netbox_proxbox.anonymize`` (which in turn imports
+    ``netbox_proxbox.redaction``), so a stub for the former plus the shared
+    pure loader for the latter keeps the test independent of NetBox/Django.
 
-    The stub ``netbox_proxbox`` package matters: ``bug_report`` does
-    ``from netbox_proxbox.anonymize import Anonymizer``, and without a parent
-    already in ``sys.modules`` that would execute the real package
-    ``__init__``, which needs Django. Pre-seeding both names makes the import
-    resolve from the cache instead.
+    The stub packages matter: without a parent already in ``sys.modules`` those
+    sibling imports would execute the real package ``__init__``, which needs
+    Django.
     """
-    package = types.ModuleType("netbox_proxbox")
-    package.__path__ = [str(_ROOT / "netbox_proxbox")]
-    monkeypatch.setitem(sys.modules, "netbox_proxbox", package)
-
-    anonymize_path = _ROOT / "netbox_proxbox" / "anonymize.py"
-    anonymize_spec = importlib.util.spec_from_file_location(
-        "netbox_proxbox.anonymize", anonymize_path
-    )
-    anonymize_module = importlib.util.module_from_spec(anonymize_spec)
-    assert anonymize_spec and anonymize_spec.loader
-    monkeypatch.setitem(sys.modules, "netbox_proxbox.anonymize", anonymize_module)
-    anonymize_spec.loader.exec_module(anonymize_module)
+    install_pure_package(monkeypatch)
+    load_anonymize(monkeypatch)
 
     core_module = types.ModuleType("core")
     core_choices = types.ModuleType("core.choices")
@@ -54,14 +40,7 @@ def _load(monkeypatch):
     monkeypatch.setitem(sys.modules, "core", core_module)
     monkeypatch.setitem(sys.modules, "core.choices", core_choices)
 
-    monkeypatch.delitem(sys.modules, "netbox_proxbox.bug_report", raising=False)
-    path = _ROOT / "netbox_proxbox" / "bug_report.py"
-    spec = importlib.util.spec_from_file_location("netbox_proxbox.bug_report", path)
-    module = importlib.util.module_from_spec(spec)
-    assert spec and spec.loader
-    sys.modules["netbox_proxbox.bug_report"] = module
-    spec.loader.exec_module(module)
-    return module
+    return load_pure_module(monkeypatch, "netbox_proxbox.bug_report", "bug_report.py")
 
 
 def _job(**overrides):
