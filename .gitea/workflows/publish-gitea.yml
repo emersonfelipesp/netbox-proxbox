@@ -111,6 +111,15 @@ jobs:
           fi
           export PATH="${HOME}/.local/bin:${PATH}"
           uv --version
+          # uv can build using a Python it manages itself, so a successful
+          # build proves nothing about the interpreter the *post-upload*
+          # verifier needs. Assert it now: failing here costs nothing, while
+          # failing after the upload would consume an immutable version.
+          command -v python3 >/dev/null 2>&1 || {
+            echo "ERROR: python3 is required by the post-upload registry verification"
+            exit 1
+          }
+          python3 --version
 
       - name: Build distributions
         run: |
@@ -161,7 +170,14 @@ jobs:
         run: |
           set -euo pipefail
           if command -v gh >/dev/null 2>&1; then gh --version; exit 0; fi
-          apt-get update -qq
+          # Best-effort for the same reason as the build job's bootstrap -- and
+          # it matters more here, because this job runs *after* the package has
+          # been uploaded. A broken third-party APT source would strand an
+          # already-published immutable version with no tag or release on
+          # GitHub, and a re-run would then collide with that upload. The
+          # `apt-get install` calls below remain the real gate, as does the
+          # closing `gh --version`.
+          apt-get update -qq || true
           apt-get install -y ca-certificates curl gnupg
           mkdir -p -m 755 /etc/apt/keyrings
           curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
@@ -169,7 +185,7 @@ jobs:
           chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
             | tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-          apt-get update -qq
+          apt-get update -qq || true
           apt-get install -y gh
           gh --version
 
