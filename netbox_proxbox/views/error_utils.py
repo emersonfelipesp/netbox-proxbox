@@ -8,6 +8,14 @@ import re
 
 import requests
 
+from netbox_proxbox.redaction import (
+    SCHEME_PATTERN,
+    is_sensitive_key,
+    is_sensitive_or_echo_key,
+    normalize_key,
+    redact_assignments,
+)
+
 logger = logging.getLogger(__name__)
 
 try:
@@ -22,17 +30,14 @@ except AttributeError:
 # (``password``/``token_value``).  The extracted detail is written to job logs and
 # the ``Job.error`` field, which are long-lived and readable by any user with
 # permission to view jobs — so redaction happens here, on the way out.
-_SENSITIVE_KEY_MARKERS: tuple[str, ...] = (
-    "token",
-    "password",
-    "passwd",
-    "secret",
-    "apikey",
-    "privatekey",
-    "sshkeys",
-    "authorization",
-    "credential",
-)
+# The vocabulary itself lives in :mod:`netbox_proxbox.redaction`, shared with
+# the public-report scrubber. Keeping a second copy here is how the two drifted
+# apart before: this module matched by marker while that one matched exact
+# names, so ``token_value`` and ``X-Proxbox-API-Key`` were caught in the job log
+# and published to GitHub. There is deliberately no local alias of the marker
+# tuple -- an alias nothing reads looks load-bearing and is not, which is how a
+# mutation test comes back green against a broken vocabulary. The output shape
+# stays local: this module walks structured payloads and writes ``[redacted]``.
 _REDACTED = "[redacted]"
 _REDACTION_DEPTH_LIMIT = 6
 # Past the depth limit the value is returned *redacted*, not raw.  Returning the
@@ -50,43 +55,50 @@ _LOC_ECHO_KEYS: frozenset[str] = frozenset({"input", "input_value"})
 # Credential assignments embedded in a *string* — Pydantic renders the rejected
 # object into ``msg``/``python_exception`` text (``input_value={'token': 'nbt_…'}``),
 # which no amount of key matching can reach because there is no mapping left.
-_SENSITIVE_ASSIGNMENT_RE = re.compile(
+# The value of an assignment, matched at the offset just past its separator.
+# The scheme alternative must come first.  ``Authorization: Bearer <jwt>``
+# otherwise matches with the value ``Bearer`` alone, which redacts the
+# *keyword* and leaves the token behind it in the clear — and, worse, then
+# hides it from the bearer sweep below, which no longer sees a scheme to
+# anchor on.
+_ASSIGNMENT_VALUE_RE = re.compile(
     r"""(?ix)
-    (?P<key>[a-z0-9_\-]*
-        (?:token|password|passwd|secret|api[_\-\s]?key|private[_\-\s]?key
-           |sshkeys|authorization|credential)
-        [a-z0-9_\-]*)
-    (?P<quote_end>['"]?)
-    (?P<sep>\s*[:=]\s*)
-    # The scheme alternative must come first.  ``Authorization: Bearer <jwt>``
-    # otherwise matches with the value ``Bearer`` alone, which redacts the
-    # *keyword* and leaves the token behind it in the clear — and, worse, then
-    # hides it from the bearer sweep below, which no longer sees a scheme to
-    # anchor on.
-    (?P<value>(?:bearer|basic)\s+[^\s,;)}\]]+|'[^']*'|"[^"]*"|[^\s,;)}\]]+)
+    (?:"""
+    + SCHEME_PATTERN
+    + r""")\s+[^\s,;)}\]]+
+    |'[^']*'
+    |"[^"]*"
+    # Once a quote *opens*, the value runs to the end of the line even if it
+    # never closes. Falling through to the unquoted alternative below redacted
+    # only the first whitespace-delimited fragment and published the rest --
+    # ``password="first S3CRET`` leaked, and a truncated log is exactly where an
+    # unterminated quote comes from.
+    |["'][^\r\n]*
+    |[^\s,;)}\]]+
     """
 )
+
+
+def _render_redacted_value(value: str) -> str:
+    """Keep a quoted value quoted, so the surrounding text still parses."""
+    if value[:1] in {"'", '"'}:
+        return f"{value[0]}{_REDACTED}{value[0]}"
+    return _REDACTED
+
+
 # ``Bearer <jwt>`` rendered into a message with no credential-named key in front
 # of it — a quoted request header, say.  The assignment sweep cannot see those.
-_BEARER_RE = re.compile(r"(?i)\b(bearer|basic)\s+([a-z0-9._\-+/=]{8,})")
+_BEARER_RE = re.compile(rf"(?i)\b({SCHEME_PATTERN})\s+([a-z0-9._\-+/=]{{8,}})")
 
 
 def _normalize_key(key: str) -> str:
-    """Fold a key to a separator-free lowercase form for marker matching.
-
-    ``x-proxbox-api-key``, ``api_key``, and ``ApiKey`` are the same field wearing
-    three spellings; only the underscore variant used to match, so the HTTP header
-    form sailed through unredacted.
-    """
-    return re.sub(r"[-_\s]+", "", key.lower())
+    """Fold a key to a separator-free lowercase form for marker matching."""
+    return normalize_key(key)
 
 
 def _is_sensitive_key(key: object) -> bool:
     """Return ``True`` when a mapping key names a credential-bearing field."""
-    if not isinstance(key, str):
-        return False
-    normalized = _normalize_key(key)
-    return any(marker in normalized for marker in _SENSITIVE_KEY_MARKERS)
+    return is_sensitive_key(key)
 
 
 def _loc_names_sensitive_field(loc: object) -> bool:
@@ -102,16 +114,15 @@ def redact_sensitive_text(value: str) -> str:
     Structural redaction cannot reach a secret that has already been rendered
     into prose, and both Pydantic and proxbox-api do exactly that.
     """
-    redacted = _SENSITIVE_ASSIGNMENT_RE.sub(
-        lambda m: (
-            f"{m.group('key')}{m.group('quote_end')}{m.group('sep')}"
-            + (
-                f"{m.group('value')[0]}{_REDACTED}{m.group('value')[0]}"
-                if m.group("value")[:1] in {"'", '"'}
-                else _REDACTED
-            )
-        ),
+    # ``is_sensitive_or_echo_key`` rather than ``is_sensitive_key``: free text
+    # cannot correlate a rendered ``input_value=`` echo with the field name on
+    # the preceding line, so it fails closed. ``redact_sensitive`` below keeps
+    # the precise ``loc``-based correlation and is unaffected.
+    redacted = redact_assignments(
         value,
+        _ASSIGNMENT_VALUE_RE,
+        _render_redacted_value,
+        predicate=is_sensitive_or_echo_key,
     )
     return _BEARER_RE.sub(lambda m: f"{m.group(1)} {_REDACTED}", redacted)
 

@@ -16,7 +16,6 @@ the test run without booting NetBox.
 
 from __future__ import annotations
 
-import importlib.util
 import json
 from pathlib import Path
 
@@ -24,19 +23,21 @@ import pytest
 import requests
 import requests.exceptions
 
+from tests.pure_loader import load_error_utils
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
-@pytest.fixture(scope="module")
-def error_utils_module():
-    spec = importlib.util.spec_from_file_location(
-        "_netbox_proxbox_error_utils_under_test",
-        REPO_ROOT / "netbox_proxbox" / "views" / "error_utils.py",
-    )
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+@pytest.fixture()
+def error_utils_module(monkeypatch):
+    """Load the module by path, with its pure siblings seeded.
+
+    It imports ``netbox_proxbox.redaction`` for the shared credential
+    vocabulary, so it can no longer be loaded under a synthetic name with no
+    package context -- resolving that sibling would execute the real package
+    ``__init__`` and need Django.
+    """
+    return load_error_utils(monkeypatch)
 
 
 def _response(

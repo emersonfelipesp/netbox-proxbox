@@ -207,6 +207,31 @@ This directory contains the plugin's pytest test suite.
   `_post_clean()` form override to call `super()._post_clean()`, preserving
   NetBox's model construction, validation, and M2M preparation behavior.
 - `test_hardware_discovery_custom_fields_migration.py`: migration `0049_register_hardware_discovery_cfs` registers all six custom fields with correct types, content-type bindings (`dcim.device` / `dcim.interface`), `ui_editable="hidden"`, `filter_logic="disabled"`, idempotency, unregister path, and dependency chain.
+- `pure_loader.py`: the shared loader for the Django-free modules
+  (`netbox_proxbox/anonymize.py`, `netbox_proxbox/views/error_utils.py`,
+  `netbox_proxbox/redaction.py`). Both consumers import
+  `netbox_proxbox.redaction`, which a plain `spec_from_file_location` cannot
+  satisfy — resolving that sibling executes the real package `__init__` and
+  needs Django, and reaching `error_utils` additionally executes
+  `netbox_proxbox/views/__init__.py`. It seeds stub packages plus the
+  path-loaded `redaction` module into `sys.modules` under `monkeypatch`, so the
+  entries are scoped to the test. **Four** suites use it
+  (`test_anonymize.py`, `test_bug_report.py`, `test_views_error_utils.py`,
+  `test_redaction_vocabulary.py`); each previously carried its own copy of the
+  preparation, which is the same duplication that let the two redactors drift.
+- `test_redaction_vocabulary.py`: pins that **both** redactors honour the whole
+  shared vocabulary. It does not compare the two modules' constants — that would
+  prove only that they read the same list — but pushes every marker through
+  `anonymize.Anonymizer.scrub` **and** `error_utils.redact_sensitive` /
+  `redact_sensitive_text` as real input and requires the canary to die in both.
+  `_REQUIRED_MARKERS` / `_REQUIRED_SCHEMES` are a **fixed oracle transcribed
+  once**, because the per-marker sweeps take their parameters *from* the
+  vocabulary: deleting an entry silently deletes its own test cases, and only an
+  independently written list catches that. Mutation-tested in both directions —
+  removing a marker or an auth scheme from `redaction.py` turns it red, and the
+  scheme case fails with `error_utils` visibly leaking the token. It also
+  asserts that neither module has acquired a Django import, since it loads both
+  by path.
 - `test_anonymize.py`: per-pattern behavior tests for `netbox_proxbox/anonymize.py` — credentials (assignment and header forms), IPv4/IPv6/MAC, URLs (host replaced, userinfo dropped, path kept), realm principals, e-mails, and FQDNs — plus the two properties the feature rests on: stable mapping across calls on one instance, and idempotence. It also pins the three deliberate **non**-matches that keep a report readable: a wall-clock timestamp, a dotted version, and a dotted Python path in a traceback. Loads the module by path so it stays runnable without Django; if it ever needs one, the anonymizer has grown a dependency it must not have.
 - `test_proxbox_job_filter_django.py`: real-database parity between `jobs.proxbox_sync_job_q()` and `jobs.is_proxbox_sync_job()`. It creates a matrix of `Job` rows (data-payload, legacy queue, default label on each allowed queue **including SQL NULL**, whitespace-padded names, targeted per-VM names, other plugins' jobs, and near misses), asks the **predicate** which are Proxbox jobs, asks the **database** the same through the `Q`, and requires the answers to be equal — the predicate is the oracle, the `Q` is under test. A companion case asserts the matrix produces both verdicts, so the parity assertion cannot pass against a `Q` matching everything or nothing. Runs in the NetBox matrix only.
 - `test_proxbox_job_list_page.py`: mocked-suite AST/source contracts for the Proxbox-only jobs page — the nav target is `plugins:netbox_proxbox:job_list` and not `core:job_list`, the route is mounted, the view is exported, the queryset is filtered, the view/table subclass core rather than reimplementing it, the bug-report column gates on `is_reportable_status`, and the list does **not** build the modal per row (it would defeat `defer("data")`). Also pins the two `Q`-translation traps the matrix test owns behaviorally: the NULL `queue_name` branch and the `\s*` whitespace tolerance that mirrors the predicate's `.strip()`.
