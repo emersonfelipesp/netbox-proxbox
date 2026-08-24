@@ -312,13 +312,108 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   from live Proxmox data, which is the actual recovery. Only permission-denied,
   active-job, and enqueue failures are hard errors; all are flash messages that
   never return a 500.
-- The dashboard and Job detail pages are extended by template extensions so Proxbox jobs get run-now/cancel controls and live stream/log helpers. Sync jobs that end in an error/unknown state also get a **Bug report** button whose modal packages job metadata + logs (copy-to-clipboard) and links to a prefilled netbox-proxbox GitHub *new issue* — logic in [`netbox_proxbox/bug_report.py`](./netbox_proxbox/bug_report.py), rendered by [`inc/bug_report_button.html`](./netbox_proxbox/templates/netbox_proxbox/inc/bug_report_button.html).
+- The dashboard and Job detail pages are extended by template extensions so Proxbox jobs get run-now/cancel controls and live stream/log helpers. Sync jobs that end in an error/unknown state also get a **Bug report** button whose modal packages job metadata + logs (copy-to-clipboard) and links to a prefilled netbox-proxbox GitHub *new issue* — logic in [`netbox_proxbox/bug_report.py`](./netbox_proxbox/bug_report.py), rendered by [`inc/bug_report_button.html`](./netbox_proxbox/templates/netbox_proxbox/inc/bug_report_button.html). **That payload is anonymized** by [`netbox_proxbox/anonymize.py`](./netbox_proxbox/anonymize.py) before it is displayed — see §"Bug-report anonymization" below.
+- **Sync Jobs is a plugin page, not `core:job_list`.** The nav entry points at `plugins:netbox_proxbox:job_list` (`/plugins/proxbox/jobs/`, [`views/jobs.py`](./netbox_proxbox/views/jobs.py)), a subclass of core's `JobListView` whose queryset is filtered by `jobs.proxbox_sync_job_q()`. It previously linked to NetBox's `core:job_list`, which lists **every** job in the instance — reports, scripts, other plugins — so operators had to find the Proxbox rows by eye.
 - Browser updates can flow over SSE streams or the existing WebSocket channel.
 - Templates and static assets are conventional Django plugin assets under `netbox_proxbox/templates/` and `netbox_proxbox/static/`.
 - All three endpoint types support **CSV/JSON/YAML export** (safe and sensitive modes) and **bulk import** with IP auto-creation and id-stripping. See [`netbox_proxbox/views/endpoints/CLAUDE.md`](./netbox_proxbox/views/endpoints/CLAUDE.md).
 - The Proxmox endpoint list at `/plugins/proxbox/endpoints/proxmox/` shows `Enabled` by default and exposes **Enable Selected** / **Disable Selected** list actions. These actions bulk-update only `ProxmoxEndpoint.enabled` via `queryset.update()` so they do not fire the ProxmoxEndpoint `post_save` backend-registration/sync signal.
 - The Proxmox endpoint detail page carries a **Templates** tab (`.../endpoints/proxmox/<pk>/templates/`, `views/proxmox_templates_tab.py`) that reads templates **live** from proxbox-api for that endpoint (`GET /cloud/vm/templates?cloud_init_only=false` + `GET /cloud/lxc/templates`, via `get_fastapi_request_context()` + `resolve_backend_endpoint_id()`), grouped into three client-side filters: **Cloud-Init**, **plain QEMU/KVM (no cloud-init)**, and **LXC**. Cloud-init classification derives from `cloud_init_drives`/`cicustom`, not the always-`True` `cloud_init` field. The tab also offers a "Create Cloud-Init template image" action that links to the optional **netbox-packer** plugin when installed (soft-detected by `integrations/packer.py::is_netbox_packer_installed()`, mirroring `integrations/rpc.py`) and is disabled with an explanatory hover tooltip when it is not.
 - The Templates tab also exposes a per-row **Create new instance** wizard for QEMU and LXC templates. The action posts directly to proxbox-api (`/cloud/vm/provision` or `/cloud/lxc/provision`) through `views/proxmox_create_instance.py`, defaults QEMU to linked clone (`full_clone=false`), uses a 90-second request timeout, retries QEMU VMID collisions from the datacenter `next_id` hint, and runs `sync_individual("sync/individual/vm", ...)` afterward so the new VM/container appears in NetBox. Writes are gated in four layers: UI disables the button when `ProxmoxEndpoint.allow_writes=False`, the plugin view pre-checks the same flag before backend calls, proxbox-api 403 `reason`/`detail` is surfaced unchanged, and the view requires `core.run_proxmox_action` via `permission_run_proxmox_action()`.
+
+## Bug-report anonymization
+
+The failed-job **Bug report** modal exists so an operator can hand a sync
+failure to a public issue tracker. A Proxbox sync error or log line routinely
+carries Proxmox node hostnames and FQDNs, management addresses, API URLs,
+`user@pam` realm principals, `PVEAPIToken` values, and `Authorization` headers,
+so [`netbox_proxbox/anonymize.py`](./netbox_proxbox/anonymize.py) scrubs the
+payload before it is rendered. Three invariants are load-bearing:
+
+- **The prefilled GitHub URL is the real egress path.** `_build_issue_url()`
+  embeds the report body in a `?body=` query parameter, so scrubbing only the
+  modal textarea would still publish the raw text the moment the reporter clicks
+  *Open a new issue*. `build_bug_report_context()` therefore scrubs the metadata,
+  error, and log lines **first** and composes `report_text` and the issue URL
+  from those already-scrubbed parts — including the over-length truncation
+  branch, which is a separate code path. Never scrub the composed string instead;
+  the two outputs must not be able to disagree.
+- **One `Anonymizer` per report.** Placeholders are stable per instance
+  (`<host-1>`, `<ip-2>`), so a node named in both the error and a log line keeps
+  one token and the report stays correlatable. A fresh instance per field would
+  renumber and destroy that.
+- **Credential keys are matched by *marker*, in both `:` and `=` forms,
+  anywhere in the text.** An enumerated key list missed `token_value` and
+  `token_secret` -- field names on this plugin's own models -- and
+  `X-Proxbox-API-Key`; anchoring the `:` form to the start of a line made it
+  dead code, because `_format_log_lines` prepends `[timestamp] LEVEL ` before
+  anything is scrubbed. A bare `Bearer <jwt>` is swept separately, since a
+  credential quoted into prose has no key in front of it. This mirrors
+  `views/error_utils.py`, which cannot be imported here (it needs Django) --
+  keep the two in step. Marker matching deliberately over-redacts
+  (`tokenizer=` is redacted too): losing a word from a report is recoverable,
+  publishing a credential is not.
+- **An `Authorization` value is consumed whole, whatever the scheme.**
+  Enumerating known schemes in the value branch matched `Token` alone and
+  published the credential behind it -- and `Token` is the scheme NetBox's own
+  API uses. Multi-line key material (PEM blocks, OpenSSH public keys) is swept
+  separately, because the generic value stops at the first whitespace.
+- **The `Authorization` rule fires only in header position** -- line start, or
+  after the `[timestamp] LEVEL ` prefix `_format_log_lines` adds. Letting it
+  match anywhere destroyed the reports it exists to enable: `Proxmox
+  authorization: denied; missing Sys.Audit on /nodes/pve01/storage/local`
+  collapsed to `<redacted>`, erasing the privilege, path and cause of exactly
+  the permission failure being reported. Prose falls through to the generic
+  rule, which takes only the first token.
+- **Single-label node names are caught where something names them as a host**
+  (`node=pve1`, `on node pve-node-01`), with a stop-word list so `node is not
+  reachable` stays readable. A bare identifier in prose is still not caught --
+  that is the documented best-effort limit.
+- **A bracketed IPv6 URL authority is matched atomically.** A plain
+  `[^/\s:?#]+` authority stops at the literal's first colon, which published
+  most of a management address and left a fragment the IPv6 pass could no
+  longer recognise.
+- **Every quantifier that precedes a required literal is bounded.** Job logs
+  carry remote-controlled text, so an unbounded greedy class in front of a
+  literal that turns out to be absent makes the engine re-scan the tail from
+  every start position -- quadratic, and reached from the job page. Four
+  regexes had this shape; at 2,000 dotted labels (an 18 KB string)
+  `_FQDN_RE` alone took ~2.1 s, versus ~17 ms bounded. Do not "simplify" a
+  bound back to `+` or `*`.
+- **`anonymize.py` must not import Django.** `tests/test_bug_report.py`
+  exec-loads `bug_report.py` with only `core.choices` stubbed; it pre-seeds a
+  stub `netbox_proxbox` package plus a path-loaded `netbox_proxbox.anonymize` in
+  `sys.modules` so the import resolves from cache rather than executing the real
+  package `__init__`. A Django import anywhere in that path breaks the harness.
+
+Two deliberate limits, both documented in the module and surfaced to the user as
+a "best-effort — review before submitting" caution in the modal:
+
+- **Hostname matching uses a curated suffix allowlist** (`_HOST_SUFFIXES`) and
+  lowercase-only labels. Matching "any trailing word" turned every dotted path in
+  a traceback (`django.db.utils.OperationalError`) into `<host-1>`, destroying
+  exactly the text a maintainer needs. A host under an unlisted TLD is missed
+  when it appears bare; inside a URL it is still caught, because there the
+  authority is identified positionally rather than by suffix.
+- **A bare single-label node name in prose** (`pve-node-01`) is
+  indistinguishable from any other identifier and is not scrubbed.
+
+Version metadata (`netbox-proxbox`, `NetBox`) is excluded from scrubbing by
+`_UNSCRUBBED_METADATA_LABELS`: a four-segment version is shaped exactly like an
+IPv4 address and would otherwise be reported as `<ip-1>`.
+
+The prefilled issue body is **budgeted per block**. Dropping the job logs is not
+enough on its own: a single verbose backend traceback can exceed
+`_MAX_ISSUE_BODY_CHARS` by itself, and an unbudgeted error produced a ~20,500
+character body against a 6,000 limit -- which GitHub rejects or silently drops,
+costing the reporter the prefill entirely. Metadata and error each have a
+sub-budget and are truncated with an explicit notice; the full text always
+remains in the clipboard copy.
+
+A known, accepted limit: a credential key spelled with **homoglyphs**
+(`passwоrd=` with a Cyrillic `о`) is not matched. Detecting that needs a
+confusables table, and the spelling does not arise from the systems that
+produce these logs.
 
 ## Backend integration notes
 

@@ -209,3 +209,28 @@ def test_netbox_backed_job_still_relies_on_pytest_django(flag):
         "django-tests.yml must NOT disable pytest-django — it runs against a "
         "real Django and depends on the plugin's flags and fixtures"
     )
+
+
+def test_every_django_suite_is_enumerated_in_the_workflow():
+    """A ``*_django.py`` file the workflow does not name never runs at all.
+
+    These modules ``pytest.skip`` at import when Django is absent, which is
+    exactly what the mocked suite provides -- so a matrix test that is not
+    listed in ``django-tests.yml`` is silently inert everywhere, and the
+    property it claims to guard is ungated while its file sits in the tree
+    looking like coverage. That happened to the job-filter parity suite on the
+    change that introduced it.
+    """
+    if not DJANGO_WORKFLOW.exists():
+        pytest.fail("django-tests.yml is missing; the matrix cannot be verified")
+    workflow = DJANGO_WORKFLOW.read_text()
+
+    suites = sorted(p.name for p in (REPO_ROOT / "tests").glob("test_*_django.py"))
+    assert suites, "no *_django.py suites found -- has the naming convention changed?"
+
+    missing = [name for name in suites if f"tests/{name}" not in workflow]
+    assert not missing, (
+        "these Django-backed suites are never executed: "
+        + ", ".join(missing)
+        + " -- add them to the pytest invocation in django-tests.yml"
+    )
