@@ -97,7 +97,14 @@ jobs:
         run: |
           set -euo pipefail
           if ! command -v uv >/dev/null 2>&1; then
-            apt-get update -qq
+            # Best-effort, deliberately. `apt-get update` exits 100 when *any*
+            # configured repository is unusable, and a third-party Adoptium
+            # source on the runner had no Release file for its suite -- which
+            # failed the whole release under `set -e` before a single artifact
+            # was built. The install on the next line was already best-effort;
+            # refreshing the index is no more essential than it is, and uv is
+            # fetched over curl regardless.
+            apt-get update -qq || true
             apt-get install -y curl python3 2>/dev/null || true
             curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --no-modify-path
             export PATH="${HOME}/.local/bin:${PATH}"
