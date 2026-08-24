@@ -96,6 +96,31 @@ _SENSITIVE_ASSIGNMENT_RE = re.compile(
 # header quoted into a message, say. The assignment sweep cannot see those.
 _BEARER_RE = re.compile(r"(?i)\b(bearer|basic)\s+([a-z0-9._\-+/=]{8,4096})")
 
+# Key material spans lines, and the assignment rule's value stops at the first
+# whitespace -- so ``private_key: -----BEGIN RSA PRIVATE KEY-----\nMIIE...``
+# redacted the word ``-----BEGIN`` and published the key. This plugin stores
+# SSH private keys (``NodeSSHCredential``) and cloud-init ``sshkeys``, so that
+# material genuinely reaches job errors and logs.
+#
+# An *unterminated* block is redacted to the end of the text: after a BEGIN
+# marker every remaining byte is key material, and a truncated log is exactly
+# where the END marker goes missing.
+# Deliberately two anchors scanned in a loop rather than one regex spanning the
+# block. A single lazy ``[\s\S]{0,65536}?`` with an end-of-text fallback is
+# quadratic on repeated BEGIN markers -- each one re-scans the tail looking for
+# an END that is not there -- and ``"-----BEGIN A-----" * 20000`` took ~45 s.
+# The loop below is a plain forward scan.
+_PEM_BEGIN_RE = re.compile(r"-----BEGIN [A-Z0-9 ]{1,64}-----")
+_PEM_END_RE = re.compile(r"-----END [A-Z0-9 ]{1,64}-----")
+
+# An OpenSSH public key and its trailing comment. The key is not secret, but it
+# names the estate and the operator as surely as a hostname does.
+_SSH_PUBLIC_KEY_RE = re.compile(
+    r"\b(ssh-(?:rsa|dss|ed25519)|ecdsa-sha2-nistp(?:256|384|521))"
+    r"\s+[A-Za-z0-9+/=]{20,4096}"
+    r"(?:\s+\S{1,256})?"
+)
+
 # Every quantifier that precedes a required literal is bounded, for the same
 # quadratic-backtracking reason as ``_FQDN_RE`` below: an unbounded greedy class
 # in front of a literal that is absent re-scans the tail at every start
@@ -176,6 +201,28 @@ _FQDN_RE = re.compile(
 )
 
 
+def _redact_pem_blocks(text: str) -> str:
+    """Replace every ``-----BEGIN ...-----`` block with a single placeholder.
+
+    An unterminated block consumes the rest of the text: past a BEGIN marker
+    every remaining byte is key material, and a truncated log is exactly where
+    the END marker goes missing.
+    """
+    parts: list[str] = []
+    position = 0
+    while True:
+        begin = _PEM_BEGIN_RE.search(text, position)
+        if begin is None:
+            parts.append(text[position:])
+            return "".join(parts)
+        parts.append(text[position : begin.start()])
+        parts.append(REDACTED)
+        end = _PEM_END_RE.search(text, begin.end())
+        if end is None:
+            return "".join(parts)
+        position = end.end()
+
+
 def _is_ip_literal(value: str) -> bool:
     """Return ``True`` when *value* is a bare IPv4/IPv6 address."""
     return bool(_IPV4_RE.fullmatch(value) or _IPV6_RE.fullmatch(value.strip("[]")))
@@ -223,6 +270,11 @@ class Anonymizer:
         if not value:
             return value
 
+        # Multi-line key material first: the assignment rule's value stops at
+        # the first whitespace, so it would redact the BEGIN marker and leave
+        # the body behind.
+        value = _redact_pem_blocks(value)
+        value = _SSH_PUBLIC_KEY_RE.sub(lambda m: f"{m.group(1)} {REDACTED}", value)
         value = _SENSITIVE_ASSIGNMENT_RE.sub(
             lambda m: (
                 f"{m.group('key')}{m.group('quote_end')}{m.group('sep')}{REDACTED}"

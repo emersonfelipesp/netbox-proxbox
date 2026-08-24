@@ -325,3 +325,63 @@ def test_bracketed_ipv6_url_authority_is_replaced_whole(scrub):
     assert "fd00" not in out
     assert "beef" not in out
     assert "<ipv6-1>" in out
+
+
+# --------------------------------------------------------------------------
+# Multi-line key material
+#
+# The assignment rule's value stops at the first whitespace, so it redacted the
+# ``-----BEGIN`` marker and published the body. This plugin stores SSH private
+# keys (``NodeSSHCredential``) and cloud-init ``sshkeys``, so the material does
+# reach job errors and logs.
+# --------------------------------------------------------------------------
+
+
+def test_pem_private_key_block_is_removed(scrub):
+    out = scrub(
+        "private_key: -----BEGIN RSA PRIVATE KEY-----\n"
+        "MIIEowIBAAKCAQEAsecretkeymaterial\n"
+        "-----END RSA PRIVATE KEY-----\ntail stays"
+    )
+    assert "secretkeymaterial" not in out
+    assert "MIIEow" not in out
+    assert "tail stays" in out, "only the block should be consumed"
+
+
+def test_unterminated_pem_block_consumes_the_rest(scrub):
+    """A truncated log is exactly where the END marker goes missing."""
+    out = scrub(
+        "key: -----BEGIN OPENSSH PRIVATE KEY-----\nMIIEowsecrettruncated\n(log cut)"
+    )
+    assert "secrettruncated" not in out
+
+
+def test_ssh_public_key_and_comment_are_replaced(scrub):
+    """Not secret, but it names the estate and the operator."""
+    out = scrub("sshkeys=ssh-rsa AAAAB3NzaC1yc2EAAAADAQABsecretpubkeydata admin@corp")
+    assert "secretpubkeydata" not in out
+    assert "admin@corp" not in out
+
+
+def test_a_hex_digest_is_not_mistaken_for_key_material(scrub):
+    """Digests are diagnostic and sit inside the base64 alphabet."""
+    line = "sha256:9f2c4a1be3d5079ab2c1e4f6a8d0b3c5e7f9012345678abcdef0123456789ab"
+    assert scrub(line) == line
+
+
+@pytest.mark.parametrize(
+    "label, payload",
+    [
+        # A single lazy span with an end-of-text fallback made each BEGIN
+        # re-scan the tail for an END that is not there: ~45 s.
+        ("unterminated begin markers", "-----BEGIN A-----" * 20000),
+        ("begin/end pairs", "-----BEGIN A-----x-----END A-----" * 20000),
+        ("ssh key runs", "ssh-rsa AAAAAAAAAAAAAAAAAAAAAA " * 20000),
+        ("bearer runs", "Bearer aaaa " * 20000),
+    ],
+)
+def test_key_material_sweeps_stay_linear(scrub, label, payload):
+    started = time.perf_counter()
+    scrub(payload)
+    elapsed = time.perf_counter() - started
+    assert elapsed < 10.0, f"{label} took {elapsed:.1f}s"
