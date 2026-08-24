@@ -185,25 +185,35 @@ def test_modules_import_without_django(monkeypatch):
 
 
 def test_the_loader_leaves_no_modules_behind(monkeypatch):
-    """``sys.modules`` entries must be scoped to the test that made them.
+    """``sys.modules`` must be restored to whatever it held before the load.
 
-    The loader originally assigned ``sys.modules`` directly, which left
-    ``netbox_proxbox.redaction`` and ``netbox_proxbox.anonymize`` in place for
-    every later test in the session. Nothing broke *yet*, but that is precisely
-    the arrangement in which a test passes only because an earlier one left the
-    right object behind -- and it would shadow a real import of either module.
+    The loader originally assigned ``sys.modules`` directly, so the modules it
+    path-loaded stayed registered for every later test in the session. Nothing
+    broke *yet*, but that is precisely the arrangement in which a test passes
+    only because an earlier one left the right object behind, and it would
+    shadow a genuine import of either module.
+
+    The assertion is *restoration*, not absence: ``conftest.py`` installs its
+    own ``netbox_proxbox`` stubs for the whole session, so several of these
+    names are legitimately present before this test starts. An earlier version
+    asserted absence, passed when run alone, and failed inside the full suite --
+    which is the same class of mistake it exists to catch.
     """
+    names = (
+        "netbox_proxbox",
+        "netbox_proxbox.views",
+        "netbox_proxbox.redaction",
+        "netbox_proxbox.anonymize",
+        "netbox_proxbox.views.error_utils",
+    )
+    before = {name: sys.modules.get(name) for name in names}
+
     load_anonymize(monkeypatch)
     load_error_utils(monkeypatch)
     assert "netbox_proxbox.redaction" in sys.modules, "seeded during the test"
 
     monkeypatch.undo()
 
-    for name in (
-        "netbox_proxbox",
-        "netbox_proxbox.views",
-        "netbox_proxbox.redaction",
-        "netbox_proxbox.anonymize",
-        "netbox_proxbox.views.error_utils",
-    ):
-        assert name not in sys.modules, f"{name} outlived the test"
+    after = {name: sys.modules.get(name) for name in names}
+    changed = [name for name in names if after[name] is not before[name]]
+    assert not changed, f"the loader left {changed} altered in sys.modules"
