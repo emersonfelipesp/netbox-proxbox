@@ -439,3 +439,58 @@ def test_long_namespaced_keys_stay_linear(scrub):
     started = time.perf_counter()
     scrub(("a" * 200 + "_password ") * 2000)
     assert time.perf_counter() - started < 10.0
+
+
+# --------------------------------------------------------------------------
+# Diagnosis must survive
+#
+# Fail-closed matching has a real cost: a report scrubbed into uselessness is a
+# bug report nobody can act on. These are verbatim shapes this stack actually
+# emits -- several are strings other modules branch on (`sync_stages.py` looks
+# for "init_ok"; `sync_types.py` matches the Postgres connection-slots phrase;
+# `_is_retryable_stage_failure` matches the transport texts).
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        "Error ensuring Proxbox tag",
+        # A validation rejection, not a transport timeout -- the retry
+        # classifier distinguishes them by this exact wording.
+        "timeout must be between 1 and 300",
+        "stage virtual-machines failed: 500 Internal Server Error",
+        "remaining connection slots are reserved for non-replication superuser connections",
+        "Invalid v1 token",
+        "token_version mismatch: expected 2 got 1",
+        "Authentication failed against Proxmox endpoint",
+        "[Errno 111] Connection refused",
+        "Temporary failure in name resolution",
+        "504 Gateway Time-out",
+        "sync_types: ['virtual-machines', 'storage']",
+        "django.db.utils.OperationalError: could not connect",
+        "VM 100 on node pve1 is locked by a backup task",
+        "cluster01/pve1/100 not found",
+        "credential rotation required",
+        "session expired, re-authenticating",
+        "ticket renewal failed after 3 attempts",
+    ],
+)
+def test_diagnostic_text_is_left_intact(scrub, line):
+    """A marker-bearing word is not an assignment; only ``key<sep>value`` is.
+
+    ``Invalid v1 token`` and ``session expired`` carry markers but no separator,
+    so they must survive verbatim. This is what stops fail-closed matching from
+    degenerating into redact-everything.
+    """
+    assert scrub(line) == line
+
+
+def test_a_transport_error_keeps_everything_but_the_host(scrub):
+    """The host is replaced; the diagnosis around it is not."""
+    out = scrub(
+        "HTTPConnectionPool(host='node01.example.com', port=8006): Read timed out"
+    )
+    assert "node01.example.com" not in out
+    assert "Read timed out" in out
+    assert "port=8006" in out
