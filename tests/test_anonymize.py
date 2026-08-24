@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -193,3 +194,52 @@ def test_empty_input_is_safe(scrub, value):
 
 def test_non_string_input_is_coerced(scrub):
     assert scrub(1234) == "1234"
+
+
+# --------------------------------------------------------------------------
+# Backtracking / denial of service
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "label, payload",
+    [
+        ("dotted labels", "aaaaaaaa." * 20000),
+        ("dotted digits", "123." * 20000),
+        ("hex and colons", "aaaa:" * 20000),
+        ("at signs", "aaaa@" * 20000),
+    ],
+)
+def test_pathological_input_does_not_blow_up(scrub, label, payload):
+    """Scrubbing must stay linear in the size of the text.
+
+    Job logs carry remote-controlled strings -- a guest hostname, an error
+    relayed from a Proxmox node -- and the modal renders on the job page, so a
+    quadratic regex here is a denial-of-service vector rather than a
+    micro-optimisation.
+
+    Four regexes originally paired an unbounded greedy class with a required
+    literal (``_FQDN_RE``'s label group, ``_URL_RE``'s scheme, and the
+    local-parts of ``_REALM_RE`` and ``_EMAIL_RE``). When the literal is absent
+    the engine re-scans the tail from every start position: at 2,000 dotted
+    labels -- an 18 KB string -- that alone took ~2.1 s, so the 180 KB input
+    here took minutes.
+
+    The ceiling is deliberately loose. Bounded, this input finishes in well
+    under a second; unbounded it takes minutes, so the gap is wide enough to
+    discriminate without flaking on a slow CI runner.
+    """
+    started = time.perf_counter()
+    scrub(payload)
+    elapsed = time.perf_counter() - started
+    assert elapsed < 10.0, f"{label} took {elapsed:.1f}s -- quantifier bounds lost?"
+
+
+def test_bounded_quantifiers_still_match_real_values(scrub):
+    """The bounds must not have been bought by breaking ordinary inputs."""
+    out = scrub("a.b.c.d.e.example.com and admin@example.org and root@pam")
+    assert "example.com" not in out
+    assert "admin@example.org" not in out
+    assert "<host-1>" in out
+    assert "<email-1>" in out
+    assert out.endswith("@pam")

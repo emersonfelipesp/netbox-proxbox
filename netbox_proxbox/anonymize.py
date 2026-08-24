@@ -23,6 +23,11 @@ rather than preserved. It is still best-effort, and the modal says so. In
 particular, a bare single-label Proxmox node name (``pve-node-01``) appearing
 in prose is indistinguishable from any other identifier and is only caught when
 it appears in a URL or another positionally-identifiable slot.
+
+Every quantifier that precedes a required literal is **bounded**. Log text is
+remote-controlled, so an unbounded greedy class in front of an absent literal
+is a denial-of-service vector, not a style question -- see ``_URL_RE`` and
+``_FQDN_RE`` for the measurements.
 """
 
 from __future__ import annotations
@@ -84,14 +89,21 @@ _CREDENTIAL_HEADER_RE = re.compile(
     rf"(?i)^(\s*)({_CRED_ALTERNATION})\b(\s*:\s*)(.+)$", re.MULTILINE
 )
 
+# Every quantifier that precedes a required literal is bounded, for the same
+# quadratic-backtracking reason as ``_FQDN_RE`` below: an unbounded greedy class
+# in front of a literal that is absent re-scans the tail at every start
+# position. The bounds are the real-world limits (RFC 3986 schemes are short;
+# RFC 5321 caps an address local-part at 64 octets), so nothing valid is lost.
 _URL_RE = re.compile(
-    r"(?i)\b([a-z][a-z0-9+.\-]*)://(?:([^/@\s]*)@)?([^/\s:?#]+)(:\d+)?"
+    r"(?i)\b([a-z][a-z0-9+.\-]{0,15})://(?:([^/@\s]{0,255})@)?([^/\s:?#]{1,255})(:\d{1,5})?"
 )
 
 # Proxmox realm principals: root@pam, svc@pve, backup@pbs.
-_REALM_RE = re.compile(r"(?i)\b([A-Za-z0-9._%+\-]+)@(pam|pve|pbs|ldap|ad)\b")
+_REALM_RE = re.compile(r"(?i)\b([A-Za-z0-9._%+\-]{1,64})@(pam|pve|pbs|ldap|ad)\b")
 
-_EMAIL_RE = re.compile(r"(?i)\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,24}\b")
+_EMAIL_RE = re.compile(
+    r"(?i)\b[A-Za-z0-9._%+\-]{1,64}@[A-Za-z0-9.\-]{1,255}\.[A-Za-z]{2,24}\b"
+)
 
 _MAC_RE = re.compile(r"(?i)\b[0-9a-f]{2}(?::[0-9a-f]{2}){5}\b")
 
@@ -131,10 +143,21 @@ _HOST_SUFFIXES = frozenset(
     """.split()
 )
 
+# The label group is bounded rather than ``+``. With an unbounded ``+`` a long
+# dotted run that never reaches a valid TLD -- ``"aaaaaaaa." * 2000``, or any
+# digits-only run like an IPv4 list -- makes the engine consume every label at
+# every start position before failing, which is quadratic: 800 labels took
+# ~330 ms and 2000 took ~2.1 s. Job logs carry remote-controlled text (a guest
+# hostname, a Proxmox error string), so that is a denial-of-service vector on
+# the job page, not a micro-optimisation. Eight labels is far past any real
+# FQDN; a longer one is only missed when it appears bare, since a host inside a
+# URL is matched positionally by ``_URL_RE`` instead.
+_MAX_HOST_LABELS = 8
+
 _FQDN_RE = re.compile(
     r"(?<![A-Za-z0-9._\-])"
-    r"((?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.)+[a-z]{2,24})"
-    r"(?![A-Za-z0-9.\-])"
+    r"((?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.){1,%d}[a-z]{2,24})"
+    r"(?![A-Za-z0-9.\-])" % _MAX_HOST_LABELS
 )
 
 

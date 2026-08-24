@@ -342,6 +342,13 @@ payload before it is rendered. Three invariants are load-bearing:
   (`<host-1>`, `<ip-2>`), so a node named in both the error and a log line keeps
   one token and the report stays correlatable. A fresh instance per field would
   renumber and destroy that.
+- **Every quantifier that precedes a required literal is bounded.** Job logs
+  carry remote-controlled text, so an unbounded greedy class in front of a
+  literal that turns out to be absent makes the engine re-scan the tail from
+  every start position -- quadratic, and reached from the job page. Four
+  regexes had this shape; at 2,000 dotted labels (an 18 KB string)
+  `_FQDN_RE` alone took ~2.1 s, versus ~17 ms bounded. Do not "simplify" a
+  bound back to `+` or `*`.
 - **`anonymize.py` must not import Django.** `tests/test_bug_report.py`
   exec-loads `bug_report.py` with only `core.choices` stubbed; it pre-seeds a
   stub `netbox_proxbox` package plus a path-loaded `netbox_proxbox.anonymize` in
