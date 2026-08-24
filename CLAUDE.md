@@ -312,13 +312,57 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   from live Proxmox data, which is the actual recovery. Only permission-denied,
   active-job, and enqueue failures are hard errors; all are flash messages that
   never return a 500.
-- The dashboard and Job detail pages are extended by template extensions so Proxbox jobs get run-now/cancel controls and live stream/log helpers. Sync jobs that end in an error/unknown state also get a **Bug report** button whose modal packages job metadata + logs (copy-to-clipboard) and links to a prefilled netbox-proxbox GitHub *new issue* — logic in [`netbox_proxbox/bug_report.py`](./netbox_proxbox/bug_report.py), rendered by [`inc/bug_report_button.html`](./netbox_proxbox/templates/netbox_proxbox/inc/bug_report_button.html).
+- The dashboard and Job detail pages are extended by template extensions so Proxbox jobs get run-now/cancel controls and live stream/log helpers. Sync jobs that end in an error/unknown state also get a **Bug report** button whose modal packages job metadata + logs (copy-to-clipboard) and links to a prefilled netbox-proxbox GitHub *new issue* — logic in [`netbox_proxbox/bug_report.py`](./netbox_proxbox/bug_report.py), rendered by [`inc/bug_report_button.html`](./netbox_proxbox/templates/netbox_proxbox/inc/bug_report_button.html). **That payload is anonymized** by [`netbox_proxbox/anonymize.py`](./netbox_proxbox/anonymize.py) before it is displayed — see §"Bug-report anonymization" below.
+- **Sync Jobs is a plugin page, not `core:job_list`.** The nav entry points at `plugins:netbox_proxbox:job_list` (`/plugins/proxbox/jobs/`, [`views/jobs.py`](./netbox_proxbox/views/jobs.py)), a subclass of core's `JobListView` whose queryset is filtered by `jobs.proxbox_sync_job_q()`. It previously linked to NetBox's `core:job_list`, which lists **every** job in the instance — reports, scripts, other plugins — so operators had to find the Proxbox rows by eye.
 - Browser updates can flow over SSE streams or the existing WebSocket channel.
 - Templates and static assets are conventional Django plugin assets under `netbox_proxbox/templates/` and `netbox_proxbox/static/`.
 - All three endpoint types support **CSV/JSON/YAML export** (safe and sensitive modes) and **bulk import** with IP auto-creation and id-stripping. See [`netbox_proxbox/views/endpoints/CLAUDE.md`](./netbox_proxbox/views/endpoints/CLAUDE.md).
 - The Proxmox endpoint list at `/plugins/proxbox/endpoints/proxmox/` shows `Enabled` by default and exposes **Enable Selected** / **Disable Selected** list actions. These actions bulk-update only `ProxmoxEndpoint.enabled` via `queryset.update()` so they do not fire the ProxmoxEndpoint `post_save` backend-registration/sync signal.
 - The Proxmox endpoint detail page carries a **Templates** tab (`.../endpoints/proxmox/<pk>/templates/`, `views/proxmox_templates_tab.py`) that reads templates **live** from proxbox-api for that endpoint (`GET /cloud/vm/templates?cloud_init_only=false` + `GET /cloud/lxc/templates`, via `get_fastapi_request_context()` + `resolve_backend_endpoint_id()`), grouped into three client-side filters: **Cloud-Init**, **plain QEMU/KVM (no cloud-init)**, and **LXC**. Cloud-init classification derives from `cloud_init_drives`/`cicustom`, not the always-`True` `cloud_init` field. The tab also offers a "Create Cloud-Init template image" action that links to the optional **netbox-packer** plugin when installed (soft-detected by `integrations/packer.py::is_netbox_packer_installed()`, mirroring `integrations/rpc.py`) and is disabled with an explanatory hover tooltip when it is not.
 - The Templates tab also exposes a per-row **Create new instance** wizard for QEMU and LXC templates. The action posts directly to proxbox-api (`/cloud/vm/provision` or `/cloud/lxc/provision`) through `views/proxmox_create_instance.py`, defaults QEMU to linked clone (`full_clone=false`), uses a 90-second request timeout, retries QEMU VMID collisions from the datacenter `next_id` hint, and runs `sync_individual("sync/individual/vm", ...)` afterward so the new VM/container appears in NetBox. Writes are gated in four layers: UI disables the button when `ProxmoxEndpoint.allow_writes=False`, the plugin view pre-checks the same flag before backend calls, proxbox-api 403 `reason`/`detail` is surfaced unchanged, and the view requires `core.run_proxmox_action` via `permission_run_proxmox_action()`.
+
+## Bug-report anonymization
+
+The failed-job **Bug report** modal exists so an operator can hand a sync
+failure to a public issue tracker. A Proxbox sync error or log line routinely
+carries Proxmox node hostnames and FQDNs, management addresses, API URLs,
+`user@pam` realm principals, `PVEAPIToken` values, and `Authorization` headers,
+so [`netbox_proxbox/anonymize.py`](./netbox_proxbox/anonymize.py) scrubs the
+payload before it is rendered. Three invariants are load-bearing:
+
+- **The prefilled GitHub URL is the real egress path.** `_build_issue_url()`
+  embeds the report body in a `?body=` query parameter, so scrubbing only the
+  modal textarea would still publish the raw text the moment the reporter clicks
+  *Open a new issue*. `build_bug_report_context()` therefore scrubs the metadata,
+  error, and log lines **first** and composes `report_text` and the issue URL
+  from those already-scrubbed parts — including the over-length truncation
+  branch, which is a separate code path. Never scrub the composed string instead;
+  the two outputs must not be able to disagree.
+- **One `Anonymizer` per report.** Placeholders are stable per instance
+  (`<host-1>`, `<ip-2>`), so a node named in both the error and a log line keeps
+  one token and the report stays correlatable. A fresh instance per field would
+  renumber and destroy that.
+- **`anonymize.py` must not import Django.** `tests/test_bug_report.py`
+  exec-loads `bug_report.py` with only `core.choices` stubbed; it pre-seeds a
+  stub `netbox_proxbox` package plus a path-loaded `netbox_proxbox.anonymize` in
+  `sys.modules` so the import resolves from cache rather than executing the real
+  package `__init__`. A Django import anywhere in that path breaks the harness.
+
+Two deliberate limits, both documented in the module and surfaced to the user as
+a "best-effort — review before submitting" caution in the modal:
+
+- **Hostname matching uses a curated suffix allowlist** (`_HOST_SUFFIXES`) and
+  lowercase-only labels. Matching "any trailing word" turned every dotted path in
+  a traceback (`django.db.utils.OperationalError`) into `<host-1>`, destroying
+  exactly the text a maintainer needs. A host under an unlisted TLD is missed
+  when it appears bare; inside a URL it is still caught, because there the
+  authority is identified positionally rather than by suffix.
+- **A bare single-label node name in prose** (`pve-node-01`) is
+  indistinguishable from any other identifier and is not scrubbed.
+
+Version metadata (`netbox-proxbox`, `NetBox`) is excluded from scrubbing by
+`_UNSCRUBBED_METADATA_LABELS`: a four-segment version is shaped exactly like an
+IPv4 address and would otherwise be reported as `<ip-1>`.
 
 ## Backend integration notes
 

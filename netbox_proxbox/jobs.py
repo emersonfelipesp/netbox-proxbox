@@ -1803,3 +1803,47 @@ def is_proxbox_sync_job(job: Job) -> bool:
     if name == default_label and qn in allowed_queue_names:
         return True
     return bool(_TARGETED_VM_JOB_NAME_RE.match(name))
+
+
+def proxbox_sync_job_q():
+    """Return a ``Q`` selecting the same rows :func:`is_proxbox_sync_job` accepts.
+
+    The Python predicate answers "is *this* row ours?" one object at a time,
+    which a list view cannot use -- it needs the question pushed into SQL. The
+    two must agree, so both are built from the same constants and
+    ``tests/test_proxbox_job_filter.py`` asserts parity over a row matrix
+    rather than trusting that they were written to match.
+
+    Two translation details are easy to get wrong:
+
+    * ``queue_name`` is normalised by the predicate as ``queue_name or ""``, so
+      the SQL ``NULL`` case must be spelled out. A bare ``__in`` list never
+      matches ``NULL``, which would silently drop every job whose queue was
+      never recorded.
+    * The predicate compares ``name.strip()``, so both name tests are anchored
+      regexes tolerating surrounding whitespace rather than plain equality.
+
+    Note that ``queue_name`` alone is not a discriminator: ``PROXBOX_SYNC_QUEUE_NAME``
+    is NetBox's shared ``default`` queue, so it only counts alongside a name match.
+    """
+    import re
+
+    from django.db.models import Q
+
+    default_label = getattr(ProxboxSyncJob.Meta, "name", "Proxbox Sync")
+    allowed_queue = (
+        Q(queue_name__isnull=True)
+        | Q(queue_name="")
+        | Q(queue_name=PROXBOX_SYNC_QUEUE_NAME)
+        | Q(queue_name=LEGACY_PROXBOX_RQ_QUEUE)
+    )
+    # Reuse the targeted-VM pattern itself, minus its anchors, so a change to
+    # the job-name format cannot leave this filter behind.
+    targeted_inner = _TARGETED_VM_JOB_NAME_RE.pattern.removeprefix("^").removesuffix("$")
+
+    return (
+        Q(data__has_key="proxbox_sync")
+        | Q(queue_name=LEGACY_PROXBOX_RQ_QUEUE)
+        | (Q(name__regex=rf"^\s*{re.escape(default_label)}\s*$") & allowed_queue)
+        | Q(name__regex=rf"^\s*{targeted_inner}\s*$")
+    )

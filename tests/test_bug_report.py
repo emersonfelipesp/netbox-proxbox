@@ -16,9 +16,30 @@ _ROOT = Path(__file__).resolve().parents[1]
 def _load(monkeypatch):
     """Load netbox_proxbox.bug_report with a minimal core.choices stub.
 
-    The module's only external dependency is ``core.choices.JobStatusChoices``,
-    so a stub keeps the test independent of NetBox/Django being importable.
+    Its external dependencies are ``core.choices.JobStatusChoices`` and the
+    sibling ``netbox_proxbox.anonymize`` module, so a stub for the former plus
+    a by-path load of the latter keeps the test independent of NetBox/Django
+    being importable.
+
+    The stub ``netbox_proxbox`` package matters: ``bug_report`` does
+    ``from netbox_proxbox.anonymize import Anonymizer``, and without a parent
+    already in ``sys.modules`` that would execute the real package
+    ``__init__``, which needs Django. Pre-seeding both names makes the import
+    resolve from the cache instead.
     """
+    package = types.ModuleType("netbox_proxbox")
+    package.__path__ = [str(_ROOT / "netbox_proxbox")]
+    monkeypatch.setitem(sys.modules, "netbox_proxbox", package)
+
+    anonymize_path = _ROOT / "netbox_proxbox" / "anonymize.py"
+    anonymize_spec = importlib.util.spec_from_file_location(
+        "netbox_proxbox.anonymize", anonymize_path
+    )
+    anonymize_module = importlib.util.module_from_spec(anonymize_spec)
+    assert anonymize_spec and anonymize_spec.loader
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.anonymize", anonymize_module)
+    anonymize_spec.loader.exec_module(anonymize_module)
+
     core_module = types.ModuleType("core")
     core_choices = types.ModuleType("core.choices")
     core_choices.JobStatusChoices = SimpleNamespace(
@@ -165,3 +186,117 @@ def test_handles_missing_data_and_logs(monkeypatch):
     assert ctx["error"] == ""
     assert "(no error message)" in ctx["report_text"]
     assert "(no log entries)" in ctx["report_text"]
+
+
+# ---------------------------------------------------------------------------
+# Anonymization
+#
+# The payload built here is meant to be pasted into a public issue tracker, so
+# these guard the boundary rather than the formatting.
+# ---------------------------------------------------------------------------
+
+
+def _leaky_job():
+    """A job whose error and logs carry exactly what must never be published."""
+    return _job(
+        error="connect to node01.example.com (192.0.2.15) failed: password=hunter2",
+        log_entries=[
+            {
+                "level": "error",
+                "message": "node01.example.com unreachable at 192.0.2.15",
+                "timestamp": datetime(2026, 7, 8, 12, 0, 59, tzinfo=timezone.utc),
+            },
+            {
+                "level": "error",
+                "message": "auth failed for root@pam with PVEAPIToken=abc!id=s3cr3t",
+                "timestamp": datetime(2026, 7, 8, 12, 1, 0, tzinfo=timezone.utc),
+            },
+        ],
+    )
+
+
+_LEAKED_VALUES = ("node01.example.com", "192.0.2.15", "hunter2", "s3cr3t")
+
+
+def test_report_text_is_anonymized(monkeypatch):
+    module = _load(monkeypatch)
+    ctx = module.build_bug_report_context(_leaky_job())
+    for secret in _LEAKED_VALUES:
+        assert secret not in ctx["report_text"]
+
+
+def test_error_and_log_lines_are_anonymized(monkeypatch):
+    module = _load(monkeypatch)
+    ctx = module.build_bug_report_context(_leaky_job())
+    blob = ctx["error"] + "\n".join(ctx["log_lines"])
+    for secret in _LEAKED_VALUES:
+        assert secret not in blob
+
+
+def test_prefilled_issue_url_is_anonymized(monkeypatch):
+    """The link is the actual egress path -- scrubbing the textarea is not enough.
+
+    ``_build_issue_url`` embeds the body in a GitHub URL, so a regression that
+    scrubbed only what the modal renders would still publish the raw text the
+    moment the reporter clicks through.
+    """
+    module = _load(monkeypatch)
+    ctx = module.build_bug_report_context(_leaky_job())
+    url = ctx["github_issue_url"]
+    for secret in _LEAKED_VALUES:
+        assert secret not in url
+    body = parse_qs(urlparse(url).query)["body"][0]
+    for secret in _LEAKED_VALUES:
+        assert secret not in body
+
+
+def test_truncated_issue_body_is_also_anonymized(monkeypatch):
+    """The over-length branch of _build_issue_url is a separate code path."""
+    module = _load(monkeypatch)
+    huge_logs = [
+        {
+            "level": "error",
+            "message": "node01.example.com at 192.0.2.15 said " + "x" * 200,
+            "timestamp": None,
+        }
+        for _ in range(200)
+    ]
+    ctx = module.build_bug_report_context(
+        _leaky_job_with_logs(huge_logs)
+    )
+    body = parse_qs(urlparse(ctx["github_issue_url"]).query)["body"][0]
+    assert len(ctx["report_text"]) > module._MAX_ISSUE_BODY_CHARS
+    for secret in ("node01.example.com", "192.0.2.15", "hunter2"):
+        assert secret not in body
+
+
+def _leaky_job_with_logs(log_entries):
+    return _job(
+        error="connect to node01.example.com (192.0.2.15) failed: password=hunter2",
+        log_entries=log_entries,
+    )
+
+
+def test_placeholders_are_consistent_across_fields(monkeypatch):
+    """A host named in the error and in a log line must get the same token."""
+    module = _load(monkeypatch)
+    ctx = module.build_bug_report_context(_leaky_job())
+    token = "<host-1>"
+    assert token in ctx["error"]
+    assert any(token in line for line in ctx["log_lines"])
+
+
+def test_version_metadata_is_not_scrubbed(monkeypatch):
+    """A four-segment version looks like an IPv4 address; it must survive."""
+    module = _load(monkeypatch)
+    monkeypatch.setattr(module, "_package_version", lambda name: "1.2.3.4")
+    ctx = module.build_bug_report_context(_job())
+    versions = {label: value for label, value in ctx["metadata"]}
+    assert versions["netbox-proxbox"] == "1.2.3.4"
+    assert versions["NetBox"] == "1.2.3.4"
+
+
+def test_context_is_flagged_anonymized(monkeypatch):
+    """The template branches on this to tell the reporter what it is handing over."""
+    module = _load(monkeypatch)
+    assert module.build_bug_report_context(_job())["anonymized"] is True

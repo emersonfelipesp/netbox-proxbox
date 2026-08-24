@@ -7,6 +7,15 @@ reads data already present on the ``core.Job`` row (``data``, ``error``,
 ``log_entries``, timestamps) and never touches Proxmox or the proxbox-api
 backend. Keeping the formatting logic here (rather than in the template) makes it
 unit-testable in isolation.
+
+Everything this module emits is **anonymized** first (see
+:mod:`netbox_proxbox.anonymize`). The whole point of the payload is that an
+operator hands it to a public issue tracker, and a sync failure's error text
+and logs routinely carry node hostnames, management addresses, and API tokens.
+Note in particular that :func:`_build_issue_url` embeds the report body in a
+prefilled GitHub URL: scrubbing only what the modal displays would still leak
+the raw text the moment the operator clicks through. The scrubbed strings are
+therefore the single source for the textarea *and* the link.
 """
 
 from __future__ import annotations
@@ -19,6 +28,8 @@ from urllib.parse import urlencode
 
 from core.choices import JobStatusChoices
 
+from netbox_proxbox.anonymize import Anonymizer
+
 __all__ = (
     "GITHUB_ISSUES_URL",
     "GITHUB_NEW_ISSUE_URL",
@@ -26,6 +37,12 @@ __all__ = (
     "build_bug_report_context",
     "is_reportable_status",
 )
+
+# Metadata rows that must survive scrubbing untouched. Both are version
+# strings, and a four-segment version is shaped exactly like an IPv4 address --
+# without this the plugin version would be reported as ``<ip-1>``, which is
+# both useless and alarming.
+_UNSCRUBBED_METADATA_LABELS = frozenset({"netbox-proxbox", "NetBox"})
 
 GITHUB_REPO_URL = "https://github.com/emersonfelipesp/netbox-proxbox"
 GITHUB_NEW_ISSUE_URL = f"{GITHUB_REPO_URL}/issues/new"
@@ -200,6 +217,16 @@ def _build_issue_url(
     return f"{GITHUB_NEW_ISSUE_URL}?{query}"
 
 
+def _anonymize_metadata(
+    anonymizer: Anonymizer, metadata: list[tuple[str, str]]
+) -> list[tuple[str, str]]:
+    """Scrub metadata values, leaving version rows (see the label set) intact."""
+    return [
+        (label, value if label in _UNSCRUBBED_METADATA_LABELS else anonymizer.scrub(value))
+        for label, value in metadata
+    ]
+
+
 def build_bug_report_context(job: Any) -> dict[str, Any]:
     """Assemble the template context for the Bug report modal.
 
@@ -207,10 +234,21 @@ def build_bug_report_context(job: Any) -> dict[str, Any]:
     metadata list, formatted ``log_lines``, the full copy-to-clipboard
     ``report_text``, and a prefilled ``github_issue_url`` (plus the plain
     ``github_issues_url``).
+
+    Every string here is scrubbed by a **single** :class:`Anonymizer`, so a
+    host that appears in both the error and a log line resolves to the same
+    ``<host-N>`` token and the report stays correlatable. ``report_text`` and
+    the issue URL are composed from the already-scrubbed parts rather than
+    scrubbed separately -- that is what guarantees the link and the textarea
+    can never disagree about what was redacted.
     """
-    metadata = _build_metadata(job)
-    error = getattr(job, "error", "") or ""
-    log_lines = _format_log_lines(getattr(job, "log_entries", None))
+    anonymizer = Anonymizer()
+    metadata = _anonymize_metadata(anonymizer, _build_metadata(job))
+    error = anonymizer.scrub(getattr(job, "error", "") or "")
+    log_lines = [
+        anonymizer.scrub(line)
+        for line in _format_log_lines(getattr(job, "log_entries", None))
+    ]
     report_text = _build_report_text(metadata, error, log_lines)
     return {
         "job": job,
@@ -220,4 +258,5 @@ def build_bug_report_context(job: Any) -> dict[str, Any]:
         "report_text": report_text,
         "github_issue_url": _build_issue_url(job, report_text, metadata, error),
         "github_issues_url": GITHUB_ISSUES_URL,
+        "anonymized": True,
     }

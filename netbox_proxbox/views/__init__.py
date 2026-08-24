@@ -159,6 +159,7 @@ from .endpoints import (
 from .external_pages import discussions_redirect
 from .home_quick_edit import HomeQuickEditView
 from .keepalive_status import get_service_status
+from .jobs import ProxboxJobListView, ProxboxJobTable
 from .logs import BackendLogPathUpdateView, BackendLogsView
 from .replication import (
     ReplicationBulkDeleteView,

@@ -75,7 +75,9 @@ schedule_sync_item = PluginMenuItem(
 )
 
 sync_jobs_item = PluginMenuItem(
-    link="core:job_list",
+    # Deliberately not "core:job_list": that page lists every job in the NetBox
+    # instance, so operators had to pick the Proxbox rows out by eye.
+    link="plugins:netbox_proxbox:job_list",
     link_text="Sync Jobs",
 )
 

@@ -583,6 +583,9 @@ urlpatterns = [
     path("proxmox-card/<int:pk>/", views.get_proxmox_card, name="proxmox_card"),
     path("websocket/<str:message>", WebSocketView.as_view(), name="websocket"),
     path("jobs/<int:pk>/stream/", views.JobStreamSSEView.as_view(), name="job_stream"),
+    # Proxbox-only view of core Jobs. The "Sync Jobs" menu entry points here
+    # rather than at ``core:job_list``, which lists every job in the instance.
+    path("jobs/", views.ProxboxJobListView.as_view(), name="job_list"),
     path("logs/", views.BackendLogsView.as_view(), name="backend_logs"),
     path(
         "logs/path/",
