@@ -149,9 +149,7 @@ def job_rows(db):
 def test_queryset_filter_matches_the_python_predicate(job_rows):
     """The SQL filter and the per-row predicate must select the same jobs."""
     expected = {job.pk for job in job_rows if is_proxbox_sync_job(job)}
-    actual = set(
-        Job.objects.filter(proxbox_sync_job_q()).values_list("pk", flat=True)
-    )
+    actual = set(Job.objects.filter(proxbox_sync_job_q()).values_list("pk", flat=True))
 
     # Name the disagreements; a bare set comparison makes a drift unreadable.
     names = {job.pk: (job.name, job.queue_name) for job in job_rows}
@@ -182,9 +180,7 @@ def test_blank_queue_name_is_matched(job_rows):
     future schema change and for the stub objects other tests build, but it is
     this case that a live install actually produces.
     """
-    matched = set(
-        Job.objects.filter(proxbox_sync_job_q()).values_list("pk", flat=True)
-    )
+    matched = set(Job.objects.filter(proxbox_sync_job_q()).values_list("pk", flat=True))
     blank_queue_proxbox = [
         job
         for job in job_rows
@@ -203,9 +199,7 @@ def test_a_top_level_json_array_is_not_a_proxbox_job(job_rows):
     ``["proxbox_sync"]`` is rejected by ``is_proxbox_sync_job()`` and yet shown
     on the Proxbox page -- a divergence the dict-only matrix could not see.
     """
-    matched = set(
-        Job.objects.filter(proxbox_sync_job_q()).values_list("pk", flat=True)
-    )
+    matched = set(Job.objects.filter(proxbox_sync_job_q()).values_list("pk", flat=True))
     for job in job_rows:
         if job.name in ("Array Payload", "Scalar Payload"):
             assert not is_proxbox_sync_job(job)
@@ -219,9 +213,7 @@ def test_a_dict_with_a_json_null_value_is_a_proxbox_job(job_rows):
     This is the counterweight to the array case: a translation that demanded a
     non-null *value* would drop it.
     """
-    matched = set(
-        Job.objects.filter(proxbox_sync_job_q()).values_list("pk", flat=True)
-    )
+    matched = set(Job.objects.filter(proxbox_sync_job_q()).values_list("pk", flat=True))
     for job in job_rows:
         if job.name == "Null Valued":
             assert is_proxbox_sync_job(job)
@@ -231,9 +223,7 @@ def test_a_dict_with_a_json_null_value_is_a_proxbox_job(job_rows):
 @pytest.mark.django_db
 def test_unrelated_plugin_jobs_are_excluded(job_rows):
     """The whole point of the page: other plugins' jobs must not appear."""
-    matched = set(
-        Job.objects.filter(proxbox_sync_job_q()).values_list("pk", flat=True)
-    )
+    matched = set(Job.objects.filter(proxbox_sync_job_q()).values_list("pk", flat=True))
     for job in job_rows:
         if job.name in ("Report Run", "Script: provision", "Sync GPON ONTs"):
             assert job.pk not in matched

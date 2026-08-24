@@ -368,8 +368,7 @@ class Anonymizer:
             # The log prefix is part of the match, so it has to be re-emitted;
             # dropping it would silently rewrite the line's timestamp away.
             lambda m: (
-                f"{m.group('prefix') or ''}{m.group('key')}"
-                f"{m.group('sep')}{REDACTED}"
+                f"{m.group('prefix') or ''}{m.group('key')}{m.group('sep')}{REDACTED}"
             ),
             value,
         )

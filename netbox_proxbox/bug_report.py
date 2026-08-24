@@ -247,7 +247,10 @@ def _anonymize_metadata(
 ) -> list[tuple[str, str]]:
     """Scrub metadata values, leaving version rows (see the label set) intact."""
     return [
-        (label, value if label in _UNSCRUBBED_METADATA_LABELS else anonymizer.scrub(value))
+        (
+            label,
+            value if label in _UNSCRUBBED_METADATA_LABELS else anonymizer.scrub(value),
+        )
         for label, value in metadata
     ]
 

@@ -202,9 +202,7 @@ def test_scrubbing_is_idempotent(scrub):
 
 
 def test_anonymize_lines_shares_one_mapping(anonymize):
-    lines = anonymize.anonymize_lines(
-        ["a 192.0.2.15 down", "b 192.0.2.15 still down"]
-    )
+    lines = anonymize.anonymize_lines(["a 192.0.2.15 down", "b 192.0.2.15 still down"])
     assert all("<ip-1>" in line for line in lines)
 
 
@@ -401,9 +399,21 @@ def test_key_material_sweeps_stay_linear(scrub, label, payload):
     [
         # NetBox's own API uses the ``Token`` scheme; enumerating schemes in the
         # value branch matched ``Token`` alone and published the credential.
-        ("Token scheme", "Authorization: Token nbt_s3cr3ttokenvalue", "nbt_s3cr3ttokenvalue"),
-        ("Digest scheme", "Proxy-Authorization: Digest xyzs3cr3tdigest", "xyzs3cr3tdigest"),
-        ("unknown scheme", "Authorization: Weird s3cr3tunknownscheme", "s3cr3tunknownscheme"),
+        (
+            "Token scheme",
+            "Authorization: Token nbt_s3cr3ttokenvalue",
+            "nbt_s3cr3ttokenvalue",
+        ),
+        (
+            "Digest scheme",
+            "Proxy-Authorization: Digest xyzs3cr3tdigest",
+            "xyzs3cr3tdigest",
+        ),
+        (
+            "unknown scheme",
+            "Authorization: Weird s3cr3tunknownscheme",
+            "s3cr3tunknownscheme",
+        ),
         ("bare Token", "sent Token nbt_barevalue123", "nbt_barevalue123"),
         # Keys the first marker set missed outright.
         ("auth", "auth=s3cr3tauthvalue", "s3cr3tauthvalue"),

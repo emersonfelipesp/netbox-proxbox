@@ -1839,7 +1839,9 @@ def proxbox_sync_job_q():
     )
     # Reuse the targeted-VM pattern itself, minus its anchors, so a change to
     # the job-name format cannot leave this filter behind.
-    targeted_inner = _TARGETED_VM_JOB_NAME_RE.pattern.removeprefix("^").removesuffix("$")
+    targeted_inner = _TARGETED_VM_JOB_NAME_RE.pattern.removeprefix("^").removesuffix(
+        "$"
+    )
 
     # ``has_key`` alone is *not* the predicate's test. It compiles to jsonb's
     # ``?`` operator, which is also true for a top-level **array** containing

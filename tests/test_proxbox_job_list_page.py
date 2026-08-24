@@ -27,7 +27,10 @@ def _function_source(path: Path, name: str) -> str:
     """Return the source of one top-level function, or fail if it is gone."""
     tree = ast.parse(path.read_text())
     for node in tree.body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and node.name == name:
+        if (
+            isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.name == name
+        ):
             return ast.get_source_segment(path.read_text(), node) or ""
     pytest.fail(f"{path.name} no longer defines {name}()")
 
@@ -101,7 +104,9 @@ def test_navigation_no_longer_points_at_the_core_job_list():
 
 def test_job_list_route_is_mounted():
     source = (_PACKAGE / "urls.py").read_text()
-    assert 'path("jobs/", views.ProxboxJobListView.as_view(), name="job_list")' in source
+    assert (
+        'path("jobs/", views.ProxboxJobListView.as_view(), name="job_list")' in source
+    )
 
 
 def test_view_is_exported_from_the_views_package():

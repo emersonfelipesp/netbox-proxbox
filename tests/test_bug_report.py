@@ -261,9 +261,7 @@ def test_truncated_issue_body_is_also_anonymized(monkeypatch):
         }
         for _ in range(200)
     ]
-    ctx = module.build_bug_report_context(
-        _leaky_job_with_logs(huge_logs)
-    )
+    ctx = module.build_bug_report_context(_leaky_job_with_logs(huge_logs))
     body = parse_qs(urlparse(ctx["github_issue_url"]).query)["body"][0]
     assert len(ctx["report_text"]) > module._MAX_ISSUE_BODY_CHARS
     for secret in ("node01.example.com", "192.0.2.15", "hunter2"):
