@@ -35,6 +35,12 @@ from __future__ import annotations
 import re
 from typing import Iterable
 
+from netbox_proxbox.redaction import (
+    SCHEME_PATTERN,
+    is_sensitive_or_echo_key,
+    redact_assignments,
+)
+
 __all__ = (
     "Anonymizer",
     "anonymize_lines",
@@ -43,12 +49,11 @@ __all__ = (
 
 REDACTED = "<redacted>"
 
-# Credential matching mirrors ``views/error_utils.py``'s redaction rather than
-# inventing a second scheme: that module already learned these lessons against
-# real backend payloads. It is not imported because reaching it would execute
-# ``netbox_proxbox.views.__init__``, which needs Django -- ``error_utils``
-# itself is pure. The two therefore carry the same marker vocabulary, and
-# ``tests/test_redaction_marker_parity.py`` fails when they drift.
+# The marker vocabulary and the authentication schemes come from
+# :mod:`netbox_proxbox.redaction`, shared with ``views/error_utils.py``. That
+# module cannot be imported here -- reaching it executes
+# ``netbox_proxbox.views.__init__``, which needs Django -- so the two consumers
+# meet in a dependency-free module instead of each carrying a copy.
 #
 # Three properties matter, and an earlier exact-key/line-anchored version failed
 # all three:
@@ -66,51 +71,38 @@ REDACTED = "<redacted>"
 #   the prefix a real log line has.
 # * **A bare ``Bearer <jwt>`` is swept independently**, because a credential
 #   quoted into prose has no key in front of it to match on.
-_SENSITIVE_ASSIGNMENT_RE = re.compile(
+# The value of an assignment, matched at the offset just past its separator.
+# The scheme alternative must come first: ``Authorization: Bearer <jwt>``
+# otherwise matches the value ``Bearer`` alone, which redacts the *keyword* and
+# leaves the token behind it in the clear -- and then hides it from the scheme
+# sweep below, which no longer sees a scheme to anchor on.
+#
+# The quoted alternatives are escape-aware (a plain ``"[^"]*"`` ends at the
+# first ``\"`` inside a JSON-escaped value and publishes the remainder) and
+# possessive, so an unterminated quote fails at once instead of re-scanning.
+_ASSIGNMENT_VALUE_RE = re.compile(
     r"""(?ix)
-    # A key starts at an identifier boundary, never part-way through one. That
-    # is what it means for something to be a field name, and it also collapses
-    # the search: without it the leading run is retried at every character of a
-    # long marker-bearing string, and ``"token_aaaa" * 20000`` cost seconds.
-    (?<![a-z0-9_\-])
-    # The trailing run is *possessive*. Its character class excludes ``:`` and
-    # ``=``, so it can never need to give a character back for the separator to
-    # match -- but a backtracking suffix multiplied against the prefix. The
-    # leading run must stay backtracking: it has to be able to give ground for
-    # the marker itself to match (``mytoken=x``).
-    # 256, not 64: the bound only has to accommodate a namespaced field name,
-    # and the boundary lookbehind above already limits how often this is tried.
-    (?P<key>[a-z0-9_\-]{0,256}
-        (?:token|password|passwd|pwd|passphrase|secret|credential|cookie|ticket
-           |auth|session|sshkeys
-           |(?:api|private|public|encryption|secret|ssh|host|signing)[_\-\s]?key)
-        [a-z0-9_\-]{0,64}+)
-    # ``\\?`` because a JSON document embedded *inside* a JSON string arrives
-    # doubly escaped -- ``{\"password\":\"...\"}`` -- and the backslash sits
-    # between the key and its quote, so a bare ``['"]?`` never reached the
-    # separator and the whole assignment was published.
-    (?P<quote_end>\\?['"]?)
-    (?P<sep>\s*[:=]\s*)
-    # The scheme alternative must come first. ``Authorization: Bearer <jwt>``
-    # otherwise matches with the value ``Bearer`` alone, which redacts the
-    # *keyword* and leaves the token behind it in the clear -- and then hides it
-    # from the scheme sweep below, which no longer sees a scheme to anchor on.
-    #
-    # The quoted alternatives are escape-aware: a plain ``"[^"]*"`` ends at the
-    # first ``\"`` inside a JSON-escaped value and publishes the remainder.
-    # The quantifiers here are unbounded on purpose. A cap left the tail of an
-    # over-long value in the clear -- an assignment beyond the old 4096 limit
-    # was matched only up to the cap and the remainder published -- and each of
-    # these sits at the end of the match, where a greedy run needs no
-    # backtracking. The quoted bodies are *possessive* so that an unterminated
-    # quote fails immediately instead of re-scanning: their classes exclude the
-    # closing delimiter, so they can never need to give a character back.
-    (?P<value>(?:bearer|basic|token|digest|negotiate|apikey)\s+[^\s,;)}\]]+
-        |\\?"(?:\\.|[^"\\])*+\\?"
-        |\\?'(?:\\.|[^'\\])*+\\?'
-        |[^\s,;&)}\]]+)
+    (?:"""
+    + SCHEME_PATTERN
+    + r""")\s+[^\s,;)}\]]+
+    # A JSON document embedded *inside* a JSON string arrives doubly escaped, and
+    # there ``\\`` is an escaped backslash rather than a delimiter. Treating it
+    # as one ended the value early and published the rest:
+    # ``\\"password\\":\\"a\\\\"SECRET\\"`` matched only ``\\"a\\\\"``.
+    |\\\\"(?:\\\\\\\\.|(?!\\\\").)*+\\\\"
+    |\\\\'(?:\\\\\\\\.|(?!\\\\').)*+\\\\'
+    |"(?:\\.|[^"\\])*+"
+    |'(?:\\.|[^'\\])*+'
+    # Once a quote *opens*, the value runs to the end of the line even if it
+    # never closes. Falling through to the unquoted alternative below redacted
+    # only the first whitespace-delimited fragment and published the rest --
+    # ``password="first S3CRET`` leaked, and a truncated log is exactly where an
+    # unterminated quote comes from.
+    |\\?["'][^\r\n]*
+    |[^\s,;&)}\]]+
     """
 )
+
 
 # An ``Authorization`` *header* value is opaque and may contain spaces, so it is
 # consumed whole whatever the scheme is. Enumerating schemes in the value branch
@@ -141,8 +133,11 @@ _AUTH_HEADER_RE = re.compile(
 
 # A scheme plus credential with no credential-named key in front of it -- a
 # request header quoted into prose, say. The assignment sweep cannot see those.
+# Unbounded on purpose: a cap replaced exactly that many characters and
+# published the remainder of a longer credential. The run sits at the end of
+# the match, so a greedy scan needs no backtracking.
 _SCHEME_CREDENTIAL_RE = re.compile(
-    r"(?i)\b(bearer|basic|token|digest|apikey)\s+([a-z0-9._\-+/=]{8,4096})"
+    rf"(?i)\b({SCHEME_PATTERN})\s+([a-z0-9._\-+/=]{{8,}})"
 )
 
 # Key material spans lines, and the assignment rule's value stops at the first
@@ -372,11 +367,11 @@ class Anonymizer:
             ),
             value,
         )
-        value = _SENSITIVE_ASSIGNMENT_RE.sub(
-            lambda m: (
-                f"{m.group('key')}{m.group('quote_end')}{m.group('sep')}{REDACTED}"
-            ),
+        value = redact_assignments(
             value,
+            _ASSIGNMENT_VALUE_RE,
+            lambda _matched: REDACTED,
+            predicate=is_sensitive_or_echo_key,
         )
         value = _SCHEME_CREDENTIAL_RE.sub(lambda m: f"{m.group(1)} {REDACTED}", value)
         value = _URL_RE.sub(self._sub_url, value)
