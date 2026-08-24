@@ -343,3 +343,44 @@ def test_hostile_credential_shapes_never_reach_the_public_issue_url(monkeypatch)
     ):
         assert secret not in body, f"{secret} reached the prefilled issue URL"
         assert secret not in ctx["report_text"]
+
+
+def test_authentication_schemes_never_reach_the_public_issue_url(monkeypatch):
+    """Round-2 counterexamples, asserted against the decoded ``?body=``."""
+    module = _load(monkeypatch)
+    job = _job(
+        error="auth=s3cr3tauthvalue session=s3cr3tsessionid encryption_key=s3cr3tfernetkey",
+        log_entries=[
+            {
+                "level": "error",
+                "message": "Authorization: Token nbt_s3cr3ttokenvalue rejected",
+                "timestamp": datetime(2026, 7, 8, 12, 0, 59, tzinfo=timezone.utc),
+            },
+            {
+                "level": "error",
+                "message": (
+                    "private_key: -----BEGIN RSA PRIVATE KEY-----\n"
+                    "MIIEows3cr3tpemmaterial\n-----END RSA PRIVATE KEY-----"
+                ),
+                "timestamp": datetime(2026, 7, 8, 12, 1, 0, tzinfo=timezone.utc),
+            },
+            {
+                "level": "error",
+                "message": "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5s3cr3ted25519data admin@corp",
+                "timestamp": datetime(2026, 7, 8, 12, 1, 1, tzinfo=timezone.utc),
+            },
+        ],
+    )
+    ctx = module.build_bug_report_context(job)
+    body = parse_qs(urlparse(ctx["github_issue_url"]).query)["body"][0]
+
+    for secret in (
+        "s3cr3tauthvalue",
+        "s3cr3tsessionid",
+        "s3cr3tfernetkey",
+        "nbt_s3cr3ttokenvalue",
+        "s3cr3tpemmaterial",
+        "s3cr3ted25519data",
+    ):
+        assert secret not in body, f"{secret} reached the prefilled issue URL"
+        assert secret not in ctx["report_text"]

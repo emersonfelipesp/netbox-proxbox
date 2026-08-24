@@ -385,3 +385,57 @@ def test_key_material_sweeps_stay_linear(scrub, label, payload):
     scrub(payload)
     elapsed = time.perf_counter() - started
     assert elapsed < 10.0, f"{label} took {elapsed:.1f}s"
+
+
+# --------------------------------------------------------------------------
+# Authentication schemes and further credential shapes (round 2)
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "label, raw, secret",
+    [
+        # NetBox's own API uses the ``Token`` scheme; enumerating schemes in the
+        # value branch matched ``Token`` alone and published the credential.
+        ("Token scheme", "Authorization: Token nbt_s3cr3ttokenvalue", "nbt_s3cr3ttokenvalue"),
+        ("Digest scheme", "Proxy-Authorization: Digest xyzs3cr3tdigest", "xyzs3cr3tdigest"),
+        ("unknown scheme", "Authorization: Weird s3cr3tunknownscheme", "s3cr3tunknownscheme"),
+        ("bare Token", "sent Token nbt_barevalue123", "nbt_barevalue123"),
+        # Keys the first marker set missed outright.
+        ("auth", "auth=s3cr3tauthvalue", "s3cr3tauthvalue"),
+        ("session", "session=s3cr3tsessionid", "s3cr3tsessionid"),
+        ("plugin encryption_key", "encryption_key=s3cr3tfernetkey", "s3cr3tfernetkey"),
+        ("passphrase", "passphrase=s3cr3tphrase", "s3cr3tphrase"),
+        ("host_key", "host_key=s3cr3thostkey", "s3cr3thostkey"),
+        # A namespaced key longer than the original 64-character prefix bound.
+        ("long namespaced key", "a" * 100 + "_password=s3cr3tlongns", "s3cr3tlongns"),
+    ],
+)
+def test_further_credential_shapes_are_redacted(scrub, label, raw, secret):
+    assert secret not in scrub(raw), label
+
+
+def test_authorization_value_is_consumed_whatever_the_scheme(scrub):
+    """The header value is opaque; matching known schemes is not sufficient."""
+    out = scrub("Authorization: SomeFutureScheme abc s3cr3tfuture def")
+    assert "s3cr3tfuture" not in out
+    assert out.startswith("Authorization: ")
+
+
+def test_escaped_quotes_do_not_end_the_value_early(scrub):
+    """``"[^"]*"`` stops at a JSON-escaped quote and publishes the remainder."""
+    out = scrub('{"password":"he said \\"s3cr3tinquote\\" ok"}')
+    assert "s3cr3tinquote" not in out
+
+
+def test_ed25519_public_key_is_replaced(scrub):
+    out = scrub("ssh-ed25519 AAAAC3NzaC1lZDI1NTE5s3cr3ted25519data admin@corp")
+    assert "s3cr3ted25519data" not in out
+    assert "admin@corp" not in out
+
+
+def test_long_namespaced_keys_stay_linear(scrub):
+    """Raising the key prefix bound to 256 must not reintroduce blowup."""
+    started = time.perf_counter()
+    scrub(("a" * 200 + "_password ") * 2000)
+    assert time.perf_counter() - started < 10.0

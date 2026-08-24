@@ -45,9 +45,10 @@ REDACTED = "<redacted>"
 
 # Credential matching mirrors ``views/error_utils.py``'s redaction rather than
 # inventing a second scheme: that module already learned these lessons against
-# real backend payloads. It cannot simply be imported -- it pulls in Django, and
-# this module must not (see the note above) -- so the shape is duplicated
-# deliberately. Keep the two in step.
+# real backend payloads. It is not imported because reaching it would execute
+# ``netbox_proxbox.views.__init__``, which needs Django -- ``error_utils``
+# itself is pure. The two therefore carry the same marker vocabulary, and
+# ``tests/test_redaction_marker_parity.py`` fails when they drift.
 #
 # Three properties matter, and an earlier exact-key/line-anchored version failed
 # all three:
@@ -77,24 +78,44 @@ _SENSITIVE_ASSIGNMENT_RE = re.compile(
     # match -- but a backtracking suffix multiplied against the prefix. The
     # leading run must stay backtracking: it has to be able to give ground for
     # the marker itself to match (``mytoken=x``).
-    (?P<key>[a-z0-9_\-]{0,64}
-        (?:token|password|passwd|pwd|secret|api[_\-\s]?key|private[_\-\s]?key
-           |sshkeys|authorization|credential|cookie|ticket)
+    # 256, not 64: the bound only has to accommodate a namespaced field name,
+    # and the boundary lookbehind above already limits how often this is tried.
+    (?P<key>[a-z0-9_\-]{0,256}
+        (?:token|password|passwd|pwd|passphrase|secret|credential|cookie|ticket
+           |auth|session|sshkeys
+           |(?:api|private|public|encryption|secret|ssh|host|signing)[_\-\s]?key)
         [a-z0-9_\-]{0,64}+)
     (?P<quote_end>['"]?)
     (?P<sep>\s*[:=]\s*)
     # The scheme alternative must come first. ``Authorization: Bearer <jwt>``
     # otherwise matches with the value ``Bearer`` alone, which redacts the
     # *keyword* and leaves the token behind it in the clear -- and then hides it
-    # from the bearer sweep below, which no longer sees a scheme to anchor on.
-    (?P<value>(?:bearer|basic)\s+[^\s,;)}\]]{1,4096}
-        |'[^']{0,4096}'|"[^"]{0,4096}"|[^\s,;&)}\]]{1,4096})
+    # from the scheme sweep below, which no longer sees a scheme to anchor on.
+    #
+    # The quoted alternatives are escape-aware: a plain ``"[^"]*"`` ends at the
+    # first ``\"`` inside a JSON-escaped value and publishes the remainder.
+    (?P<value>(?:bearer|basic|token|digest|negotiate|apikey)\s+[^\s,;)}\]]{1,4096}
+        |"(?:\\.|[^"\\]){0,4096}"
+        |'(?:\\.|[^'\\]){0,4096}'
+        |[^\s,;&)}\]]{1,4096})
     """
 )
 
-# ``Bearer <jwt>`` with no credential-named key in front of it -- a request
-# header quoted into a message, say. The assignment sweep cannot see those.
-_BEARER_RE = re.compile(r"(?i)\b(bearer|basic)\s+([a-z0-9._\-+/=]{8,4096})")
+# An ``Authorization`` value is opaque and may contain spaces, so it is consumed
+# to the end of the line whatever the scheme is. Enumerating schemes in the
+# value branch above is not enough: ``Authorization: Token nbt_...`` matched
+# with the value ``Token`` alone and published the credential behind it, and
+# NetBox's own API uses exactly that scheme. Over-redacting the rest of a line
+# is the safe direction here.
+_AUTH_HEADER_RE = re.compile(
+    r"(?i)(?<![a-z0-9_\-])((?:proxy[_\-\s]?)?authorization)(\s*[:=]\s*)([^\r\n]{1,4096})"
+)
+
+# A scheme plus credential with no credential-named key in front of it -- a
+# request header quoted into prose, say. The assignment sweep cannot see those.
+_SCHEME_CREDENTIAL_RE = re.compile(
+    r"(?i)\b(bearer|basic|token|digest|apikey)\s+([a-z0-9._\-+/=]{8,4096})"
+)
 
 # Key material spans lines, and the assignment rule's value stops at the first
 # whitespace -- so ``private_key: -----BEGIN RSA PRIVATE KEY-----\nMIIE...``
@@ -275,13 +296,19 @@ class Anonymizer:
         # the body behind.
         value = _redact_pem_blocks(value)
         value = _SSH_PUBLIC_KEY_RE.sub(lambda m: f"{m.group(1)} {REDACTED}", value)
+        # The whole-header rule runs before the generic one: an Authorization
+        # value is opaque and scheme-agnostic, and the generic rule would stop
+        # at the scheme keyword.
+        value = _AUTH_HEADER_RE.sub(
+            lambda m: f"{m.group(1)}{m.group(2)}{REDACTED}", value
+        )
         value = _SENSITIVE_ASSIGNMENT_RE.sub(
             lambda m: (
                 f"{m.group('key')}{m.group('quote_end')}{m.group('sep')}{REDACTED}"
             ),
             value,
         )
-        value = _BEARER_RE.sub(lambda m: f"{m.group(1)} {REDACTED}", value)
+        value = _SCHEME_CREDENTIAL_RE.sub(lambda m: f"{m.group(1)} {REDACTED}", value)
         value = _URL_RE.sub(self._sub_url, value)
         value = _REALM_RE.sub(
             lambda m: f"{self.placeholder('user', m.group(1))}@{m.group(2)}", value

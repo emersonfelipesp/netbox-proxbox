@@ -353,6 +353,11 @@ payload before it is rendered. Three invariants are load-bearing:
   keep the two in step. Marker matching deliberately over-redacts
   (`tokenizer=` is redacted too): losing a word from a report is recoverable,
   publishing a credential is not.
+- **An `Authorization` value is consumed whole, whatever the scheme.**
+  Enumerating known schemes in the value branch matched `Token` alone and
+  published the credential behind it -- and `Token` is the scheme NetBox's own
+  API uses. Multi-line key material (PEM blocks, OpenSSH public keys) is swept
+  separately, because the generic value stops at the first whitespace.
 - **A bracketed IPv6 URL authority is matched atomically.** A plain
   `[^/\s:?#]+` authority stops at the literal's first colon, which published
   most of a management address and left a fragment the IPv6 pass could no
