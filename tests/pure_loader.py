@@ -26,13 +26,21 @@ _ROOT = Path(__file__).resolve().parents[1]
 _PACKAGE = _ROOT / "netbox_proxbox"
 
 
-def _load_by_path(dotted: str, path: Path):
-    """Execute *path* as module *dotted*, registering it before execution."""
+def _load_by_path(monkeypatch, dotted: str, path: Path):
+    """Execute *path* as module *dotted*, registering it before execution.
+
+    Registration goes through ``monkeypatch`` rather than assigning
+    ``sys.modules`` directly, so the entry is removed when the test ends. A raw
+    assignment leaked ``netbox_proxbox.redaction`` and
+    ``netbox_proxbox.anonymize`` into every subsequent test in the session --
+    the shape that produces a suite where a test passes only because an earlier
+    one left the right object behind.
+    """
     spec = importlib.util.spec_from_file_location(dotted, path)
     assert spec is not None and spec.loader is not None, dotted
     module = importlib.util.module_from_spec(spec)
     # Registered *before* exec so a self-referential import resolves.
-    sys.modules[dotted] = module
+    monkeypatch.setitem(sys.modules, dotted, module)
     spec.loader.exec_module(module)
     return module
 
@@ -57,16 +65,13 @@ def install_pure_package(monkeypatch) -> None:
         "netbox_proxbox.views",
         _stub_package("netbox_proxbox.views", _PACKAGE / "views"),
     )
-    monkeypatch.delitem(sys.modules, "netbox_proxbox.redaction", raising=False)
-    module = _load_by_path("netbox_proxbox.redaction", _PACKAGE / "redaction.py")
-    monkeypatch.setitem(sys.modules, "netbox_proxbox.redaction", module)
+    _load_by_path(monkeypatch, "netbox_proxbox.redaction", _PACKAGE / "redaction.py")
 
 
 def load_pure_module(monkeypatch, dotted: str, relative_path: str):
     """Load ``netbox_proxbox/<relative_path>`` as *dotted*, siblings seeded."""
     install_pure_package(monkeypatch)
-    monkeypatch.delitem(sys.modules, dotted, raising=False)
-    return _load_by_path(dotted, _PACKAGE / relative_path)
+    return _load_by_path(monkeypatch, dotted, _PACKAGE / relative_path)
 
 
 def load_redaction(monkeypatch):
