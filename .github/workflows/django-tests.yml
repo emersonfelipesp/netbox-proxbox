@@ -131,6 +131,7 @@ jobs:
             tests/test_pdm_endpoint_permissions_django.py \
             tests/test_storage_nodes_capacity_django.py \
             tests/test_mcp_bridge_django.py \
+            tests/test_proxbox_job_filter_django.py \
             --ds=netbox.settings --reuse-db --create-db -v --no-header \
             --cov=netbox_proxbox.services.endpoint_autoconfiguration \
             --cov=netbox_proxbox.api.serializers.resource_views \
