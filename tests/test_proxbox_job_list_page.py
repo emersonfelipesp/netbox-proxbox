@@ -151,3 +151,25 @@ def test_list_page_does_not_render_the_modal_per_row(view_source):
     """
     assert "build_bug_report_context" not in view_source
     assert "record.get_absolute_url()" in view_source
+
+
+def test_export_has_a_plain_text_value_for_the_bug_report_column(view_source):
+    """``as_values()`` falls back to ``render_<name>`` without a ``value_<name>``.
+
+    That fallback would write the rendered ``<a>`` element into a CSV cell, so
+    the column needs a plain-text counterpart. Export wants the fact, not the
+    button.
+    """
+    assert "def value_bug_report" in view_source
+    tree = ast.parse(view_source)
+    value_fn = next(
+        (
+            node
+            for node in ast.walk(tree)
+            if isinstance(node, ast.FunctionDef) and node.name == "value_bug_report"
+        ),
+        None,
+    )
+    assert value_fn is not None
+    body = ast.get_source_segment(view_source, value_fn) or ""
+    assert "format_html" not in body, "the export value must not be markup"

@@ -65,6 +65,15 @@ class ProxboxJobTable(JobTable):
             _("Bug report"),
         )
 
+    def value_bug_report(self, record):
+        """Plain-text counterpart used by CSV/export.
+
+        ``Table.as_values()`` falls back to ``render_<name>`` when no
+        ``value_<name>`` exists, which would write the rendered ``<a>`` element
+        into a spreadsheet cell. Export wants the fact, not the button.
+        """
+        return "reportable" if is_reportable_status(record.status) else ""
+
 
 class ProxboxJobListView(JobListView):
     """The core job list, filtered down to Proxbox sync jobs.
