@@ -137,7 +137,15 @@ jobs:
 
       - name: Build distributions
         run: |
+          set -euo pipefail
           export PATH="${HOME}/.local/bin:${PATH}"
+          # Build and upload from the repository's own locked `publish` group
+          # rather than resolving a backend and an ephemeral twine at run time.
+          # `uv.lock` carries hashes for that group, so the PEP 517 backend and
+          # the credential-bearing uploader are the reviewed, pinned ones
+          # (hatchling 1.31.0, twine 6.2.0) instead of whatever resolution
+          # happens to pick on the day.
+          uv sync --only-group publish --locked --no-install-project
           uv build
           ls dist/
 
@@ -147,8 +155,12 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PKG_TOKEN }}
           TWINE_REPOSITORY_URL: https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi
         run: |
+          set -euo pipefail
           export PATH="${HOME}/.local/bin:${PATH}"
-          uv run --with twine twine upload --non-interactive dist/*
+          # The pinned twine from the locked `publish` group synced above; the
+          # previous `--with twine` resolved a separate ephemeral layer at run
+          # time, and that layer ran with the registry credential.
+          .venv/bin/python -m twine upload --non-interactive dist/*
 
       - name: Verify package in Gitea registry
         env:
