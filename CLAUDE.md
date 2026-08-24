@@ -358,6 +358,17 @@ payload before it is rendered. Three invariants are load-bearing:
   published the credential behind it -- and `Token` is the scheme NetBox's own
   API uses. Multi-line key material (PEM blocks, OpenSSH public keys) is swept
   separately, because the generic value stops at the first whitespace.
+- **The `Authorization` rule fires only in header position** -- line start, or
+  after the `[timestamp] LEVEL ` prefix `_format_log_lines` adds. Letting it
+  match anywhere destroyed the reports it exists to enable: `Proxmox
+  authorization: denied; missing Sys.Audit on /nodes/pve01/storage/local`
+  collapsed to `<redacted>`, erasing the privilege, path and cause of exactly
+  the permission failure being reported. Prose falls through to the generic
+  rule, which takes only the first token.
+- **Single-label node names are caught where something names them as a host**
+  (`node=pve1`, `on node pve-node-01`), with a stop-word list so `node is not
+  reachable` stays readable. A bare identifier in prose is still not caught --
+  that is the documented best-effort limit.
 - **A bracketed IPv6 URL authority is matched atomically.** A plain
   `[^/\s:?#]+` authority stops at the literal's first colon, which published
   most of a management address and left a fragment the IPv6 pass could no
@@ -390,6 +401,19 @@ a "best-effort — review before submitting" caution in the modal:
 Version metadata (`netbox-proxbox`, `NetBox`) is excluded from scrubbing by
 `_UNSCRUBBED_METADATA_LABELS`: a four-segment version is shaped exactly like an
 IPv4 address and would otherwise be reported as `<ip-1>`.
+
+The prefilled issue body is **budgeted per block**. Dropping the job logs is not
+enough on its own: a single verbose backend traceback can exceed
+`_MAX_ISSUE_BODY_CHARS` by itself, and an unbudgeted error produced a ~20,500
+character body against a 6,000 limit -- which GitHub rejects or silently drops,
+costing the reporter the prefill entirely. Metadata and error each have a
+sub-budget and are truncated with an explicit notice; the full text always
+remains in the clipboard copy.
+
+A known, accepted limit: a credential key spelled with **homoglyphs**
+(`passwоrd=` with a Cyrillic `о`) is not matched. Detecting that needs a
+confusables table, and the spelling does not arise from the systems that
+produce these logs.
 
 ## Backend integration notes
 

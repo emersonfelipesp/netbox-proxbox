@@ -90,8 +90,12 @@ def test_marker_matching_errs_towards_redaction(scrub):
 
 
 def test_keys_without_a_marker_are_left_alone(scrub):
-    """Fail-closed must not mean redact-everything; ordinary fields survive."""
-    line = "hostname=web01 vmid=100 status=stopped"
+    """Fail-closed must not mean redact-everything; ordinary fields survive.
+
+    ``hostname=`` is deliberately absent here -- it *is* matched now, by the
+    labelled-host rule rather than the credential rule.
+    """
+    line = "vmid=100 status=stopped cores=4 memory=2048 disk=32"
     assert scrub(line) == line
 
 
@@ -469,8 +473,6 @@ def test_long_namespaced_keys_stay_linear(scrub):
         "504 Gateway Time-out",
         "sync_types: ['virtual-machines', 'storage']",
         "django.db.utils.OperationalError: could not connect",
-        "VM 100 on node pve1 is locked by a backup task",
-        "cluster01/pve1/100 not found",
         "credential rotation required",
         "session expired, re-authenticating",
         "ticket renewal failed after 3 attempts",
@@ -494,3 +496,76 @@ def test_a_transport_error_keeps_everything_but_the_host(scrub):
     assert "node01.example.com" not in out
     assert "Read timed out" in out
     assert "port=8006" in out
+
+
+def test_a_labelled_node_name_is_replaced_but_the_sentence_survives(scrub):
+    """Single-label node names are caught where something names them as a host.
+
+    A bare identifier in prose is unknowable, but ``node <name>`` is not -- and
+    ``pve-node-01`` style names are the normal Proxmox form, so leaving them was
+    a real gap. The rest of the sentence must still read.
+    """
+    out = scrub("VM 100 on node pve-node-01 is locked by a backup task")
+    assert "pve-node-01" not in out
+    assert "VM 100 on node " in out
+    assert "is locked by a backup task" in out
+
+
+@pytest.mark.parametrize(
+    "line",
+    [
+        # ``node``/``host``/``cluster`` followed by an ordinary word is prose,
+        # not a host name; redacting these would turn sentences into soup.
+        "node is not reachable",
+        "host unknown",
+        "cluster name missing",
+        "endpoint not found",
+        "server error",
+    ],
+)
+def test_labelled_host_rule_does_not_eat_prose(scrub, line):
+    assert scrub(line) == line
+
+
+def test_uppercase_and_mixed_case_fqdns_are_replaced(scrub):
+    """``PVE01.EXAMPLE.COM`` is an ordinary way to write a node name."""
+    out = scrub("node PVE01.EXAMPLE.COM and Pve01.Example.Com failed")
+    assert "PVE01.EXAMPLE.COM" not in out
+    assert "Pve01.Example.Com" not in out
+    # Case-insensitive mapping: the two spellings are the same host.
+    assert out.count("<host-1>") == 2
+
+
+def test_authorization_prose_keeps_the_diagnosis(scrub):
+    """The header rule must not erase a permission failure's detail.
+
+    Firing anywhere collapsed this to ``Proxmox authorization: <redacted>``,
+    destroying the privilege, the path and the cause -- in a report whose whole
+    purpose is to convey them.
+    """
+    out = scrub(
+        "Proxmox authorization: denied; missing Sys.Audit on /nodes/pve01/storage/local"
+    )
+    assert "Sys.Audit" in out
+    assert "/nodes/pve01/storage/local" in out
+
+
+def test_authorization_header_keeps_its_log_prefix(scrub):
+    """The prefix is inside the match, so it has to be re-emitted."""
+    out = scrub("[2026-07-08T12:00:00+00:00] ERROR Authorization: Token nbt_abc123def")
+    assert out.startswith("[2026-07-08T12:00:00+00:00] ERROR Authorization: ")
+    assert "nbt_abc123def" not in out
+    assert out.count("2026-07-08") == 1, "the prefix must not be duplicated"
+
+
+@pytest.mark.parametrize(
+    "label, raw, secret",
+    [
+        ("nested json escape", '{\\"password\\":\\"s3cr3tnested\\"}', "s3cr3tnested"),
+        ("oversized value", "password=" + "x" * 9000 + "s3cr3ttail", "s3cr3ttail"),
+        ("folded header", "Authorization: Token\n\ts3cr3tfolded", "s3cr3tfolded"),
+    ],
+)
+def test_round_three_credential_shapes(scrub, label, raw, secret):
+    """A cap left the tail of an over-long value in the clear; a fold hid it."""
+    assert secret not in scrub(raw), label

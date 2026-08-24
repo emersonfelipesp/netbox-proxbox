@@ -384,3 +384,32 @@ def test_authentication_schemes_never_reach_the_public_issue_url(monkeypatch):
     ):
         assert secret not in body, f"{secret} reached the prefilled issue URL"
         assert secret not in ctx["report_text"]
+
+
+def test_an_oversized_error_alone_still_fits_the_issue_body(monkeypatch):
+    """The truncated branch must budget the error, not just drop the logs.
+
+    The earlier version removed the logs and then re-inserted the error whole,
+    so a verbose backend traceback blew the limit on its own -- a 20,000
+    character ``job.error`` produced a ~20,500 character body against a 6,000
+    limit. GitHub rejects or silently drops a prefill that size, which loses the
+    reporter the link entirely.
+    """
+    module = _load(monkeypatch)
+    job = _job(error="boom " * 4000, log_entries=[])
+    ctx = module.build_bug_report_context(job)
+
+    body = parse_qs(urlparse(ctx["github_issue_url"]).query)["body"][0]
+    assert len(body) <= module._MAX_ISSUE_BODY_CHARS
+    assert "truncated" in body
+    # The full text is still available through the clipboard copy.
+    assert len(ctx["report_text"]) > module._MAX_ISSUE_BODY_CHARS
+
+
+def test_oversized_metadata_is_also_budgeted(monkeypatch):
+    """Metadata is attacker-influenced too -- a job name can be arbitrarily long."""
+    module = _load(monkeypatch)
+    job = _job(name="n" * 20000, error="boom " * 4000, log_entries=[])
+    ctx = module.build_bug_report_context(job)
+    body = parse_qs(urlparse(ctx["github_issue_url"]).query)["body"][0]
+    assert len(body) <= module._MAX_ISSUE_BODY_CHARS

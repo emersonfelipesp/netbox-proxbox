@@ -85,7 +85,11 @@ _SENSITIVE_ASSIGNMENT_RE = re.compile(
            |auth|session|sshkeys
            |(?:api|private|public|encryption|secret|ssh|host|signing)[_\-\s]?key)
         [a-z0-9_\-]{0,64}+)
-    (?P<quote_end>['"]?)
+    # ``\\?`` because a JSON document embedded *inside* a JSON string arrives
+    # doubly escaped -- ``{\"password\":\"...\"}`` -- and the backslash sits
+    # between the key and its quote, so a bare ``['"]?`` never reached the
+    # separator and the whole assignment was published.
+    (?P<quote_end>\\?['"]?)
     (?P<sep>\s*[:=]\s*)
     # The scheme alternative must come first. ``Authorization: Bearer <jwt>``
     # otherwise matches with the value ``Bearer`` alone, which redacts the
@@ -94,21 +98,45 @@ _SENSITIVE_ASSIGNMENT_RE = re.compile(
     #
     # The quoted alternatives are escape-aware: a plain ``"[^"]*"`` ends at the
     # first ``\"`` inside a JSON-escaped value and publishes the remainder.
-    (?P<value>(?:bearer|basic|token|digest|negotiate|apikey)\s+[^\s,;)}\]]{1,4096}
-        |"(?:\\.|[^"\\]){0,4096}"
-        |'(?:\\.|[^'\\]){0,4096}'
-        |[^\s,;&)}\]]{1,4096})
+    # The quantifiers here are unbounded on purpose. A cap left the tail of an
+    # over-long value in the clear -- an assignment beyond the old 4096 limit
+    # was matched only up to the cap and the remainder published -- and each of
+    # these sits at the end of the match, where a greedy run needs no
+    # backtracking. The quoted bodies are *possessive* so that an unterminated
+    # quote fails immediately instead of re-scanning: their classes exclude the
+    # closing delimiter, so they can never need to give a character back.
+    (?P<value>(?:bearer|basic|token|digest|negotiate|apikey)\s+[^\s,;)}\]]+
+        |\\?"(?:\\.|[^"\\])*+\\?"
+        |\\?'(?:\\.|[^'\\])*+\\?'
+        |[^\s,;&)}\]]+)
     """
 )
 
-# An ``Authorization`` value is opaque and may contain spaces, so it is consumed
-# to the end of the line whatever the scheme is. Enumerating schemes in the
-# value branch above is not enough: ``Authorization: Token nbt_...`` matched
-# with the value ``Token`` alone and published the credential behind it, and
-# NetBox's own API uses exactly that scheme. Over-redacting the rest of a line
-# is the safe direction here.
+# An ``Authorization`` *header* value is opaque and may contain spaces, so it is
+# consumed whole whatever the scheme is. Enumerating schemes in the value branch
+# above is not enough: ``Authorization: Token nbt_...`` matched with the value
+# ``Token`` alone and published the credential behind it, and NetBox's own API
+# uses exactly that scheme.
+#
+# But this rule only fires in **header position** -- at the start of a line,
+# optionally after the ``[timestamp] LEVEL `` prefix ``_format_log_lines``
+# adds. Allowing it to start anywhere destroyed the reports it exists to
+# enable: ``Proxmox authorization: denied; missing Sys.Audit on
+# /nodes/pve01/storage/local`` collapsed to ``Proxmox authorization:
+# <redacted>``, erasing the privilege, the path, and the cause of exactly the
+# permission failure being reported. Prose like that is left to the generic
+# assignment rule, which takes only the first token.
+#
+# Folded continuation lines are part of the value: an obsolete but legal header
+# folding, and the shape a wrapped log line takes.
 _AUTH_HEADER_RE = re.compile(
-    r"(?i)(?<![a-z0-9_\-])((?:proxy[_\-\s]?)?authorization)(\s*[:=]\s*)([^\r\n]{1,4096})"
+    r"""(?imx)
+    ^
+    (?P<prefix>\[[^\]\r\n]{0,64}\]\s*[A-Z]{1,10}\s+)?  # formatted-log prefix
+    (?P<key>(?:proxy[_\-\s]?)?authorization)
+    (?P<sep>\s*:\s*)
+    (?P<value>[^\r\n]+(?:\r?\n[ \t][^\r\n]*)*)  # value plus folded continuations
+    """
 )
 
 # A scheme plus credential with no credential-named key in front of it -- a
@@ -197,10 +225,15 @@ _IPV4_RE = re.compile(
 _HOST_SUFFIXES = frozenset(
     """
     com net org io dev cloud ai app co info biz xyz tech tools systems site
-    online me tv cc sh gg edu gov mil int arpa
+    online me tv cc sh gg edu gov mil int arpa pro name live life world zone
+    network host hosting server cluster digital solutions services group works
+    software computer email inc ltd llc gmbh
     local lan internal intranet corp home localdomain test example invalid onion
+    localhost private priv dmz mgmt oob
     br us uk de fr eu pt es it nl ca au jp cn in ru se no fi dk pl ch at be ie
-    nz za mx ar cl
+    nz za mx ar cl cz sk hu ro bg gr tr ua by kz il ae sa eg ng ke ma tn
+    kr tw hk sg my th vn ph id nz pe uy py bo ec ve cr pa gt do cu
+    is lt lv ee si hr rs ba mk al md ge am az
     """.split()
 )
 
@@ -215,10 +248,42 @@ _HOST_SUFFIXES = frozenset(
 # URL is matched positionally by ``_URL_RE`` instead.
 _MAX_HOST_LABELS = 8
 
+# Case-insensitive: ``PVE01.EXAMPLE.COM`` is a perfectly ordinary way to write a
+# node name, and a lowercase-only rule published it. Matching any case is safe
+# here *because* of the suffix allowlist above -- it was the allowlist, not the
+# case restriction, that kept ``django.db.utils.OperationalError`` intact, since
+# ``OperationalError`` is not a listed suffix either way.
 _FQDN_RE = re.compile(
-    r"(?<![A-Za-z0-9._\-])"
+    r"(?i)(?<![A-Za-z0-9._\-])"
     r"((?:[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?\.){1,%d}[a-z]{2,24})"
     r"(?![A-Za-z0-9.\-])" % _MAX_HOST_LABELS
+)
+
+# A single-label node name (``pve-node-01``) is indistinguishable from any other
+# identifier in free prose -- but not when something names it as a host. These
+# are the labelled forms, in both ``key=value`` and prose (``on node pve1``).
+# Anything outside them stays best-effort, and the modal says so.
+_LABELLED_HOST_RE = re.compile(
+    r"""(?ix)
+    \b(node|nodename|host|hostname|cluster|clustername|endpoint|server|target|peer)
+    (?P<sep>\s*[:=]\s*|\s+)
+    (?P<quote>['"]?)
+    (?P<value>[a-z0-9](?:[a-z0-9\-]{0,61}[a-z0-9])?)
+    (?P=quote)
+    (?![A-Za-z0-9.\-])
+    """
+)
+
+# Words that follow "node"/"host" in ordinary prose and are not host names.
+# Redacting these would turn a readable sentence into placeholder soup.
+_NOT_A_HOSTNAME = frozenset(
+    """
+    is was are not no none null nil unknown unreachable down up ok failed
+    error errors failure missing found and or the a an for from to on in of
+    with without that this these those it its has have had can cannot could
+    should would will may might must does did do been being be as at by if
+    name names id ids type types list all any each every some
+    """.split()
 )
 
 
@@ -300,7 +365,13 @@ class Anonymizer:
         # value is opaque and scheme-agnostic, and the generic rule would stop
         # at the scheme keyword.
         value = _AUTH_HEADER_RE.sub(
-            lambda m: f"{m.group(1)}{m.group(2)}{REDACTED}", value
+            # The log prefix is part of the match, so it has to be re-emitted;
+            # dropping it would silently rewrite the line's timestamp away.
+            lambda m: (
+                f"{m.group('prefix') or ''}{m.group('key')}"
+                f"{m.group('sep')}{REDACTED}"
+            ),
+            value,
         )
         value = _SENSITIVE_ASSIGNMENT_RE.sub(
             lambda m: (
@@ -318,6 +389,9 @@ class Anonymizer:
         value = _IPV6_RE.sub(lambda m: self.placeholder("ipv6", m.group(0)), value)
         value = _IPV4_RE.sub(lambda m: self.placeholder("ip", m.group(0)), value)
         value = _FQDN_RE.sub(self._sub_fqdn, value)
+        # Last: by now real FQDNs are already placeholders, so this only
+        # sees the single-label names the dotted rule cannot reach.
+        value = _LABELLED_HOST_RE.sub(self._sub_labelled_host, value)
         return value
 
     def _sub_url(self, match: re.Match[str]) -> str:
@@ -332,9 +406,21 @@ class Anonymizer:
             credentials = ""
         return f"{scheme}://{credentials}{token}{port or ''}"
 
+    def _sub_labelled_host(self, match: re.Match[str]) -> str:
+        """Replace a single-label host named by a ``node``/``host``/... label."""
+        value = match.group("value")
+        if value.lower() in _NOT_A_HOSTNAME:
+            return match.group(0)
+        label = match.group(1)
+        quote = match.group("quote")
+        token = self.placeholder("host", value)
+        return f"{label}{match.group('sep')}{quote}{token}{quote}"
+
     def _sub_fqdn(self, match: re.Match[str]) -> str:
         host = match.group(1)
-        if host.rsplit(".", 1)[-1] not in _HOST_SUFFIXES:
+        # ``_HOST_SUFFIXES`` is lowercase; ``PVE01.EXAMPLE.COM`` compared
+        # unequal and survived until this was folded.
+        if host.rsplit(".", 1)[-1].lower() not in _HOST_SUFFIXES:
             return match.group(0)
         return self.placeholder("host", host)
 

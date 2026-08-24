@@ -53,6 +53,21 @@ GITHUB_ISSUES_URL = f"{GITHUB_REPO_URL}/issues"
 # always available through the modal's copy-to-clipboard action.
 _MAX_ISSUE_BODY_CHARS = 6000
 
+# Sub-budgets for the truncated branch, sized so metadata + error + the fixed
+# scaffolding stay inside ``_MAX_ISSUE_BODY_CHARS``.
+_MAX_ISSUE_METADATA_CHARS = 1500
+_MAX_ISSUE_ERROR_CHARS = 3500
+
+_TRUNCATION_NOTICE = "\n[... truncated; the full text is in the copied report ...]"
+
+
+def _truncate(text: str, limit: int) -> str:
+    """Clip *text* to *limit* characters, saying so when anything was dropped."""
+    if len(text) <= limit:
+        return text
+    keep = max(limit - len(_TRUNCATION_NOTICE), 0)
+    return text[:keep] + _TRUNCATION_NOTICE
+
 
 def _package_version(name: str) -> str:
     """Return an installed package version, or ``"unknown"`` when unavailable."""
@@ -201,8 +216,18 @@ def _build_issue_url(
     if len(report_text) <= _MAX_ISSUE_BODY_CHARS:
         body = report_text
     else:
-        meta_block = "\n".join(f"- {label}: {value}" for label, value in metadata)
+        meta_block = _truncate(
+            "\n".join(f"- {label}: {value}" for label, value in metadata),
+            _MAX_ISSUE_METADATA_CHARS,
+        )
         error_block = error.strip() if error and error.strip() else "(no error message)"
+        # Dropping the logs is not on its own enough to fit the budget: a single
+        # verbose backend traceback can exceed it by itself, and the earlier
+        # version re-inserted the error whole. A 20,000-character ``job.error``
+        # produced a 20,529-character body against a 6,000 limit, which GitHub
+        # rejects or silently truncates -- so the reporter loses the prefill
+        # entirely. Both blocks are budgeted.
+        error_block = _truncate(error_block, _MAX_ISSUE_ERROR_CHARS)
         body = (
             "### Proxbox sync job bug report\n\n"
             "**Environment / metadata**\n"
