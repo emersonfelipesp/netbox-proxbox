@@ -78,9 +78,26 @@ def test_credential_header_redacts_whole_value(scrub):
     assert "<redacted>" in out
 
 
-def test_credential_key_needs_a_word_boundary(scrub):
-    """``tokenizer`` is not ``token`` -- a substring must not trigger redaction."""
-    assert scrub("tokenizer=whitespace") == "tokenizer=whitespace"
+def test_marker_matching_errs_towards_redaction(scrub):
+    """A key merely *containing* a marker is redacted, on purpose.
+
+    Exact-name matching is what let ``token_value`` and ``token_secret`` -- real
+    field names on this plugin's own models -- through, so matching is by marker
+    and fails closed. The cost is that ``tokenizer=`` is redacted too; losing a
+    word from a bug report is recoverable, publishing a credential is not.
+    """
+    assert scrub("tokenizer=whitespace") == "tokenizer=<redacted>"
+
+
+def test_keys_without_a_marker_are_left_alone(scrub):
+    """Fail-closed must not mean redact-everything; ordinary fields survive."""
+    line = "hostname=web01 vmid=100 status=stopped"
+    assert scrub(line) == line
+
+
+def test_a_key_must_start_at_an_identifier_boundary(scrub):
+    """A marker part-way through one identifier is not a field name."""
+    assert scrub("notatokenhere") == "notatokenhere"
 
 
 # --------------------------------------------------------------------------
@@ -243,3 +260,68 @@ def test_bounded_quantifiers_still_match_real_values(scrub):
     assert "<host-1>" in out
     assert "<email-1>" in out
     assert out.endswith("@pam")
+
+
+# --------------------------------------------------------------------------
+# Credential shapes that an exact-key, line-anchored matcher missed
+#
+# Each of these was a live leak found by adversarial review: every one reached
+# `report_text` *and* the prefilled public issue URL unchanged.
+# --------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "label, raw, secret",
+    [
+        ("json object", '{"password":"hunter2","user":"root"}', "hunter2"),
+        ("json with spaces", '{ "api_key" : "AKIAxyz" }', "AKIAxyz"),
+        ("python dict repr", "{'password': 'hunter2'}", "hunter2"),
+        # Real field names on this plugin's own models.
+        ("plugin token_value", "token_value=abc123secret", "abc123secret"),
+        ("plugin token_secret", "token_secret=def456secret", "def456secret"),
+        # A real header spelling; only the underscore form used to match.
+        ("http header key", "X-Proxbox-API-Key: k3yv4lue", "k3yv4lue"),
+        ("prefixed key", "mytoken=s3cr3tvalue", "s3cr3tvalue"),
+    ],
+)
+def test_credential_shapes_are_redacted(scrub, label, raw, secret):
+    assert secret not in scrub(raw), label
+
+
+def test_authorization_header_inside_a_formatted_log_line(scrub):
+    """The ``:`` rule must not be anchored to the start of a line.
+
+    ``_format_log_lines`` prepends ``[timestamp] LEVEL `` *before* anything is
+    scrubbed, so an anchored rule never fires on a real log entry -- and a test
+    whose fixture omits that prefix passes while proving nothing. This fixture
+    carries the prefix deliberately.
+    """
+    out = scrub("[2026-07-08T12:00:00+00:00] ERROR Authorization: Bearer eyJTOKENXX")
+    assert "eyJTOKENXX" not in out
+    assert "<redacted>" in out
+
+
+def test_bare_bearer_token_is_swept(scrub):
+    """A credential quoted into prose has no key in front of it to match on."""
+    out = scrub("upstream said: Bearer eyJhbGciOiJIUzI1NiJ9.payload.sig")
+    assert "eyJhbGciOiJIUzI1NiJ9" not in out
+    assert "Bearer <redacted>" in out
+
+
+def test_bearer_keyword_alone_is_not_treated_as_the_value(scrub):
+    """Redacting the scheme keyword would leave the token in the clear."""
+    out = scrub("Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.payload.sig")
+    assert "eyJhbGciOiJIUzI1NiJ9" not in out
+
+
+def test_bracketed_ipv6_url_authority_is_replaced_whole(scrub):
+    """A plain authority class stops at the literal's first colon.
+
+    That published most of a management address (`<host-1>:1234::beef]`) and
+    left a fragment the later IPv6 pass could no longer recognise.
+    """
+    out = scrub(_S + "svc:hunter2@" + "[fd00:1234::beef]" + "/api")
+    assert "hunter2" not in out
+    assert "fd00" not in out
+    assert "beef" not in out
+    assert "<ipv6-1>" in out

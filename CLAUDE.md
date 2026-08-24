@@ -342,6 +342,21 @@ payload before it is rendered. Three invariants are load-bearing:
   (`<host-1>`, `<ip-2>`), so a node named in both the error and a log line keeps
   one token and the report stays correlatable. A fresh instance per field would
   renumber and destroy that.
+- **Credential keys are matched by *marker*, in both `:` and `=` forms,
+  anywhere in the text.** An enumerated key list missed `token_value` and
+  `token_secret` -- field names on this plugin's own models -- and
+  `X-Proxbox-API-Key`; anchoring the `:` form to the start of a line made it
+  dead code, because `_format_log_lines` prepends `[timestamp] LEVEL ` before
+  anything is scrubbed. A bare `Bearer <jwt>` is swept separately, since a
+  credential quoted into prose has no key in front of it. This mirrors
+  `views/error_utils.py`, which cannot be imported here (it needs Django) --
+  keep the two in step. Marker matching deliberately over-redacts
+  (`tokenizer=` is redacted too): losing a word from a report is recoverable,
+  publishing a credential is not.
+- **A bracketed IPv6 URL authority is matched atomically.** A plain
+  `[^/\s:?#]+` authority stops at the literal's first colon, which published
+  most of a management address and left a fragment the IPv6 pass could no
+  longer recognise.
 - **Every quantifier that precedes a required literal is bounded.** Job logs
   carry remote-controlled text, so an unbounded greedy class in front of a
   literal that turns out to be absent makes the engine re-scan the tail from

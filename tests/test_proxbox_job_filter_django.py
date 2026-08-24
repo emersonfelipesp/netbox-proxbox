@@ -19,6 +19,7 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import sys
+import uuid
 
 import pytest
 
@@ -81,8 +82,10 @@ from netbox_proxbox.jobs import (  # noqa: E402
 )
 
 # (name, queue_name, data) -- deliberately spans every branch of the predicate
-# plus the translation traps: a NULL queue, whitespace-padded names, and
-# non-Proxbox rows whose name or queue is a near miss.
+# plus the translation traps: a blank queue, whitespace-padded names, jsonb
+# payloads that are not objects, and non-Proxbox rows whose name or queue is a
+# near miss. ``queue_name`` is NOT NULL in the schema, so blank is the emptiest
+# value these rows can carry.
 _ROWS = [
     # Proxbox, identified by the data payload regardless of name/queue.
     ("Some Custom Sync Name", "default", {"proxbox_sync": {"params": {}}}),
@@ -92,7 +95,6 @@ _ROWS = [
     # Proxbox, identified by the default job label on an allowed queue.
     ("Proxbox Sync", PROXBOX_SYNC_QUEUE_NAME, None),
     ("Proxbox Sync", "", None),
-    ("Proxbox Sync", None, None),  # the SQL NULL trap
     ("  Proxbox Sync  ", "default", None),  # the .strip() trap
     # Proxbox, identified by the targeted per-VM job name.
     ("Proxbox Sync: Virtual machine 100", "default", None),
@@ -100,7 +102,7 @@ _ROWS = [
     # Not Proxbox -- other plugins and core work sharing the default queue.
     ("Report Run", "default", None),
     ("Script: provision", "default", {"script": {}}),
-    ("Housekeeping", None, None),
+    ("Housekeeping", "", None),
     ("Sync GPON ONTs", "default", {"gpon_sync": {}}),
     # Not Proxbox -- near misses that must not be swept in.
     ("Proxbox Sync Extra", "default", None),
@@ -108,6 +110,15 @@ _ROWS = [
     ("Proxbox Sync: Virtual machine abc", "default", None),
     ("Proxbox Sync: Virtual machine", "default", None),
     ("proxbox sync", "default", None),  # case-sensitive by design
+    # Not Proxbox -- jsonb ``?`` is also true for a top-level ARRAY holding the
+    # string, while the predicate requires a dict. Without the key-transform
+    # pairing in proxbox_sync_job_q() this row appears on the page.
+    ("Array Payload", "default", ["proxbox_sync"]),
+    ("Scalar Payload", "default", "proxbox_sync"),
+    # Proxbox -- a dict whose value is JSON null: ``"proxbox_sync" in data`` is
+    # True, so the filter must match it too. This is the row that breaks a
+    # naive "key transform is not null" translation.
+    ("Null Valued", "default", {"proxbox_sync": None}),
 ]
 
 
@@ -117,16 +128,19 @@ def job_rows(db):
     object_type = ContentType.objects.get_for_model(Job)
     created = []
     for name, queue_name, data in _ROWS:
+        # ``job_id`` is a required unique UUID with no model default, so it has
+        # to be supplied explicitly. ``queue_name`` is CharField(blank=True) --
+        # NOT NULL at the database level -- so blank is the emptiest value a
+        # real row can hold, and the predicate's ``queue_name or ""`` guard
+        # exists for unsaved/stub objects rather than for rows like these.
         job = Job.objects.create(
             object_type=object_type,
+            job_id=uuid.uuid4(),
             name=name,
             status="errored",
+            queue_name=queue_name,
             data=data,
         )
-        # ``queue_name`` has a model default, so NULL/blank must be forced in
-        # afterwards with an UPDATE rather than passed to create().
-        Job.objects.filter(pk=job.pk).update(queue_name=queue_name)
-        job.refresh_from_db()
         created.append(job)
     return created
 
@@ -159,24 +173,59 @@ def test_the_matrix_exercises_both_answers(job_rows):
 
 
 @pytest.mark.django_db
-def test_null_queue_name_is_matched(job_rows):
-    """A NULL queue must still match: the predicate reads it as ``""``.
+def test_blank_queue_name_is_matched(job_rows):
+    """A blank queue must still match: the predicate reads it as ``""``.
 
-    ``Q(queue_name__in=[...])`` never matches SQL NULL, so this is the branch a
-    naive translation of the predicate drops -- and it drops it silently, since
-    the rows simply stop appearing on the page.
+    ``queue_name`` is ``CharField(blank=True)`` -- NOT NULL in the database --
+    so blank, not SQL NULL, is the emptiest value a real row can carry. The
+    ``queue_name__isnull`` branch in the filter is kept as a cheap guard for a
+    future schema change and for the stub objects other tests build, but it is
+    this case that a live install actually produces.
     """
     matched = set(
         Job.objects.filter(proxbox_sync_job_q()).values_list("pk", flat=True)
     )
-    null_queue_proxbox = [
+    blank_queue_proxbox = [
         job
         for job in job_rows
-        if job.queue_name in (None, "") and job.name.strip() == "Proxbox Sync"
+        if job.queue_name == "" and job.name.strip() == "Proxbox Sync"
     ]
-    assert null_queue_proxbox, "matrix no longer covers the NULL/blank queue case"
-    for job in null_queue_proxbox:
+    assert blank_queue_proxbox, "matrix no longer covers the blank-queue case"
+    for job in blank_queue_proxbox:
         assert job.pk in matched
+
+
+@pytest.mark.django_db
+def test_a_top_level_json_array_is_not_a_proxbox_job(job_rows):
+    """jsonb ``?`` matches an array element; the predicate requires a dict.
+
+    Without the key-transform pairing, a job whose ``data`` is
+    ``["proxbox_sync"]`` is rejected by ``is_proxbox_sync_job()`` and yet shown
+    on the Proxbox page -- a divergence the dict-only matrix could not see.
+    """
+    matched = set(
+        Job.objects.filter(proxbox_sync_job_q()).values_list("pk", flat=True)
+    )
+    for job in job_rows:
+        if job.name in ("Array Payload", "Scalar Payload"):
+            assert not is_proxbox_sync_job(job)
+            assert job.pk not in matched
+
+
+@pytest.mark.django_db
+def test_a_dict_with_a_json_null_value_is_a_proxbox_job(job_rows):
+    """``"proxbox_sync" in data`` is True when the value is null.
+
+    This is the counterweight to the array case: a translation that demanded a
+    non-null *value* would drop it.
+    """
+    matched = set(
+        Job.objects.filter(proxbox_sync_job_q()).values_list("pk", flat=True)
+    )
+    for job in job_rows:
+        if job.name == "Null Valued":
+            assert is_proxbox_sync_job(job)
+            assert job.pk in matched
 
 
 @pytest.mark.django_db

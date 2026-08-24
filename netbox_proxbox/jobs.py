@@ -1841,8 +1841,20 @@ def proxbox_sync_job_q():
     # the job-name format cannot leave this filter behind.
     targeted_inner = _TARGETED_VM_JOB_NAME_RE.pattern.removeprefix("^").removesuffix("$")
 
+    # ``has_key`` alone is *not* the predicate's test. It compiles to jsonb's
+    # ``?`` operator, which is also true for a top-level **array** containing
+    # the string -- ``data == ["proxbox_sync"]`` -- while the predicate requires
+    # a dict. Pairing it with the key transform restores object semantics:
+    # ``'["proxbox_sync"]'::jsonb -> 'proxbox_sync'`` is SQL NULL, so an array
+    # is excluded, while ``{"proxbox_sync": null}`` yields JSON null (not SQL
+    # NULL) and is still matched -- which is what ``"proxbox_sync" in data``
+    # does.
+    has_proxbox_sync_object = Q(data__has_key="proxbox_sync") & Q(
+        data__proxbox_sync__isnull=False
+    )
+
     return (
-        Q(data__has_key="proxbox_sync")
+        has_proxbox_sync_object
         | Q(queue_name=LEGACY_PROXBOX_RQ_QUEUE)
         | (Q(name__regex=rf"^\s*{re.escape(default_label)}\s*$") & allowed_queue)
         | Q(name__regex=rf"^\s*{targeted_inner}\s*$")

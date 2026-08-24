@@ -300,3 +300,46 @@ def test_context_is_flagged_anonymized(monkeypatch):
     """The template branches on this to tell the reporter what it is handing over."""
     module = _load(monkeypatch)
     assert module.build_bug_report_context(_job())["anonymized"] is True
+
+
+def test_hostile_credential_shapes_never_reach_the_public_issue_url(monkeypatch):
+    """End-to-end: every shape adversarial review found must die before egress.
+
+    These are asserted against the **decoded** ``body`` query parameter rather
+    than the modal context, because the prefilled URL is the path that actually
+    publishes. Each entry leaked through the first implementation.
+    """
+    module = _load(monkeypatch)
+    job = _job(
+        error='backend rejected {"password":"hunter2"} for token_value=abc123secret',
+        log_entries=[
+            {
+                "level": "error",
+                "message": "Authorization: Bearer eyJTOKENXX rejected",
+                "timestamp": datetime(2026, 7, 8, 12, 0, 59, tzinfo=timezone.utc),
+            },
+            {
+                "level": "error",
+                "message": "X-Proxbox-API-Key: k3yv4lue and token_secret=def456secret",
+                "timestamp": datetime(2026, 7, 8, 12, 1, 0, tzinfo=timezone.utc),
+            },
+            {
+                "level": "error",
+                "message": "upstream said Bearer eyJhbGciOiJIUzI1NiJ9.payload",
+                "timestamp": datetime(2026, 7, 8, 12, 1, 1, tzinfo=timezone.utc),
+            },
+        ],
+    )
+    ctx = module.build_bug_report_context(job)
+    body = parse_qs(urlparse(ctx["github_issue_url"]).query)["body"][0]
+
+    for secret in (
+        "hunter2",
+        "abc123secret",
+        "def456secret",
+        "k3yv4lue",
+        "eyJTOKENXX",
+        "eyJhbGciOiJIUzI1NiJ9",
+    ):
+        assert secret not in body, f"{secret} reached the prefilled issue URL"
+        assert secret not in ctx["report_text"]

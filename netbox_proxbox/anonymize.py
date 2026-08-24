@@ -43,59 +43,74 @@ __all__ = (
 
 REDACTED = "<redacted>"
 
-# Keys whose *value* is a credential. Matched case-insensitively, longest-first
-# so ``access_token`` wins over ``token``.
-_CREDENTIAL_KEYS = (
-    "pveapitoken",
-    "pveauthcookie",
-    "csrfpreventiontoken",
-    "authorization",
-    "proxy-authorization",
-    "access_token",
-    "refresh_token",
-    "id_token",
-    "client_secret",
-    "private_key",
-    "secret_key",
-    "api_key",
-    "api-key",
-    "apikey",
-    "password",
-    "passwd",
-    "credentials",
-    "credential",
-    "session",
-    "secret",
-    "ticket",
-    "token",
-    "auth",
-    "pwd",
+# Credential matching mirrors ``views/error_utils.py``'s redaction rather than
+# inventing a second scheme: that module already learned these lessons against
+# real backend payloads. It cannot simply be imported -- it pulls in Django, and
+# this module must not (see the note above) -- so the shape is duplicated
+# deliberately. Keep the two in step.
+#
+# Three properties matter, and an earlier exact-key/line-anchored version failed
+# all three:
+#
+# * **The key is matched by marker, not by exact name.** ``token_value`` and
+#   ``token_secret`` are real field names on this plugin's own models, and
+#   ``X-Proxbox-API-Key`` is a real header; an enumerated key list missed every
+#   one of them.
+# * **Assignments are found anywhere in the text, in both ``:`` and ``=``
+#   forms.** Anchoring the ``:`` form to the start of a line made it dead code
+#   in practice: ``_format_log_lines`` prepends ``[timestamp] LEVEL `` before
+#   anything is scrubbed, so a log message that *begins* with an
+#   ``Authorization:`` header is never at column zero by the time it gets here.
+#   That also means a passing test can prove nothing unless its fixture carries
+#   the prefix a real log line has.
+# * **A bare ``Bearer <jwt>`` is swept independently**, because a credential
+#   quoted into prose has no key in front of it to match on.
+_SENSITIVE_ASSIGNMENT_RE = re.compile(
+    r"""(?ix)
+    # A key starts at an identifier boundary, never part-way through one. That
+    # is what it means for something to be a field name, and it also collapses
+    # the search: without it the leading run is retried at every character of a
+    # long marker-bearing string, and ``"token_aaaa" * 20000`` cost seconds.
+    (?<![a-z0-9_\-])
+    # The trailing run is *possessive*. Its character class excludes ``:`` and
+    # ``=``, so it can never need to give a character back for the separator to
+    # match -- but a backtracking suffix multiplied against the prefix. The
+    # leading run must stay backtracking: it has to be able to give ground for
+    # the marker itself to match (``mytoken=x``).
+    (?P<key>[a-z0-9_\-]{0,64}
+        (?:token|password|passwd|pwd|secret|api[_\-\s]?key|private[_\-\s]?key
+           |sshkeys|authorization|credential|cookie|ticket)
+        [a-z0-9_\-]{0,64}+)
+    (?P<quote_end>['"]?)
+    (?P<sep>\s*[:=]\s*)
+    # The scheme alternative must come first. ``Authorization: Bearer <jwt>``
+    # otherwise matches with the value ``Bearer`` alone, which redacts the
+    # *keyword* and leaves the token behind it in the clear -- and then hides it
+    # from the bearer sweep below, which no longer sees a scheme to anchor on.
+    (?P<value>(?:bearer|basic)\s+[^\s,;)}\]]{1,4096}
+        |'[^']{0,4096}'|"[^"]{0,4096}"|[^\s,;&)}\]]{1,4096})
+    """
 )
 
-_CRED_ALTERNATION = "|".join(
-    re.escape(key) for key in sorted(_CREDENTIAL_KEYS, key=len, reverse=True)
-)
-
-# ``key=value`` / ``key = "value"``. The value is a single token, which is what
-# an API-token assignment and a query-string pair both look like.
-_CREDENTIAL_ASSIGN_RE = re.compile(
-    rf"(?i)\b({_CRED_ALTERNATION})\b(\s*=\s*)(\"[^\"]*\"|'[^']*'|[^\s,;&)\]}}]+)"
-)
-
-# ``Header: value`` consumes the rest of the line: an auth header's value is
-# multi-token (``Bearer abc.def``) and over-redacting a trailing clause is the
-# safe direction to err in.
-_CREDENTIAL_HEADER_RE = re.compile(
-    rf"(?i)^(\s*)({_CRED_ALTERNATION})\b(\s*:\s*)(.+)$", re.MULTILINE
-)
+# ``Bearer <jwt>`` with no credential-named key in front of it -- a request
+# header quoted into a message, say. The assignment sweep cannot see those.
+_BEARER_RE = re.compile(r"(?i)\b(bearer|basic)\s+([a-z0-9._\-+/=]{8,4096})")
 
 # Every quantifier that precedes a required literal is bounded, for the same
 # quadratic-backtracking reason as ``_FQDN_RE`` below: an unbounded greedy class
 # in front of a literal that is absent re-scans the tail at every start
 # position. The bounds are the real-world limits (RFC 3986 schemes are short;
 # RFC 5321 caps an address local-part at 64 octets), so nothing valid is lost.
+# The bracketed-IPv6 authority alternative must come first and is matched
+# atomically. A plain ``[^/\s:?#]+`` authority stops at the literal's first
+# colon, so a management address embedded in a URL came out as
+# ``<host-1>:1234::beef]`` -- host token replaced, address still published --
+# and the later IPv6 pass could not recover the fragment because the bracketed
+# literal had already been split.
 _URL_RE = re.compile(
-    r"(?i)\b([a-z][a-z0-9+.\-]{0,15})://(?:([^/@\s]{0,255})@)?([^/\s:?#]{1,255})(:\d{1,5})?"
+    r"(?i)\b([a-z][a-z0-9+.\-]{0,15})://(?:([^/@\s]{0,255})@)?"
+    r"(\[[0-9A-Fa-f:.]{2,45}(?:%[0-9A-Za-z._\-]{1,32})?\]|[^/\s:?#]{1,255})"
+    r"(:\d{1,5})?"
 )
 
 # Proxmox realm principals: root@pam, svc@pve, backup@pbs.
@@ -208,12 +223,13 @@ class Anonymizer:
         if not value:
             return value
 
-        value = _CREDENTIAL_ASSIGN_RE.sub(
-            lambda m: f"{m.group(1)}{m.group(2)}{REDACTED}", value
+        value = _SENSITIVE_ASSIGNMENT_RE.sub(
+            lambda m: (
+                f"{m.group('key')}{m.group('quote_end')}{m.group('sep')}{REDACTED}"
+            ),
+            value,
         )
-        value = _CREDENTIAL_HEADER_RE.sub(
-            lambda m: f"{m.group(1)}{m.group(2)}{m.group(3)}{REDACTED}", value
-        )
+        value = _BEARER_RE.sub(lambda m: f"{m.group(1)} {REDACTED}", value)
         value = _URL_RE.sub(self._sub_url, value)
         value = _REALM_RE.sub(
             lambda m: f"{self.placeholder('user', m.group(1))}@{m.group(2)}", value
