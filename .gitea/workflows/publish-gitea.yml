@@ -94,20 +94,58 @@ jobs:
           ref: ${{ needs.validate-version.outputs.tag }}
 
       - name: Install build tools
+        env:
+          # Pinned deliberately. The previous bootstrap fetched whatever the
+          # unversioned installer served and then accepted whatever answered
+          # `uv --version`, so two builds of one tag could come from different
+          # toolchains -- and this path is live: the runner that failed this
+          # release had no uv at all.
+          UV_VERSION: "0.12.5"
         run: |
           set -euo pipefail
-          if ! command -v uv >/dev/null 2>&1; then
-            apt-get update -qq
-            apt-get install -y curl python3 2>/dev/null || true
-            curl -LsSf https://astral.sh/uv/install.sh | sh -s -- --no-modify-path
+          # Assert the tools the *post-upload* verification needs, on the
+          # default PATH it will actually run with, before anything is built.
+          # The verifier is a fresh shell -- it does not inherit the PATH export
+          # below -- and it uses both curl and python3. A user-local python3
+          # visible only to this step would pass a naive check here and be
+          # missing there, after an immutable version had been consumed.
+          for tool in python3 curl; do
+            command -v "${tool}" >/dev/null 2>&1 || {
+              echo "ERROR: ${tool} is required by the post-upload registry verification"
+              exit 1
+            }
+          done
+          python3 --version
+          curl --version | head -1
+
+          uv_is_pinned() {
+            command -v uv >/dev/null 2>&1 && \
+              [ "$(uv --version 2>/dev/null | awk '{print $2}')" = "${UV_VERSION}" ]
+          }
+          if ! uv_is_pinned; then
+            curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" \
+              | sh -s -- --no-modify-path
             export PATH="${HOME}/.local/bin:${PATH}"
           fi
           export PATH="${HOME}/.local/bin:${PATH}"
+          ACTUAL_UV="$(uv --version | awk '{print $2}')"
+          if [ "${ACTUAL_UV}" != "${UV_VERSION}" ]; then
+            echo "ERROR: expected uv ${UV_VERSION}, got ${ACTUAL_UV}"
+            exit 1
+          fi
           uv --version
 
       - name: Build distributions
         run: |
+          set -euo pipefail
           export PATH="${HOME}/.local/bin:${PATH}"
+          # Build and upload from the repository's own locked `publish` group
+          # rather than resolving a backend and an ephemeral twine at run time.
+          # `uv.lock` carries hashes for that group, so the PEP 517 backend and
+          # the credential-bearing uploader are the reviewed, pinned ones
+          # (hatchling 1.31.0, twine 6.2.0) instead of whatever resolution
+          # happens to pick on the day.
+          uv sync --only-group publish --locked --no-install-project
           uv build
           ls dist/
 
@@ -117,8 +155,12 @@ jobs:
           TWINE_PASSWORD: ${{ secrets.PKG_TOKEN }}
           TWINE_REPOSITORY_URL: https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi
         run: |
+          set -euo pipefail
           export PATH="${HOME}/.local/bin:${PATH}"
-          uv run --with twine twine upload --non-interactive dist/*
+          # The pinned twine from the locked `publish` group synced above; the
+          # previous `--with twine` resolved a separate ephemeral layer at run
+          # time, and that layer ran with the registry credential.
+          .venv/bin/python -m twine upload --non-interactive dist/*
 
       - name: Verify package in Gitea registry
         env:
@@ -154,7 +196,14 @@ jobs:
         run: |
           set -euo pipefail
           if command -v gh >/dev/null 2>&1; then gh --version; exit 0; fi
-          apt-get update -qq
+          # Best-effort for the same reason as the build job's bootstrap -- and
+          # it matters more here, because this job runs *after* the package has
+          # been uploaded. A broken third-party APT source would strand an
+          # already-published immutable version with no tag or release on
+          # GitHub, and a re-run would then collide with that upload. The
+          # `apt-get install` calls below remain the real gate, as does the
+          # closing `gh --version`.
+          apt-get update -qq || true
           apt-get install -y ca-certificates curl gnupg
           mkdir -p -m 755 /etc/apt/keyrings
           curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
@@ -162,7 +211,7 @@ jobs:
           chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
           echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
             | tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-          apt-get update -qq
+          apt-get update -qq || true
           apt-get install -y gh
           gh --version
 
