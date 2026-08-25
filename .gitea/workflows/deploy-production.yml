@@ -125,7 +125,7 @@ jobs:
           # in over stdin rather than argv, and the transport is pinned -- an ambient
           # proxy would otherwise receive the whole capability, which a signature
           # prevents forging but not disclosing.
-          status="$(printf '%s' "$claim_body" | curl -sS --fail-with-body \
+          status="$(printf '%s' "$claim_body" | curl --disable -sS --fail-with-body \
             --noproxy '*' --proto '=http,https' --max-redirs 0 \
             --max-time 30 --retry 0 \
             -o "$proof_path" -w '%{http_code}' \
@@ -218,7 +218,19 @@ jobs:
           test "${DEPLOY_COMPLETED:-}" = "true"
 
       - name: Require healthy production status
-        run: /opt/nmulticloud/deploy/bin/status-app netbox
+        run: |
+          set -euo pipefail
+          # status-app prints service state and suppresses their exit codes, so
+          # calling it bare asserts nothing. Proxbox sync runs on netbox-rq --
+          # a deploy that leaves the worker stopped breaks the very feature
+          # being shipped while the web endpoint looks fine.
+          report="$(/opt/nmulticloud/deploy/bin/status-app netbox)"
+          printf '%s\n' "$report"
+          # The report reads `systemd=netbox.service:active,netbox-rq.service:...`,
+          # so the first entry is preceded by `=` rather than a comma. Anchoring
+          # on `(^|,)` alone silently fails every deploy.
+          printf '%s' "$report" | grep -Eq '[=,]netbox\.service:active(,|$)'
+          printf '%s' "$report" | grep -Eq '[=,]netbox-rq\.service:active(,|$)'
 
       - name: Publish host-issued successful-deployment attestation
         if: ${{ env.RESOLVED_SOURCE == 'latest_package' }}
@@ -249,9 +261,20 @@ jobs:
           # later root job for the remainder of its lifetime. The path is
           # recomputed rather than trusted so a half-written GITHUB_ENV cannot
           # leave it behind, and the deleted target is confined to this run.
-          proof_root="${RUNNER_TEMP}/nms-proof-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          case "$proof_root" in
-            "${RUNNER_TEMP}/nms-proof-"*) rm -rf -- "$proof_root" ;;
-            *) echo "refusing to remove unexpected path: $proof_root" >&2; exit 1 ;;
-          esac
+          # Validate the inputs rather than the string built from them: a
+          # `case` against the same prefix used to construct the path always
+          # matches and proves nothing.
+          test -n "${RUNNER_TEMP:-}"
+          case "$RUNNER_TEMP" in /?*) ;; *) echo "RUNNER_TEMP is not absolute" >&2; exit 1 ;; esac
+          printf '%s' "$GITHUB_RUN_ID" | grep -Eq '^[1-9][0-9]*$'
+          printf '%s' "$GITHUB_RUN_ATTEMPT" | grep -Eq '^[1-9][0-9]*$'
+          runner_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          test "$runner_temp" != "/"
+          proof_root="${runner_temp}/nms-proof-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if [ -e "$proof_root" ]; then
+            # Confirm the resolved parent really is RUNNER_TEMP before removing
+            # anything, so a non-canonical value cannot widen the target.
+            test "$(cd "$(dirname "$proof_root")" && pwd -P)" = "$runner_temp"
+            rm -rf -- "$proof_root"
+          fi
           test ! -e "$proof_root"

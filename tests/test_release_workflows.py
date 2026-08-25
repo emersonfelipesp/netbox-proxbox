@@ -557,6 +557,32 @@ def test_production_deploy_cannot_report_success_without_deploying() -> None:
     assert 'test "${DEPLOY_COMPLETED:-}" = "true"' in workflow
 
 
+def test_production_health_gate_actually_asserts_service_state() -> None:
+    workflow = _read(GITEA_DEPLOY_WORKFLOW)
+
+    # `status-app netbox` prints service state and suppresses their exit codes,
+    # so calling it bare asserts nothing. Proxbox sync runs on netbox-rq: a
+    # deploy that leaves the worker stopped breaks the feature being shipped
+    # while the web endpoint still answers.
+    start = workflow.index("- name: Require healthy production status")
+    gate = workflow[start:workflow.index("- name:", start + 1)]
+    # Scoped to the gate: the failure-reporting step calls status-app bare on
+    # purpose, as a diagnostic rather than an assertion.
+    assert "run: /opt/nmulticloud/deploy/bin/status-app netbox\n" not in gate
+    assert "[=,]netbox\\.service:active" in gate
+    assert "[=,]netbox-rq\\.service:active" in gate
+
+
+def test_claim_ignores_ambient_curl_configuration() -> None:
+    workflow = _read(GITEA_DEPLOY_WORKFLOW)
+
+    # A .curlrc on this shared root runner can carry --connect-to/--resolve,
+    # which redirect a loopback-looking URL despite --noproxy and would hand
+    # over the request id in the path and its digest in the body. --disable
+    # only works as the first argument.
+    assert "curl --disable" in workflow
+
+
 def test_claimed_proof_is_destroyed_on_every_exit_path() -> None:
     workflow = _read(GITEA_DEPLOY_WORKFLOW)
 
