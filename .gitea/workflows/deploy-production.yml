@@ -19,6 +19,16 @@ on:
         required: false
         default: ""
         type: string
+      nms_request_id:
+        description: "Injected by nms-backend; not set by hand"
+        required: false
+        default: ""
+        type: string
+      nms_request_sha256:
+        description: "Injected by nms-backend; not set by hand"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -51,6 +61,12 @@ jobs:
       PACKAGE_VERSION: ${{ inputs.package_version }}
       WORKFLOW_REF: ${{ github.ref }}
       WORKFLOW_SHA: ${{ github.sha }}
+      NMS_REQUEST_ID: ${{ inputs.nms_request_id }}
+      NMS_REQUEST_SHA256: ${{ inputs.nms_request_sha256 }}
+      # Loopback on the deploy host. Overridable so the runner can move without
+      # a workflow change; the proof routes carry no bearer, so this URL is not
+      # a secret.
+      NMS_BACKEND_URL: ${{ vars.NMS_BACKEND_URL || 'http://127.0.0.1:16001' }}
     steps:
       - name: Checkout canonical workflow source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -63,49 +79,129 @@ jobs:
           set -euo pipefail
           test "$WORKFLOW_REF" = refs/heads/main
           printf '%s' "$WORKFLOW_SHA" | grep -Eq '^[a-f0-9]{40}$'
-          case "$DEPLOY_SOURCE" in
-            latest_package)
-              printf '%s' "$PACKAGE_VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(rc[1-9][0-9]*|\.post[1-9][0-9]*)?$'
-              ;;
-            main_branch)
-              test -z "$PACKAGE_VERSION"
-              ;;
-            *) exit 1 ;;
-          esac
+          # Both are injected by nms-backend on every authorized dispatch. A
+          # dispatch without them did not come through the proof path and must
+          # not reach the deploy host, which would reject it anyway.
+          printf '%s' "$NMS_REQUEST_ID" | grep -Eq '^[a-f0-9]{32}$'
+          printf '%s' "$NMS_REQUEST_SHA256" | grep -Eq '^[a-f0-9]{64}$'
 
-      - name: Bind exact package artifacts before deployment
-        if: ${{ inputs.deploy_source == 'latest_package' }}
+      - name: Claim the NMS authorization for this exact run
         run: |
           set -euo pipefail
-          git fetch --force --no-tags origin \
-            "+refs/heads/develop:refs/remotes/gitea/release-develop" \
-            "+refs/tags/v${PACKAGE_VERSION}:refs/release-policy/candidate"
-          SOURCE_SHA="$(git rev-parse refs/release-policy/candidate^{commit})"
-          git merge-base --is-ancestor "$SOURCE_SHA" refs/remotes/gitea/release-develop
-          python3 scripts/release_artifacts.py fetch-gitea \
-            --owner emersonfelipesp --repository netbox-proxbox \
-            --package netbox-proxbox --version "$PACKAGE_VERSION" \
-            --source-sha "$SOURCE_SHA" --dist release-dist \
-            --manifest release-manifest.json
+          umask 077
+          proof_root="${RUNNER_TEMP}/nms-proof-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "$proof_root"
+          mkdir -m 0700 "$proof_root"
+          proof_path="$proof_root/claimed-proof.json"
 
-      - name: Deploy exact Gitea package
-        if: ${{ inputs.deploy_source == 'latest_package' }}
+          # The claim binds this authorization to this run and is single-use, so
+          # it happens once, here, and never inside a retry loop.
+          # `run_attempt` is a constant 1 in the request contract: a re-run is a
+          # different run and needs its own authorization.
+          claim_body="$(python3 - <<'PAYLOAD'
+          import json, os
+          print(json.dumps({
+              "run_id": int(os.environ["GITHUB_RUN_ID"]),
+              "run_attempt": 1,
+              "run_head_sha": os.environ["WORKFLOW_SHA"],
+              "owner": os.environ["GITHUB_REPOSITORY"].split("/", 1)[0],
+              "repository": os.environ["GITHUB_REPOSITORY"].split("/", 1)[1],
+              "workflow_id": "deploy-production.yml",
+              "request_sha256": os.environ["NMS_REQUEST_SHA256"],
+          }))
+          PAYLOAD
+          )"
+
+          # No bearer: these routes are capability-protected. Holding the
+          # request id and its digest IS the authorization, so neither may be
+          # echoed, and the body goes in via stdin rather than argv.
+          status="$(printf '%s' "$claim_body" | curl -sS --fail-with-body \
+            --max-time 30 --retry 0 \
+            -o "$proof_path" -w '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' --data-binary @- \
+            "${NMS_BACKEND_URL}/git/deployment-proofs/${NMS_REQUEST_ID}/claim")"
+          test "$status" = "200"
+
+          # The host verifies an Ed25519 signature over exactly these six keys
+          # against its own root-owned public key pin, so the response is
+          # written through unmodified -- reshaping it would invalidate it.
+          python3 - "$proof_path" <<'CHECK'
+          import json, sys
+          proof = json.load(open(sys.argv[1]))
+          expected = {
+              "claimed_at_unix", "request", "retention_expires_at_unix",
+              "run", "signature", "state",
+          }
+          if set(proof) != expected:
+              raise SystemExit(f"claimed proof schema is not exact: {sorted(proof)}")
+          if proof["state"] != "claimed":
+              raise SystemExit(f"proof is {proof['state']}, not claimed")
+          CHECK
+
+          echo "PROOF_PATH=$proof_path" >> "$GITHUB_ENV"
+          echo "PROOF_ROOT=$proof_root" >> "$GITHUB_ENV"
+          # The signed request -- not a dispatch input -- decides the source.
+          # nms-backend sends no `deploy_source` for a main_branch dispatch, so
+          # trusting the input would silently fall back to its default.
+          {
+            echo "RESOLVED_SOURCE=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["request"]["deploy_source"])' "$proof_path")"
+          } >> "$GITHUB_ENV"
+
+      - name: Deploy the canonical main commit the request authorizes
+        if: ${{ env.RESOLVED_SOURCE == 'main_branch' }}
         run: |
           set -euo pipefail
-          /opt/nmulticloud/deploy/bin/deploy-netbox-plugin-package \
-            netbox-proxbox "$PACKAGE_VERSION" "$GITHUB_RUN_ID"
+          trap 'rm -rf -- "$PROOF_ROOT"' EXIT
 
-      - name: Deploy canonical main override
-        if: ${{ inputs.deploy_source == 'main_branch' }}
+          # Main mode carries no artifact identity; a request that does is not
+          # the one this step knows how to satisfy.
+          python3 - "$PROOF_PATH" "$WORKFLOW_SHA" <<'CHECK'
+          import json, sys
+          request = json.load(open(sys.argv[1]))["request"]
+          if request["deploy_source"] != "main_branch":
+              raise SystemExit("resolved source changed under us")
+          if request.get("artifacts"):
+              raise SystemExit("main-mode request must carry no artifacts")
+          for field in (
+              "package_name", "package_type", "package_version",
+              "package_source_sha", "release_manifest_package",
+              "release_manifest_sha256",
+          ):
+              if request.get(field) is not None:
+                  raise SystemExit(f"main-mode request must leave {field} null")
+          CHECK
+
+          # The runner is root on the deploy host; this is the same fixed-argv
+          # action the sudoers grant allows, and the only accepted entry point
+          # for a netbox-proxbox production deploy.
+          /opt/nmulticloud/deploy/bin/proxbox-package-deploy deploy-main \
+            netbox-proxbox "$WORKFLOW_SHA" "$NMS_REQUEST_ID" "$PROOF_PATH" \
+            "$NMS_REQUEST_SHA256" "$GITHUB_RUN_ID"
+
+      - name: Reject a package deploy until the release manifest is published
+        if: ${{ env.RESOLVED_SOURCE == 'latest_package' }}
         run: |
           set -euo pipefail
-          /opt/nmulticloud/deploy/bin/deploy-netbox-plugin netbox-proxbox "$WORKFLOW_SHA"
+          rm -rf -- "$PROOF_ROOT"
+          cat >&2 <<'MSG'
+          latest_package cannot be deployed yet.
+
+          scripts/release_artifacts.py fetch-gitea requires a generic
+          <package>-release-manifest/<version> package, and publish-gitea.yml
+          has never produced one -- no version has it, so this path would fail
+          at "Bind exact package artifacts" no matter which version is chosen.
+
+          Publish the manifest from the release workflow first (see the
+          follow-up on netbox-proxbox issue #362). Until then use main_branch,
+          which needs no manifest.
+          MSG
+          exit 1
 
       - name: Require healthy production status
         run: /opt/nmulticloud/deploy/bin/status-app netbox
 
       - name: Publish host-issued successful-deployment attestation
-        if: ${{ inputs.deploy_source == 'latest_package' }}
+        if: ${{ env.RESOLVED_SOURCE == 'latest_package' }}
         env:
           GITEA_PACKAGE_TOKEN: ${{ secrets.PKG_TOKEN }}
         run: |

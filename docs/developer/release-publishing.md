@@ -227,6 +227,24 @@ sequenceDiagram
    `proxbox-api` version.
 6. Publish each final package in Gitea, link/verify it, and deploy the exact pair
    through NMS using `latest_package` by default.
+
+   > **Dispatch through NMS, not Gitea.** A production deploy must be started
+   > with `POST /git/deployments/{target_id}/dispatch-source`, which mints the
+   > signed authorization the deploy host requires and injects
+   > `nms_request_id`/`nms_request_sha256` into the workflow. Firing
+   > `deploy-production.yml` straight from Gitea produces a run with no
+   > authorization, and it fails closed before touching anything.
+   >
+   > The workflow reads the deploy source from the **claimed request**, not from
+   > the `deploy_source` input: for a canonical-main dispatch the backend sends
+   > no `deploy_source`, so trusting the input would silently fall back to its
+   > default.
+   >
+   > `latest_package` currently fails closed with a diagnostic.
+   > `release_artifacts.py fetch-gitea` needs a generic
+   > `<package>-release-manifest/<version>` package that `publish-gitea.yml`
+   > has never produced for any version. Until that producer exists, use
+   > `main_branch`, which needs no manifest.
 7. After production integration and health checks pass, dispatch each
    repository's `promote-final-tag.yml` from canonical Gitea `main`. The
    workflow verifies the exact package and protected host-issued deployment receipt before
