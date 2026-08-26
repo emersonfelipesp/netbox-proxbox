@@ -738,3 +738,29 @@ Before any destruction-adjacent intent operation, an LLM agent MUST:
 - `netbox_proxbox/api/views.py::DeletionRequestViewSet.http_method_names` — read-only `["get", "head", "options"]` enforces the four-eyes approval gap at the REST layer
 - `netbox_proxbox/api/views.py::ProxmoxApplyJobViewSet.http_method_names` — read-only enforcement on apply-job state (jobs are created only through intent branch-merge workflow)
 - `tests/test_static_guardrails.py` — static contract tests that pin `http_method_names`, `self_approve_allowed=False`, the five-lock chain, and the confirmation phrase presence in AGENTS.md
+
+## Production deploy requires a signed NMS authorization
+
+`deploy-production.yml`'s production job cannot be started usefully from Gitea.
+The deploy host refuses `netbox-proxbox` unless it is invoked as the fixed
+`proxbox-package-deploy deploy-main netbox-proxbox <sha> <request-id>
+<proof-path> <request-sha256> <run-id>` action, and only `nms-backend` can mint
+that authorization.
+
+Dispatch with `POST /git/deployments/{target_id}/dispatch-source`
+(target 4 = `emersonfelipesp/netbox-proxbox production`). The backend publishes
+a request, injects `nms_request_id` and `nms_request_sha256` as workflow inputs,
+and binds the authorization to that exact run. The workflow then claims it via
+`POST /git/deployment-proofs/{request_id}/claim` and writes the response through
+**unmodified** — the host verifies an Ed25519 signature over exactly those six
+keys against a root-owned public-key pin, so reshaping the body invalidates it.
+Those proof routes carry no bearer by design: holding the request id and its
+digest *is* the authorization, which is why neither is ever echoed.
+
+The source comes from the claimed request, never from the `deploy_source`
+input — a canonical-main dispatch sends no `deploy_source`, so the input would
+default to `latest_package`. The authorization is single-use and expires in
+15 minutes, and `run_attempt` is a constant 1: a re-run needs a fresh dispatch.
+
+`latest_package` fails closed until `publish-gitea.yml` publishes a
+`<package>-release-manifest` generic package; no version has one today.

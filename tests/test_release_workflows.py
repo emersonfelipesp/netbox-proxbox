@@ -511,8 +511,87 @@ def test_repository_deploy_workflow_is_nms_source_aware() -> None:
     assert "- main_branch" in workflow
     assert "package_version:" in workflow
     assert "deploy-netbox-plugin-staging" in workflow
-    assert "deploy-netbox-plugin-package \\\n            netbox-proxbox" in workflow
-    assert "deploy-netbox-plugin netbox-proxbox" in workflow
+    # The production path no longer calls the raw host scripts. Both rejected
+    # the workflow's argv after the deploy host was hardened -- two arguments
+    # where six are required -- so a deploy could not succeed by that route.
+    assert "deploy-netbox-plugin-package" not in workflow
+    assert "deploy-netbox-plugin netbox-proxbox" not in workflow
+    assert (
+        "proxbox-package-deploy deploy-main \\\n"
+        "            netbox-proxbox" in workflow
+    )
+
+
+def test_production_deploy_claims_a_signed_nms_authorization() -> None:
+    workflow = _read(GITEA_DEPLOY_WORKFLOW)
+
+    # nms-backend injects these on every authorized dispatch; a workflow that
+    # does not declare them cannot be dispatched through the proof path.
+    assert "nms_request_id:" in workflow
+    assert "nms_request_sha256:" in workflow
+    assert "/git/deployment-proofs/${NMS_REQUEST_ID}/claim" in workflow
+
+    # A re-run keeps GITHUB_RUN_ID and only bumps the attempt, so without this
+    # it would present the first attempt's binding as its own.
+    assert 'test "${GITHUB_RUN_ATTEMPT:-1}" = "1"' in workflow
+
+    # The endpoint is operator-overridable, and the request id plus digest are
+    # the whole capability -- pin the transport before sending them.
+    assert "--noproxy '*'" in workflow
+    assert "--proto '=http,https'" in workflow
+    assert "127\\.0\\.0\\.1|localhost" in workflow
+
+
+def test_production_deploy_cannot_report_success_without_deploying() -> None:
+    workflow = _read(GITEA_DEPLOY_WORKFLOW)
+
+    # The health check passes against the NetBox already running, so a job that
+    # deployed nothing would otherwise look green. Both guards matter: the
+    # source is resolved by a checked command rather than inside `echo`, where
+    # a KeyError's exit status would vanish, and a completion marker is
+    # asserted before the run may pass.
+    assert 'resolved_source="$(python3 - "$proof_path"' in workflow
+    assert 'test -n "$resolved_source"' in workflow
+    assert 'unsupported deploy source' in workflow
+    assert 'echo "DEPLOY_COMPLETED=true"' in workflow
+    assert 'test "${DEPLOY_COMPLETED:-}" = "true"' in workflow
+
+
+def test_production_health_gate_actually_asserts_service_state() -> None:
+    workflow = _read(GITEA_DEPLOY_WORKFLOW)
+
+    # `status-app netbox` prints service state and suppresses their exit codes,
+    # so calling it bare asserts nothing. Proxbox sync runs on netbox-rq: a
+    # deploy that leaves the worker stopped breaks the feature being shipped
+    # while the web endpoint still answers.
+    start = workflow.index("- name: Require healthy production status")
+    gate = workflow[start:workflow.index("- name:", start + 1)]
+    # Scoped to the gate: the failure-reporting step calls status-app bare on
+    # purpose, as a diagnostic rather than an assertion.
+    assert "run: /opt/nmulticloud/deploy/bin/status-app netbox\n" not in gate
+    assert "[=,]netbox\\.service:active" in gate
+    assert "[=,]netbox-rq\\.service:active" in gate
+
+
+def test_claim_ignores_ambient_curl_configuration() -> None:
+    workflow = _read(GITEA_DEPLOY_WORKFLOW)
+
+    # A .curlrc on this shared root runner can carry --connect-to/--resolve,
+    # which redirect a loopback-looking URL despite --noproxy and would hand
+    # over the request id in the path and its digest in the body. --disable
+    # only works as the first argument.
+    assert "curl --disable" in workflow
+
+
+def test_claimed_proof_is_destroyed_on_every_exit_path() -> None:
+    workflow = _read(GITEA_DEPLOY_WORKFLOW)
+
+    # Traps do not survive across step shells, so cleanup cannot live in the
+    # deploy step: a signed authorization left in RUNNER_TEMP on a root
+    # self-hosted runner is readable by any later root job.
+    assert "name: Destroy the claimed proof" in workflow
+    assert "if: always()" in workflow
+    assert 'rm -rf -- "$proof_root"' in workflow
     assert "create-attestation" not in workflow
     assert "export-package-deploy-receipt" in workflow
     assert "GITEA_PACKAGE_TOKEN: ${{ secrets.PKG_TOKEN }}" in workflow
