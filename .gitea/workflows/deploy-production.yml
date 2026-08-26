@@ -19,6 +19,16 @@ on:
         required: false
         default: ""
         type: string
+      nms_request_id:
+        description: "Injected by nms-backend; not set by hand"
+        required: false
+        default: ""
+        type: string
+      nms_request_sha256:
+        description: "Injected by nms-backend; not set by hand"
+        required: false
+        default: ""
+        type: string
 
 permissions:
   contents: read
@@ -51,6 +61,12 @@ jobs:
       PACKAGE_VERSION: ${{ inputs.package_version }}
       WORKFLOW_REF: ${{ github.ref }}
       WORKFLOW_SHA: ${{ github.sha }}
+      NMS_REQUEST_ID: ${{ inputs.nms_request_id }}
+      NMS_REQUEST_SHA256: ${{ inputs.nms_request_sha256 }}
+      # Loopback on the deploy host. Overridable so the runner can move without
+      # a workflow change; the proof routes carry no bearer, so this URL is not
+      # a secret.
+      NMS_BACKEND_URL: ${{ vars.NMS_BACKEND_URL || 'http://127.0.0.1:16001' }}
     steps:
       - name: Checkout canonical workflow source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -63,49 +79,161 @@ jobs:
           set -euo pipefail
           test "$WORKFLOW_REF" = refs/heads/main
           printf '%s' "$WORKFLOW_SHA" | grep -Eq '^[a-f0-9]{40}$'
-          case "$DEPLOY_SOURCE" in
-            latest_package)
-              printf '%s' "$PACKAGE_VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(rc[1-9][0-9]*|\.post[1-9][0-9]*)?$'
-              ;;
-            main_branch)
-              test -z "$PACKAGE_VERSION"
-              ;;
-            *) exit 1 ;;
-          esac
+          # Injected by nms-backend on every authorized dispatch. Without them the
+          # dispatch did not come through the proof path and must not reach the
+          # deploy host, which would reject it anyway.
+          printf '%s' "$NMS_REQUEST_ID" | grep -Eq '^[a-f0-9]{32}$'
+          printf '%s' "$NMS_REQUEST_SHA256" | grep -Eq '^[a-f0-9]{64}$'
+          # The authorization binds to attempt 1. Gitea keeps GITHUB_RUN_ID across
+          # re-runs and only increments the attempt, so a re-run would otherwise
+          # present the first attempt's binding as its own. A re-run needs a fresh
+          # dispatch, not a replayed claim.
+          test "${GITHUB_RUN_ATTEMPT:-1}" = "1"
+          # The endpoint is operator-overridable, so pin its shape before the request
+          # id and digest are ever sent to it.
+          printf '%s' "$NMS_BACKEND_URL" | grep -Eq '^https?://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?$'
 
-      - name: Bind exact package artifacts before deployment
-        if: ${{ inputs.deploy_source == 'latest_package' }}
+      - name: Claim the NMS authorization for this exact run
         run: |
           set -euo pipefail
-          git fetch --force --no-tags origin \
-            "+refs/heads/develop:refs/remotes/gitea/release-develop" \
-            "+refs/tags/v${PACKAGE_VERSION}:refs/release-policy/candidate"
-          SOURCE_SHA="$(git rev-parse refs/release-policy/candidate^{commit})"
-          git merge-base --is-ancestor "$SOURCE_SHA" refs/remotes/gitea/release-develop
-          python3 scripts/release_artifacts.py fetch-gitea \
-            --owner emersonfelipesp --repository netbox-proxbox \
-            --package netbox-proxbox --version "$PACKAGE_VERSION" \
-            --source-sha "$SOURCE_SHA" --dist release-dist \
-            --manifest release-manifest.json
+          umask 077
+          proof_root="${RUNNER_TEMP}/nms-proof-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "$proof_root"
+          mkdir -m 0700 "$proof_root"
+          proof_path="$proof_root/claimed-proof.json"
+          # Recorded before the claim so the always() cleanup can find it even if
+          # this step dies partway; traps do not survive across step shells.
+          echo "PROOF_ROOT=$proof_root" >> "$GITHUB_ENV"
 
-      - name: Deploy exact Gitea package
-        if: ${{ inputs.deploy_source == 'latest_package' }}
+          claim_body="$(python3 - <<'PAYLOAD'
+          import json, os
+          owner, _, repository = os.environ["GITHUB_REPOSITORY"].partition("/")
+          print(json.dumps({
+              "run_id": int(os.environ["GITHUB_RUN_ID"]),
+              "run_attempt": 1,
+              "run_head_sha": os.environ["WORKFLOW_SHA"],
+              "owner": owner,
+              "repository": repository,
+              "workflow_id": "deploy-production.yml",
+              "request_sha256": os.environ["NMS_REQUEST_SHA256"],
+          }))
+          PAYLOAD
+          )"
+
+          # No bearer: these routes are capability-protected, so holding the request
+          # id and its digest IS the authorization. Neither is echoed, the body goes
+          # in over stdin rather than argv, and the transport is pinned -- an ambient
+          # proxy would otherwise receive the whole capability, which a signature
+          # prevents forging but not disclosing.
+          status="$(printf '%s' "$claim_body" | curl --disable -sS --fail-with-body \
+            --noproxy '*' --proto '=http,https' --max-redirs 0 \
+            --max-time 30 --retry 0 \
+            -o "$proof_path" -w '%{http_code}' \
+            -X POST -H 'Content-Type: application/json' --data-binary @- \
+            --url "${NMS_BACKEND_URL}/git/deployment-proofs/${NMS_REQUEST_ID}/claim")"
+          test "$status" = "200"
+
+          # Resolved in its own checked command. Folding this into `echo` would let a
+          # KeyError's exit status vanish into echo's success, leaving an empty value
+          # that matches neither branch below -- a job that deploys nothing and still
+          # reports green.
+          resolved_source="$(python3 - "$proof_path" <<'RESOLVE'
+          import json, sys
+          proof = json.load(open(sys.argv[1]))
+          expected = {
+              "claimed_at_unix", "request", "retention_expires_at_unix",
+              "run", "signature", "state",
+          }
+          if set(proof) != expected:
+              raise SystemExit(f"claimed proof schema is not exact: {sorted(proof)}")
+          if proof["state"] != "claimed":
+              raise SystemExit(f"proof is {proof['state']!r}, not claimed")
+          source = proof["request"]["deploy_source"]
+          if source not in {"main_branch", "latest_package"}:
+              raise SystemExit(f"unsupported deploy source: {source!r}")
+          print(source)
+          RESOLVE
+          )"
+          test -n "$resolved_source"
+          echo "RESOLVED_SOURCE=$resolved_source" >> "$GITHUB_ENV"
+          echo "PROOF_PATH=$proof_path" >> "$GITHUB_ENV"
+
+      - name: Deploy the canonical main commit the request authorizes
+        if: ${{ env.RESOLVED_SOURCE == 'main_branch' }}
         run: |
           set -euo pipefail
-          /opt/nmulticloud/deploy/bin/deploy-netbox-plugin-package \
-            netbox-proxbox "$PACKAGE_VERSION" "$GITHUB_RUN_ID"
 
-      - name: Deploy canonical main override
-        if: ${{ inputs.deploy_source == 'main_branch' }}
+          # Main mode carries no artifact identity; a request that does is not the
+          # one this step knows how to satisfy.
+          python3 - "$PROOF_PATH" <<'CHECK'
+          import json, sys
+          request = json.load(open(sys.argv[1]))["request"]
+          if request["deploy_source"] != "main_branch":
+              raise SystemExit("resolved source changed under us")
+          if request.get("artifacts"):
+              raise SystemExit("main-mode request must carry no artifacts")
+          for field in (
+              "package_name", "package_type", "package_version",
+              "package_source_sha", "release_manifest_package",
+              "release_manifest_sha256",
+          ):
+              if request.get(field) is not None:
+                  raise SystemExit(f"main-mode request must leave {field} null")
+          CHECK
+
+          # The runner is root on the deploy host; this is the fixed argv the sudoers
+          # grant allows and the only accepted entry point for a netbox-proxbox
+          # production deploy. The request id and digest are necessarily visible in
+          # this process's arguments -- that is the host's contract, not a choice
+          # made here.
+          /opt/nmulticloud/deploy/bin/proxbox-package-deploy deploy-main \
+            netbox-proxbox "$WORKFLOW_SHA" "$NMS_REQUEST_ID" "$PROOF_PATH" \
+            "$NMS_REQUEST_SHA256" "$GITHUB_RUN_ID"
+
+          echo "DEPLOY_COMPLETED=true" >> "$GITHUB_ENV"
+
+      - name: Reject a package deploy until the release manifest is published
+        if: ${{ env.RESOLVED_SOURCE == 'latest_package' }}
         run: |
           set -euo pipefail
-          /opt/nmulticloud/deploy/bin/deploy-netbox-plugin netbox-proxbox "$WORKFLOW_SHA"
+          cat >&2 <<'MSG'
+          latest_package cannot be deployed yet.
+
+          scripts/release_artifacts.py fetch-gitea requires a generic
+          <package>-release-manifest/<version> package, and publish-gitea.yml has
+          never produced one -- no version has it, so this path would fail at "Bind
+          exact package artifacts" whichever version is chosen.
+
+          Publish the manifest from the release workflow first (see the follow-up on
+          netbox-proxbox issue #362). Until then use main_branch, which needs none.
+          MSG
+          exit 1
+
+      - name: Require that something was actually deployed
+        run: |
+          set -euo pipefail
+          # Belt and braces against a silent no-op: the health check below would
+          # happily pass against the NetBox already running, so a job that deployed
+          # nothing must not be allowed to look green.
+          test "${DEPLOY_COMPLETED:-}" = "true"
 
       - name: Require healthy production status
-        run: /opt/nmulticloud/deploy/bin/status-app netbox
+        run: |
+          set -euo pipefail
+          # status-app prints service state and suppresses their exit codes, so
+          # calling it bare asserts nothing. Proxbox sync runs on netbox-rq --
+          # a deploy that leaves the worker stopped breaks the very feature
+          # being shipped while the web endpoint looks fine.
+          report="$(/opt/nmulticloud/deploy/bin/status-app netbox)"
+          printf '%s\n' "$report"
+          # The report reads `systemd=netbox.service:active,netbox-rq.service:...`,
+          # so the first entry is preceded by `=` rather than a comma. Anchoring
+          # on `(^|,)` alone silently fails every deploy.
+          printf '%s' "$report" | grep -Eq '[=,]netbox\.service:active(,|$)'
+          printf '%s' "$report" | grep -Eq '[=,]netbox-rq\.service:active(,|$)'
 
       - name: Publish host-issued successful-deployment attestation
-        if: ${{ inputs.deploy_source == 'latest_package' }}
+        if: ${{ env.RESOLVED_SOURCE == 'latest_package' }}
         env:
           GITEA_PACKAGE_TOKEN: ${{ secrets.PKG_TOKEN }}
         run: |
@@ -122,3 +250,31 @@ jobs:
       - name: Report failure status
         if: failure()
         run: /opt/nmulticloud/deploy/bin/status-app netbox
+
+      - name: Destroy the claimed proof
+        if: always()
+        run: |
+          set -euo pipefail
+          # Runs on every exit path -- claim failure, an unusable source,
+          # cancellation between steps -- because a signed authorization left
+          # in RUNNER_TEMP on a root self-hosted runner is readable by any
+          # later root job for the remainder of its lifetime. The path is
+          # recomputed rather than trusted so a half-written GITHUB_ENV cannot
+          # leave it behind, and the deleted target is confined to this run.
+          # Validate the inputs rather than the string built from them: a
+          # `case` against the same prefix used to construct the path always
+          # matches and proves nothing.
+          test -n "${RUNNER_TEMP:-}"
+          case "$RUNNER_TEMP" in /?*) ;; *) echo "RUNNER_TEMP is not absolute" >&2; exit 1 ;; esac
+          printf '%s' "$GITHUB_RUN_ID" | grep -Eq '^[1-9][0-9]*$'
+          printf '%s' "$GITHUB_RUN_ATTEMPT" | grep -Eq '^[1-9][0-9]*$'
+          runner_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
+          test "$runner_temp" != "/"
+          proof_root="${runner_temp}/nms-proof-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          if [ -e "$proof_root" ]; then
+            # Confirm the resolved parent really is RUNNER_TEMP before removing
+            # anything, so a non-canonical value cannot widen the target.
+            test "$(cd "$(dirname "$proof_root")" && pwd -P)" = "$runner_temp"
+            rm -rf -- "$proof_root"
+          fi
+          test ! -e "$proof_root"
