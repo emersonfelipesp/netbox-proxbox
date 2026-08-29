@@ -280,7 +280,7 @@ def test_declared_bounds_have_the_expected_literal_values() -> None:
     assert EXPERIMENTAL_MAX_NETBOX_VERSION == "4.7.0"
     assert PLUGIN_MIN_VERSION == STABLE_MIN_NETBOX_VERSION
     assert PLUGIN_MAX_VERSION == EXPERIMENTAL_MAX_NETBOX_VERSION
-    assert CONTRACT_VERSION == "netbox-compat-v3"
+    assert CONTRACT_VERSION == "netbox-compat-v4"
 
 
 # ---------------------------------------------------------------------------

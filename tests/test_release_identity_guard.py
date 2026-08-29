@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import importlib.util
 import sys
 import types
-import importlib.util
 from collections import Counter
 from pathlib import Path
 
@@ -113,6 +113,82 @@ def test_exact_beta_without_local_overlay_is_accepted(
     write_release(tmp_path)
     install_release_modules(monkeypatch, tmp_path)
     validate_held_netbox_release_identity(HeldPluginConfig, "4.7.0")
+
+
+def test_build_appended_loader_version_is_admitted(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    write_release(tmp_path, local={"build": "Docker-3.4.0"})
+    install_release_modules(monkeypatch, tmp_path)
+
+    validate_held_netbox_release_identity(HeldPluginConfig, "4.7.0-beta2-Docker-3.4.0")
+
+
+def test_build_appended_loader_version_must_match_local_metadata(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    write_release(tmp_path, local={"build": "Docker-3.4.0"})
+    install_release_modules(monkeypatch, tmp_path)
+
+    with pytest.raises(IncompatiblePluginError, match="cannot match NetBox loader"):
+        validate_held_netbox_release_identity(
+            HeldPluginConfig, "4.7.0-beta2-Docker-3.4.1"
+        )
+
+
+@pytest.mark.parametrize("loader_version", ["4.7", "4.7.0", "4.7b2", "4.7.0-beta2"])
+def test_equivalent_beta2_loader_versions_are_admitted(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    loader_version: str,
+) -> None:
+    write_release(tmp_path)
+    install_release_modules(monkeypatch, tmp_path)
+
+    validate_held_netbox_release_identity(HeldPluginConfig, loader_version)
+
+
+@pytest.mark.parametrize(
+    "loader_version",
+    ["4.7b1", "4.7rc1", "4.7.dev1", "4.7.0-beta1", "4.7.0.post1"],
+)
+def test_conflicting_47_loader_identity_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    loader_version: str,
+) -> None:
+    write_release(tmp_path)
+    install_release_modules(monkeypatch, tmp_path)
+
+    with pytest.raises(IncompatiblePluginError, match="approved only"):
+        validate_held_netbox_release_identity(HeldPluginConfig, loader_version)
+
+
+@pytest.mark.parametrize("loader_version", ["4.7.0-beta2", "4.7.0b2", "4.7.0rc1"])
+def test_prerelease_loader_versions_cannot_bypass_identity_validation(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    loader_version: str,
+) -> None:
+    write_release(tmp_path, designation="beta1")
+    install_release_modules(monkeypatch, tmp_path)
+
+    with pytest.raises(IncompatiblePluginError, match="approved only"):
+        validate_held_netbox_release_identity(HeldPluginConfig, loader_version)
+
+
+def test_malformed_47_loader_version_fails_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    core = types.ModuleType("core")
+    core_exceptions = types.ModuleType("core.exceptions")
+    core_exceptions.IncompatiblePluginError = IncompatiblePluginError
+    core.exceptions = core_exceptions
+    monkeypatch.setitem(sys.modules, "core", core)
+    monkeypatch.setitem(sys.modules, "core.exceptions", core_exceptions)
+
+    with pytest.raises(IncompatiblePluginError, match="malformed NetBox 4.7"):
+        validate_held_netbox_release_identity(HeldPluginConfig, "4.7-not-a-version")
 
 
 @pytest.mark.parametrize("designation", [None, "beta1", "beta3", "rc1"])
