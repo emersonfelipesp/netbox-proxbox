@@ -362,12 +362,12 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 > skips only endpoints whose backend row is already **current** — for those the
 > push is a no-op refresh, so skipping costs nothing at all.
 > `backend_holds_proxmox_endpoint()` decides, and "held" alone is not the
-> question: it locates the row by `proxmox_backend_name()` (the same name the
-> push itself matches on, so the check cannot drift from
-> `sync_proxmox_endpoint_to_backend()`) and then requires
-> `_proxmox_row_is_current()` — same resolved connection target, same `username` /
-> `access_methods` / `verify_ssl` / `timeout` / `max_retries` /
-> `retry_backoff`. Skipping a **drifted** row would preserve
+> question: it locates exactly one row by the immutable `(nb:<pk>)` suffix (the
+> same identity the push itself matches on; mutable display-name prefixes never
+> select a row) and then requires `_proxmox_row_is_current()` — same resolved
+> connection target, same `enabled` / `allow_packer_template_builds` /
+> `username` / `access_methods` / `verify_ssl` / `timeout` / `max_retries` /
+> `retry_backoff`, with missing policy keys treated as stale. Skipping a **drifted** row would preserve
 > exactly the stale row `resolve_backend_endpoint_ids()` then refuses to sync
 > against, turning a merely slow backend into a blocked endpoint, so a drifted row
 > is pushed regardless of the budget. The public proxbox-api list schema returns
@@ -545,6 +545,18 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 - [`websocket_client.py`](./websocket_client.py): long-lived WebSocket client, message queue, and HTTP view used to stream backend messages into NetBox pages. The view resolves only enabled FastAPI rows and returns before URL/header construction for disabled inventory.
 - [`signals.py`](./signals.py): Django signal handlers that authenticate an
   already-persisted FastAPIEndpoint key before downstream endpoint delivery.
+  ProxmoxEndpoint delivery is registered with `transaction.on_commit()` and
+  re-reads the committed row before any backend access, so an outer API
+  transaction rollback cannot leak a grant. Each successful push records the
+  effective Packer grant in the internal
+  `packer_template_builds_backend_authorized` field without re-entering
+  `post_save`; failed revocation preserves the previous true value and keeps
+  deletion blocked.
+  A disabled ProxmoxEndpoint save is the one disabled-row exception: the
+  receiver may use that trusted backend context only for a credential-free
+  policy update on an existing proxbox-api row, setting `enabled=False` and
+  `allow_packer_template_builds=False`; it never creates the row or pushes
+  Proxmox credentials.
   Explicit-candidate adoption belongs to `FastAPIEndpoint.save()`; that model
   schedules pending rows through `transaction.on_commit` into bounded
   `services.endpoint_autoconfiguration`, which treats the exact

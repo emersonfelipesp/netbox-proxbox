@@ -11,7 +11,8 @@ Coverage:
 2. Source contracts for the optional ``netbox_proxbox.integrations.packer``
    helper (detection against ``settings.PLUGINS`` + guarded add-URL).
 3. Template contracts — three filterable category groups and a create button
-   that is disabled *with a working tooltip* when netbox-packer is absent.
+   that is disabled *with a working tooltip* unless netbox-packer is installed
+   and both endpoint write authorizations are enabled.
 4. Behavior of the cloud-init classification / normalization logic (mirrored,
    as the view module cannot be imported without a full NetBox environment).
 
@@ -174,6 +175,15 @@ def test_view_degrades_gracefully(view_src):
     assert "packer_add_url" in view_src
 
 
+def test_view_requires_both_endpoint_write_authorizations(view_src):
+    assert 'context["enabled"]' in view_src
+    assert 'context["allow_writes"]' in view_src
+    assert 'context["allow_packer_template_builds"]' in view_src
+    assert 'context["packer_build_authorized"]' in view_src
+    assert 'context["packer_build_disabled_reason"]' in view_src
+    assert "gettext as _" in view_src
+
+
 # ── integrations/packer.py contracts ─────────────────────────────────────────
 
 
@@ -208,8 +218,10 @@ def test_template_has_category_filter(template_src):
         assert f'data-filter="{f}"' in template_src
 
 
-def test_template_create_button_enabled_when_packer_installed(template_src):
-    assert "{% if packer_installed and packer_add_url %}" in template_src
+def test_template_create_button_enabled_only_when_endpoint_authorizes_packer(
+    template_src,
+):
+    assert "{% if packer_build_authorized %}" in template_src
     assert 'href="{{ packer_add_url }}"' in template_src
 
 
@@ -217,9 +229,21 @@ def test_template_disabled_button_has_working_tooltip(template_src):
     # Bootstrap tooltips do not fire on a disabled button — the tooltip must live
     # on a wrapping element. This is the behavior the task explicitly requires.
     assert 'data-bs-toggle="tooltip"' in template_src
-    assert "netbox-packer is not installed" in template_src
+    assert 'title="{{ packer_build_disabled_reason }}"' in template_src
     # The disabled button itself must still be present inside the tooltip wrapper.
     assert "disabled" in template_src
+
+
+def test_endpoint_detail_displays_explicit_packer_authorization():
+    detail_template = (
+        REPO_ROOT
+        / "netbox_proxbox"
+        / "templates"
+        / "netbox_proxbox"
+        / "proxmoxendpoint.html"
+    ).read_text(encoding="utf-8")
+    assert "object.allow_packer_template_builds" in detail_template
+    assert 'trans "netbox-packer template builds"' in detail_template
 
 
 # ── Behavior: classification / normalization (mirrors the view helpers) ───────

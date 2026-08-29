@@ -181,6 +181,26 @@
                             </td>
                         </tr>
                         <tr>
+                            <th scope="row">{% trans "netbox-packer template builds" %}</th>
+                            <td>
+                                {% if object.allow_packer_template_builds %}
+                                    <span class="badge text-bg-warning">{% trans "Explicitly allowed" %}</span>
+                                {% else %}
+                                    <span class="badge text-bg-secondary">{% trans "Disabled" %}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Backend-confirmed Packer grant" %}</th>
+                            <td>
+                                {% if object.packer_template_builds_backend_authorized %}
+                                    <span class="badge text-bg-danger">{% trans "Authorized — revoke before deletion" %}</span>
+                                {% else %}
+                                    <span class="badge text-bg-success">{% trans "Revoked" %}</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        <tr>
                             <th scope="row">{% trans "Access method" %}</th>
                             <td>
                                 {% if object.access_methods == 'api_ssh' %}

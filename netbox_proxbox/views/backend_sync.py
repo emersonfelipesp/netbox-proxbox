@@ -66,9 +66,9 @@ def backend_holds_proxmox_endpoint(
     ``resolve_backend_endpoint_ids()`` then refuses to sync against, turning a
     merely slow backend into a blocked endpoint.
 
-    The row is located by ``proxmox_backend_name()`` — the same name the push
-    itself matches on, so this check and ``sync_proxmox_endpoint_to_backend()``
-    cannot drift apart — and then compared by ``_proxmox_row_is_current()``.
+    The row is located by the immutable ``(nb:<pk>)`` suffix — the same identity
+    the push itself matches on — and then compared by
+    ``_proxmox_row_is_current()``.
 
     ``None`` (the listing call itself failed) is treated as *not held*: unknown
     must never be the reason an endpoint is skipped into a fatal error.
@@ -121,6 +121,17 @@ def _int_or_none(value: object) -> int | None:
         return None
 
 
+def _packer_template_builds_effectively_allowed(endpoint: ProxmoxEndpoint) -> bool:
+    """Return the narrow backend grant only when every NetBox gate is open."""
+    return all(
+        (
+            bool(getattr(endpoint, "enabled", True)),
+            bool(getattr(endpoint, "allow_writes", False)),
+            bool(getattr(endpoint, "allow_packer_template_builds", False)),
+        )
+    )
+
+
 def _proxmox_backend_payload(endpoint: ProxmoxEndpoint) -> dict[str, object]:
     """JSON body for POST/PUT ``/proxmox/endpoints`` from a ``ProxmoxEndpoint`` row."""
     tuning = endpoint.effective_connection_tuning()
@@ -138,11 +149,18 @@ def _proxmox_backend_payload(endpoint: ProxmoxEndpoint) -> dict[str, object]:
         "retry_backoff": float(tuning["retry_backoff"]),
         "token_name": (getattr(endpoint, "token_name", "") or "").strip() or None,
         "token_value": (getattr(endpoint, "token_value", "") or "").strip() or None,
+        "enabled": bool(getattr(endpoint, "enabled", True)),
+        # ``allow_writes`` remains a deliberate manual trust boundary on the
+        # backend and is not propagated. Only the effective endpoint-enabled +
+        # broad-write + narrow-packer result crosses this wire, so proxbox-api
+        # can independently require the same operator capability at its final
+        # template-image write boundary without NetBox granting its broad gate.
+        "allow_packer_template_builds": (
+            _packer_template_builds_effectively_allowed(endpoint)
+        ),
         # Push the transport access method so the proxbox-api backend can gate
-        # its own SSH paths (cloud-image build / Azure VHD import). Unlike
-        # allow_writes (a deliberate manual trust boundary), access_methods only
-        # permits the SSH transport and never grants writes, so it is safe to
-        # propagate automatically.
+        # its own SSH paths (cloud-image build / Azure VHD import). It permits a
+        # transport only and never grants writes.
         "access_methods": (getattr(endpoint, "access_methods", "") or "api").strip()
         or "api",
         **_related_object_metadata("site", getattr(endpoint, "site", None)),
@@ -158,6 +176,7 @@ def sync_proxmox_endpoint_to_backend(
     backend_verify_ssl: bool = True,
     timeout: int = BACKEND_ENDPOINT_PUSH_TIMEOUT,
     existing_endpoints: list[dict[str, object]] | None = None,
+    allow_disabled_policy_update: bool = False,
 ) -> tuple[bool, str | None, int | None]:
     """Ensure the selected NetBox Proxmox endpoint exists in proxbox-api backend DB.
 
@@ -167,12 +186,11 @@ def sync_proxmox_endpoint_to_backend(
     that already scales with endpoint count.
     """
     disabled_detail = _disabled_endpoint_detail(endpoint)
-    if disabled_detail:
+    if disabled_detail and not allow_disabled_policy_update:
         return False, disabled_detail, None
 
     list_url = f"{base_url}/proxmox/endpoints"
     headers = auth_headers or {}
-    payload = _proxmox_backend_payload(endpoint)
 
     try:
         if existing_endpoints is not None:
@@ -202,15 +220,69 @@ def sync_proxmox_endpoint_to_backend(
                 None,
             )
 
-        endpoint_name = str(payload["name"])
-        existing = next(
-            (
-                item
-                for item in endpoints
-                if isinstance(item, dict) and item.get("name") == endpoint_name
-            ),
-            None,
-        )
+        matching_rows = _backend_rows_for_endpoint(endpoints, endpoint)
+        if len(matching_rows) > 1:
+            # A mutable display name used to be part of row identity, so legacy
+            # rename races can leave duplicates for one NetBox pk. Never choose
+            # one arbitrarily: best-effort revoke every identifiable copy before
+            # refusing, even when an earlier row rejects its update.
+            revocation_failures: list[str] = []
+            for row in matching_rows:
+                row_id = row.get("id")
+                if row_id is None:
+                    continue
+                try:
+                    response = requests.put(
+                        f"{list_url}/{row_id}",
+                        json={
+                            "enabled": False,
+                            "allow_packer_template_builds": False,
+                        },
+                        headers=headers,
+                        verify=backend_verify_ssl,
+                        timeout=timeout,
+                        allow_redirects=False,
+                    )
+                    response.raise_for_status()
+                except requests.exceptions.RequestException as exc:
+                    detail, _ = extract_backend_error_detail(exc)
+                    revocation_failures.append(f"backend row {row_id}: {detail}")
+            failure_detail = (
+                " Revocation failed for " + "; ".join(revocation_failures) + "."
+                if revocation_failures
+                else " All identifiable rows were disabled."
+            )
+            return (
+                False,
+                f"Multiple ProxBox backend rows claim immutable identity nb:{endpoint.pk}; "
+                f"every identifiable row was attempted and operator cleanup is required."
+                f"{failure_detail}",
+                None,
+            )
+        existing = matching_rows[0] if matching_rows else None
+
+        if disabled_detail:
+            if not existing or existing.get("id") is None:
+                # Disabling an endpoint may revoke an existing backend grant,
+                # but must never create a new backend row or push credentials.
+                _record_confirmed_packer_template_authorization(endpoint, False)
+                return True, None, None
+            response = requests.put(
+                f"{list_url}/{existing['id']}",
+                json={
+                    "enabled": False,
+                    "allow_packer_template_builds": False,
+                },
+                headers=headers,
+                verify=backend_verify_ssl,
+                timeout=timeout,
+                allow_redirects=False,
+            )
+            response.raise_for_status()
+            _record_confirmed_packer_template_authorization(endpoint, False)
+            return True, None, None
+
+        payload = _proxmox_backend_payload(endpoint)
 
         if existing and existing.get("id") is not None:
             response = requests.put(
@@ -233,6 +305,10 @@ def sync_proxmox_endpoint_to_backend(
 
         response.raise_for_status()
         _record_pushed_proxmox_credential_fingerprint(endpoint, payload)
+        _record_confirmed_packer_template_authorization(
+            endpoint,
+            bool(payload["enabled"] and payload["allow_packer_template_builds"]),
+        )
         return True, None, None
 
     except requests.exceptions.RequestException as exc:
@@ -391,7 +467,7 @@ def _proxmox_targets_match(endpoint: ProxmoxEndpoint, row: dict[str, object]) ->
 def _proxmox_row_is_current(endpoint: ProxmoxEndpoint, row: dict[str, object]) -> bool:
     """Return ``True`` when a backend row already reflects what a push would send.
 
-    Compares the resolved connection target first, then the six pushed fields
+    Compares the resolved connection target first, then the eight pushed fields
     the backend both stores and returns, and finally the **credentials**, which
     it does not. The public proxbox-api response schema normalises request tuning
     as ``int`` / ``int`` / ``float``, matching this module's payload, so timeout,
@@ -416,9 +492,17 @@ def _proxmox_row_is_current(endpoint: ProxmoxEndpoint, row: dict[str, object]) -
     if not _proxmox_targets_match(endpoint, row):
         return False
     payload = _proxmox_backend_payload(endpoint)
+    if "enabled" not in row or "allow_packer_template_builds" not in row:
+        return False
+    if bool(row.get("enabled")) != bool(payload.get("enabled")):
+        return False
     for key in ("username", "access_methods"):
         if str(row.get(key) or "").strip() != str(payload.get(key) or "").strip():
             return False
+    if bool(row.get("allow_packer_template_builds")) != bool(
+        payload.get("allow_packer_template_builds")
+    ):
+        return False
     if bool(row.get("verify_ssl")) != bool(payload.get("verify_ssl")):
         return False
     for key in ("timeout", "max_retries", "retry_backoff"):
@@ -432,21 +516,28 @@ def _backend_row_for_endpoint(
 ) -> dict[str, object] | None:
     """Return the backend row stored under this endpoint's ``(nb:<pk>)`` name.
 
-    Unlike the NetBox endpoint — a singleton the backend updates by position,
-    whose name is free text — a Proxmox row's name embeds the plugin primary key
-    (see :func:`proxmox_backend_name`), so *which* row belongs to this endpoint
-    is never in doubt. The open question is whether that row is still **fresh**,
-    which is what the target/currency checks above answer.
+    A Proxmox row's mutable display name embeds the immutable plugin primary-key
+    suffix. Exactly one claim is required; duplicates are ambiguous and fail
+    closed. Target/currency checks separately decide whether that row is fresh.
     """
-    target_name = proxmox_backend_name(endpoint)
-    return next(
-        (
-            item
-            for item in endpoints
-            if isinstance(item, dict) and item.get("name") == target_name
-        ),
-        None,
-    )
+    matching_rows = _backend_rows_for_endpoint(endpoints, endpoint)
+    return matching_rows[0] if len(matching_rows) == 1 else None
+
+
+def _backend_rows_for_endpoint(
+    endpoints: list[dict[str, object]], endpoint: ProxmoxEndpoint
+) -> list[dict[str, object]]:
+    """Return rows claiming the endpoint's immutable ``nb:<pk>`` suffix."""
+    endpoint_id = getattr(endpoint, "pk", getattr(endpoint, "id", None))
+    if endpoint_id is None:
+        return []
+    suffix = f"(nb:{endpoint_id})"
+    return [
+        item
+        for item in endpoints
+        if isinstance(item, dict)
+        and str(item.get("name") or "").strip().endswith(suffix)
+    ]
 
 
 def _resolve_backend_row_id(
@@ -463,7 +554,13 @@ def _resolve_backend_row_id(
     connection target is checked too and a mismatch refuses the id.
     """
     target_name = proxmox_backend_name(endpoint)
-    row = _backend_row_for_endpoint(endpoints, endpoint)
+    matching_rows = _backend_rows_for_endpoint(endpoints, endpoint)
+    if len(matching_rows) > 1:
+        return None, (
+            f"Multiple ProxBox backend rows claim immutable identity nb:{endpoint.pk}; "
+            "refusing to choose one."
+        )
+    row = matching_rows[0] if matching_rows else None
     if row is None:
         return None, (
             f"Proxmox endpoint '{target_name}' is not registered on the ProxBox "
@@ -1041,6 +1138,37 @@ def proxmox_endpoint_credentials_rotated_since_last_push(
     return not hmac.compare_digest(
         stored, proxmox_endpoint_credential_fingerprint(endpoint)
     )
+
+
+def _record_confirmed_packer_template_authorization(
+    endpoint: ProxmoxEndpoint,
+    authorized: bool,
+) -> None:
+    """Record the effective narrow grant from any successful backend push.
+
+    Every caller of ``sync_proxmox_endpoint_to_backend()`` owns this state, not
+    only the post-save signal: preflight can be the first successful delivery
+    after an outage. QuerySet update avoids re-entering the post-save receiver.
+    """
+    pk = getattr(endpoint, "pk", None)
+    manager = getattr(type(endpoint), "objects", None)
+    if pk is None or manager is None:
+        endpoint.packer_template_builds_backend_authorized = authorized
+        return
+    try:
+        manager.filter(pk=pk).update(
+            packer_template_builds_backend_authorized=authorized
+        )
+    except DatabaseError as exc:
+        # Includes ProgrammingError during a rolling upgrade before 0082 lands.
+        logger.warning(
+            "Could not record backend-confirmed Packer authorization for Proxmox "
+            "endpoint %s: %s",
+            pk,
+            exc,
+        )
+        return
+    endpoint.packer_template_builds_backend_authorized = authorized
 
 
 def _record_pushed_proxmox_credential_fingerprint(

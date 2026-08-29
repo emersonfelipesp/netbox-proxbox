@@ -196,6 +196,9 @@ sequenceDiagram
     Op->>NB: Save ProxmoxEndpoint
     NB->>PX_EP: ORM save()
     PX_EP-->>Sig: post_save fired
+    Sig->>Sig: Register transaction.on_commit callback
+    NB-->>Sig: Commit transaction
+    Sig->>PX_EP: Re-read row by primary key
     Sig->>Sig: Resolve FastAPIEndpoint (singleton)
     Sig->>Sig: Resolve an enabled FastAPIEndpoint with a stored token
     Sig->>API: GET bootstrap status, then authenticated GET /auth/keys
@@ -211,11 +214,24 @@ sequenceDiagram
         Sig->>API: PUT /proxmox/endpoints/{id} { name, ip, port, credentials }
         API-->>Sig: 200 OK
     end
+    Sig->>PX_EP: Record last confirmed effective Packer grant
     Note over API: Password/token encrypted at rest with Fernet
 ```
 
-The endpoint name uses the stable format `"{name} (nb:{pk})"` so that the same Proxmox cluster
-registered under different NetBox PKs is treated as a distinct backend entry.
+The immutable identity is the exact `(nb:{pk})` suffix; the display-name prefix
+may change without creating a second row. If a legacy race produced multiple
+rows claiming one suffix, synchronization attempts the credential-free
+`enabled=false`, `allow_packer_template_builds=false` revocation on every
+identifiable duplicate even when an earlier PUT fails, then refuses the sync
+and reports every failed row for operator cleanup.
+
+`packer_template_builds_backend_authorized` is not desired configuration. It is
+the last effective narrow grant successfully confirmed by this push. A failed
+revocation deliberately leaves it true, which blocks local/model/UI/REST
+deletion and local-only bulk toggles until a later normal save confirms the
+backend grant is false. Because both the grant and revocation push start only
+from `transaction.on_commit()` and re-read the row, rollback cannot leave
+proxbox-api with authority that never existed in committed NetBox state.
 
 ---
 
@@ -566,11 +582,12 @@ flowchart TD
     be the reason an endpoint is skipped into a fatal error.
 
     "Held" is not sufficient on its own, either. `backend_holds_proxmox_endpoint()` locates
-    the row by `proxmox_backend_name()` — the same name the push itself matches on, so the
-    check cannot drift from `sync_proxmox_endpoint_to_backend()` — and then requires
+    exactly one row by the immutable `(nb:<pk>)` suffix — the same identity the push itself
+    matches on; duplicate claims fail closed — and then requires
     `_proxmox_row_is_current()`: the resolved connection target must match, and so must the
-    three pushed fields the backend both stores and returns (`username`, `access_methods`,
-    `verify_ssl`). Skipping a **drifted** row would preserve exactly the stale row the
+    five policy/connection fields the backend both stores and returns (`enabled`,
+    `allow_packer_template_builds`, `username`, `access_methods`, `verify_ssl`). Missing
+    policy keys are stale rather than equivalent to false. Skipping a **drifted** row would preserve exactly the stale row the
     resolvers below then refuse to sync against, turning a merely slow backend into a
     blocked endpoint. The same check covers `timeout`, `max_retries`, and
     `retry_backoff`: proxbox-api's public list schema returns those as
@@ -596,8 +613,9 @@ flowchart TD
     nothing about where the row now points.
 
     `resolve_backend_endpoint_ids()` and `resolve_backend_endpoint_id()` therefore both route
-    through `_resolve_backend_row_id()`, which locates the row by `proxmox_backend_name()`
-    and then confirms it still dials the same service. Identity is the **resolved connection
+    through `_resolve_backend_row_id()`, which requires exactly one row ending in the
+    immutable `(nb:<pk>)` suffix; mutable display-name prefixes are ignored and duplicate
+    claims fail closed. It then confirms the row still dials the same service. Identity is the **resolved connection
     target** — `_proxmox_connection_target()` → `(domain or ip_address)` plus `port` — which
     mirrors proxbox-api's own `ProxmoxEndpoint.host` property (`return self.domain or
     self.ip_address`), exactly as on the NetBox side above. `port` is required on both sides:

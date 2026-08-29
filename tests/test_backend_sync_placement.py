@@ -9,6 +9,8 @@ from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 
+import pytest
+
 from tests.django_stubs import install_django_stubs
 
 
@@ -185,3 +187,100 @@ def test_proxmox_backend_payload_pushes_access_methods(monkeypatch) -> None:
 def test_proxmox_backend_payload_defaults_access_methods_to_api(monkeypatch) -> None:
     # Missing/blank access_methods falls back to "api" (API-only) in the payload.
     assert _payload_for_access_methods(monkeypatch, "")["access_methods"] == "api"
+
+
+@pytest.mark.parametrize(
+    ("enabled", "allow_writes", "allow_packer_template_builds", "expected"),
+    (
+        (True, True, True, True),
+        (True, True, False, False),
+        (True, False, True, False),
+        (False, True, True, False),
+    ),
+)
+def test_proxmox_backend_payload_pushes_only_effective_packer_authorization(
+    monkeypatch,
+    enabled: bool,
+    allow_writes: bool,
+    allow_packer_template_builds: bool,
+    expected: bool,
+) -> None:
+    backend_sync = _load_backend_sync_module(monkeypatch)
+    endpoint = SimpleNamespace(
+        pk=1,
+        name="PVE",
+        ip_address="10.0.0.10/32",
+        domain="pve.example.com",
+        port=8006,
+        username="root@pam",
+        password="secret",
+        verify_ssl=False,
+        token_name=None,
+        token_value=None,
+        access_methods="api_ssh",
+        enabled=enabled,
+        allow_writes=allow_writes,
+        allow_packer_template_builds=allow_packer_template_builds,
+        site=None,
+        tenant=None,
+        effective_connection_tuning=lambda: {
+            "timeout": 5,
+            "max_retries": 0,
+            "retry_backoff": Decimal("0.50"),
+        },
+    )
+
+    payload = backend_sync._proxmox_backend_payload(endpoint)
+    assert payload["enabled"] is enabled
+    assert payload["allow_packer_template_builds"] is expected
+    del endpoint.allow_packer_template_builds
+    assert (
+        backend_sync._proxmox_backend_payload(endpoint)["allow_packer_template_builds"]
+        is False
+    )
+
+
+def test_backend_currency_detects_packer_authorization_revocation(monkeypatch) -> None:
+    backend_sync = _load_backend_sync_module(monkeypatch)
+    endpoint = SimpleNamespace(
+        pk=1,
+        name="PVE",
+        ip_address="10.0.0.10/32",
+        domain="pve.example.com",
+        port=8006,
+        username="root@pam",
+        password="secret",
+        verify_ssl=False,
+        token_name=None,
+        token_value=None,
+        access_methods="api_ssh",
+        allow_packer_template_builds=False,
+        allow_writes=True,
+        enabled=True,
+        pushed_credential_fingerprint="",
+        site=None,
+        tenant=None,
+        effective_connection_tuning=lambda: {
+            "timeout": 5,
+            "max_retries": 0,
+            "retry_backoff": Decimal("0.50"),
+        },
+    )
+    payload = backend_sync._proxmox_backend_payload(endpoint)
+    backend_sync.proxmox_push_credentials_unchanged = lambda *_args: True
+    row = {
+        "name": backend_sync.proxmox_backend_name(endpoint),
+        "domain": "pve.example.com",
+        "ip_address": "10.0.0.10",
+        "port": 8006,
+        "username": "root@pam",
+        "enabled": True,
+        "verify_ssl": False,
+        "access_methods": "api_ssh",
+        "allow_packer_template_builds": True,
+        "timeout": payload["timeout"],
+        "max_retries": payload["max_retries"],
+        "retry_backoff": payload["retry_backoff"],
+    }
+
+    assert backend_sync._proxmox_row_is_current(endpoint, row) is False

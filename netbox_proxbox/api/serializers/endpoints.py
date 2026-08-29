@@ -93,6 +93,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     service_monitoring_last_success_at = serializers.DateTimeField(read_only=True)
     service_monitoring_last_status = serializers.CharField(read_only=True)
     service_monitoring_last_error = serializers.CharField(read_only=True)
+    packer_template_builds_backend_authorized = serializers.BooleanField(read_only=True)
     effective_rpc_enabled = serializers.SerializerMethodField(read_only=True)
 
     def get_effective_rpc_enabled(self, obj: ProxmoxEndpoint) -> bool:
@@ -144,6 +145,8 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "enable_tenant_tag_assignment",
             "enable_tenant_from_cluster",
             "allow_writes",
+            "allow_packer_template_builds",
+            "packer_template_builds_backend_authorized",
             "access_methods",
             *SYNC_MODE_FIELDS,
             *OVERWRITE_FIELDS,

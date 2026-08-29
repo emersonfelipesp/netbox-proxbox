@@ -7,7 +7,7 @@
     <div class="card">
       <div class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
         <h2 class="card-title mb-0">{% trans "Templates" %}</h2>
-        {% if packer_installed and packer_add_url %}
+        {% if packer_build_authorized %}
           <a href="{{ packer_add_url }}" class="btn btn-primary btn-sm">
             <i class="mdi mdi-plus-thick"></i> {% trans "Create Cloud-Init template image" %}
           </a>
@@ -15,7 +15,7 @@
           {# Bootstrap tooltips do not fire on a disabled button (pointer-events:none), #}
           {# so the tooltip lives on the wrapping span. #}
           <span class="d-inline-block" tabindex="0" data-bs-toggle="tooltip" data-bs-placement="left"
-                title="{% trans 'netbox-packer is not installed. Install the netbox-packer plugin to build Cloud-Init template images from here.' %}">
+                title="{{ packer_build_disabled_reason }}">
             <button type="button" class="btn btn-primary btn-sm disabled" tabindex="-1" aria-disabled="true" disabled
                     style="pointer-events: none;">
               <i class="mdi mdi-plus-thick"></i> {% trans "Create Cloud-Init template image" %}

@@ -1,6 +1,6 @@
 # Operations API
 
-This page covers four models that store Proxmox operational state in NetBox: scheduled backup routines, replication jobs, deletion requests, and apply jobs.
+This page covers four models that store Proxmox operational state in NetBox — scheduled backup routines, replication jobs, deletion requests, and apply jobs — plus the read-only **sync-jobs** listing, which is not a model at all but a filtered view of core's own job table.
 
 **BackupRoutine** and **Replication** are standard read/write models.
 
@@ -292,4 +292,97 @@ curl -H "Authorization: Token <token>" \
 ```bash
 curl -H "Authorization: Token <token>" \
      "http://netbox.example.com/api/plugins/proxbox/apply-jobs/?endpoint_id=1&limit=10"
+```
+
+---
+
+## Sync Jobs (Read-Only)
+
+The plugin has no job model of its own. A Proxbox sync is a **core NetBox
+`core.Job` row** whose `data` carries a `proxbox_sync` block, and
+`/api/core/jobs/` cannot filter on `data` — which is the only reliable way to
+recognise one, because a run scheduled with a custom `job_name` keeps that name
+verbatim and no name filter can find it.
+
+This endpoint is core's job list already narrowed to the plugin's own rows, with
+the filters that live inside `data` pushed into SQL.
+
+```
+GET    /api/plugins/proxbox/sync-jobs/
+GET    /api/plugins/proxbox/sync-jobs/{id}/
+```
+
+!!! warning "Write methods are blocked"
+    POST, PUT, PATCH, and DELETE return **HTTP 405 Method Not Allowed**.
+    Scheduling stays on `sync/schedule/` and cancelling on `jobs/{id}/cancel/`,
+    each with its own permission gate.
+
+Rows are serialised with core's own `JobSerializer`, so a sync job looks exactly
+like the same row on `/api/core/jobs/` and needs no second parser. Object
+permissions apply as usual: a caller sees the jobs `core.view_job` allows.
+
+### Filters
+
+Every filter from core's job API keeps working — `status` (multi-value), `name`
+and its lookups, `queue_name`, `user`, `object_type`, `object_id`, `id`,
+`interval`, `q`, `ordering`, and `created` / `scheduled` / `started` /
+`completed` with `__before` / `__after`. On top of those:
+
+| Filter | Matches |
+|---|---|
+| `sync_type` | Runs that included the stage. Repeatable. |
+| `proxmox_endpoint_id` | Runs that covered the endpoint. Repeatable. |
+| `cluster_id` | Runs covering the cluster, resolved through its endpoint. |
+| `node_id` | Runs covering the node, resolved through its endpoint. |
+| `netbox_vm_id` | Runs that targeted the virtual machine. |
+| `run_id` | Proxbox run identifier recorded in the parameters. |
+| `batch_object_type` | Batch object type recorded in the parameters. |
+| `errored` | Runs that failed **or** finished while recording an error. |
+
+Three of these carry semantics worth stating outright, because they decide
+whether full syncs show up in scoped queries. They are deliberately the same
+rules `nbx proxbox jobs` applies, so one question cannot get two different
+answers depending on who asks:
+
+- **An empty endpoint list means "every endpoint".** That is what the schedule
+  API stores when the caller names none, and such a run really did sync them
+  all — so it matches any `proxmox_endpoint_id`, `cluster_id`, or `node_id`.
+  The same holds when the key is absent or JSON `null`.
+- **A run recorded as `sync_types: ["all"]` covers every `sync_type`**, and so
+  does a run with no types recorded, whose documented default is `all`. The
+  legacy singular `sync_type` key is honoured for rows written before
+  `sync_types` existed.
+- **An empty VM list is not a wildcard.** A run that targeted no particular
+  virtual machine is not an answer to "which runs touched VM 199?".
+
+`errored` is broader than a failure status on purpose: a sync can finish
+`completed` while recording a stage error, and that is exactly the row an
+operator triaging a failure is looking for.
+
+### Log entries
+
+`log_entries` is **omitted from list responses**. It is unbounded — a single
+full-sync row can reach 130 KB, and a page of them is most of the payload.
+Ask for it explicitly with `?include_log_entries=true`; the detail route always
+returns it.
+
+**Example — failed syncs for one cluster in the last week:**
+
+```bash
+curl -H "Authorization: Token <token>" \
+     "http://netbox.example.com/api/plugins/proxbox/sync-jobs/?cluster_id=3&errored=true&created__after=2026-08-22"
+```
+
+**Example — every storage sync that touched one endpoint:**
+
+```bash
+curl -H "Authorization: Token <token>" \
+     "http://netbox.example.com/api/plugins/proxbox/sync-jobs/?proxmox_endpoint_id=5&sync_type=storage"
+```
+
+**Example — one job in full, with its log:**
+
+```bash
+curl -H "Authorization: Token <token>" \
+     "http://netbox.example.com/api/plugins/proxbox/sync-jobs/24422/"
 ```

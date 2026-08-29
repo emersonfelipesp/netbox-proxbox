@@ -210,10 +210,9 @@ def test_create_view_wired_into_views_package():
 
 def test_templates_tab_context_exposes_write_gate_and_create_url():
     tab_src = TAB_VIEW_PATH.read_text(encoding="utf-8")
-    assert (
-        'context["allow_writes"] = bool(getattr(instance, "allow_writes", False))'
-        in tab_src
-    )
+    assert 'allow_writes = bool(getattr(instance, "allow_writes", False))' in tab_src
+    assert 'context["allow_writes"] = allow_writes' in tab_src
+    assert 'context["allow_packer_template_builds"]' in tab_src
     assert "proxmoxendpoint_create_instance" in tab_src
 
 

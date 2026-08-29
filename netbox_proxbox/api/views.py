@@ -9,6 +9,7 @@ from netbox.api.authentication import IsAuthenticatedOrLoginNotRequired
 from netbox.api.viewsets import NetBoxModelViewSet
 from rest_framework import status as drf_status
 from rest_framework.decorators import action
+from rest_framework.exceptions import APIException
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
@@ -95,6 +96,11 @@ from .serializers import (
 from netbox_proxbox.api.build_pve_template import (
     build_cloud_image_pipeline_via_backend,
     build_pve_template_via_backend,
+)
+from netbox_proxbox.api.template_build_authorization import (
+    TemplateBuildAuthorizationError,
+    require_template_build_authorization,
+    resolve_authorized_backend_endpoint_id,
 )
 from netbox_proxbox.api.mcp_bridge import (
     build_mcp_bridge_manifest,
@@ -635,6 +641,24 @@ class ProxboxClusterTypeSyncStateViewSet(
     filterset_class = filtersets.ProxboxClusterTypeSyncStateFilterSet
 
 
+class _PackerTemplateBuildDeleteConflict(APIException):
+    """Stable API response while local or confirmed backend authority remains."""
+
+    status_code = drf_status.HTTP_409_CONFLICT
+    default_code = "packer_template_build_authorization_active"
+
+
+class _PackerTemplateBuildActionPermission(BasePermission):
+    """Require the explicit operational permission before endpoint lookup."""
+
+    def has_permission(self, request: Request, view: object) -> bool:  # type: ignore[override]
+        del view
+        return bool(
+            request.user.is_authenticated
+            and request.user.has_perm(permission_run_proxmox_action())
+        )
+
+
 class ProxmoxEndpointViewSet(NetBoxModelViewSet):
     """REST API for Proxmox VE API endpoint credentials and targets."""
 
@@ -644,10 +668,45 @@ class ProxmoxEndpointViewSet(NetBoxModelViewSet):
     serializer_class = ProxmoxEndpointSerializer
     filterset_class = filtersets.ProxmoxEndpointFilterSet
 
+    @staticmethod
+    def _template_build_payload(
+        request: Request,
+        endpoint: models.ProxmoxEndpoint,
+    ) -> tuple[dict[str, object] | None, Response | None]:
+        """Validate local authority and translate NetBox pk to backend identity."""
+        try:
+            require_template_build_authorization(request.user, endpoint)
+        except TemplateBuildAuthorizationError as exc:
+            return None, Response({"detail": exc.detail}, status=exc.status_code)
+
+        serializer = PVETemplateBuildRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            backend_endpoint_id = resolve_authorized_backend_endpoint_id(endpoint)
+        except TemplateBuildAuthorizationError as exc:
+            return None, Response({"detail": exc.detail}, status=exc.status_code)
+
+        payload: dict[str, object] = dict(serializer.validated_data)
+        payload["endpoint_id"] = backend_endpoint_id
+        return payload, None
+
+    def perform_destroy(self, instance: models.ProxmoxEndpoint) -> None:
+        """Translate the model's revocation invariant to a stable REST conflict."""
+        if (
+            instance.allow_packer_template_builds
+            or instance.packer_template_builds_backend_authorized
+        ):
+            raise _PackerTemplateBuildDeleteConflict(
+                "Revoke netbox-packer template builds and wait for confirmed "
+                "proxbox-api revocation before deleting this endpoint."
+            )
+        super().perform_destroy(instance)
+
     @extend_schema(
         request=PVETemplateBuildRequestSerializer,
         responses={
             201: PVETemplateBuildResponseSerializer,
+            403: OpenApiTypes.OBJECT,
             502: OpenApiTypes.OBJECT,
             503: OpenApiTypes.OBJECT,
         },
@@ -658,22 +717,23 @@ class ProxmoxEndpointViewSet(NetBoxModelViewSet):
         methods=["post"],
         url_path="build-pve-template",
         url_name="build-pve-template",
-        permission_classes=[IsAuthenticated],
+        permission_classes=[IsAuthenticated, _PackerTemplateBuildActionPermission],
     )
     def build_pve_template(self, request: Request, pk: int | None = None) -> Response:
         """Trigger a PVE-installer cloud-init template build via proxbox-api.
 
         Validates the request body against ``PVETemplateBuildRequestSerializer``,
-        injects ``endpoint_id`` from the URL path, then proxies the call to
-        the Cloud Image Build Pipeline compatibility endpoint on proxbox-api.
+        checks the endpoint's broad and narrow write gates, resolves the URL-path
+        object to proxbox-api's distinct endpoint id, then proxies the call to the
+        Cloud Image Build Pipeline compatibility endpoint on proxbox-api.
         The response is the upstream body verbatim — including the rendered
         build script and cloud-init snippets for the target host.
         """
         endpoint = self.get_object()
-        serializer = PVETemplateBuildRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        payload = dict(serializer.validated_data)
-        payload["endpoint_id"] = endpoint.pk
+        payload, error_response = self._template_build_payload(request, endpoint)
+        if error_response is not None:
+            return error_response
+        assert payload is not None
         body, status_code = build_pve_template_via_backend(payload)
         return Response(body, status=status_code)
 
@@ -693,7 +753,7 @@ class ProxmoxEndpointViewSet(NetBoxModelViewSet):
         methods=["post"],
         url_path="cloud-image-build-pipeline",
         url_name="cloud-image-build-pipeline",
-        permission_classes=[IsAuthenticated],
+        permission_classes=[IsAuthenticated, _PackerTemplateBuildActionPermission],
     )
     def cloud_image_build_pipeline(
         self,
@@ -702,10 +762,10 @@ class ProxmoxEndpointViewSet(NetBoxModelViewSet):
     ) -> Response:
         """Trigger the Cloud Image Build Pipeline via proxbox-api."""
         endpoint = self.get_object()
-        serializer = PVETemplateBuildRequestSerializer(data=request.data)
-        serializer.is_valid(raise_exception=True)
-        payload = dict(serializer.validated_data)
-        payload["endpoint_id"] = endpoint.pk
+        payload, error_response = self._template_build_payload(request, endpoint)
+        if error_response is not None:
+            return error_response
+        assert payload is not None
         body, status_code = build_cloud_image_pipeline_via_backend(payload)
         return Response(body, status=status_code)
 

@@ -517,8 +517,7 @@ def test_repository_deploy_workflow_is_nms_source_aware() -> None:
     assert "deploy-netbox-plugin-package" not in workflow
     assert "deploy-netbox-plugin netbox-proxbox" not in workflow
     assert (
-        "proxbox-package-deploy deploy-main \\\n"
-        "            netbox-proxbox" in workflow
+        "proxbox-package-deploy deploy-main \\\n            netbox-proxbox" in workflow
     )
 
 
@@ -552,7 +551,7 @@ def test_production_deploy_cannot_report_success_without_deploying() -> None:
     # asserted before the run may pass.
     assert 'resolved_source="$(python3 - "$proof_path"' in workflow
     assert 'test -n "$resolved_source"' in workflow
-    assert 'unsupported deploy source' in workflow
+    assert "unsupported deploy source" in workflow
     assert 'echo "DEPLOY_COMPLETED=true"' in workflow
     assert 'test "${DEPLOY_COMPLETED:-}" = "true"' in workflow
 
@@ -565,7 +564,7 @@ def test_production_health_gate_actually_asserts_service_state() -> None:
     # deploy that leaves the worker stopped breaks the feature being shipped
     # while the web endpoint still answers.
     start = workflow.index("- name: Require healthy production status")
-    gate = workflow[start:workflow.index("- name:", start + 1)]
+    gate = workflow[start : workflow.index("- name:", start + 1)]
     # Scoped to the gate: the failure-reporting step calls status-app bare on
     # purpose, as a diagnostic rather than an assertion.
     assert "run: /opt/nmulticloud/deploy/bin/status-app netbox\n" not in gate
@@ -688,9 +687,9 @@ def test_public_publish_workflow_uses_immutable_locked_tooling() -> None:
         "build==1.5.0",
         "hatchling==1.31.0",
         "packaging==26.0",
-        "setuptools==80.9.0",
+        "setuptools==83.0.0",
         "twine==6.2.0",
-        "wheel==0.45.1",
+        "wheel==0.46.2",
     ]
     assert workflow.count("uv sync --only-group publish --locked") == 3
     assert "uv run --with twine python -m twine upload" not in workflow

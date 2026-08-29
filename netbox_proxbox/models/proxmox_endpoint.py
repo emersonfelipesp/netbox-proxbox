@@ -162,6 +162,26 @@ class ProxmoxEndpoint(EndpointBase):
             "core.run_proxmox_action permission to a small operator group."
         ),
     )
+    allow_packer_template_builds = models.BooleanField(
+        default=False,
+        verbose_name=_("Allow netbox-packer template builds"),
+        help_text=_(
+            "Explicitly authorize netbox-packer to create Cloud-Init template "
+            "images on this endpoint. Default off and effective only while "
+            "'Allow Proxmox-side writes' is also enabled. This capability does "
+            "not authorize any other Proxmox mutation."
+        ),
+    )
+    packer_template_builds_backend_authorized = models.BooleanField(
+        default=False,
+        editable=False,
+        verbose_name=_("Backend-authorized netbox-packer template builds"),
+        help_text=_(
+            "Internal record of the last netbox-packer template-build grant "
+            "successfully confirmed on proxbox-api. A true value blocks endpoint "
+            "deletion until a later save confirms backend revocation."
+        ),
+    )
     access_methods = models.CharField(
         max_length=16,
         choices=ProxmoxAccessMethodChoices,
@@ -719,6 +739,21 @@ class ProxmoxEndpoint(EndpointBase):
     def get_absolute_url(self) -> str:
         """Plugin UI URL for this Proxmox endpoint detail view."""
         return reverse("plugins:netbox_proxbox:proxmoxendpoint", args=[self.pk])
+
+    def delete(self, *args: object, **kwargs: object) -> tuple[int, dict[str, int]]:
+        """Require backend capability revocation before removing local authority."""
+        if (
+            self.allow_packer_template_builds
+            or self.packer_template_builds_backend_authorized
+        ):
+            raise ValidationError(
+                _(
+                    "Revoke 'Allow netbox-packer template builds' and save this "
+                    "endpoint; deletion remains blocked until proxbox-api confirms "
+                    "the backend grant is revoked."
+                )
+            )
+        return super().delete(*args, **kwargs)
 
     @property
     def password(self) -> str:

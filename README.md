@@ -67,6 +67,22 @@ upgraded.
 | [`netbox-packer`](https://github.com/emersonfelipesp/netbox-packer) | `netbox_packer` | Tracks HashiCorp Packer image definitions and build execution records for Proxmox VM templates and image-factory workflows. |
 | [`netbox-rpc`](https://github.com/emersonfelipesp/netbox-rpc) | `netbox_rpc` | Audited SSH/RPC procedure engine. netbox-proxbox optionally uses it to install SSH keys on Proxmox hosts and to collect Proxmox endpoint systemd service status via `netbox_proxbox.integrations.rpc`. |
 
+Cloud-Init template-image creation through `netbox-packer` is a separately
+authorized endpoint capability. The selected `ProxmoxEndpoint` must be enabled
+with both `allow_writes=True` and the default-off
+`allow_packer_template_builds=True`; the latter grants only netbox-packer
+template builds. The Templates-tab action remains disabled until both gates
+pass, and the narrow value is pushed to proxbox-api for enforcement at its
+final write boundary only when the endpoint is also enabled and the broad gate
+is open. Disabling the endpoint or either gate revokes that backend capability;
+the endpoint detail page displays the explicit narrow assertion for audit. The
+save-time push runs only after the NetBox transaction commits and records the
+last backend-confirmed grant. Endpoint deletion remains blocked after an
+unsuccessful revocation until proxbox-api confirms the grant is false. The two
+template-build REST actions also require `core.run_proxmox_action`, recheck all
+three endpoint gates before backend access, and translate the NetBox primary key
+to proxbox-api's independent endpoint ID.
+
 For a standard NetBox virtualenv install, activate the NetBox environment and
 install the packages you want:
 
@@ -340,7 +356,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
-| >=4.5.8 | v0.0.25 | v0.0.20 | v0.0.10 | v0.0.13 |
+| 4.5.8-4.6.x; exact canonical 4.7.0-beta2 | v0.0.25 | v0.0.20 | v0.0.10 | v0.0.13 |
 | >=4.5.8 | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |
@@ -365,18 +381,17 @@ across the whole Proxbox plugin stack:
 | Tier | NetBox range | What it means |
 |---|---|---|
 | **Stable** | `4.5.8` – `4.6.99` | Admitted silently. Directly exercised in CI at v4.5.8, v4.5.10, v4.6.0 and v4.6.6. |
-| **Experimental** | `4.7.0` – `4.7.99` | Loads and runs normally; the release line is not yet certified, so the plugin warns once at startup. |
+| **Experimental** | exact canonical `4.7.0-beta2` | Loads and runs normally for evaluation; the upstream pre-release is not production-certified, so the plugin warns once at startup. |
 
-Experimental support needs **no configuration at all** — no setting, no opt-in
-flag, no install step. Upgrade NetBox and the plugin keeps working. On a 4.7
-install you will see one warning per plugin, from `manage.py check` and in the
-startup log:
+The exact beta2 support needs **no configuration at all** — no setting, opt-in
+flag, or install step. On that canonical release you will see one warning per
+plugin, from `manage.py check` and in the startup log:
 
 ```
 WARNINGS:
-?: (netbox_proxbox.W001) Proxbox is running on NetBox 4.7.0-beta1, which is
+?: (netbox_proxbox.W001) Proxbox is running on NetBox 4.7.0-beta2, which is
    supported on an experimental basis only. Certified support covers NetBox
-   4.5.8 through 4.6.99. NetBox 4.7.0-beta1 is also an upstream pre-release:
+   4.5.8 through 4.6.99. NetBox 4.7.0-beta2 is also an upstream pre-release:
    upstream does not support pre-releases in production and does not guarantee
    an upgrade path from a pre-release to the final release. Use it for
    evaluation on disposable data only.
@@ -389,11 +404,10 @@ WARNINGS:
 
 It is a warning, never an error — it cannot block NetBox from starting.
 
-**On a NetBox pre-release, silencing is for evaluation installs only.** The
+**Silencing is for evaluation installs only.** The
 notice above is the only thing telling you the release is unsupported upstream
 and has no guaranteed upgrade path to GA; quieting it does not change either
-fact. A stable `4.7.x` release gets the plain experimental notice without the
-pre-release paragraph, and silencing that one is an ordinary decision.
+fact. It does not admit a later prerelease or GA build.
 
 **To silence it**, set the key in this plugin's `PLUGINS_CONFIG` entry:
 
@@ -411,8 +425,12 @@ That silences both the system check and the startup log line.
 > It only applies through NetBox's `local_settings.py` hatch, which upstream
 > labels unsupported. Use the `PLUGINS_CONFIG` key above.
 
-NetBox releases below `4.5.8` and from `4.8` onward are still refused outright
-by NetBox's own plugin version gate.
+NetBox releases below `4.5.8` and above bare `4.7.0` are refused by NetBox's
+stock plugin version gate. Because NetBox passes the same bare `4.7.0` for
+beta2, later prereleases, and GA, this plugin additionally reads canonical
+`release.yaml`: only `version: "4.7.0"` plus `designation: "beta2"` is admitted.
+An unreviewed 4.7 identity raises `IncompatiblePluginError`; NetBox warns, omits
+the plugin from `registry["plugins"]["installed"]`, and continues startup.
 
 > **Upgrading to NetBox 4.7 means upgrading the whole plugin stack.** A
 > Proxbox-family plugin left at the old `4.6.99` ceiling does not stop NetBox
@@ -424,16 +442,21 @@ by NetBox's own plugin version gate.
 > `apps.is_installed(...)`. On 4.5.8–4.6.x, mixed versions remain fine.
 
 > **On beta version strings.** NetBox splits its release identity: at tag
-> `v4.7.0-beta1`, `release.yaml` carries `version: "4.7.0"` with
-> `designation: "beta1"`, and NetBox passes the bare `"4.7.0"` to the plugin
-> version gate. That is why the declared ceiling is `4.7.99` rather than
-> something pre-release-shaped.
+> `v4.7.0-beta2`, canonical `release.yaml` carries `version: "4.7.0"` with
+> `designation: "beta2"`, and NetBox passes only bare `"4.7.0"` to the stock
+> plugin gate. The declared ceiling is therefore `4.7.0`, with a second
+> fail-closed canonical identity check. Optional `local/release.yaml` may add
+> only informational `build`; it cannot override version or designation.
 
 ## Requirements
 
-- NetBox 4.5.8 through 4.6.x (stable), or 4.7.x (experimental — see above)
+- NetBox 4.5.8 through 4.6.x (stable), or exact canonical 4.7.0-beta2
+  (experimental evaluation only — see above)
 - Verified with NetBox v4.5.8 through v4.5.10, v4.6.0 through v4.6.6, and
-  v4.7.0-beta1 (experimental tier)
+  exact v4.7.0-beta2 commit
+  `aa1d49d0f5021a28e6efc2d0364b84c5bcec7137` (experimental tier); the source
+  matrix verifies release metadata and installs commit-bound, hash-checked
+  Python 3.12/Linux dependency locks
 - Python 3.12+
 - Proxmox VE 7.x, 8.x, or 9.x (PVE 9 requires `VM.GuestAgent.Audit` on the API role; see "Troubleshooting" below for the PVE 9 auth checklist)
 - Proxbox API backend as a separately deployed service (see below)
@@ -676,6 +699,25 @@ executable examples, error handling, compatibility policy, and agent checklist a
 ## Contributing
 
 See [DEVELOP.md](./DEVELOP.md) for development setup and contribution guidelines.
+
+Gitea pull-request CI runs the quality/mocked suite before strict docs/package
+validation on the shared capacity-bounded Python runner. One repository-wide
+concurrency group covers all refs without auto-cancelling protected or immutable
+evidence. Both jobs require at least 384 MiB free and print the measured and
+required KiB before environment creation. That floor is based on a 195,498 KiB
+locked quality environment plus the 42,021 KiB source tree, leaving 155,697 KiB
+of measured residual capacity before transient operations. The hosted preflight
+reports the exact available capacity; serialization and cacheless operation
+bound the remaining pressure. Both jobs set `UV_NO_CACHE=1` and always
+remove environments, tool caches, output trees, and generated bytecode. Quality
+installs the locked `test`, `dev`, and `cli` optional extras with `--no-dev`;
+the serialized docs job owns the separate MkDocs `dev` and exact packaging
+`publish` dependency groups and builds without an isolated floating tool
+environment. Keep those scopes separate so concurrent caches, duplicate docs
+dependencies, or floating package tools cannot exhaust or drift on the runner.
+Each job also scrubs those paths before use; stale generated-state symlinks are
+removed without traversal and fail that run closed, protecting reused workspaces
+from redirected writes or stale package evidence.
 
 ## Support the Project
 

@@ -1,5 +1,9 @@
 # Version 0.0.24
 
+> Historical behavior: this release admitted the wider 4.7 line. Current
+> source narrows evaluation support to exact canonical `4.7.0-beta2`; see the
+> latest release notes and compatibility matrix.
+
 netbox-proxbox `0.0.24` pairs with `proxbox-api 0.0.20`,
 `proxmox-sdk 0.0.13`, and the backend's REST dependency
 `netbox-sdk 0.0.10`. The plugin now declares **two NetBox support tiers**: a

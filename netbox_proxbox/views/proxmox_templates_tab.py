@@ -14,9 +14,10 @@ backend's own endpoint id). The view degrades gracefully — a missing/disabled
 FastAPI backend, an unresolved endpoint, or a request failure renders an
 informative message and empty lists instead of raising.
 
-When the optional **netbox-packer** plugin is installed the tab offers a
-"Create Cloud-Init template image" shortcut linking to its build page; when it is
-absent the button is disabled with an explanatory tooltip.
+The "Create Cloud-Init template image" shortcut is enabled only when the
+optional **netbox-packer** plugin is installed and the endpoint has both its
+broad write gate and narrow packer-template capability enabled. Every refusal
+renders a stable explanatory tooltip.
 """
 
 from __future__ import annotations
@@ -28,6 +29,7 @@ from typing import Any
 import requests
 from django.http import HttpRequest
 from django.urls import reverse
+from django.utils.translation import gettext as _
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 
@@ -236,7 +238,42 @@ class ProxmoxEndpointTemplatesTabView(generic.ObjectView):
         context["packer_add_url"] = (
             packer_template_add_url() if packer_installed else None
         )
-        context["allow_writes"] = bool(getattr(instance, "allow_writes", False))
+        enabled = bool(getattr(instance, "enabled", True))
+        allow_writes = bool(getattr(instance, "allow_writes", False))
+        allow_packer_template_builds = bool(
+            getattr(instance, "allow_packer_template_builds", False)
+        )
+        context["enabled"] = enabled
+        context["allow_writes"] = allow_writes
+        context["allow_packer_template_builds"] = allow_packer_template_builds
+        if not enabled:
+            disabled_reason = _(
+                "This Proxmox endpoint is disabled. Enable the endpoint before "
+                "creating template images."
+            )
+        elif not packer_installed:
+            disabled_reason = _(
+                "netbox-packer is not installed. Install the netbox-packer "
+                "plugin to build Cloud-Init template images from here."
+            )
+        elif context["packer_add_url"] is None:
+            disabled_reason = _(
+                "The netbox-packer template creation route is unavailable."
+            )
+        elif not allow_writes:
+            disabled_reason = _(
+                "This endpoint does not allow Proxmox-side writes. Enable "
+                "'Allow Proxmox-side writes' before creating template images."
+            )
+        elif not allow_packer_template_builds:
+            disabled_reason = _(
+                "This endpoint does not explicitly allow netbox-packer template "
+                "builds. Enable 'Allow netbox-packer template builds' first."
+            )
+        else:
+            disabled_reason = None
+        context["packer_build_disabled_reason"] = disabled_reason
+        context["packer_build_authorized"] = disabled_reason is None
         context["create_instance_url"] = reverse(
             "plugins:netbox_proxbox:proxmoxendpoint_create_instance",
             args=[instance.pk],

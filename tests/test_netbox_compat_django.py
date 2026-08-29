@@ -9,7 +9,7 @@ experimental notice as a warning rather than an error.
 
 Run by ``.github/workflows/django-tests.yml`` across the whole NetBox matrix,
 so the same assertions are evaluated on every supported release — the 4.5.8 and
-4.6.x legs are the backward-compatibility evidence, and the ``v4.7.0-beta1`` leg
+4.6.x legs are the backward-compatibility evidence, and the ``v4.7.0-beta2`` leg
 is the experimental-support evidence.
 """
 
@@ -84,7 +84,7 @@ def test_plugin_config_sources_its_bounds_from_compat() -> None:
 def test_running_netbox_release_is_admitted_by_the_declared_range() -> None:
     """Reproduce NetBox's own gate arithmetic against the release under test.
 
-    On the ``v4.7.0-beta1`` CI leg this is the assertion that fails if the cap
+    On the ``v4.7.0-beta2`` CI leg this is the assertion that fails if the cap
     is ever lowered again: NetBox passes ``RELEASE.version`` (``"4.7.0"``) to
     ``PluginConfig.validate()``, so the ceiling has to cover it.
     """
@@ -174,11 +174,11 @@ def test_ready_registered_the_check_by_injecting_a_4_7_release() -> None:
     from django.core.checks import run_checks
 
     class _Release:
-        # Transcribed from netbox/release.yaml at tag v4.7.0-beta1; NetBox
+        # Transcribed from netbox/release.yaml at tag v4.7.0-beta2; NetBox
         # assembles full_version as version[-designation][-build].
         version = "4.7.0"
-        full_version = "4.7.0-beta1"
-        designation = "beta1"
+        full_version = "4.7.0-beta2"
+        designation = "beta2"
 
     with patch.object(settings, "RELEASE", _Release()):
         messages = [
@@ -189,9 +189,9 @@ def test_ready_registered_the_check_by_injecting_a_4_7_release() -> None:
 
     assert len(messages) == 1, (
         "ProxboxConfig.ready() must register the compatibility check exactly once; "
-        f"got {messages} while pretending to run on NetBox 4.7.0-beta1"
+        f"got {messages} while pretending to run on NetBox 4.7.0-beta2"
     )
-    assert "4.7.0-beta1" in messages[0].msg
+    assert "4.7.0-beta2" in messages[0].msg
     assert "experimental" in messages[0].msg.lower()
     # The pre-release caveat must survive the real registration path too.
     assert "pre-release" in messages[0].msg.lower()
@@ -217,3 +217,66 @@ def test_injecting_a_stable_release_produces_no_notice() -> None:
         ]
 
     assert messages == [], f"a stable release must emit nothing; got {messages}"
+
+
+def test_packer_template_authorization_is_default_off_and_exposed() -> None:
+    """Exercise the real Django model, form, and DRF serializer declarations."""
+    from netbox_proxbox.api.serializers.endpoints import ProxmoxEndpointSerializer
+    from netbox_proxbox.forms.proxmox import ProxmoxEndpointForm
+    from netbox_proxbox.models import ProxmoxEndpoint
+
+    field = ProxmoxEndpoint._meta.get_field("allow_packer_template_builds")
+    assert field.default is False
+    assert field.null is False
+    assert "allow_packer_template_builds" in ProxmoxEndpointForm.Meta.fields
+    assert "allow_packer_template_builds" in ProxmoxEndpointSerializer.Meta.fields
+
+
+def test_templates_tab_requires_enabled_broad_and_narrow_gates() -> None:
+    """Prove the rendered action's authorization truth table with real NetBox."""
+    from types import SimpleNamespace
+    from unittest.mock import patch
+
+    from netbox_proxbox.views import proxmox_templates_tab
+
+    empty_context = {
+        "cloudinit_templates": [],
+        "plain_templates": [],
+        "lxc_templates": [],
+    }
+    matrix = (
+        (False, True, True, False),
+        (True, False, True, False),
+        (True, True, False, False),
+        (True, True, True, True),
+    )
+    view = proxmox_templates_tab.ProxmoxEndpointTemplatesTabView()
+
+    with (
+        patch.object(
+            proxmox_templates_tab,
+            "_fetch_endpoint_templates",
+            return_value=empty_context,
+        ),
+        patch.object(
+            proxmox_templates_tab,
+            "is_netbox_packer_installed",
+            return_value=True,
+        ),
+        patch.object(
+            proxmox_templates_tab,
+            "packer_template_add_url",
+            return_value="/plugins/netbox-packer/templates/add/",
+        ),
+        patch.object(proxmox_templates_tab, "reverse", return_value="/create/"),
+    ):
+        for enabled, broad, narrow, expected in matrix:
+            instance = SimpleNamespace(
+                pk=1,
+                enabled=enabled,
+                allow_writes=broad,
+                allow_packer_template_builds=narrow,
+            )
+            context = view.get_extra_context(SimpleNamespace(), instance)
+            assert context["packer_build_authorized"] is expected
+            assert (context["packer_build_disabled_reason"] is None) is expected

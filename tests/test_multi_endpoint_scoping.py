@@ -130,6 +130,8 @@ def _endpoint(
     timeout=5,
     max_retries=0,
     retry_backoff=Decimal("0.50"),
+    allow_writes=False,
+    allow_packer_template_builds=False,
 ):
     """Return a Proxmox endpoint stub that resolves a connection target.
 
@@ -149,6 +151,8 @@ def _endpoint(
         username=username,
         access_methods=access_methods,
         verify_ssl=verify_ssl,
+        allow_writes=allow_writes,
+        allow_packer_template_builds=allow_packer_template_builds,
         effective_connection_tuning=lambda: {
             "timeout": timeout,
             "max_retries": max_retries,
@@ -160,7 +164,7 @@ def _endpoint(
 def _backend_row(backend_id, endpoint, **overrides):
     """Return the row proxbox-api would store for ``endpoint``, fully current.
 
-    Carries the six pushed fields ``_proxmox_row_is_current()`` compares
+    Carries the eight pushed fields ``_proxmox_row_is_current()`` compares
     beyond the connection target, so a row built here reads as *held and
     current* unless a test overrides one of them.
     """
@@ -172,7 +176,13 @@ def _backend_row(backend_id, endpoint, **overrides):
         "ip_address": endpoint.ip_address or "",
         "port": endpoint.port,
         "username": endpoint.username,
+        "enabled": endpoint.enabled,
         "access_methods": endpoint.access_methods,
+        "allow_packer_template_builds": (
+            endpoint.enabled
+            and endpoint.allow_writes
+            and endpoint.allow_packer_template_builds
+        ),
         "verify_ssl": endpoint.verify_ssl,
         "timeout": tuning["timeout"],
         "max_retries": tuning["max_retries"],
@@ -227,6 +237,279 @@ def test_sync_proxmox_endpoint_to_backend_skips_disabled_without_http(monkeypatc
     assert ok is False
     assert status is None
     assert "disabled" in detail
+
+
+def test_disabled_policy_update_revokes_existing_backend_grant(monkeypatch):
+    """A save-time disable updates policy only and never sends credentials."""
+    endpoint = _endpoint(
+        1,
+        "Disabled PVE",
+        enabled=False,
+        allow_writes=True,
+        allow_packer_template_builds=True,
+    )
+    backend_sync = _load_backend_sync_module(
+        monkeypatch,
+        endpoints_payload=[
+            _backend_row(17, endpoint, enabled=True, allow_packer_template_builds=True)
+        ],
+    )
+    calls = []
+
+    def _put(url, **kwargs):
+        calls.append((url, kwargs["json"]))
+        return _FakeResponse({})
+
+    monkeypatch.setattr(backend_sync.requests, "put", _put)
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "post",
+        lambda *args, **kwargs: pytest.fail("policy revocation created a backend row"),
+    )
+
+    ok, detail, status = backend_sync.sync_proxmox_endpoint_to_backend(
+        endpoint,
+        base_url="http://backend:8000",
+        allow_disabled_policy_update=True,
+    )
+
+    assert (ok, detail, status) == (True, None, None)
+    assert calls == [
+        (
+            "http://backend:8000/proxmox/endpoints/17",
+            {"enabled": False, "allow_packer_template_builds": False},
+        )
+    ]
+    assert endpoint.packer_template_builds_backend_authorized is False
+
+
+def test_failed_policy_revocation_preserves_confirmed_backend_grant(monkeypatch):
+    endpoint = _endpoint(
+        1,
+        "Disabled PVE",
+        enabled=False,
+        allow_writes=True,
+        allow_packer_template_builds=False,
+    )
+    endpoint.packer_template_builds_backend_authorized = True
+    backend_sync = _load_backend_sync_module(
+        monkeypatch,
+        endpoints_payload=[
+            _backend_row(17, endpoint, enabled=True, allow_packer_template_builds=True)
+        ],
+    )
+
+    def _put(*args, **kwargs):
+        error = backend_sync.requests.exceptions.HTTPError("revocation unavailable")
+        error.response = SimpleNamespace(status_code=503)
+        raise error
+
+    monkeypatch.setattr(backend_sync.requests, "put", _put)
+
+    ok, detail, status = backend_sync.sync_proxmox_endpoint_to_backend(
+        endpoint,
+        base_url="http://backend:8000",
+        allow_disabled_policy_update=True,
+    )
+
+    assert ok is False
+    assert "revocation unavailable" in detail
+    assert status is None
+    assert endpoint.packer_template_builds_backend_authorized is True
+
+
+def test_successful_normal_push_records_effective_backend_grant(monkeypatch):
+    endpoint = _endpoint(
+        3,
+        "Authorized PVE",
+        allow_writes=True,
+        allow_packer_template_builds=True,
+    )
+    backend_sync = _load_backend_sync_module(monkeypatch, endpoints_payload=[])
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "post",
+        lambda *args, **kwargs: _FakeResponse({}),
+    )
+    monkeypatch.setattr(
+        backend_sync,
+        "_record_pushed_proxmox_credential_fingerprint",
+        lambda *_args, **_kwargs: None,
+    )
+
+    result = backend_sync.sync_proxmox_endpoint_to_backend(
+        endpoint,
+        base_url="http://backend:8000",
+    )
+
+    assert result == (True, None, None)
+    assert endpoint.packer_template_builds_backend_authorized is True
+
+
+def test_disabled_policy_update_does_not_create_missing_backend_row(monkeypatch):
+    backend_sync = _load_backend_sync_module(monkeypatch, endpoints_payload=[])
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "post",
+        lambda *args, **kwargs: pytest.fail("policy revocation created a backend row"),
+    )
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "put",
+        lambda *args, **kwargs: pytest.fail("missing backend row was updated"),
+    )
+
+    result = backend_sync.sync_proxmox_endpoint_to_backend(
+        _endpoint(1, "Disabled PVE", enabled=False),
+        base_url="http://backend:8000",
+        allow_disabled_policy_update=True,
+    )
+
+    assert result == (True, None, None)
+
+
+def test_rename_and_disable_revokes_row_by_immutable_identity(monkeypatch):
+    endpoint = _endpoint(
+        3,
+        "Renamed PVE",
+        enabled=False,
+        allow_writes=True,
+        allow_packer_template_builds=True,
+    )
+    old_endpoint = _endpoint(3, "Old PVE")
+    backend_sync = _load_backend_sync_module(
+        monkeypatch,
+        endpoints_payload=[
+            _backend_row(
+                17,
+                old_endpoint,
+                enabled=True,
+                allow_packer_template_builds=True,
+            )
+        ],
+    )
+    calls = []
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "put",
+        lambda url, **kwargs: calls.append((url, kwargs["json"])) or _FakeResponse({}),
+    )
+
+    result = backend_sync.sync_proxmox_endpoint_to_backend(
+        endpoint,
+        base_url="http://backend:8000",
+        allow_disabled_policy_update=True,
+    )
+
+    assert result == (True, None, None)
+    assert calls == [
+        (
+            "http://backend:8000/proxmox/endpoints/17",
+            {"enabled": False, "allow_packer_template_builds": False},
+        )
+    ]
+
+
+def test_rename_while_enabled_updates_existing_immutable_row(monkeypatch):
+    endpoint = _endpoint(3, "Renamed PVE")
+    old_endpoint = _endpoint(3, "Old PVE")
+    backend_sync = _load_backend_sync_module(
+        monkeypatch,
+        endpoints_payload=[_backend_row(17, old_endpoint)],
+    )
+    calls = []
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "put",
+        lambda url, **kwargs: calls.append((url, kwargs["json"])) or _FakeResponse({}),
+    )
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "post",
+        lambda *args, **kwargs: pytest.fail("rename created a duplicate backend row"),
+    )
+    monkeypatch.setattr(
+        backend_sync,
+        "_record_pushed_proxmox_credential_fingerprint",
+        lambda *_args, **_kwargs: None,
+    )
+
+    ok, detail, status = backend_sync.sync_proxmox_endpoint_to_backend(
+        endpoint,
+        base_url="http://backend:8000",
+    )
+
+    assert (ok, detail, status) == (True, None, None)
+    assert calls[0][0].endswith("/proxmox/endpoints/17")
+    assert calls[0][1]["name"] == "Renamed PVE (nb:3)"
+
+
+def test_duplicate_immutable_rows_are_all_revoked_and_refused(monkeypatch):
+    endpoint = _endpoint(3, "Renamed PVE")
+    backend_sync = _load_backend_sync_module(
+        monkeypatch,
+        endpoints_payload=[
+            _backend_row(
+                17, _endpoint(3, "Old PVE"), allow_packer_template_builds=True
+            ),
+            _backend_row(18, endpoint, allow_packer_template_builds=True),
+        ],
+    )
+    calls = []
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "put",
+        lambda url, **kwargs: calls.append((url, kwargs["json"])) or _FakeResponse({}),
+    )
+
+    ok, detail, status = backend_sync.sync_proxmox_endpoint_to_backend(
+        endpoint,
+        base_url="http://backend:8000",
+    )
+
+    assert ok is False
+    assert status is None
+    assert "Multiple ProxBox backend rows" in detail
+    assert [url.rsplit("/", 1)[-1] for url, _payload in calls] == ["17", "18"]
+    assert all(
+        payload == {"enabled": False, "allow_packer_template_builds": False}
+        for _url, payload in calls
+    )
+
+
+def test_duplicate_revocation_attempts_later_rows_after_first_failure(monkeypatch):
+    endpoint = _endpoint(3, "Renamed PVE")
+    backend_sync = _load_backend_sync_module(
+        monkeypatch,
+        endpoints_payload=[
+            _backend_row(
+                17, _endpoint(3, "Old PVE"), allow_packer_template_builds=True
+            ),
+            _backend_row(18, endpoint, allow_packer_template_builds=True),
+        ],
+    )
+    calls = []
+
+    def _put(url, **kwargs):
+        calls.append((url, kwargs["json"]))
+        if url.endswith("/17"):
+            error = backend_sync.requests.exceptions.HTTPError("first revoke failed")
+            error.response = SimpleNamespace(status_code=503)
+            raise error
+        return _FakeResponse({})
+
+    monkeypatch.setattr(backend_sync.requests, "put", _put)
+
+    ok, detail, status = backend_sync.sync_proxmox_endpoint_to_backend(
+        endpoint,
+        base_url="http://backend:8000",
+    )
+
+    assert ok is False
+    assert status is None
+    assert "backend row 17" in detail
+    assert "first revoke failed" in detail
+    assert [url.rsplit("/", 1)[-1] for url, _payload in calls] == ["17", "18"]
 
 
 def test_resolve_backend_endpoint_id_skips_disabled_without_http(monkeypatch):
@@ -477,6 +760,16 @@ def test_backend_holds_proxmox_endpoint_requires_the_row_to_be_current(monkeypat
             key: value
             for key, value in _backend_row(7, endpoint).items()
             if key not in {"timeout", "max_retries", "retry_backoff"}
+        },
+        "missing enabled": {
+            key: value
+            for key, value in _backend_row(7, endpoint).items()
+            if key != "enabled"
+        },
+        "missing packer capability": {
+            key: value
+            for key, value in _backend_row(7, endpoint).items()
+            if key != "allow_packer_template_builds"
         },
         "another endpoint": _backend_row(7, _endpoint(4, "Other")),
     }

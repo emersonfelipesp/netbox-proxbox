@@ -22,6 +22,13 @@ This directory contains Django templates bundled with the plugin.
 - Template names in Python views resolve into this namespaced subtree.
 - Most behavior-rich pages pair templates here with JS under `static/netbox_proxbox/js/`.
 - The namespaced subtree includes shared layout templates, page fragments, table snippets, test pages, and widget partials.
+- `netbox_proxbox/proxmoxendpoint_templates.html` enables its netbox-packer
+  creation action only through `packer_build_authorized`, which requires an
+  enabled endpoint plus both broad and narrow write gates; disabled buttons
+  keep the translated refusal text on a tooltip wrapper because disabled
+  controls do not receive pointer events. The endpoint detail template displays
+  the explicit narrow assertion independently for audit and the read-only
+  backend-confirmed grant so a failed revocation's deletion block is visible.
 - `netbox_proxbox/settings.html` renders only encrypted-family labels, counts,
   and secret-free states. Rotation password inputs never render submitted or
   stored values. The destructive reset form is omitted unless the user holds

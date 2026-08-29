@@ -22,7 +22,17 @@ WORKFLOW = REPO_ROOT / ".gitea/workflows/publish-gitea.yml"
 
 # Labels advertised by runners that exist today. A job pinned outside this set
 # cannot be scheduled, which is exactly the failure that blocked this release.
-AVAILABLE_LABELS = {"mirror-host", "prod-deploy", "ci-untrusted-python312"}
+AVAILABLE_LABELS = {
+    # Quality lane, 10.0.30.241
+    "ubuntu-latest",
+    "ci-untrusted-python312",
+    # Deployment lane. "package-publish" is served by
+    # ci-publish-nmulticloud-org-246 on 10.0.30.246; "mirror-host" and
+    # "prod-deploy" are still on their legacy hosts pending that migration.
+    "package-publish",
+    "mirror-host",
+    "prod-deploy",
+}
 
 
 def _workflow() -> dict:

@@ -200,13 +200,14 @@ def test_compat_imports_no_django_at_module_scope() -> None:
         ("4.6.4", "stable"),
         ("4.6.6", "stable"),
         ("4.6.99", "stable"),
-        # Experimental band — loads, warns, never blocks.
+        # Numeric held line. The separate canonical identity guard narrows
+        # this bare value to beta2.
         ("4.7.0", "experimental"),
         ("4.7.0-beta1", "experimental"),
         ("4.7.0b1", "experimental"),
-        ("4.7.3", "experimental"),
-        ("4.7.99", "experimental"),
-        # Above the ceiling — refused again.
+        # Above the exact bare 4.7.0 ceiling — refused again.
+        ("4.7.3", "unsupported-new"),
+        ("4.7.99", "unsupported-new"),
         ("4.8.0", "unsupported-new"),
         ("5.0.0", "unsupported-new"),
     ],
@@ -276,10 +277,10 @@ def test_declared_bounds_have_the_expected_literal_values() -> None:
     assert STABLE_MIN_NETBOX_VERSION == "4.5.8"
     assert STABLE_MAX_NETBOX_VERSION == "4.6.99"
     assert EXPERIMENTAL_MIN_NETBOX_VERSION == "4.7.0"
-    assert EXPERIMENTAL_MAX_NETBOX_VERSION == "4.7.99"
+    assert EXPERIMENTAL_MAX_NETBOX_VERSION == "4.7.0"
     assert PLUGIN_MIN_VERSION == STABLE_MIN_NETBOX_VERSION
     assert PLUGIN_MAX_VERSION == EXPERIMENTAL_MAX_NETBOX_VERSION
-    assert CONTRACT_VERSION == "netbox-compat-v2"
+    assert CONTRACT_VERSION == "netbox-compat-v3"
 
 
 # ---------------------------------------------------------------------------

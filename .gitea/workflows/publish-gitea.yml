@@ -14,7 +14,7 @@ on:
 
 jobs:
   validate-version:
-    runs-on: mirror-host
+    runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.extract.outputs.version }}
       is_rc: ${{ steps.extract.outputs.is_rc }}

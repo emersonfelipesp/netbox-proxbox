@@ -16,7 +16,7 @@ This directory contains Django schema migrations for the plugin models.
 ## Idempotent additive operations (post-0036)
 
 Additive schema operations in the post-``0036_add_overwrite_vm_type`` chain,
-including current migration ``0081``, are wrapped through the helpers in
+including current migration ``0082``, are wrapped through the helpers in
 [`_idempotent_ops.py`](./_idempotent_ops.py) — ``add_field_idempotent()``
 for ``AddField`` and ``create_model_idempotent()`` for ``CreateModel``.
 Each helper returns a ``SeparateDatabaseAndState`` whose ``database_operations``
@@ -185,6 +185,14 @@ contract and issue #454 for the bug history.
   the #295/#297 branches as a colliding 0079 and renumbered to 0081 (dependency
   `0080_metrics_influxdb_secret_ref_constraints`) at merge time. Tests find
   this migration by operation content rather than its number.
+- **0082_proxmoxendpoint_allow_packer_template_builds**: adds the idempotent,
+  default-off `ProxmoxEndpoint.allow_packer_template_builds` capability and the
+  default-false, non-editable
+  `packer_template_builds_backend_authorized` confirmation field. It has no
+  permissive backfill: existing endpoints remain unable to create netbox-packer
+  template images until an operator enables the narrow gate in addition to
+  `allow_writes`, while the confirmation field records only later successful
+  proxbox-api pushes and blocks deletion after a failed revocation.
 
 ## Hierarchy backends: never assume django-mptt columns
 

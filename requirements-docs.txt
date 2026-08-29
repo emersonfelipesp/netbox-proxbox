@@ -18,3 +18,8 @@ pydantic>=2.11.7
 PyYAML>=6.0.3
 rich>=14.1.0
 typer>=0.19.2
+
+# Transitive via requests/httpx, but they ask only for a floor that still admits
+# GHSA-65pc-fj4g-8rjx (idna <=3.10). This file is installed with a plain
+# `pip install -r`, which reads no lockfile, so the floor has to be declared here.
+idna>=3.15

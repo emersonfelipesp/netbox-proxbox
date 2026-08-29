@@ -21,6 +21,7 @@ This directory contains the NetBox plugin API surface for ProxBox. It exposes th
 - [`mcp_bridge.py`](./mcp_bridge.py): pure version 1 semantic-tool manifest backed by existing DRF routes; it must not import FastMCP, netbox-sdk, or credentials.
 - [`jobs.py`](./jobs.py): `ProxboxJobCancelAPIView` — `POST jobs/<pk>/cancel/`, the JSON mirror of the UI `proxbox-cancel` action so a stuck/zombie Proxbox sync `core.Job` can be cleared through the nms-backend proxy without the UI (today `nms virt raw POST jobs/<pk>/cancel/`; a first-class `nms virt cancel-job` wrapper is the paired nms-cli follow-up). Reuses `views/job_cancel.py::cancel_rq_job_for_netbox_job()` + `jobs.is_proxbox_sync_job()` + `Job.terminate()`; gated on `core.delete_job`.
 - [`filters.py`](./filters.py): additional filter utilities used by the API router if needed.
+- [`sync_jobs.py`](./sync_jobs.py): `ProxboxSyncJobViewSet` + `ProxboxSyncJobFilterSet` — the read-only `sync-jobs/` listing. The plugin has no job model: a sync is a core `core.Job` row whose `data` carries a `proxbox_sync` block, and `/api/core/jobs/` **cannot filter on `data`**, which is the only reliable discriminator (a run scheduled with a custom `job_name` keeps that name verbatim, so no name filter finds it). The queryset reuses `jobs.proxbox_sync_job_q()` — the *same* `Q` the Sync Jobs UI page uses, so the API and the page can never disagree about which rows are ours, and the existing parity test covers both. The filterset **subclasses core's `JobFilterSet`** rather than reimplementing it, so every core job filter keeps working and a NetBox release that adds one adds it here too.
 - [`serializers/`](./serializers): package of API serializers for endpoints, clusters, storage, backups, snapshots, task history, backup routines, replications, and the non-model resource/schedule serializers in `resource_views.py`. The `pbs_pdm.py` module provides serializers for `PBSEndpoint`, `PDMEndpoint`, and `PDMRemote`; `intent.py` provides read-only serializers for `DeletionRequest` and `ProxmoxApplyJob`.
 
 ## Model Viewsets
@@ -76,6 +77,7 @@ These follow the standard `NetBoxModelViewSet` + `NetBoxRouter` pattern:
 | `PDMRemoteViewSet` | `pdm-remotes/` | Full CRUD; FK to PDMEndpoint |
 | `DeletionRequestViewSet` | `deletion-requests/` | **GET/HEAD/OPTIONS only** — write paths go through UI approval workflow |
 | `ProxmoxApplyJobViewSet` | `apply-jobs/` | **GET/HEAD/OPTIONS only** — jobs created by intent branch-merge workflow |
+| `ProxboxSyncJobViewSet` | `sync-jobs/` | **GET/HEAD/OPTIONS only** — core `Job` rows narrowed by `jobs.proxbox_sync_job_q()`; not a plugin model. Serialised with core's own `JobSerializer` so a row is byte-identical to `/api/core/jobs/`. `log_entries` is omitted from list responses (a single full-sync row reaches 130 KB) and restored with `?include_log_entries=true`; detail always includes it. |
 
 Firecracker host-pool and image-template serializers expose `allowed_tenants` as
 the NMS Cloud tenant visibility contract. Omitting `allowed_tenants` on create or
@@ -218,7 +220,18 @@ through the actual route and assert exact enqueue or fail-closed behavior.
   candidate is rejected or the backend cannot be reached.
 - `ProxmoxEndpointSerializer` marks password and token value fields write-only
   and exposes `ssh_credential_source` for endpoint browser-terminal SSH
-  configuration.
+  configuration. It also exposes `allow_packer_template_builds`; the field
+  defaults off and remains subordinate to `allow_writes` for template-image
+  creation. The companion `packer_template_builds_backend_authorized` field is
+  read-only and reports the last effective grant successfully confirmed on
+  proxbox-api.
+- `template_build_authorization.py` is the shared pre-dispatch boundary for
+  both ProxmoxEndpoint template-build actions. It requires
+  `core.run_proxmox_action`, endpoint enabled, `allow_writes`, and the narrow
+  flag before backend access, then resolves the immutable NetBox endpoint
+  identity to proxbox-api's distinct row ID. The viewset's `perform_destroy()`
+  returns HTTP 409 for both single and bulk REST deletion while either desired
+  or last-confirmed backend Packer authority remains.
 - `ProxmoxEndpointSSHCredentialSecretsAPIView` preserves the proxbox-api payload
   shape (`host`, `username`, `port`, `auth_method`, fingerprint, booleans,
   `password`, `private_key`). In `reuse_endpoint` mode it returns the
@@ -266,6 +279,7 @@ through the actual route and assert exact enqueue or fail-closed behavior.
   Save — no silent auto-trust.
 - Resource views use `get_proxbox_tagged_object_ids()` from `netbox_proxbox/utils.py` to look up objects tagged `proxbox` without repeating the `TaggedItem` query pattern.
 - `DashboardAPIView` makes live HTTP calls to the proxbox-api backend to fetch current cluster/VM statistics; it returns partial data (with error context) when the backend is unreachable rather than failing the entire request.
+- **`sync-jobs/` filter semantics are deliberately identical to `nbx proxbox jobs`**, so one question cannot get two different answers depending on whether it is asked through the CLI or the API. An **open endpoint scope** — the key absent, JSON `null`, or `[]` — means *every* endpoint, because that is what the schedule API stores when the caller names none; `sync_types: ["all"]` (or no recorded types, whose documented default is `all`) covers every requested type; the legacy singular `sync_type` key is honoured; and an **empty VM list is not a wildcard** — a run that targeted no particular VM is not an answer to "which runs touched VM 199?". `errored=true` is broader than a failure status on purpose: a run can finish `completed` while recording a stage error, and that is the row an operator triaging a failure wants. **Ids inside `job.data` are stored as strings** (`_serialize_sync_params` casts with `str()`), so a jsonb containment test must cast — a numeric one compiles to `@> '[5]'`, never matches `["5"]`, and silently returns only the open-scope rows. A `cluster_id`/`node_id` that resolves to no endpoint returns **nothing**, never the unfiltered queryset. Behavioural coverage is real-database only (`tests/test_sync_jobs_api_django.py`), because jsonb containment, key-absence and JSON-null cannot be proven against the mocked stubs.
 - Contract tests for this API layer live in `tests/test_api_source_contracts.py`.
 
 ## Links

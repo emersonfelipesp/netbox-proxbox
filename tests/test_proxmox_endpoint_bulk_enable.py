@@ -7,6 +7,7 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 VIEW_PATH = REPO_ROOT / "netbox_proxbox/views/endpoints/proxmox.py"
+MODEL_PATH = REPO_ROOT / "netbox_proxbox/models/proxmox_endpoint.py"
 TABLE_PATH = REPO_ROOT / "netbox_proxbox/tables/__init__.py"
 ENABLE_TEMPLATE = (
     REPO_ROOT
@@ -136,6 +137,11 @@ def test_bulk_enabled_view_updates_only_selected_enabled_field() -> None:
     assert 'request.POST.get("_all")' in source
     assert "ProxmoxEndpointFilterSet(" in source
     assert "request.GET" in source
+    assert "protected = Q(allow_packer_template_builds=True) | Q(" in source
+    assert "packer_template_builds_backend_authorized=True" in source
+    assert "queryset.filter(protected).count()" in source
+    assert "allow_packer_template_builds=False" in source
+    assert "packer_template_builds_backend_authorized=False" in source
     assert ".exclude(enabled=self.enabled).update(" in source
     assert "enabled=self.enabled" in source
     assert (
@@ -146,6 +152,39 @@ def test_bulk_enabled_view_updates_only_selected_enabled_field() -> None:
             )
         ]
     )
+
+
+def test_authorized_endpoints_require_normal_save_before_delete() -> None:
+    source = VIEW_PATH.read_text(encoding="utf-8")
+    delete_start = source.index("class ProxmoxEndpointDeleteView")
+    delete_end = source.index("class ProxmoxEndpointBulkDeleteView")
+    bulk_end = source.index("@register_model_view(", delete_end + 1)
+
+    assert "allow_packer_template_builds=False" in source[delete_start:delete_end]
+    assert (
+        "packer_template_builds_backend_authorized=False"
+        in source[delete_start:delete_end]
+    )
+    assert "allow_packer_template_builds=False" in source[delete_end:bulk_end]
+    assert (
+        "packer_template_builds_backend_authorized=False" in source[delete_end:bulk_end]
+    )
+    model_source = MODEL_PATH.read_text(encoding="utf-8")
+    assert "def delete(" in model_source
+    assert "or self.packer_template_builds_backend_authorized" in model_source
+    assert "Revoke 'Allow netbox-packer template builds'" in model_source
+
+
+def test_rest_delete_precheck_returns_conflict_for_local_or_backend_grant() -> None:
+    source = (REPO_ROOT / "netbox_proxbox/api/views.py").read_text(encoding="utf-8")
+    viewset = source.split("class ProxmoxEndpointViewSet", 1)[1].split(
+        "class ProxmoxServiceMonitoringRefreshAPIView", 1
+    )[0]
+    assert "def perform_destroy(" in viewset
+    assert "instance.allow_packer_template_builds" in viewset
+    assert "instance.packer_template_builds_backend_authorized" in viewset
+    assert "_PackerTemplateBuildDeleteConflict" in viewset
+    assert "HTTP_409_CONFLICT" in source
 
 
 def test_bulk_enable_disable_button_templates_post_to_action_urls() -> None:

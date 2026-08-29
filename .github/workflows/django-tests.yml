@@ -16,20 +16,24 @@ on:
 
 jobs:
   django-tests:
-    runs-on: ubuntu-latest
+    # Keep the host OS line stable; GitHub maintains the image behind this
+    # label, while every fetchable action, service, source, and Python/tool
+    # input below is pinned independently.
+    runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
       matrix:
-        # Declared support is NetBox 4.5.8 - 4.7.99, split into two tiers by
+        # Declared support is stable NetBox 4.5.8 - 4.6.99 plus exact canonical
+        # 4.7.0-beta2, split into two tiers by
         # netbox_proxbox/compat.py: a certified stable band (4.5.8 - 4.6.99)
-        # and an experimental band (4.7.0 - 4.7.99). Gate the minimum, the
+        # and an exact held-beta identity. Gate the minimum, the
         # latest certified 4.5 patch, and both the 4.6 line floor/latest
         # validated patch in step with netbox_proxbox/compat.py. The extra
         # 4.6.6 cell loads the supported PDM override so its registry identity
         # contract cannot become a permanently skipped optional branch.
         #
-        # v4.7.0-beta1 is the experimental-tier evidence and is a REQUIRED leg,
-        # not continue-on-error: the tag is immutable, so it cannot churn, and
+        # v4.7.0-beta2 is the experimental-tier evidence and is a REQUIRED leg,
+        # not continue-on-error: the checkout uses the full commit SHA below,
         # a decorative leg would not actually demonstrate 4.7 support. The
         # 4.5/4.6 legs alongside it are the backward-compatibility evidence
         # that admitting 4.7 was a pure widening. NetBox 4.7 needs PostgreSQL
@@ -37,15 +41,55 @@ jobs:
         # the postgres:16-alpine / redis:7-alpine services below already
         # satisfy this, and POSTGRES_USER creates a superuser role that can
         # CREATE EXTENSION.
-        netbox: ["v4.5.8", "v4.5.10", "v4.6.0", "v4.6.6", "v4.7.0-beta1"]
+        netbox: ["v4.5.8", "v4.5.10", "v4.6.0", "v4.6.6", "v4.7.0-beta2"]
         pdm: [false]
         include:
+          - netbox: "v4.5.8"
+            pdm: false
+            netbox_ref: 75e1b86613792458b4d4c8d0cbbfc94df16cfaaf
+            netbox_version: "4.5.8"
+            netbox_designation: ""
+            netbox_requirements_sha256: 646c5bb635d5b9b126c6af4d56664dfde461608bdcaa8a65c1735ac5d8ddde9b
+            netbox_lock: ci/netbox-requirements/v4.5.8-py312-linux-x86_64.txt
+          - netbox: "v4.5.10"
+            pdm: false
+            netbox_ref: b78bd713294564e0421c36c936a909e64da04b8d
+            netbox_version: "4.5.10"
+            netbox_designation: ""
+            netbox_requirements_sha256: d68f08fb6167317174be89cda3045ee0e2fa34dd6e18ce19db2a31cf31a26e6f
+            netbox_lock: ci/netbox-requirements/v4.5.10-py312-linux-x86_64.txt
+          - netbox: "v4.6.0"
+            pdm: false
+            netbox_ref: 00791344e68213bde942218283dce03cc3941c30
+            netbox_version: "4.6.0"
+            netbox_designation: ""
+            netbox_requirements_sha256: 0d88cea37b413f22953ead2c2c341c82fe7a5e5d8a01f42632288676db8d66b6
+            netbox_lock: ci/netbox-requirements/v4.6.0-py312-linux-x86_64.txt
+          - netbox: "v4.6.6"
+            pdm: false
+            netbox_ref: fb8c455ba61b57119a70670612dfdd05e8438b10
+            netbox_version: "4.6.6"
+            netbox_designation: ""
+            netbox_requirements_sha256: 25eb62e54362568599c7701a528a7ac24dbe0400d5311fc496eab866bd6174b9
+            netbox_lock: ci/netbox-requirements/v4.6.6-py312-linux-x86_64.txt
+          - netbox: "v4.7.0-beta2"
+            pdm: false
+            netbox_ref: aa1d49d0f5021a28e6efc2d0364b84c5bcec7137
+            netbox_version: "4.7.0"
+            netbox_designation: "beta2"
+            netbox_requirements_sha256: f658550e473ad047205b9d442b36d72f2477233790e9b2b3f85a1ecd8c9fe609
+            netbox_lock: ci/netbox-requirements/v4.7.0-beta2-py312-linux-x86_64.txt
           - netbox: "v4.6.6"
             pdm: true
+            netbox_ref: fb8c455ba61b57119a70670612dfdd05e8438b10
+            netbox_version: "4.6.6"
+            netbox_designation: ""
+            netbox_requirements_sha256: 25eb62e54362568599c7701a528a7ac24dbe0400d5311fc496eab866bd6174b9
+            netbox_lock: ci/netbox-requirements/v4.6.6-py312-linux-x86_64.txt
 
     services:
       postgres:
-        image: postgres:16-alpine
+        image: postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
         env:
           POSTGRES_USER: netbox
           POSTGRES_PASSWORD: netbox
@@ -58,7 +102,7 @@ jobs:
           --health-timeout 5s
           --health-retries 10
       redis:
-        image: redis:7-alpine
+        image: redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
         ports:
           - 6379:6379
         options: >-
@@ -69,39 +113,210 @@ jobs:
 
     steps:
       - name: Checkout plugin
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           path: netbox-proxbox
 
       - name: Checkout NetBox ${{ matrix.netbox }}
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: netbox-community/netbox
-          ref: ${{ matrix.netbox }}
+          ref: ${{ matrix.netbox_ref }}
           path: netbox
 
       - name: Checkout supported PDM registry override
         if: matrix.pdm
-        uses: actions/checkout@v6
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: emersonfelipesp/netbox-pdm
           ref: 3408441672bf849dfaf953d96d6e0ba1561cd576
           path: netbox-pdm
 
       - name: Set up Python
-        uses: actions/setup-python@v6
+        uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
         with:
-          python-version: "3.12"
-          cache: "pip"
+          python-version: "3.12.13"
+
+      - name: Verify exact NetBox source identity
+        env:
+          EXPECTED_NETBOX_REF: ${{ matrix.netbox_ref }}
+          EXPECTED_NETBOX_TAG: ${{ matrix.netbox }}
+          EXPECTED_NETBOX_VERSION: ${{ matrix.netbox_version }}
+          EXPECTED_NETBOX_DESIGNATION: ${{ matrix.netbox_designation }}
+          EXPECTED_REQUIREMENTS_SHA256: ${{ matrix.netbox_requirements_sha256 }}
+        run: |
+          actual_ref="$(git -C netbox rev-parse HEAD)"
+          test "$actual_ref" = "$EXPECTED_NETBOX_REF"
+          git -C netbox fetch --force --no-tags origin \
+            "refs/tags/$EXPECTED_NETBOX_TAG:refs/tags/$EXPECTED_NETBOX_TAG"
+          tagged_ref="$(git -C netbox rev-parse "$EXPECTED_NETBOX_TAG^{commit}")"
+          test "$tagged_ref" = "$EXPECTED_NETBOX_REF"
+          printf '%s  %s\n' "$EXPECTED_REQUIREMENTS_SHA256" netbox/requirements.txt \
+            | sha256sum --check --strict
+          python - <<'PY'
+          import os
+          from pathlib import Path
+
+          release = {}
+          for line in Path("netbox/netbox/release.yaml").read_text().splitlines():
+              key, separator, value = line.partition(":")
+              if separator:
+                  release[key.strip()] = value.strip().strip("\"'")
+
+          actual_version = release.get("version", "")
+          actual_designation = release.get("designation", "")
+          expected_version = os.environ["EXPECTED_NETBOX_VERSION"]
+          expected_designation = os.environ["EXPECTED_NETBOX_DESIGNATION"]
+          expected_tag = os.environ["EXPECTED_NETBOX_TAG"].removeprefix("v")
+          expected_full_version = expected_version
+          if expected_designation:
+              expected_full_version += f"-{expected_designation}"
+
+          assert actual_version == expected_version, (actual_version, expected_version)
+          assert actual_designation == expected_designation, (
+              actual_designation,
+              expected_designation,
+          )
+          assert expected_full_version == expected_tag, (
+              expected_full_version,
+              expected_tag,
+          )
+          PY
+
+      - name: Set up locked Python installer
+        uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990 # v8.3.2
+        with:
+          version: "0.11.28"
+          enable-cache: true
+          cache-dependency-glob: netbox-proxbox/uv.lock
 
       - name: Install NetBox and plugin
+        working-directory: netbox-proxbox
         run: |
-          python -m pip install --upgrade pip
-          pip install -r netbox/requirements.txt
-          pip install -e "netbox-proxbox[test]"
+          # uv.lock carries hashes for the reviewed plugin/test environment;
+          # each exact NetBox source commit has a reviewed Python 3.12/Linux
+          # lock whose artifact hashes are enforced against the public index.
+          uv sync --extra test --locked
+          uv pip install --python .venv/bin/python \
+            --require-hashes \
+            --default-index https://pypi.org/simple \
+            --index-strategy first-index \
+            -r "${{ matrix.netbox_lock }}"
           if [[ "${{ matrix.pdm }}" == "true" ]]; then
-            pip install -e netbox-pdm
+            uv pip install --python .venv/bin/python --no-deps -e ../netbox-pdm
           fi
+
+      - name: Prove held beta identity and loader omission contract
+        if: matrix.netbox == 'v4.7.0-beta2' && !matrix.pdm
+        working-directory: netbox-proxbox
+        env:
+          NETBOX_CONFIGURATION: tests.netbox_test_configuration
+          DJANGO_SETTINGS_MODULE: netbox.settings
+          PYTHONPATH: ${{ github.workspace }}/netbox/netbox:${{ github.workspace }}/netbox-proxbox
+        run: |
+          set -euo pipefail
+          canonical_release_path="$GITHUB_WORKSPACE/netbox/netbox/release.yaml"
+          local_release_dir="$GITHUB_WORKSPACE/netbox/netbox/local"
+          local_release_path="$local_release_dir/release.yaml"
+          restore_dir="$(mktemp -d "$RUNNER_TEMP/proxbox-release-restore.XXXXXX")"
+          canonical_backup="$restore_dir/release.yaml"
+          local_backup="$restore_dir/local-release.yaml"
+          cp "$canonical_release_path" "$canonical_backup"
+          canonical_sha256="$(sha256sum "$canonical_release_path" | cut -d' ' -f1)"
+          local_dir_existed=0
+          local_existed=0
+          [ ! -d "$local_release_dir" ] || local_dir_existed=1
+          if [ -f "$local_release_path" ]; then
+            local_existed=1
+            cp "$local_release_path" "$local_backup"
+          fi
+
+          restore_release_metadata() {
+            cp "$canonical_backup" "$canonical_release_path"
+            if [ "$local_existed" = 1 ]; then
+              install -d "$local_release_dir"
+              cp "$local_backup" "$local_release_path"
+            else
+              rm -f "$local_release_path"
+              if [ "$local_dir_existed" = 0 ]; then
+                rmdir "$local_release_dir" 2>/dev/null || true
+              fi
+            fi
+          }
+          trap restore_release_metadata EXIT
+
+          manage=(.venv/bin/python ../netbox/netbox/manage.py)
+          install -d "$local_release_dir"
+          cat > "$local_release_path" <<'YAML'
+          build: Docker-ci
+          YAML
+          "${manage[@]}" check
+          "${manage[@]}" shell -c '
+          from netbox.registry import registry
+          from utilities.release import load_release_data
+
+          release = load_release_data()
+          assert "netbox_proxbox" in registry["plugins"]["installed"]
+          assert release.version == "4.7.0"
+          assert release.designation == "beta2"
+          assert release.build == "Docker-ci"
+          '
+
+          cat > "$local_release_path" <<'YAML'
+          build: Docker-ci
+          designation: beta2
+          YAML
+          spoof_log="$restore_dir/spoofed-local-release.log"
+          "${manage[@]}" check > "$spoof_log" 2>&1
+          grep -F "permits only the build key in local/release.yaml" "$spoof_log"
+          "${manage[@]}" shell -c '
+          from netbox.registry import registry
+
+          assert "netbox_proxbox" not in registry["plugins"]["installed"]
+          ' >> "$spoof_log" 2>&1
+
+          rm -f "$local_release_path"
+          for held_identity in final beta3; do
+            .venv/bin/python - "$canonical_release_path" "$held_identity" <<'PY'
+          import sys
+          from pathlib import Path
+
+          import yaml
+
+          path = Path(sys.argv[1])
+          identity = sys.argv[2]
+          data = yaml.safe_load(path.read_text(encoding="utf-8"))
+          if identity == "final":
+              data.pop("designation", None)
+          else:
+              data["designation"] = identity
+          path.write_text(yaml.safe_dump(data, sort_keys=False), encoding="utf-8")
+          PY
+            held_log="$restore_dir/held-$held_identity.log"
+            "${manage[@]}" check > "$held_log" 2>&1
+            grep -F "approved only for NetBox 4.7.0-beta2" "$held_log"
+            "${manage[@]}" shell -c '
+          from netbox.registry import registry
+
+          assert "netbox_proxbox" not in registry["plugins"]["installed"]
+          ' >> "$held_log" 2>&1
+            cp "$canonical_backup" "$canonical_release_path"
+            test "$(sha256sum "$canonical_release_path" | cut -d' ' -f1)" = \
+              "$canonical_sha256"
+          done
+
+          restore_release_metadata
+          trap - EXIT
+          cmp "$canonical_backup" "$canonical_release_path"
+          test "$(sha256sum "$canonical_release_path" | cut -d' ' -f1)" = \
+            "$canonical_sha256"
+          if [ "$local_existed" = 1 ]; then
+            cmp "$local_backup" "$local_release_path"
+          else
+            test ! -e "$local_release_path"
+          fi
+          "${manage[@]}" check
+          test -z "$(git -C ../netbox status --porcelain --untracked-files=all)"
 
       - name: Run NetBox-backed model, view, and integration tests
         working-directory: netbox-proxbox
@@ -118,7 +333,7 @@ jobs:
           NETBOX_PROXBOX_TEST_PDM: ${{ matrix.pdm && '1' || '0' }}
           PYTHONPATH: ${{ github.workspace }}/netbox/netbox:${{ github.workspace }}/netbox-proxbox
         run: |
-          pytest tests/test_netbox_compat_django.py \
+          .venv/bin/pytest tests/test_netbox_compat_django.py \
             tests/test_list_view_render_django.py \
             tests/test_sync_state_models.py tests/test_sync_state_contracts.py \
             tests/test_backend_key_adoption_django.py \
@@ -129,16 +344,18 @@ jobs:
             tests/test_node_ssh_credential_form_django.py \
             tests/test_detail_view_templates_django.py \
             tests/test_pdm_endpoint_permissions_django.py \
+            tests/test_packer_endpoint_authorization_django.py \
             tests/test_storage_nodes_capacity_django.py \
             tests/test_mcp_bridge_django.py \
             tests/test_proxbox_job_filter_django.py \
+            tests/test_sync_jobs_api_django.py \
             --ds=netbox.settings --reuse-db --create-db -v --no-header \
             --cov=netbox_proxbox.services.endpoint_autoconfiguration \
             --cov=netbox_proxbox.api.serializers.resource_views \
             --cov-branch --cov-report=term-missing --cov-fail-under=0
-          coverage report \
+          .venv/bin/coverage report \
             --include='netbox_proxbox/services/endpoint_autoconfiguration.py' \
             --fail-under=85
-          coverage report \
+          .venv/bin/coverage report \
             --include='netbox_proxbox/api/serializers/resource_views.py' \
             --fail-under=85

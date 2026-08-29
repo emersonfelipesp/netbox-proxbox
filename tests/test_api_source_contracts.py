@@ -595,6 +595,7 @@ def test_plugin_api_routes_register_all_plugin_objects():
         "settings",
         "ssh-credentials",
         "storage",
+        "sync-jobs",
         "sync-state/cluster-groups",
         "sync-state/cluster-types",
         "sync-state/clusters",

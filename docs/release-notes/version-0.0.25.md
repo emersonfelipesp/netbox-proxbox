@@ -2,15 +2,16 @@
 
 netbox-proxbox `0.0.25` pairs with `proxbox-api 0.0.20`,
 `proxmox-sdk 0.0.13`, and the backend's REST dependency
-`netbox-sdk 0.0.10`. NetBox support is unchanged: a **stable** tier covering
-`4.5.8` through `4.6.99`, and an **experimental** tier covering `4.7.0` through
-`4.7.99`. The latest certified NetBox release remains `4.6.6`.
+`netbox-sdk 0.0.10`. NetBox support includes a **stable** tier covering
+`4.5.8` through `4.6.99`, and **experimental** evaluation of exact canonical
+`4.7.0-beta2`. The numeric ceiling is `4.7.0`; canonical metadata must retain
+designation `beta2`. The latest certified NetBox release remains `4.6.6`.
 
 Current backend-runtime pairing: netbox-proxbox 0.0.25 <-> proxbox-api 0.0.20 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |---|---|---|---|---|
-| >=4.5.8 | v0.0.25 | v0.0.20 | v0.0.10 | v0.0.13 |
+| 4.5.8-4.6.x; exact canonical 4.7.0-beta2 | v0.0.25 | v0.0.20 | v0.0.10 | v0.0.13 |
 
 ## Sync Jobs is now a Proxbox-only page
 

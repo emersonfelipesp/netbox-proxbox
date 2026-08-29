@@ -16,7 +16,10 @@ This directory contains Django/NetBox forms for plugin models, plugin settings, 
 ## Files And Ownership
 
 - [`__init__.py`](./__init__.py): re-exports all concrete form classes.
-- [`proxmox.py`](./proxmox.py): create/edit and filter forms for `ProxmoxEndpoint`.
+- [`proxmox.py`](./proxmox.py): create/edit and filter forms for
+  `ProxmoxEndpoint`, including the Access control fieldset's broad
+  `allow_writes` gate and separate default-off
+  `allow_packer_template_builds` capability.
 - [`netbox.py`](./netbox.py): create/edit and filter forms for `NetBoxEndpoint`, including local validation for token version selection.
 - [`fastapi.py`](./fastapi.py): create/edit and filter forms for `FastAPIEndpoint`, including WebSocket and backend token fields.
 - [`backup_routine.py`](./backup_routine.py): create/edit and filter forms for `BackupRoutine`.
@@ -73,9 +76,10 @@ Each endpoint type has an `ImportForm` (e.g. `ProxmoxEndpointImportForm`, `NetBo
   Its warning asks the operator to replace the hidden value or delete the mapping;
   never repopulate the input from the raw stored value.
 - Password and token_value fields on `ProxmoxEndpointForm` use `PasswordInput(render_value=False)` and are preserved from the stored instance when the user submits a blank value (edit-without-change UX).
-- `ProxmoxEndpointForm` exposes `allow_writes` in a dedicated **Write permission**
-  fieldset so operators can opt a Proxmox endpoint into backend write verbs from
-  the normal add/edit form.
+- `ProxmoxEndpointForm` exposes the broad `allow_writes` gate and the separate
+  default-off `allow_packer_template_builds` capability in its **Access control**
+  fieldset so operators make both trust assertions explicitly in the normal
+  add/edit form.
 - Endpoint-level browser-terminal SSH fields are shared between
   `ProxmoxEndpointForm` and `ProxmoxEndpointSSHSettingsForm` through
   `ProxmoxEndpointSSHCredentialFormMixin`. The selector

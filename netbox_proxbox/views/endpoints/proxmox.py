@@ -8,7 +8,7 @@ from typing import ClassVar
 
 from django.contrib import messages
 from django.core.exceptions import ValidationError
-from django.db.models import QuerySet
+from django.db.models import Q, QuerySet
 from django.http import HttpRequest, HttpResponse, HttpResponseRedirect, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
@@ -232,6 +232,17 @@ class _ProxmoxEndpointBulkEnabledView(
             return HttpResponseRedirect(self._return_url(request))
 
         queryset = self._selected_queryset(request)
+        protected = Q(allow_packer_template_builds=True) | Q(
+            packer_template_builds_backend_authorized=True
+        )
+        protected_count = queryset.filter(protected).count()
+        # Bulk toggles intentionally remain local-only. An endpoint carrying an
+        # external packer grant must use a normal save so the credential-free
+        # backend policy update cannot be bypassed.
+        queryset = queryset.filter(
+            allow_packer_template_builds=False,
+            packer_template_builds_backend_authorized=False,
+        )
         matched_count = queryset.count()
         updated_count = queryset.exclude(enabled=self.enabled).update(
             enabled=self.enabled
@@ -258,6 +269,15 @@ class _ProxmoxEndpointBulkEnabledView(
                 _("No selected Proxmox endpoints were available to {verb}.").format(
                     verb=self.verb
                 ),
+            )
+
+        if protected_count:
+            messages.warning(
+                request,
+                _(
+                    "{count} endpoint(s) with Packer template authorization were skipped; "
+                    "edit and save them individually so backend policy stays synchronized."
+                ).format(count=protected_count),
             )
 
         return HttpResponseRedirect(self._return_url(request))
@@ -1207,14 +1227,20 @@ class ProxmoxEndpointDeleteView(generic.ObjectDeleteView):
     Delete a Proxmox endpoint.
     """
 
-    queryset = ProxmoxEndpoint.objects.all()
+    queryset = ProxmoxEndpoint.objects.filter(
+        allow_packer_template_builds=False,
+        packer_template_builds_backend_authorized=False,
+    )
 
 
 @register_model_view(ProxmoxEndpoint, "bulk_delete", detail=False)
 class ProxmoxEndpointBulkDeleteView(generic.BulkDeleteView):
     """Bulk-delete Proxmox endpoint records."""
 
-    queryset = ProxmoxEndpoint.objects.all()
+    queryset = ProxmoxEndpoint.objects.filter(
+        allow_packer_template_builds=False,
+        packer_template_builds_backend_authorized=False,
+    )
     filterset = ProxmoxEndpointFilterSet
     table = ProxmoxEndpointTable
 

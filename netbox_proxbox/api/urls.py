@@ -6,6 +6,7 @@ from netbox.api.routers import NetBoxRouter
 from . import views
 from .ha import HAClusterSummaryAPIView, HAVMResourceAPIView
 from .jobs import ProxboxJobCancelAPIView
+from .sync_jobs import ProxboxSyncJobViewSet
 from .ssh_credentials import (
     NodeHostKeyFingerprintAPIView,
     NodeSSHCredentialByNodeAPIView,
@@ -284,6 +285,11 @@ router.register(
     "apply-jobs",
     views.ProxmoxApplyJobViewSet,
     basename="proxmoxapplyjob",
+)
+router.register(
+    "sync-jobs",
+    ProxboxSyncJobViewSet,
+    basename="syncjob",
 )
 
 urlpatterns = [

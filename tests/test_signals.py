@@ -78,3 +78,35 @@ def test_signals_module_only_uses_post_save_receivers():
         assert info["signal"] == "post_save", (
             f"All endpoint receivers must run on post_save, not {info['signal']!r}"
         )
+
+
+def test_disabled_proxmox_save_requests_policy_only_backend_revocation():
+    source = SIGNALS_PATH.read_text(encoding="utf-8")
+    assert "policy_revocation_only = not bool" in source
+    assert "allow_disabled_policy_update=policy_revocation_only" in source
+
+
+def test_proxmox_backend_push_runs_only_after_commit_from_a_fresh_row():
+    source = SIGNALS_PATH.read_text(encoding="utf-8")
+    handler = source.split("def ensure_proxmox_endpoint_has_fastapi_token(", 1)[
+        1
+    ].split("@receiver(post_save", 1)[0]
+    assert "transaction.on_commit(sync_committed_endpoint, using=using)" in handler
+    assert "manager.filter(pk=endpoint_pk).first()" in handler
+    assert "_after_commit=True" in handler
+    assert handler.index("transaction.on_commit") < handler.index(
+        "from netbox_proxbox.models import FastAPIEndpoint"
+    )
+
+
+def test_signal_delegates_confirmed_policy_recording_to_shared_push_helper():
+    source = SIGNALS_PATH.read_text(encoding="utf-8")
+    handler = source.split("def ensure_proxmox_endpoint_has_fastapi_token(", 1)[
+        1
+    ].split("@receiver(post_save", 1)[0]
+    assert "sync_proxmox_endpoint_to_backend(" in handler
+    backend_sync = (
+        REPO_ROOT / "netbox_proxbox" / "views" / "backend_sync.py"
+    ).read_text(encoding="utf-8")
+    assert "_record_confirmed_packer_template_authorization(" in backend_sync
+    assert "packer_template_builds_backend_authorized=authorized" in backend_sync

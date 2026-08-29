@@ -10,17 +10,18 @@ Proxbox is a NetBox plugin that integrates Proxmox with NetBox through a separat
 | Tier | NetBox range | Behaviour |
 |---|---|---|
 | Stable | `4.5.8` - `4.6.99` | Admitted silently. Exercised in CI at v4.5.8, v4.5.10, v4.6.0 and v4.6.6. |
-| Experimental | `4.7.0` - `4.7.99` | Loads and runs with no configuration change; warns once via system check `netbox_proxbox.W001`. |
+| Experimental | exact canonical `4.7.0-beta2` | Loads for evaluation with no configuration change; warns once via system check `netbox_proxbox.W001`. |
 
-Experimental support requires no setting, opt-in flag, or install step. The
-notice is a warning, never an error, and is silenced with Django's stock
-the `silence_netbox_compatibility_warning` key in the plugin's `PLUGINS_CONFIG` entry.
+Exact beta2 support requires no setting, opt-in flag, or install step. Its
+maturity notice is silenced with the `silence_netbox_compatibility_warning` key
+in the plugin's `PLUGINS_CONFIG` entry. Other 4.7 identities fail closed: NetBox
+warns, omits the plugin, and continues startup.
 
 ## Compatibility
 
 | NetBox   | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
-| >=4.5.8  | v0.0.25 | v0.0.20 | v0.0.10 | v0.0.13 |
+| 4.5.8-4.6.x; exact canonical 4.7.0-beta2 | v0.0.25 | v0.0.20 | v0.0.10 | v0.0.13 |
 | >=4.5.8  | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8  | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8  | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |
@@ -56,10 +57,16 @@ The current repository code declares support for:
 That support comes directly from the plugin config in this repository:
 
 - `min_version = "4.5.8"`
-- `max_version = "4.7.99"` (the experimental ceiling; `4.5.8`-`4.6.99` is the stable tier)
+- `max_version = "4.7.0"` (numeric ceiling; canonical release metadata must
+  additionally identify exact `4.7.0-beta2`; `4.5.8`-`4.6.99` is stable)
 
 This compatibility line is validated against NetBox `v4.5.8` through `v4.5.10`
-and `v4.6.0` through `v4.6.6`. It includes per-endpoint API-only vs API+SSH access
+and `v4.6.0` through `v4.6.6` in the stable tier, plus evaluation-only
+`v4.7.0-beta2` at exact commit `aa1d49d0f5021a28e6efc2d0364b84c5bcec7137`.
+The source matrix verifies each checkout's commit and release metadata before
+installing its checksum-bound, artifact-hashed Python 3.12/Linux dependency
+lock.
+It includes per-endpoint API-only vs API+SSH access
 methods, tenant-scoped endpoint allowlists, bulk endpoint enablement, PDM
 endpoint sync, SDN inventory, Firecracker serializer hardening, dual VM
 interface sync, and the all-endpoint `enabled=False` no-connection guard.

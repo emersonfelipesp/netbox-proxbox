@@ -36,6 +36,9 @@ def test_build_pve_template_action_registered_on_viewset() -> None:
         "PVETemplateBuildRequestSerializer",
         "build_cloud_image_pipeline_via_backend",
         "build_pve_template_via_backend",
+        "require_template_build_authorization",
+        "resolve_authorized_backend_endpoint_id",
+        "_PackerTemplateBuildActionPermission",
         '"endpoint_id"',
     ):
         assert token in views, f"missing token in api/views.py: {token!r}"

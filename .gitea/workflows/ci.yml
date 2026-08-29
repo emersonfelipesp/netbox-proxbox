@@ -13,8 +13,10 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: netbox-proxbox-ci-${{ github.ref }}
-  cancel-in-progress: true
+  # One active CI run per repository: all refs share this capacity-bounded host.
+  group: netbox-proxbox-ci
+  # Never let feature-branch churn cancel protected-branch or immutable-tag evidence.
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -26,7 +28,7 @@ jobs:
     timeout-minutes: 35
     env:
       HOME: ${{ github.workspace }}
-      UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
+      UV_NO_CACHE: "1"
       UV_PYTHON_DOWNLOADS: never
     steps:
       - name: Checkout
@@ -34,13 +36,25 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Reset generated workspace state
+        shell: bash
+        run: bash ci/clean-generated-workspace.sh startup
+
       - name: Install locked quality and test environment
         shell: bash
         run: |
           set -euo pipefail
           command -v uv
+          required_kib=393216
+          available_kib="$(df -Pk . | awk 'NR == 2 {print $4}')"
+          [[ "$available_kib" =~ ^[0-9]+$ ]]
+          printf 'runner_capacity available_kib=%s required_kib=%s\n' \
+            "$available_kib" "$required_kib"
+          test "$available_kib" -ge "$required_kib"
           uv venv --python 3.12 .venv
-          uv sync --extra test --extra dev --extra cli --group dev --locked
+          # The optional `dev` extra owns lint/type tools. The dependency-group
+          # named `dev` owns MkDocs and belongs only in docs-and-package.
+          uv sync --no-dev --extra test --extra dev --extra cli --locked
 
       - name: Ruff lint and format
         shell: bash
@@ -67,13 +81,21 @@ jobs:
           set -euo pipefail
           .venv/bin/python -m pytest -p no:django -q -rs tests
 
+      - name: Clean quality environment
+        if: always()
+        shell: bash
+        run: bash ci/clean-generated-workspace.sh cleanup
+
   docs-and-package:
     name: Strict docs and package validation
+    # Both jobs share one capacity-bounded runner host. Avoid two concurrent
+    # locked environments and their extraction scratch space.
+    needs: quality
     runs-on: ci-untrusted-python312
     timeout-minutes: 30
     env:
       HOME: ${{ github.workspace }}
-      UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
+      UV_NO_CACHE: "1"
       UV_PYTHON_DOWNLOADS: never
     steps:
       - name: Checkout
@@ -81,24 +103,38 @@ jobs:
         with:
           persist-credentials: false
 
+      - name: Reset generated workspace state
+        shell: bash
+        run: bash ci/clean-generated-workspace.sh startup
+
       - name: Install documentation and packaging environment
         shell: bash
         run: |
           set -euo pipefail
           command -v uv
+          required_kib=393216
+          available_kib="$(df -Pk . | awk 'NR == 2 {print $4}')"
+          [[ "$available_kib" =~ ^[0-9]+$ ]]
+          printf 'runner_capacity available_kib=%s required_kib=%s\n' \
+            "$available_kib" "$required_kib"
+          test "$available_kib" -ge "$required_kib"
           uv venv --python 3.12 .venv
-          uv sync --group dev --locked
-          uv pip install --python .venv/bin/python "build>=1.3,<2" "twine>=6.2,<7"
+          uv sync --group dev --group publish --locked
 
       - name: Build strict documentation
         shell: bash
         run: |
           set -euo pipefail
-          .venv/bin/mkdocs build --strict --site-dir /tmp/netbox-proxbox-site
+          .venv/bin/mkdocs build --strict --site-dir .ci-site
 
       - name: Build and check distribution
         shell: bash
         run: |
           set -euo pipefail
-          .venv/bin/python -m build
+          .venv/bin/python -m build --no-isolation
           .venv/bin/twine check dist/*
+
+      - name: Clean docs and package environment
+        if: always()
+        shell: bash
+        run: bash ci/clean-generated-workspace.sh cleanup

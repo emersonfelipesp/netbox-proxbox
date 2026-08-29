@@ -117,6 +117,8 @@ curl -H "Authorization: Token <token>" \
 | `enabled` | boolean | Local inventory toggle. Disabled endpoints remain visible but are excluded from operational reads, registration, keepalive, status, and sync paths. |
 | `allowed_tenants` | nested Tenant list | Tenant allow-list for NMS Cloud endpoint visibility. Empty means default/global visibility. |
 | `allow_writes` | boolean | Gate for the operational verb routes on the paired `proxbox-api` (start/stop/snapshot/migrate). Defaults to `false`. When `false`, `proxbox-api` returns `403 {"reason": "writes_disabled_for_endpoint"}` for verb POSTs against this endpoint even with a valid API key and `X-Proxbox-Actor` header. Flip to `true` per-endpoint to opt that Proxmox cluster into write access. |
+| `allow_packer_template_builds` | boolean | Separate, default-off capability for netbox-packer Cloud-Init template-image creation. It is effective only when the endpoint is enabled and `allow_writes` is also true, authorizes no other Proxmox mutation, and is propagated to proxbox-api so the backend can recheck it at the final write boundary. |
+| `packer_template_builds_backend_authorized` | boolean (read-only) | Last effective Packer template-build grant successfully confirmed on proxbox-api. Endpoint deletion remains blocked while this is true, including after a local revocation whose backend update failed. |
 | `ssh_credential_source` | choice | Browser terminal endpoint SSH source. `dedicated` (default) uses the encrypted endpoint `ssh_*` fields. `reuse_endpoint` sends the realm-stripped endpoint username plus endpoint plaintext password to `proxbox-api` as password SSH auth. |
 | `ssh_username` / `ssh_port` / `ssh_auth_method` / `ssh_known_host_fingerprint` | mixed | Dedicated endpoint SSH credential metadata for browser terminal sessions. The pinned host-key fingerprint is also required when `ssh_credential_source=reuse_endpoint`. |
 | `has_ssh_password` / `has_ssh_private_key` / `has_ssh_terminal_credentials` | boolean | Read-only browser terminal credential readiness flags. In reuse mode, readiness depends on endpoint host, pinned fingerprint, realm-stripped username, and endpoint password. |
@@ -131,6 +133,19 @@ curl -H "Authorization: Token <token>" \
 
 !!! tip "Operational verbs"
     `allow_writes` does **not** gate any of the read-side sync paths. It only controls the POST verb routes (`/proxmox/qemu/{vmid}/{start,stop,snapshot,migrate}` and the LXC equivalents) on the paired `proxbox-api`. See [Operational verbs design](../design/operational-verbs.md) and the [Endpoint Operations API](./operations.md).
+
+!!! warning "Packer template builds need both gates"
+    Enabling `allow_writes` alone does not authorize a template bake. The same
+    endpoint must also have `allow_packer_template_builds=true`. The Templates
+    tab keeps its netbox-packer action disabled with an explanatory tooltip
+    until both flags are enabled; proxbox-api independently returns
+    `packer_template_builds_disabled_for_endpoint` if the narrow capability is
+    absent or revoked. `POST .../build-pve-template/` and
+    `POST .../cloud-image-build-pipeline/` additionally require
+    `core.run_proxmox_action`; both check the three endpoint gates before any
+    backend call and translate the URL's NetBox endpoint ID to proxbox-api's
+    separate endpoint ID. A failed backend revocation leaves the read-only
+    confirmed flag true and causes single or bulk REST deletion to return 409.
 
 !!! tip "Endpoint SSH terminal credentials"
     The endpoint SSH secrets endpoint keeps the same response shape for both

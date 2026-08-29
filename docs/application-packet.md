@@ -19,11 +19,15 @@ the certification process.
 ## Compatibility Target
 
 The certification matrix covers NetBox `v4.5.8` through `v4.5.10` and `v4.6.0`
-through `v4.6.6` in the **stable** tier, plus `v4.7.0-beta1` in the
+through `v4.6.6` in the **stable** tier, plus `v4.7.0-beta2` at exact commit
+`aa1d49d0f5021a28e6efc2d0364b84c5bcec7137` in the
 **experimental** tier. `netbox-proxbox` declares `min_version = "4.5.8"` and
-`max_version = "4.7.99"`, sourced from its vendored `compat.py`: NetBox 4.7
-loads with no configuration change and warns once that the line is not yet
-certified.
+`max_version = "4.7.0"`, sourced from its vendored `compat.py`, then requires
+canonical `release.yaml` identity `version: "4.7.0"` plus `designation:
+"beta2"`. Other 4.7 identities are omitted fail-closed while NetBox continues
+startup. Each source-matrix cell verifies the checked-out commit and NetBox
+release metadata, checksums that commit's upstream requirements, and enforces a
+reviewed Python 3.12/Linux dependency lock with artifact hashes.
 
 **This statement is scoped to `netbox-proxbox` alone.** The companion plugins
 (`netbox-ceph`, `netbox-packer`, `netbox-pbs`, `netbox-pdm`) carry the same
@@ -39,7 +43,7 @@ every installed Proxbox-family plugin to a 4.7-capable release first, then
 verify each is registered with `apps.is_installed()` rather than inferring it
 from a successful start.
 
-NetBox `v4.7.0-beta1` is additionally an **upstream pre-release**. Upstream
+NetBox `v4.7.0-beta2` is additionally an **upstream pre-release**. Upstream
 does not support pre-releases in production and does not guarantee an upgrade
 path from a pre-release to the final release, so the experimental tier is
 evaluation evidence on disposable data — not a production certification.

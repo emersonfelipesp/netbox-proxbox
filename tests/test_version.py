@@ -10,10 +10,13 @@ reminder to update the docs and release-notes files at the same time.
 from __future__ import annotations
 
 import ast
+import hashlib
 import json
 import re
 from pathlib import Path
 import tomllib
+
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 INIT_PATH = REPO_ROOT / "netbox_proxbox" / "__init__.py"
@@ -74,10 +77,15 @@ CURRENT_NETBOX_MIN_VERSION = "4.5.8"
 # Ceiling of the certified, CI-gated tier. Docs that describe *supported*
 # NetBox still quote this range.
 CURRENT_NETBOX_STABLE_MAX_VERSION = "4.6.99"
-# Ceiling actually declared on ProxboxConfig.max_version — the experimental
-# tier. NetBox 4.7 is admitted without an opt-in and warns at startup.
-CURRENT_NETBOX_MAX_VERSION = "4.7.99"
+# Ceiling actually declared on ProxboxConfig.max_version. NetBox supplies bare
+# 4.7.0 for prereleases and GA, so the runtime guard additionally attests the
+# exact canonical beta2 designation.
+CURRENT_NETBOX_MAX_VERSION = "4.7.0"
 CURRENT_NETBOX_EXPERIMENTAL_MIN_VERSION = "4.7.0"
+CURRENT_NETBOX_EXPERIMENTAL_TAG = "v4.7.0-beta2"
+CURRENT_NETBOX_EXPERIMENTAL_DESIGNATION = "beta2"
+CURRENT_NETBOX_SUPPORT_LABEL = "4.5.8-4.6.x; exact canonical 4.7.0-beta2"
+CURRENT_NETBOX_EXPERIMENTAL_REF = "aa1d49d0f5021a28e6efc2d0364b84c5bcec7137"
 LATEST_CERTIFIED_NETBOX_VERSION = "4.6.6"
 LATEST_CERTIFIED_NETBOX_IMAGE = (
     f"netboxcommunity/netbox:v{LATEST_CERTIFIED_NETBOX_VERSION}"
@@ -107,7 +115,75 @@ DJANGO_TESTED_NETBOX_TAGS = (
     "v4.6.6",
     # Experimental tier. Pinned to the immutable beta tag and required,
     # not continue-on-error.
-    "v4.7.0-beta1",
+    "v4.7.0-beta2",
+)
+DJANGO_TESTED_NETBOX_ROWS = (
+    {
+        "netbox": "v4.5.8",
+        "pdm": False,
+        "netbox_ref": "75e1b86613792458b4d4c8d0cbbfc94df16cfaaf",
+        "netbox_version": "4.5.8",
+        "netbox_designation": "",
+        "netbox_requirements_sha256": (
+            "646c5bb635d5b9b126c6af4d56664dfde461608bdcaa8a65c1735ac5d8ddde9b"
+        ),
+        "netbox_lock": "ci/netbox-requirements/v4.5.8-py312-linux-x86_64.txt",
+    },
+    {
+        "netbox": "v4.5.10",
+        "pdm": False,
+        "netbox_ref": "b78bd713294564e0421c36c936a909e64da04b8d",
+        "netbox_version": "4.5.10",
+        "netbox_designation": "",
+        "netbox_requirements_sha256": (
+            "d68f08fb6167317174be89cda3045ee0e2fa34dd6e18ce19db2a31cf31a26e6f"
+        ),
+        "netbox_lock": "ci/netbox-requirements/v4.5.10-py312-linux-x86_64.txt",
+    },
+    {
+        "netbox": "v4.6.0",
+        "pdm": False,
+        "netbox_ref": "00791344e68213bde942218283dce03cc3941c30",
+        "netbox_version": "4.6.0",
+        "netbox_designation": "",
+        "netbox_requirements_sha256": (
+            "0d88cea37b413f22953ead2c2c341c82fe7a5e5d8a01f42632288676db8d66b6"
+        ),
+        "netbox_lock": "ci/netbox-requirements/v4.6.0-py312-linux-x86_64.txt",
+    },
+    {
+        "netbox": "v4.6.6",
+        "pdm": False,
+        "netbox_ref": "fb8c455ba61b57119a70670612dfdd05e8438b10",
+        "netbox_version": "4.6.6",
+        "netbox_designation": "",
+        "netbox_requirements_sha256": (
+            "25eb62e54362568599c7701a528a7ac24dbe0400d5311fc496eab866bd6174b9"
+        ),
+        "netbox_lock": "ci/netbox-requirements/v4.6.6-py312-linux-x86_64.txt",
+    },
+    {
+        "netbox": "v4.7.0-beta2",
+        "pdm": False,
+        "netbox_ref": "aa1d49d0f5021a28e6efc2d0364b84c5bcec7137",
+        "netbox_version": "4.7.0",
+        "netbox_designation": "beta2",
+        "netbox_requirements_sha256": (
+            "f658550e473ad047205b9d442b36d72f2477233790e9b2b3f85a1ecd8c9fe609"
+        ),
+        "netbox_lock": ("ci/netbox-requirements/v4.7.0-beta2-py312-linux-x86_64.txt"),
+    },
+    {
+        "netbox": "v4.6.6",
+        "pdm": True,
+        "netbox_ref": "fb8c455ba61b57119a70670612dfdd05e8438b10",
+        "netbox_version": "4.6.6",
+        "netbox_designation": "",
+        "netbox_requirements_sha256": (
+            "25eb62e54362568599c7701a528a7ac24dbe0400d5311fc496eab866bd6174b9"
+        ),
+        "netbox_lock": "ci/netbox-requirements/v4.6.6-py312-linux-x86_64.txt",
+    },
 )
 PREVIOUS_PLUGIN_VERSION = "0.0.22"
 PREVIOUS_PROXBOX_API_VERSION = "0.0.19.post5"
@@ -229,6 +305,11 @@ def test_min_max_netbox_versions_are_pinned():
         == CURRENT_NETBOX_EXPERIMENTAL_MIN_VERSION
     )
     assert compat["EXPERIMENTAL_MAX_NETBOX_VERSION"] == CURRENT_NETBOX_MAX_VERSION
+    assert compat["APPROVED_EXPERIMENTAL_NETBOX_VERSION"] == CURRENT_NETBOX_MAX_VERSION
+    assert (
+        compat["APPROVED_EXPERIMENTAL_NETBOX_DESIGNATION"]
+        == CURRENT_NETBOX_EXPERIMENTAL_DESIGNATION
+    )
     assert compat["PLUGIN_MIN_VERSION"] == CURRENT_NETBOX_MIN_VERSION
     assert compat["PLUGIN_MAX_VERSION"] == CURRENT_NETBOX_MAX_VERSION
 
@@ -241,6 +322,13 @@ def test_plugin_config_bounds_are_wired_to_compat():
     names = _class_constant_names("ProxboxConfig")
     assert names.get("min_version") == "PLUGIN_MIN_VERSION"
     assert names.get("max_version") == "PLUGIN_MAX_VERSION"
+    assert (
+        names.get("approved_netbox_version") == "APPROVED_EXPERIMENTAL_NETBOX_VERSION"
+    )
+    assert (
+        names.get("approved_netbox_designation")
+        == "APPROVED_EXPERIMENTAL_NETBOX_DESIGNATION"
+    )
     literals = _class_constants("ProxboxConfig")
     assert "min_version" not in literals
     assert "max_version" not in literals
@@ -281,11 +369,14 @@ COMPATIBILITY_AUTHORITY_PATHS = (
 
 
 def test_experimental_netbox_tier_is_documented():
-    """The experimental tier must be stated where operators actually look."""
+    """The exact held beta identity must be stated where operators look."""
     for path in (README_PATH, COMPATIBILITY_PATH, CLAUDE_PATH):
         text = _read(path)
         assert CURRENT_NETBOX_MAX_VERSION in text, (
             f"{path} missing experimental ceiling"
+        )
+        assert CURRENT_NETBOX_EXPERIMENTAL_TAG.removeprefix("v") in text, (
+            f"{path} missing exact held beta identity"
         )
         assert "experimental" in text.lower(), f"{path} does not name the tier"
     # And the silencing escape hatch must be discoverable, since the warning is
@@ -330,15 +421,15 @@ def test_the_beta_example_keeps_the_prerelease_caveat():
     The pre-release paragraph is the only thing telling an operator that
     upstream does not support the release in production and offers no upgrade
     path to GA. An example that quotes the *stable* hint next to a
-    ``4.7.0-beta1`` banner tells them the opposite.
+    ``4.7.0-beta2`` banner tells them the opposite.
     """
     text = _read(README_PATH)
-    beta_marker = "4.7.0-beta1) Proxbox is running on NetBox 4.7.0-beta1"
+    beta_marker = "4.7.0-beta2) Proxbox is running on NetBox 4.7.0-beta2"
     assert (
-        beta_marker in text or "W001) Proxbox is running on NetBox 4.7.0-beta1" in text
+        beta_marker in text or "W001) Proxbox is running on NetBox 4.7.0-beta2" in text
     )
     # Locate the fenced example and check the caveat travels with it.
-    start = text.index("W001) Proxbox is running on NetBox 4.7.0-beta1")
+    start = text.index("W001) Proxbox is running on NetBox 4.7.0-beta2")
     example = text[start : text.index("```", start)]
     assert "pre-release" in example.lower(), (
         "the beta example dropped the pre-release caveat"
@@ -400,6 +491,77 @@ def test_django_tests_pin_expected_netbox_matrix():
     workflow = _read(DJANGO_TESTS_WORKFLOW_PATH)
     expected_matrix = json.dumps(list(DJANGO_TESTED_NETBOX_TAGS))
     assert f"        netbox: {expected_matrix}" in workflow
+    parsed = yaml.safe_load(workflow)
+    include = parsed["jobs"]["django-tests"]["strategy"]["matrix"]["include"]
+    assert tuple(include) == DJANGO_TESTED_NETBOX_ROWS
+    assert "ref: ${{ matrix.netbox_ref }}" in workflow
+
+
+def test_django_netbox_locks_match_reviewed_upstream_inputs():
+    unique_rows = {row["netbox_ref"]: row for row in DJANGO_TESTED_NETBOX_ROWS}
+    for row in unique_rows.values():
+        lock_path = REPO_ROOT / row["netbox_lock"]
+        input_path = lock_path.with_suffix(".in")
+        assert input_path.is_file(), f"missing upstream input snapshot: {input_path}"
+        assert lock_path.is_file(), f"missing generated dependency lock: {lock_path}"
+        assert (
+            hashlib.sha256(input_path.read_bytes()).hexdigest()
+            == (row["netbox_requirements_sha256"])
+        )
+        lock = _read(lock_path)
+        assert "--hash=sha256:" in lock
+        assert "-e " not in lock
+
+
+def test_current_prerelease_evidence_agrees_across_release_docs():
+    for path in (
+        README_PATH,
+        COMPATIBILITY_PATH,
+        CERTIFICATION_PATH,
+        APPLICATION_PACKET_PATH,
+        DOCS_INDEX_PATH,
+    ):
+        text = _read(path)
+        assert CURRENT_NETBOX_EXPERIMENTAL_TAG in text, (
+            f"{path} missing current experimental tag"
+        )
+        assert CURRENT_NETBOX_EXPERIMENTAL_REF in text, (
+            f"{path} missing exact experimental commit"
+        )
+
+
+def test_django_tests_pin_reviewed_execution_inputs():
+    workflow = _read(DJANGO_TESTS_WORKFLOW_PATH)
+    assert "runs-on: ubuntu-24.04" in workflow
+    assert (
+        workflow.count(
+            "uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803"
+        )
+        == 3
+    )
+    assert (
+        "uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1"
+        in workflow
+    )
+    assert (
+        "uses: astral-sh/setup-uv@11f9893b081a58869d3b5fccaea48c9e9e46f990" in workflow
+    )
+    assert 'version: "0.11.28"' in workflow
+    assert 'python-version: "3.12.13"' in workflow
+    assert "postgres:16-alpine@sha256:cf78e766" in workflow
+    assert "redis:7-alpine@sha256:ff02b58f" in workflow
+    assert "uv sync --extra test --locked" in workflow
+    assert "Verify exact NetBox source identity" in workflow
+    assert "git -C netbox rev-parse HEAD" in workflow
+    assert "refs/tags/$EXPECTED_NETBOX_TAG:refs/tags/$EXPECTED_NETBOX_TAG" in workflow
+    assert 'git -C netbox rev-parse "$EXPECTED_NETBOX_TAG^{commit}"' in workflow
+    assert "netbox/netbox/release.yaml" in workflow
+    assert "sha256sum --check --strict" in workflow
+    assert "--require-hashes" in workflow
+    assert "--default-index https://pypi.org/simple" in workflow
+    assert "--index-strategy first-index" in workflow
+    assert '-r "${{ matrix.netbox_lock }}"' in workflow
+    assert "../netbox/requirements.txt" not in workflow
 
 
 def test_page_coverage_pins_latest_certified_netbox():
@@ -586,7 +748,7 @@ def test_e2e_workflow_supports_proxbox_api_package_index_runtime_modes():
 
 def test_current_release_pairing_is_documented_in_primary_docs():
     current_row = (
-        f">={CURRENT_NETBOX_MIN_VERSION}",
+        CURRENT_NETBOX_SUPPORT_LABEL,
         f"v{CURRENT_RELEASE_VERSION}",
         CURRENT_PROXBOX_API_PAIRING_LABEL,
         "v0.0.10",
@@ -598,7 +760,7 @@ def test_current_release_pairing_is_documented_in_primary_docs():
 
     compatibility_row = (
         f"v{CURRENT_RELEASE_VERSION}",
-        f">={CURRENT_NETBOX_MIN_VERSION}",
+        CURRENT_NETBOX_SUPPORT_LABEL,
         ">=3.12",
         CURRENT_PROXBOX_API_PAIRING_LABEL,
         "v0.0.10",

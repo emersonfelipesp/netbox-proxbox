@@ -142,16 +142,42 @@ def ensure_proxmox_endpoint_has_fastapi_token(
 ) -> None:
     """Require an adopted FastAPI key before a ProxmoxEndpoint push.
 
-    This receiver never creates, bootstraps, or persists a credential.
+    This receiver never creates, bootstraps, or persists a credential. The
+    backend push is deferred until the surrounding database transaction commits,
+    then the endpoint is re-read so rolled-back or superseded policy is never
+    granted remotely.
     """
+    after_commit = bool(kwargs.pop("_after_commit", False))
+    if not after_commit:
+        endpoint_pk = getattr(instance, "pk", None)
+        using = kwargs.get("using")
+
+        def sync_committed_endpoint() -> None:
+            committed = instance
+            manager = getattr(sender, "objects", None)
+            if manager is not None and endpoint_pk is not None:
+                committed = manager.filter(pk=endpoint_pk).first()
+                if committed is None:
+                    return
+            ensure_proxmox_endpoint_has_fastapi_token(
+                sender=sender,
+                instance=committed,
+                created=created,
+                using=using,
+                _after_commit=True,
+            )
+
+        transaction.on_commit(sync_committed_endpoint, using=using)
+        return
+
     from netbox_proxbox.models import FastAPIEndpoint
 
-    if not bool(getattr(instance, "enabled", True)):
+    policy_revocation_only = not bool(getattr(instance, "enabled", True))
+    if policy_revocation_only:
         logger.info(
-            "ProxmoxEndpoint %s is disabled, skipping backend key verification and endpoint sync",
+            "ProxmoxEndpoint %s is disabled; attempting a policy-only backend revocation",
             getattr(instance, "pk", None),
         )
-        return
 
     count = FastAPIEndpoint.objects.filter(enabled=True).count()
     if count == 0:
@@ -219,6 +245,7 @@ def ensure_proxmox_endpoint_has_fastapi_token(
                 base_url=base_url,
                 auth_headers=auth_headers,
                 backend_verify_ssl=bool(fastapi_ep.verify_ssl),
+                allow_disabled_policy_update=policy_revocation_only,
             )
         except EncryptionError:
             logger.warning(

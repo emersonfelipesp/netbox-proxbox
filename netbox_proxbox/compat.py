@@ -11,29 +11,29 @@ contract itself moves.
 Two support tiers:
 
 * **stable** — ``4.5.8`` through ``4.6.99``. Fully supported and CI-gated.
-* **experimental** — ``4.7.0`` through ``4.7.99``. The plugin loads and runs
-  normally, but the release line is not yet certified, so a Django system check
-  warns once at startup.
+* **experimental** — the exact canonical ``4.7.0-beta2`` release identity. The
+  plugin loads and runs normally, but this upstream pre-release is not yet
+  certified for production, so a Django system check warns once at startup.
 
-Admission is left to NetBox's stock :class:`~netbox.plugins.PluginConfig`
-version gate, which compares against ``RELEASE.version``. Nothing here blocks
-startup: an experimental NetBox produces a ``Warning``, never an ``Error``, so
-an operator who upgrades NetBox never has to touch plugin configuration to keep
-running. The warning is silenceable through Django's stock
-``SILENCED_SYSTEM_CHECKS`` — this module deliberately adds no setting of its
-own.
+Stable admission is left to NetBox's stock
+:class:`~netbox.plugins.PluginConfig` version gate. NetBox supplies only the
+bare ``RELEASE.version`` to that gate, so a second fail-closed identity check
+reads the canonical release metadata for the held 4.7 line. An exact beta2
+identity produces a warning, never an error; an unreviewed 4.7 identity causes
+NetBox to warn and omit this plugin while startup continues.
 
 A note on beta version strings, because it is the whole reason the cap moved.
 NetBox splits its release identity in ``release.yaml``: at tag
-``v4.7.0-beta1`` the file reads ``version: "4.7.0"`` with
-``designation: "beta1"``, and ``settings.py`` passes ``RELEASE.version`` — the
+``v4.7.0-beta2`` the file reads ``version: "4.7.0"`` with
+``designation: "beta2"``, and ``settings.py`` passes ``RELEASE.version`` — the
 bare ``"4.7.0"`` — to the plugin gate. ``RELEASE.full_version`` carries the
-human-facing ``"4.7.0-beta1"``. So the gate never sees the pre-release
+human-facing ``"4.7.0-beta2"``. So the gate never sees the pre-release
 qualifier, and a cap of ``"4.6.99"`` rejects the beta outright.
-:func:`detect_netbox_version` returns both strings for exactly this reason:
-compare on the first, display the second. :func:`netbox_support_level`
-classifies either form identically, since ``4.7.0b1`` also sorts above
-``4.6.99``.
+:func:`validate_held_netbox_release_identity` reads ``release.yaml`` directly
+for exactly this reason. It never trusts ``load_release_data()`` because that
+helper overlays local data; ``local/release.yaml`` may add only an informational
+``build`` value while the canonical file alone supplies version and
+designation.
 
 **Import-time constraint.** NetBox calls ``PluginConfig.validate()`` while
 ``netbox/settings.py`` is still executing, and that import reaches this module.
@@ -50,6 +50,8 @@ from typing import Any
 from packaging import version as _version
 
 __all__ = [
+    "APPROVED_EXPERIMENTAL_NETBOX_DESIGNATION",
+    "APPROVED_EXPERIMENTAL_NETBOX_VERSION",
     "CONTRACT_VERSION",
     "EXPERIMENTAL_MAX_NETBOX_VERSION",
     "EXPERIMENTAL_MIN_NETBOX_VERSION",
@@ -67,15 +69,15 @@ __all__ = [
     "is_prerelease_netbox",
     "netbox_support_level",
     "register_netbox_compatibility_check",
+    "validate_held_netbox_release_identity",
 ]
 
 #: Bumped whenever the shared contract below changes shape. All five vendored
 #: copies must agree on this value; a mismatch means one repo was updated alone.
 #:
-#: v2 — added `detect_netbox_designation()`, `experimental_warning_hint()`,
-#: designation-aware `is_prerelease_netbox()`, and the `SILENCE_SETTING_NAME`
-#: PLUGINS_CONFIG opt-out.
-CONTRACT_VERSION = "netbox-compat-v2"
+#: v3 — narrowed 4.7 admission to exact canonical v4.7.0-beta2 identity and
+#: rejects local release-identity overrides before plugin registration.
+CONTRACT_VERSION = "netbox-compat-v3"
 
 #: Oldest NetBox release the Proxbox stack supports at all.
 STABLE_MIN_NETBOX_VERSION = "4.5.8"
@@ -83,14 +85,17 @@ STABLE_MIN_NETBOX_VERSION = "4.5.8"
 STABLE_MAX_NETBOX_VERSION = "4.6.99"
 #: First NetBox release admitted on an experimental basis.
 EXPERIMENTAL_MIN_NETBOX_VERSION = "4.7.0"
-#: Newest NetBox release admitted on an experimental basis.
-EXPERIMENTAL_MAX_NETBOX_VERSION = "4.7.99"
+#: Only bare 4.7 version admitted by NetBox's stock numeric gate.
+EXPERIMENTAL_MAX_NETBOX_VERSION = "4.7.0"
+#: Canonical release identity approved on the held 4.7 line.
+APPROVED_EXPERIMENTAL_NETBOX_VERSION = "4.7.0"
+APPROVED_EXPERIMENTAL_NETBOX_DESIGNATION = "beta2"
 
 #: Consumed by each plugin's ``PluginConfig.min_version``.
 PLUGIN_MIN_VERSION = STABLE_MIN_NETBOX_VERSION
 #: Consumed by each plugin's ``PluginConfig.max_version``. This is the
-#: experimental ceiling, not the stable one — admitting 4.7 without an opt-in
-#: is what makes the upgrade seamless for operators.
+#: experimental numeric ceiling. The identity guard below further narrows this
+#: bare version to the exact canonical beta2 designation.
 PLUGIN_MAX_VERSION = EXPERIMENTAL_MAX_NETBOX_VERSION
 
 # Guards against a second ``register_netbox_compatibility_check`` call for the
@@ -109,6 +114,105 @@ _VERSION_SUFFIX_STRIP_LIMIT = 6
 #: its maturity notice. See :func:`_check_is_silenced` for why this exists
 #: despite the module otherwise adding no settings of its own.
 SILENCE_SETTING_NAME = "silence_netbox_compatibility_warning"
+
+
+def validate_held_netbox_release_identity(
+    plugin_config: type[Any], netbox_version: str
+) -> None:
+    """Admit only canonical NetBox v4.7.0-beta2 on the held 4.7 line.
+
+    NetBox's stock plugin gate passes only ``RELEASE.version`` (``4.7.0`` for
+    beta2, later prereleases, and GA), so the numeric maximum cannot identify
+    the reviewed release. Stable versions return immediately and retain stock
+    :class:`PluginConfig` behavior. For 4.7.0, read the canonical and optional
+    local release snapshots exactly once. Local metadata may add only ``build``;
+    it can never replace the canonical version or designation.
+
+    Source commit, Python archive, and dependency provenance remain CI/operator
+    attestations. This runtime guard attests release identity only.
+    """
+    approved_version = plugin_config.approved_netbox_version
+    if netbox_version != approved_version:
+        return
+
+    from pathlib import Path
+
+    import yaml
+    from core.exceptions import IncompatiblePluginError
+
+    try:
+        from utilities import release as netbox_release
+
+        release_path = netbox_release.RELEASE_PATH
+        local_release_relative_path = netbox_release.LOCAL_RELEASE_PATH
+        release_base_path = Path(netbox_release._find_release_base_path())
+    except Exception as error:
+        raise IncompatiblePluginError(
+            f"Plugin {plugin_config.__module__} could not locate canonical NetBox "
+            f"release metadata: {error}"
+        ) from error
+
+    try:
+        release_data = yaml.safe_load(
+            release_base_path.joinpath(release_path).read_text(encoding="utf-8")
+        )
+    except Exception as error:
+        raise IncompatiblePluginError(
+            f"Plugin {plugin_config.__module__} could not verify canonical NetBox "
+            f"release identity from {release_path}: {error}"
+        ) from error
+    if type(release_data) is not dict:
+        raise IncompatiblePluginError(
+            f"Plugin {plugin_config.__module__} requires a mapping in "
+            f"{release_path} while NetBox 4.7 is release-held."
+        )
+
+    try:
+        local_release_path = release_base_path.joinpath(local_release_relative_path)
+        local_release_text = local_release_path.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        local_release_data = {}
+    except Exception as error:
+        raise IncompatiblePluginError(
+            f"Plugin {plugin_config.__module__} could not verify "
+            f"{local_release_relative_path}: {error}"
+        ) from error
+    else:
+        try:
+            local_release_data = yaml.safe_load(local_release_text)
+        except Exception as error:
+            raise IncompatiblePluginError(
+                f"Plugin {plugin_config.__module__} could not verify "
+                f"{local_release_relative_path}: {error}"
+            ) from error
+        if local_release_data is None:
+            local_release_data = {}
+
+    unexpected_keys = (
+        set(local_release_data) - {"build"}
+        if type(local_release_data) is dict
+        else {"invalid-content"}
+    )
+    if unexpected_keys:
+        unexpected_labels = ", ".join(sorted(map(str, unexpected_keys)))
+        raise IncompatiblePluginError(
+            f"Plugin {plugin_config.__module__} permits only the build key in "
+            f"{local_release_relative_path} while NetBox 4.7 is release-held "
+            f"(unexpected: {unexpected_labels})."
+        )
+
+    version = release_data.get("version")
+    designation = release_data.get("designation")
+    approved_designation = plugin_config.approved_netbox_designation
+    if version != approved_version or designation != approved_designation:
+        current_release = str(version)
+        if designation:
+            current_release = f"{current_release}-{designation}"
+        raise IncompatiblePluginError(
+            f"Plugin {plugin_config.__module__} is approved only for NetBox "
+            f"{approved_version}-{approved_designation} on the 4.7 line "
+            f"(canonical: {current_release})."
+        )
 
 
 class NetBoxSupportLevel(StrEnum):
@@ -133,9 +237,9 @@ def netbox_support_level(netbox_version: str) -> NetBoxSupportLevel:
     """Classify ``netbox_version`` against the stable and experimental bands.
 
     Accepts either form of the NetBox release string — the bare ``"4.7.0"``
-    that the plugin gate compares against, or the ``"4.7.0-beta1"`` display
+    that the plugin gate compares against, or the ``"4.7.0-beta2"`` display
     form — and classifies both as :attr:`NetBoxSupportLevel.EXPERIMENTAL`,
-    since ``4.7.0b1`` also sorts above the stable ceiling.
+    since ``4.7.0b2`` also sorts above the stable ceiling.
 
     Raises:
         packaging.version.InvalidVersion: if the string is not a version at
@@ -159,7 +263,7 @@ def detect_netbox_version() -> tuple[str, str]:
 
     ``comparison_version`` is what NetBox itself feeds to the plugin version
     gate (``RELEASE.version`` — ``"4.7.0"`` on a beta). ``display_version`` is
-    the operator-facing string (``RELEASE.full_version`` — ``"4.7.0-beta1"``).
+    the operator-facing string (``RELEASE.full_version`` — ``"4.7.0-beta2"``).
 
     ``settings.RELEASE`` exists as far back as the oldest supported release, so
     the ``settings.VERSION`` fallback is belt-and-braces for an unexpected
@@ -196,12 +300,12 @@ def is_prerelease_netbox(display_version: str, designation: str | None = None) -
     """True when the running NetBox is a pre-release (beta, rc, alpha).
 
     ``designation`` is authoritative when supplied: NetBox leaves it unset on a
-    stable release and sets it to ``"beta1"``/``"rc1"`` otherwise. Prefer it.
+    stable release and sets it to ``"beta2"``/``"rc1"`` otherwise. Prefer it.
 
     The ``display_version`` fallback exists for callers that only have the
     string, and it must cope with **build metadata**. ``full_version`` is built
     as ``version[-designation][-build]``, so a Docker image reports
-    ``"4.7.0-beta1-Docker-3.4.0"`` — which ``packaging`` rejects outright. A
+    ``"4.7.0-beta2-Docker-3.4.0"`` — which ``packaging`` rejects outright. A
     naive parse would then return False and silently drop the pre-release
     caveat on every containerised install, which is precisely the deployment
     most likely to be running a beta. So on a parse failure, trailing
@@ -226,12 +330,12 @@ def is_prerelease_netbox(display_version: str, designation: str | None = None) -
 
 
 def detect_netbox_designation() -> str | None:
-    """Return NetBox's release designation (``"beta1"``, ``"rc1"``) or ``None``.
+    """Return NetBox's release designation (``"beta2"``, ``"rc1"``) or ``None``.
 
     This is the *authoritative* maturity signal and the reason it exists as a
     separate reader: ``RELEASE.full_version`` is assembled as
     ``version[-designation][-build]``, so a Docker image reports something like
-    ``"4.7.0-beta1-Docker-3.4.0"`` — which is not a parseable version at all.
+    ``"4.7.0-beta2-Docker-3.4.0"`` — which is not a parseable version at all.
     A stable release leaves ``designation`` unset.
 
     Returns ``None`` rather than raising if it cannot be read; the caller falls

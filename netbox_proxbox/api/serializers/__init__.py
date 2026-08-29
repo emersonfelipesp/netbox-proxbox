@@ -19,6 +19,10 @@ from netbox_proxbox.api.serializers.resource_views import (
     VirtualDiskResourceSerializer,
     VirtualMachineResourceSerializer,
 )
+from netbox_proxbox.api.serializers.sync_jobs import (
+    ProxboxSyncJobListSerializer,
+    ProxboxSyncJobSerializer,
+)
 from netbox_proxbox.api.serializers.backup_routine import (
     BackupRoutineSerializer,
     NestedBackupRoutineSerializer,
@@ -170,6 +174,8 @@ __all__ = (
     "ProxboxVLANSyncStateSerializer",
     "ProxboxVMInterfaceSyncStateSerializer",
     "ProxmoxApplyJobSerializer",
+    "ProxboxSyncJobListSerializer",
+    "ProxboxSyncJobSerializer",
     "ProxmoxClusterSerializer",
     "ProxmoxDatacenterCpuModelSerializer",
     "ProxmoxEndpointSerializer",
