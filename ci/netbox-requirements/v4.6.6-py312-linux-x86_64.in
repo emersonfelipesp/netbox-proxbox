@@ -41,6 +41,6 @@ sorl-thumbnail==13.0.0
 strawberry-graphql==0.323.2
 strawberry-graphql-django==0.86.5
 svgwrite==1.4.3
-tablib==3.9.0
+tablib==3.10.0
 tzdata==2026.3
 zensical==0.0.51
