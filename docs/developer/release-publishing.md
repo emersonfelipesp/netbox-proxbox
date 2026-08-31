@@ -23,7 +23,7 @@ flowchart TD
     RCFailed{Any TestPyPI\nvalidation failed?}
     NextRC[Bump to vX.Y.ZrcN+1]
     FinalPrivate[Publish final package to Gitea\nvX.Y.Z]
-    Deploy[Deploy exact Gitea package\nthrough NMS]
+    Deploy[Deploy exact Gitea package\nthrough the management backend]
     PublicRelease[Create GitHub Release\nafter production validation]
     FinalUpload[Upload vX.Y.Z to PyPI]
     FinalValidate[Install final from PyPI\nrun post-upload E2E]
@@ -84,7 +84,7 @@ sequenceDiagram
   validation.
 - Official releases (`vX.Y.Z`, `vX.Y.Z.postN`) are triggered **only** by GitHub
   release creation (`release: published`) cut from the `develop` branch after
-  the final Gitea package and NMS production gates. Plain non-rc tag pushes do
+  the final Gitea package and the production deployment gates. Plain non-rc tag pushes do
   **not** trigger public publishing. Manual workflow dispatch is TestPyPI-only
   and requires an RC version.
 - Package uploads intentionally omit `twine --skip-existing`; a consumed version
@@ -226,12 +226,16 @@ sequenceDiagram
 5. Publish and validate `netbox-proxbox` on TestPyPI using that TestPyPI
    `proxbox-api` version.
 6. Publish each final package in Gitea, link/verify it, and deploy the exact pair
-   through NMS using `latest_package` by default.
+   through the management backend using `latest_package` by default.
 
-   > **Dispatch through NMS, not Gitea.** A production deploy must be started
-   > with `POST /git/deployments/{target_id}/dispatch-source`, which mints the
+   > **Dispatch through the management backend, not Gitea.** A production
+   > deploy must be started with
+   > `POST /git/deployments/{target_id}/dispatch-source`, which mints the
    > signed authorization the deploy host requires and injects
-   > `nms_request_id`/`nms_request_sha256` into the workflow. Firing
+   > `deploy_request_id`/`deploy_request_sha256` into the workflow. Those input
+   > names are deliberately neutral: this repository is published publicly and
+   > must not name the internal stack, so do not reintroduce the old names by
+   > copying a workflow from elsewhere. Firing
    > `deploy-production.yml` straight from Gitea produces a run with no
    > authorization, and it fails closed before touching anything.
    >

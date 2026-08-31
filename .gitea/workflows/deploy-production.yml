@@ -19,13 +19,13 @@ on:
         required: false
         default: ""
         type: string
-      nms_request_id:
-        description: "Injected by nms-backend; not set by hand"
+      deploy_request_id:
+        description: "Injected by the management backend on an authorized dispatch; not set by hand"
         required: false
         default: ""
         type: string
-      nms_request_sha256:
-        description: "Injected by nms-backend; not set by hand"
+      deploy_request_sha256:
+        description: "Injected by the management backend on an authorized dispatch; not set by hand"
         required: false
         default: ""
         type: string
@@ -50,7 +50,7 @@ jobs:
           /opt/nmulticloud/deploy/bin/deploy-netbox-plugin-staging netbox-proxbox "$GITHUB_SHA"
 
   production:
-    name: Deploy plugin to production through NMS-selected source
+    name: Deploy plugin to production through the authorized source
     if: ${{ github.event_name == 'workflow_dispatch' }}
     runs-on: prod-deploy
     permissions:
@@ -61,12 +61,12 @@ jobs:
       PACKAGE_VERSION: ${{ inputs.package_version }}
       WORKFLOW_REF: ${{ github.ref }}
       WORKFLOW_SHA: ${{ github.sha }}
-      NMS_REQUEST_ID: ${{ inputs.nms_request_id }}
-      NMS_REQUEST_SHA256: ${{ inputs.nms_request_sha256 }}
+      DEPLOY_REQUEST_ID: ${{ inputs.deploy_request_id }}
+      DEPLOY_REQUEST_SHA256: ${{ inputs.deploy_request_sha256 }}
       # Loopback on the deploy host. Overridable so the runner can move without
       # a workflow change; the proof routes carry no bearer, so this URL is not
       # a secret.
-      NMS_BACKEND_URL: ${{ vars.NMS_BACKEND_URL || 'http://127.0.0.1:16001' }}
+      DEPLOY_CONTROL_URL: ${{ vars.DEPLOY_CONTROL_URL || 'http://127.0.0.1:16001' }}
     steps:
       - name: Checkout canonical workflow source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -79,11 +79,11 @@ jobs:
           set -euo pipefail
           test "$WORKFLOW_REF" = refs/heads/main
           printf '%s' "$WORKFLOW_SHA" | grep -Eq '^[a-f0-9]{40}$'
-          # Injected by nms-backend on every authorized dispatch. Without them the
+          # Injected by the management backend on every authorized dispatch. Without them the
           # dispatch did not come through the proof path and must not reach the
           # deploy host, which would reject it anyway.
-          printf '%s' "$NMS_REQUEST_ID" | grep -Eq '^[a-f0-9]{32}$'
-          printf '%s' "$NMS_REQUEST_SHA256" | grep -Eq '^[a-f0-9]{64}$'
+          printf '%s' "$DEPLOY_REQUEST_ID" | grep -Eq '^[a-f0-9]{32}$'
+          printf '%s' "$DEPLOY_REQUEST_SHA256" | grep -Eq '^[a-f0-9]{64}$'
           # The authorization binds to attempt 1. Gitea keeps GITHUB_RUN_ID across
           # re-runs and only increments the attempt, so a re-run would otherwise
           # present the first attempt's binding as its own. A re-run needs a fresh
@@ -91,13 +91,13 @@ jobs:
           test "${GITHUB_RUN_ATTEMPT:-1}" = "1"
           # The endpoint is operator-overridable, so pin its shape before the request
           # id and digest are ever sent to it.
-          printf '%s' "$NMS_BACKEND_URL" | grep -Eq '^https?://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?$'
+          printf '%s' "$DEPLOY_CONTROL_URL" | grep -Eq '^https?://(127\.0\.0\.1|localhost)(:[0-9]{1,5})?$'
 
-      - name: Claim the NMS authorization for this exact run
+      - name: Claim the deployment authorization for this exact run
         run: |
           set -euo pipefail
           umask 077
-          proof_root="${RUNNER_TEMP}/nms-proof-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          proof_root="${RUNNER_TEMP}/deploy-proof-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           test ! -e "$proof_root"
           mkdir -m 0700 "$proof_root"
           proof_path="$proof_root/claimed-proof.json"
@@ -115,7 +115,7 @@ jobs:
               "owner": owner,
               "repository": repository,
               "workflow_id": "deploy-production.yml",
-              "request_sha256": os.environ["NMS_REQUEST_SHA256"],
+              "request_sha256": os.environ["DEPLOY_REQUEST_SHA256"],
           }))
           PAYLOAD
           )"
@@ -130,7 +130,7 @@ jobs:
             --max-time 30 --retry 0 \
             -o "$proof_path" -w '%{http_code}' \
             -X POST -H 'Content-Type: application/json' --data-binary @- \
-            --url "${NMS_BACKEND_URL}/git/deployment-proofs/${NMS_REQUEST_ID}/claim")"
+            --url "${DEPLOY_CONTROL_URL}/git/deployment-proofs/${DEPLOY_REQUEST_ID}/claim")"
           test "$status" = "200"
 
           # Resolved in its own checked command. Folding this into `echo` would let a
@@ -187,8 +187,8 @@ jobs:
           # this process's arguments -- that is the host's contract, not a choice
           # made here.
           /opt/nmulticloud/deploy/bin/proxbox-package-deploy deploy-main \
-            netbox-proxbox "$WORKFLOW_SHA" "$NMS_REQUEST_ID" "$PROOF_PATH" \
-            "$NMS_REQUEST_SHA256" "$GITHUB_RUN_ID"
+            netbox-proxbox "$WORKFLOW_SHA" "$DEPLOY_REQUEST_ID" "$PROOF_PATH" \
+            "$DEPLOY_REQUEST_SHA256" "$GITHUB_RUN_ID"
 
           echo "DEPLOY_COMPLETED=true" >> "$GITHUB_ENV"
 
@@ -270,7 +270,7 @@ jobs:
           printf '%s' "$GITHUB_RUN_ATTEMPT" | grep -Eq '^[1-9][0-9]*$'
           runner_temp="$(cd "$RUNNER_TEMP" && pwd -P)"
           test "$runner_temp" != "/"
-          proof_root="${runner_temp}/nms-proof-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          proof_root="${runner_temp}/deploy-proof-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           if [ -e "$proof_root" ]; then
             # Confirm the resolved parent really is RUNNER_TEMP before removing
             # anything, so a non-canonical value cannot widen the target.
