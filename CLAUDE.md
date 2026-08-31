@@ -305,21 +305,24 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
 - NetBox UI routes live in [`netbox_proxbox/urls.py`](./netbox_proxbox/urls.py) and are implemented primarily in `netbox_proxbox/views/`.
 - The plugin also exposes a NetBox plugin API under `netbox_proxbox/api/`, using serializers, filtersets, and standard `NetBoxModelViewSet` classes. The root advertises a version 1 semantic producer manifest at `mcp/`; only a future exact SDK identity activated by the checked immutable gate may validate and invoke its fixed plugin-local targets through the normal API client.
 - Sync actions enqueue NetBox background jobs (`ProxboxSyncJob`) on NetBox's default RQ queue and call the external ProxBox FastAPI SSE endpoints to record progress/result on the Job row.
-- **Operator sync-state repair UX (issue #217, hardened in #255).** The Proxbox
-  Home Configuration section and plugin Settings page include a shared
-  **Repair / Rebuild Proxbox sync-state** card that **only surfaces when the
-  backend bootstrap actually needs attention.** The card renders hidden
-  (`d-none`); its inline JS auto-checks
+- **Operator sync-state repair UX (issue #217, hardened in #255).** The
+  **Repair / Rebuild Proxbox sync-state** card lives on a dedicated page at
+  `/plugins/proxbox/sync-state/` (`SyncStateRepairPageView`). The page is
+  **deliberately absent from the plugin navigation menu** — it is an operator
+  recovery action, not a routine one — so its only entry point is the
+  **Repair / Rebuild sync-state** link in the footer of the Proxbox Home page.
+  The card is always visible on that page; it no longer renders inline on Home
+  or Settings. Its inline JS auto-checks
   `services/backend_proxy.py::get_backend_bootstrap_status()`
   (`GET /extras/bootstrap-status`, gated by `view` on `FastAPIEndpoint`) on page
-  load and reveals the card **only** for a genuine backend-reported problem
-  (`ok:false` with `http_status == 200`, e.g. the "Invalid v1 token" bootstrap
-  warnings). A healthy or unreachable/unconfigured backend keeps it hidden, so
-  it never shows on the UI permanently. The one exception is a **repair-only**
-  user (has `core.add_job` but not `view` on `FastAPIEndpoint`): the card is
-  rendered server-visible so they keep the repair affordance they are authorized
-  to use, with no bootstrap payload exposed. A user with neither permission
-  never sees it. The POST action at `/plugins/proxbox/sync-state/repair/` uses a
+  load and flags a genuine backend-reported problem (`ok:false` with
+  `http_status == 200`, e.g. the "Invalid v1 token" bootstrap warnings); a
+  healthy or unreachable/unconfigured backend is not a needs-attention state. A
+  **repair-only** user (has `core.add_job` but not `view` on `FastAPIEndpoint`)
+  keeps the repair affordance with no bootstrap payload exposed. Included on any
+  other page the card keeps its original hidden-until-needed behaviour, guarded
+  by `proxbox_repair_page`. The POST action at
+  `/plugins/proxbox/sync-state/repair/` uses a
   session-gated `RepairSyncStateView`, requires `core.add_job` via
   `permission_enqueue_proxbox_sync()`, calls
   `POST /extras/custom-fields/reconcile`, then enqueues a normal

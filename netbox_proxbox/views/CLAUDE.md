@@ -201,10 +201,19 @@ per node, or issuing an authenticated request for every membership entry.
   from live Proxmox data (the actual recovery). The view surfaces a reconcile
   warning as `messages.warning` (still linking the job). Only `permission_denied`,
   `already_running`, and `enqueue_error` are hard failures; all outcomes are
-  flash messages that never 500. The card is hidden for a view-capable user and
-  only reveals on a genuine backend-reported bootstrap problem, but is rendered
-  server-visible for a repair-only user (can `core.add_job`, cannot view status)
-  so they keep the repair affordance — see `partials/bootstrap_status_card.html`.
+  flash messages that never 500. The card is always visible on its dedicated
+  page; included elsewhere it stays hidden for a view-capable user and only
+  reveals on a genuine backend-reported bootstrap problem, while a repair-only
+  user (can `core.add_job`, cannot view status) keeps the repair affordance —
+  see `partials/bootstrap_status_card.html`.
+- [`sync_state_repair_page.py`](./sync_state_repair_page.py):
+  `SyncStateRepairPageView`, the login-required page at `sync-state/` that hosts
+  the repair card. It is intentionally absent from `navigation.py` and reached
+  only from the Home page footer link, and it passes `surface="repair"` so a
+  repair POST redirects back to itself. It lives in its own module because
+  `sync_state_repair.py` must stay free of `ConditionalLoginRequiredMixin` —
+  combining it with `ContentTypePermissionRequiredMixin` there produced an
+  invalid MRO (commit 39f8f9d9), and a contract test pins that.
 - [`proxmox_cluster_node.py`](./proxmox_cluster_node.py): detail (`ObjectView`) views for `ProxmoxCluster` and `ProxmoxNode`, registered under the bare model names so `get_absolute_url()` resolves.
 - [`storage.py`](./storage.py): CRUD list/detail/delete views for `ProxmoxStorage`.
 - [`storage_content.py`](./storage_content.py): process-wide bounded worker pool,

@@ -619,21 +619,23 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 - Browser-side pages use templates plus JS from `static/netbox_proxbox/js/` for dashboard hydration, keepalive polling, SSE streaming, log rendering, and WebSocket updates.
 - Operator recovery for missing Proxbox bootstrap/custom-field setup is exposed
   through `views/sync_state_repair.py` and the shared
-  `partials/bootstrap_status_card.html`. The card is included on Home and
-  Settings but **renders hidden (`d-none`) and only reveals itself when the
-  backend bootstrap actually needs attention** — its inline JS auto-checks
-  `sync-state/bootstrap-status/` on page load (only when the user has
-  `view_fastapiendpoint`) and reveals the card **only** on a genuine
+  `partials/bootstrap_status_card.html`. The card lives on its own page at
+  `sync-state/` (`views/sync_state_repair_page.py::SyncStateRepairPageView`, template
+  `templates/netbox_proxbox/sync_state_repair.html`), which is **deliberately
+  not registered in `navigation.py`**: its only entry point is the
+  **Repair / Rebuild sync-state** link in the Home page footer. The page
+  includes the card with `proxbox_repair_page=True` so it is always visible
+  there. Its inline JS still auto-checks `sync-state/bootstrap-status/` on load
+  (only when the user has `view_fastapiendpoint`) and flags a genuine
   backend-reported problem (`ok:false` with `http_status == 200`, e.g. the
-  "Invalid v1 token" warnings). A healthy backend, an unreachable/unconfigured
-  backend (no FastAPI endpoint → 404), or a transport failure keeps the card
-  hidden, so it never shows on the UI permanently. The JS never auto-hides a
-  revealed card within a page view; the next load re-evaluates from hidden.
-  **Repair-only exception:** a user who can repair (`core.add_job`) but cannot
-  view status (no `view_fastapiendpoint`) gets the card rendered server-visible
-  so they keep the repair affordance — no bootstrap payload is exposed — via the
-  template's `{% if bootstrap_status.can_view or not can_repair_sync_state %}
-  d-none{% endif %}` guard. A user with neither permission never sees it.
+  "Invalid v1 token" warnings); a healthy backend, an unreachable/unconfigured
+  backend (no FastAPI endpoint → 404), or a transport failure is not a
+  needs-attention state. **Repair-only users** (`core.add_job` without
+  `view_fastapiendpoint`) keep the repair affordance with no bootstrap payload
+  exposed. Included on any other page the card reverts to its hidden-until-needed
+  behaviour via the nested `{% if not proxbox_repair_page %}{% if
+  bootstrap_status.can_view or not can_repair_sync_state %} d-none{% endif %}
+  {% endif %}` guard.
 - The `sync-state/repair/` POST (`core.add_job`) calls
   `POST /extras/custom-fields/reconcile` through `services/backend_proxy.py` and
   then enqueues a normal full `ProxboxSyncJob`. **The custom-field reconcile is a

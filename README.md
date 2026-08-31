@@ -226,8 +226,10 @@ other tenants.
   flag is deprecated and only applies when `vm_interface_sync_strategy` is set
   to `legacy_rename`.
 - **Operator repair path.** If Proxbox custom fields or bootstrap setup vanish
-  after an upgrade, use **Repair / Rebuild Proxbox sync-state** on the Proxbox
-  Home or Settings page. It reconciles proxbox-api custom-field definitions,
+  after an upgrade, use **Repair / Rebuild Proxbox sync-state**. It has its own
+  page at `/plugins/proxbox/sync-state/`, reached from the **Repair / Rebuild
+  sync-state** link in the Proxbox Home page footer (it is intentionally kept
+  out of the navigation menu). It reconciles proxbox-api custom-field definitions,
   queues a normal full sync job, and shows `GET /extras/bootstrap-status` output
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).

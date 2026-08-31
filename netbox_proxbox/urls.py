@@ -570,6 +570,13 @@ urlpatterns = [
         views.RepairSyncStateView.as_view(),
         name="repair_sync_state",
     ),
+    # Deliberately not registered in ``navigation.py``: the repair page is an
+    # operator recovery action reached from the Proxbox home page footer.
+    path(
+        "sync-state/",
+        views.SyncStateRepairPageView.as_view(),
+        name="sync_state_repair_page",
+    ),
     path(
         "sync/schedule/quick/",
         views.QuickScheduleSyncFromHomeView.as_view(),

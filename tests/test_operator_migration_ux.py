@@ -19,6 +19,14 @@ SETTINGS_TEMPLATE = (
 HOME_TEMPLATE = (
     REPO_ROOT / "netbox_proxbox" / "templates" / "netbox_proxbox" / "home.html"
 )
+REPAIR_PAGE_TEMPLATE = (
+    REPO_ROOT
+    / "netbox_proxbox"
+    / "templates"
+    / "netbox_proxbox"
+    / "sync_state_repair.html"
+)
+NAVIGATION_PATH = REPO_ROOT / "netbox_proxbox" / "navigation.py"
 BOOTSTRAP_PARTIAL = (
     REPO_ROOT
     / "netbox_proxbox"
@@ -57,6 +65,9 @@ def test_repair_sync_state_route_is_registered():
     assert '"sync-state/bootstrap-status/"' in urls
     assert "views.BootstrapStatusView.as_view()" in urls
     assert 'name="bootstrap_status"' in urls
+    assert '"sync-state/"' in urls
+    assert "views.SyncStateRepairPageView.as_view()" in urls
+    assert 'name="sync_state_repair_page"' in urls
 
 
 def test_repair_view_is_exported_from_views_package():
@@ -67,6 +78,9 @@ def test_repair_view_is_exported_from_views_package():
         in init_source
     )
     assert "BootstrapStatusView" in init_source
+    # The dedicated page view lives in its own module (see
+    # test_repair_view_uses_session_gate_and_sync_enqueue_permission).
+    assert "from .sync_state_repair_page import SyncStateRepairPageView" in init_source
 
 
 def test_repair_view_uses_session_gate_and_sync_enqueue_permission():
@@ -79,6 +93,9 @@ def test_repair_view_uses_session_gate_and_sync_enqueue_permission():
     # was left behind and has been failing on develop ever since; it now pins
     # the gate the view actually uses, and that the removed mixin stays out.
     assert "ContentTypePermissionRequiredMixin" in view_source
+    # ``SyncStateRepairPageView`` needs ConditionalLoginRequiredMixin, so it
+    # lives in ``sync_state_repair_page.py`` rather than reintroducing the
+    # mixin here.
     assert "ConditionalLoginRequiredMixin" not in view_source
     assert "permission_enqueue_proxbox_sync" in view_source
     assert "def get_required_permission" in view_source
@@ -154,7 +171,7 @@ def test_backend_json_auth_retry_preserves_scoped_endpoint_id():
         ), f"{func_name} must pass the scoped endpoint_id into request_backend_json"
 
 
-def test_settings_and_home_templates_expose_bootstrap_status_card():
+def test_dedicated_repair_page_hosts_the_bootstrap_status_card():
     partial = _read(BOOTSTRAP_PARTIAL)
 
     assert "bootstrap_status.can_view" in partial
@@ -164,20 +181,45 @@ def test_settings_and_home_templates_expose_bootstrap_status_card():
     assert "plugins:netbox_proxbox:repair_sync_state" in partial
     assert "Repair / Rebuild Proxbox sync-state" in partial
     assert "innerHTML" not in partial
-    assert "bootstrap_status_card.html" in _read(SETTINGS_TEMPLATE)
-    assert "bootstrap_status_card.html" in _read(HOME_TEMPLATE)
+
+    # The card now lives on its own page and is always visible there.
+    page = _read(REPAIR_PAGE_TEMPLATE)
+    assert (
+        '{% include "netbox_proxbox/partials/bootstrap_status_card.html" '
+        "with proxbox_repair_page=True %}" in page
+    )
+
+    # ...and no longer renders inline on Home or Settings.
+    assert "bootstrap_status_card.html" not in _read(SETTINGS_TEMPLATE)
+    assert "bootstrap_status_card.html" not in _read(HOME_TEMPLATE)
+
+
+def test_repair_page_is_reachable_only_from_the_home_footer():
+    home = _read(HOME_TEMPLATE)
+    footer_block = home.split("{% block footer_links %}", 1)[1].split(
+        "{% endblock %}", 1
+    )[0]
+
+    assert "plugins:netbox_proxbox:sync_state_repair_page" in footer_block
+    assert "Repair / Rebuild sync-state" in footer_block
+
+    # Deliberately no navigation menu item for the page.
+    assert "sync_state_repair_page" not in _read(NAVIGATION_PATH)
 
 
 def test_bootstrap_status_card_is_hidden_until_it_needs_attention():
     partial = _read(BOOTSTRAP_PARTIAL)
 
-    # The card is hidden when the user can view status (JS reveals on a problem)
-    # OR cannot repair; it is server-visible only for a repair-only user
-    # (can repair but not view status), so it never shows permanently for the
-    # common both-permissions case yet an authorized repairer keeps the action.
+    # Outside the dedicated repair page the card is hidden when the user can view
+    # status (JS reveals on a problem) OR cannot repair; it is server-visible only
+    # for a repair-only user (can repair but not view status), so it never shows
+    # permanently for the common both-permissions case yet an authorized repairer
+    # keeps the action. ``proxbox_repair_page`` bypasses the whole guard so the
+    # dedicated page is never blank.
     assert (
-        'class="card mb-3{% if bootstrap_status.can_view or '
-        'not can_repair_sync_state %} d-none{% endif %}"' in partial
+        'class="card mb-3{% if not proxbox_repair_page %}'
+        "{% if bootstrap_status.can_view or "
+        'not can_repair_sync_state %} d-none{% endif %}{% endif %}"' in partial
     )
     assert "data-can-view=" in partial
     assert "bootstrap_status.can_view|yesno" in partial

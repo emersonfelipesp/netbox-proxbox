@@ -5,21 +5,25 @@ Proxbox setup data incomplete. A common symptom is that legacy Proxbox custom
 fields are missing, so old synced records no longer show the expected Proxmox
 metadata.
 
-## When The Card Appears
+## Where To Find The Card
 
-The **Repair / Rebuild Proxbox sync-state** card lives on
-`Plugins > Proxbox > Home` (Proxbox Configuration section) and
-`Plugins > Proxbox > Settings` (above the settings form), but it does **not**
-show permanently. It only surfaces when it is useful:
+The **Repair / Rebuild Proxbox sync-state** card lives on its own page at
+`/plugins/proxbox/sync-state/`. Because it is an operator recovery action rather
+than a routine one, the page is deliberately **not** listed in the Proxbox
+navigation menu: the only entry point is the **Repair / Rebuild sync-state**
+link in the footer of `Plugins > Proxbox > Home`.
 
-- If you can view bootstrap status (`view` on `FastAPIEndpoint`), the card is
-  hidden and the page silently checks `GET /extras/bootstrap-status` on load. It
-  reveals itself **only** when the backend reports a real bootstrap problem
-  (an HTTP 200 response with `ok:false`, e.g. the `Invalid v1 token` warnings).
-  A healthy, unreachable, or unconfigured backend keeps the card hidden.
+On that page the card is always visible. What it shows still depends on your
+permissions:
+
+- With `view` on `FastAPIEndpoint`, the page checks
+  `GET /extras/bootstrap-status` on load and renders the result — the backend
+  status badge, any reported detail, and the raw payload. A real bootstrap
+  problem is an HTTP 200 response with `ok:false`, e.g. the `Invalid v1 token`
+  warnings.
 - If you can run the repair but cannot view status (`core.add_job` without
-  `view` on `FastAPIEndpoint`), the card is shown so you keep the repair
-  affordance; no bootstrap payload is displayed.
+  `view` on `FastAPIEndpoint`), the repair button is still available and no
+  bootstrap payload is displayed.
 
 ## What The Repair Action Does
 
@@ -54,10 +58,9 @@ Permissions:
 
 1. Confirm proxbox-api is running and the Proxbox **FastAPI Endpoint** row is
    enabled.
-2. Open `Plugins > Proxbox > Home` or `Plugins > Proxbox > Settings`. If you can
-   view bootstrap status and the card is hidden, the backend reported no
-   bootstrap problem. (If you can run the repair but cannot view status, the card
-   is shown without a status payload — see "When The Card Appears".)
+2. Open `Plugins > Proxbox > Home` and follow the **Repair / Rebuild
+   sync-state** link in the page footer, or go straight to
+   `/plugins/proxbox/sync-state/`.
 3. Review **Backend bootstrap status**. If it reports missing setup, keep the
    payload available while troubleshooting.
 4. Click **Repair / Rebuild**.

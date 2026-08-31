@@ -257,9 +257,14 @@ This directory contains the plugin's pytest test suite.
   preflight is the recovery path — while
   `test_repair_outcome_enqueue_failure_after_reconcile_warning_is_fatal` keeps a
   failed *enqueue* fatal. `test_bootstrap_status_card_is_hidden_until_it_needs_attention`
-  pins the template: `d-none` by default, `data-can-view`, the
+  pins the template: `d-none` by default outside the dedicated repair page
+  (`proxbox_repair_page` bypasses the guard), `data-can-view`, the
   `needsAttention`/`revealCard` reveal-only-on-HTTP-200-`ok:false` logic, the
   auto-check on load, and no `innerHTML`.
+  `test_dedicated_repair_page_hosts_the_bootstrap_status_card` and
+  `test_repair_page_is_reachable_only_from_the_home_footer` pin that the card
+  moved to `sync_state_repair.html`, is gone from `home.html`/`settings.html`,
+  is linked from the Home `footer_links` block, and has no `navigation.py` entry.
 - `test_stack_setup.py`, `test_stack_sync_polling.py`: integration-level stack setup and sync polling behavior tests.
 - `test_templatetags.py`: tests for custom Proxbox template tag helpers.
 - `e2e/`: stack-oriented tests that exercise the proxbox-api and NetBox integration flow end to end.

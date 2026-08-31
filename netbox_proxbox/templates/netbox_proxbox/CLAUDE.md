@@ -40,20 +40,29 @@ This is the main Django template namespace for the plugin.
   usage summary cannot hide that only some per-node content calls completed.
 - Shared fragments and includes: `footer.html`, the `inc/` snippets for job buttons, runtime panels, live poll alerts, schedule form fields, and VM sync actions, plus `widgets/` helpers for custom checkbox controls.
 - Operator bootstrap/status fragment:
-  `partials/bootstrap_status_card.html` is included by `home.html` and
-  `settings.html`. It displays the escaped proxbox-api
-  `/extras/bootstrap-status` payload and the permission-aware
-  **Repair / Rebuild Proxbox sync-state** POST form. **The card only surfaces
-  when it is useful (issue #255).** For a user who can view status it renders
-  hidden (`d-none`); its inline JS auto-checks `bootstrap-status` on load (only
-  when `data-can-view="true"`) and calls `revealCard()` only for a genuine
-  backend-reported problem — `needsAttention(data)` is `ok === false` with
-  `Number(http_status) === 200` — and never auto-hides a revealed card within a
-  page view. **A repair-only user** (can `core.add_job` but not view status) gets
-  the card rendered server-visible instead, so they keep the repair affordance
-  with no payload exposed; the `{% if bootstrap_status.can_view or not
-  can_repair_sync_state %} d-none{% endif %}` guard encodes this. Its JS is inline
-  (Bootstrap's `d-none` toggle only) and must not use `innerHTML`.
+  `partials/bootstrap_status_card.html` is included **only** by
+  `sync_state_repair.html`, the dedicated repair page. It displays the escaped
+  proxbox-api `/extras/bootstrap-status` payload and the permission-aware
+  **Repair / Rebuild Proxbox sync-state** POST form. The page includes it with
+  `with proxbox_repair_page=True`, which skips the auto-hide entirely — the page
+  exists only to host this card, so hiding it would render an empty page.
+  **Without that flag the card only surfaces when it is useful (issue #255):**
+  for a user who can view status it renders hidden (`d-none`); its inline JS
+  auto-checks `bootstrap-status` on load (only when `data-can-view="true"`) and
+  calls `revealCard()` only for a genuine backend-reported problem —
+  `needsAttention(data)` is `ok === false` with `Number(http_status) === 200` —
+  and never auto-hides a revealed card within a page view. **A repair-only user**
+  (can `core.add_job` but not view status) gets the card rendered server-visible
+  instead, so they keep the repair affordance with no payload exposed; the
+  nested `{% if not proxbox_repair_page %}{% if bootstrap_status.can_view or not
+  can_repair_sync_state %} d-none{% endif %}{% endif %}` guard encodes this. Its
+  JS is inline (Bootstrap's `d-none` toggle only) and must not use `innerHTML`.
+- Dedicated repair page: `sync_state_repair.html` extends `base/layout.html`,
+  includes the bootstrap-status card, and re-includes `footer.html`. It is
+  rendered by `views/sync_state_repair.py::SyncStateRepairPageView` at
+  `/plugins/proxbox/sync-state/` and is deliberately absent from
+  `navigation.py`; `home.html` links to it from its `footer_links` block, which
+  is the page's only entry point.
 - Child subdirectories: `base`, `cluster`, `fastapi`, `home`, `inc`, `partials`, `proxmox`, `table`, `test`, and `widgets`.
 
 ## Dependencies

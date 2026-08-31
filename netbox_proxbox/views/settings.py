@@ -21,7 +21,6 @@ from netbox_proxbox.models import ProxboxPluginSettings
 from netbox_proxbox.views.proxbox_access import (
     permission_change_proxbox_plugin_settings,
 )
-from netbox_proxbox.views.sync_state_repair import build_bootstrap_status_context
 from utilities.views import (
     ContentTypePermissionRequiredMixin,
     TokenConditionalLoginRequiredMixin,
@@ -65,7 +64,6 @@ def _settings_template_context(
         "can_reset_encrypted_secrets": request.user.has_perm(
             "netbox_proxbox.reset_encrypted_secrets"
         ),
-        **build_bootstrap_status_context(request, surface="settings"),
     }
 
 

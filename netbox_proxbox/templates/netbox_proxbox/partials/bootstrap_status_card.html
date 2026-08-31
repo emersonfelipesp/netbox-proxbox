@@ -1,7 +1,7 @@
 {% load i18n %}
 
 {% comment %}
-Visibility rules so the card never shows on the UI permanently:
+Visibility rules so the card never shows on a general-purpose page permanently:
   - can_view: hidden by default; the JS silently checks `bootstrap-status` on
     load and reveals it only for a genuine needs-attention state (the backend
     answered HTTP 200 with `ok:false`). Healthy / unreachable / unconfigured
@@ -11,8 +11,13 @@ Visibility rules so the card never shows on the UI permanently:
     bootstrap payload is exposed (the body shows the permission notice).
   - neither view nor repair: hidden.
 So the card is server-visible only when `not can_view and can_repair_sync_state`.
+
+The dedicated repair page (`sync_state_repair.html`) includes this partial with
+`proxbox_repair_page=True`, which bypasses the auto-hide entirely: that page
+exists only to host this card, so hiding it would render an empty page. The
+permission-dependent bodies above still apply there.
 {% endcomment %}
-<div class="card mb-3{% if bootstrap_status.can_view or not can_repair_sync_state %} d-none{% endif %}" data-proxbox-bootstrap-status-card data-can-view="{{ bootstrap_status.can_view|yesno:'true,false' }}" data-status-url="{% url 'plugins:netbox_proxbox:bootstrap_status' %}">
+<div class="card mb-3{% if not proxbox_repair_page %}{% if bootstrap_status.can_view or not can_repair_sync_state %} d-none{% endif %}{% endif %}" data-proxbox-bootstrap-status-card data-can-view="{{ bootstrap_status.can_view|yesno:'true,false' }}" data-status-url="{% url 'plugins:netbox_proxbox:bootstrap_status' %}">
     <h5 class="card-header d-flex justify-content-between align-items-center flex-wrap gap-2">
         <span>
             <i class="mdi mdi-wrench" aria-hidden="true"></i>

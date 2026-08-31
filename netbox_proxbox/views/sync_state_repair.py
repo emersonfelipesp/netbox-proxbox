@@ -45,6 +45,7 @@ __all__ = (
 
 _REPAIR_NEXT_ROUTES = {
     "home": "plugins:netbox_proxbox:home",
+    "repair": "plugins:netbox_proxbox:sync_state_repair_page",
     "settings": "plugins:netbox_proxbox:settings",
 }
 logger = logging.getLogger(__name__)

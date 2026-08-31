@@ -183,6 +183,7 @@ from .resource_list_views import (
 from .schedule_sync import QuickScheduleSyncFromHomeView, ScheduleSyncView
 from .settings import EncryptedSecretResetView, EncryptionKeyRotateView, SettingsView
 from .sync_state_repair import BootstrapStatusView, RepairSyncStateView
+from .sync_state_repair_page import SyncStateRepairPageView
 from .ssh_credential import (
     NodeSSHCredentialBulkDeleteView,
     NodeSSHCredentialDeleteView,

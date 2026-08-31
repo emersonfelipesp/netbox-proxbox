@@ -1,0 +1,34 @@
+{% extends 'base/layout.html' %}
+{% load i18n %}
+
+{% block title %}{% trans "Repair / Rebuild Proxbox sync-state" %}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col col-md-12">
+        <div class="d-flex justify-content-between align-items-center flex-wrap gap-2 mb-3">
+            <h4 class="mb-0">{% trans "Repair / Rebuild Proxbox sync-state" %}</h4>
+            <a href="{% url 'plugins:netbox_proxbox:home' %}" class="btn btn-sm btn-outline-secondary">
+                <i class="mdi mdi-arrow-left" aria-hidden="true"></i>
+                {% trans "Back to Proxbox home" %}
+            </a>
+        </div>
+
+        <p class="text-muted">
+            {% blocktrans trimmed %}
+            This page is reached from the Proxbox footer and is intentionally absent
+            from the navigation menu: it is an operator recovery action, not a routine
+            one. Run it when Proxbox reports reconcile errors or missing custom-field
+            definitions.
+            {% endblocktrans %}
+        </p>
+
+        {% include "netbox_proxbox/partials/bootstrap_status_card.html" with proxbox_repair_page=True %}
+    </div>
+</div>
+{% endblock %}
+
+{% block footer_links %}
+    {{ block.super }}
+    {% include "netbox_proxbox/footer.html" %}
+{% endblock %}
