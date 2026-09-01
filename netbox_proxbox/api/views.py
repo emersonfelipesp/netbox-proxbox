@@ -1467,6 +1467,7 @@ class _ProxboxVMListAPIView(APIView):
 
     @extend_schema(responses={200: OpenApiTypes.OBJECT})
     def get(self, request: Request) -> Response:
+        """Retrieve the proxbox vmlist API."""
         from virtualization.models import VirtualMachine
         from netbox_proxbox.utils import (
             filter_queryset_by_proxmox_vm_type,
