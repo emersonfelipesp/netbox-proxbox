@@ -48,7 +48,7 @@ class HomeQuickEditView(ConditionalLoginRequiredMixin, View):
 
     def get(self, request: HttpRequest, endpoint_type: str, pk: int) -> HttpResponse:
         obj, form_cls = self._resolve(endpoint_type, pk, request.user)
-        form = form_cls(instance=obj)
+        form = form_cls(instance=obj, request_user=request.user)
         return render(
             request,
             _FRAGMENT,
@@ -57,7 +57,12 @@ class HomeQuickEditView(ConditionalLoginRequiredMixin, View):
 
     def post(self, request: HttpRequest, endpoint_type: str, pk: int) -> HttpResponse:
         obj, form_cls = self._resolve(endpoint_type, pk, request.user)
-        form = form_cls(data=request.POST, files=request.FILES, instance=obj)
+        form = form_cls(
+            data=request.POST,
+            files=request.FILES,
+            instance=obj,
+            request_user=request.user,
+        )
         if form.is_valid():
             form.save()
             return JsonResponse({"success": True, "name": str(obj)})

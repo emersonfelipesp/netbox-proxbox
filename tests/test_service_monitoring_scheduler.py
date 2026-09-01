@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tests.choices_stubs import attach_credential_storage_backend_choices
 import importlib.util
 import re
 import sys
@@ -79,6 +80,7 @@ def _load_jobs_module(monkeypatch):
     package = types.ModuleType("netbox_proxbox")
     package.__path__ = [str(REPO_ROOT / "netbox_proxbox")]
 
+    attach_credential_storage_backend_choices(choices)
     for name, mod in [
         ("netbox.constants", netbox_constants),
         ("netbox.jobs", netbox_jobs),

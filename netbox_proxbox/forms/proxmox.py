@@ -2,6 +2,7 @@
 
 # Django Imports
 from django import forms
+from django.core.exceptions import ValidationError
 
 # NetBox Imports
 from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm
@@ -106,15 +107,25 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         """Hide clear controls when no corresponding encrypted value exists."""
+        self._request_user = kwargs.pop("request_user", None)
         super().__init__(*args, **kwargs)
         instance = getattr(self, "instance", None)
         if not (instance and getattr(instance, "pk", None)):
             self.fields.pop("clear_ssh_password", None)
             self.fields.pop("clear_ssh_private_key", None)
             return
-        if not getattr(instance, "ssh_password_enc", ""):
+        from netbox_proxbox.integrations.openbao import endpoint_uses_openbao_storage
+
+        uses_openbao = endpoint_uses_openbao_storage(instance)
+        has_ssh_password = bool(getattr(instance, "ssh_password_enc", "")) or (
+            uses_openbao and bool(instance.openbao_ssh_password_credential_uuid)
+        )
+        has_ssh_private_key = bool(getattr(instance, "ssh_private_key_enc", "")) or (
+            uses_openbao and bool(instance.openbao_ssh_keypair_credential_uuid)
+        )
+        if not has_ssh_password:
             self.fields.pop("clear_ssh_password", None)
-        if not getattr(instance, "ssh_private_key_enc", ""):
+        if not has_ssh_private_key:
             self.fields.pop("clear_ssh_private_key", None)
 
     def clean(self) -> dict[str, object]:
@@ -171,12 +182,32 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
         private_key = cleaned_data.get("ssh_private_key") or ""
         clear_password = bool(cleaned_data.get("clear_ssh_password"))
         clear_private_key = bool(cleaned_data.get("clear_ssh_private_key"))
+        from netbox_proxbox.integrations.openbao import endpoint_uses_openbao_storage
 
+        uses_openbao = endpoint_uses_openbao_storage(instance)
         has_password = bool(password) or (
-            bool(getattr(instance, "ssh_password_enc", "")) and not clear_password
+            (
+                bool(getattr(instance, "ssh_password_enc", ""))
+                or (
+                    uses_openbao
+                    and bool(
+                        getattr(instance, "openbao_ssh_password_credential_uuid", None)
+                    )
+                )
+            )
+            and not clear_password
         )
         has_private_key = bool(private_key) or (
-            bool(getattr(instance, "ssh_private_key_enc", "")) and not clear_private_key
+            (
+                bool(getattr(instance, "ssh_private_key_enc", ""))
+                or (
+                    uses_openbao
+                    and bool(
+                        getattr(instance, "openbao_ssh_keypair_credential_uuid", None)
+                    )
+                )
+            )
+            and not clear_private_key
         )
 
         username = (cleaned_data.get("ssh_username") or "").strip()
@@ -207,8 +238,10 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
                 _("Password authentication requires a stored SSH password."),
             )
         if (
-            password or private_key
-        ) and not ProxboxPluginSettings.get_solo().encryption_key:
+            (password or private_key)
+            and not uses_openbao
+            and not ProxboxPluginSettings.get_solo().encryption_key
+        ):
             self.add_error(
                 "ssh_private_key" if private_key else "ssh_password",
                 _(
@@ -220,11 +253,29 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
     def save(self, commit: bool = True) -> ProxmoxEndpoint:
         """Encrypt submitted dedicated SSH secrets and preserve blank inputs."""
         instance = super().save(commit=False)
+        from netbox_proxbox.integrations.openbao import endpoint_uses_openbao_storage
+
+        if self._request_user is not None:
+            instance._openbao_actor_user = self._request_user
+
+        uses_openbao = endpoint_uses_openbao_storage(instance)
+        if commit and uses_openbao and not instance.pk:
+            instance.save()
 
         if "password" in self.cleaned_data:
-            instance.password = self.cleaned_data.get("password")
+            if self.cleaned_data.get("clear_password"):
+                instance.password = ""
+            else:
+                password = self.cleaned_data.get("password")
+                if password:
+                    instance.password = password
         if "token_value" in self.cleaned_data:
-            instance.token_value = self.cleaned_data.get("token_value")
+            if self.cleaned_data.get("clear_token"):
+                instance.token_value = ""
+            else:
+                token_value = self.cleaned_data.get("token_value")
+                if token_value:
+                    instance.token_value = token_value
 
         if self.cleaned_data.get("ssh_credential_source") == SSH_CRED_SOURCE_REUSE:
             if commit:
@@ -235,19 +286,41 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
         key = ProxboxPluginSettings.get_solo().encryption_key or ""
 
         if self.cleaned_data.get("clear_ssh_password"):
+            from netbox_proxbox.integrations.openbao import (
+                clear_endpoint_openbao_credential,
+                endpoint_uses_openbao_storage as _uses_openbao,
+            )
             from netbox_proxbox.services.encryption_recovery import (
                 mark_encrypted_fields_for_write,
             )
 
-            mark_encrypted_fields_for_write(instance, "ssh_password_enc")
-            instance.ssh_password_enc = ""
+            if _uses_openbao(instance):
+                clear_endpoint_openbao_credential(
+                    instance,
+                    "openbao_ssh_password_credential_uuid",
+                    user=self._request_user,
+                )
+            else:
+                mark_encrypted_fields_for_write(instance, "ssh_password_enc")
+                instance.ssh_password_enc = ""
         if self.cleaned_data.get("clear_ssh_private_key"):
+            from netbox_proxbox.integrations.openbao import (
+                clear_endpoint_openbao_credential,
+                endpoint_uses_openbao_storage as _uses_openbao,
+            )
             from netbox_proxbox.services.encryption_recovery import (
                 mark_encrypted_fields_for_write,
             )
 
-            mark_encrypted_fields_for_write(instance, "ssh_private_key_enc")
-            instance.ssh_private_key_enc = ""
+            if _uses_openbao(instance):
+                clear_endpoint_openbao_credential(
+                    instance,
+                    "openbao_ssh_keypair_credential_uuid",
+                    user=self._request_user,
+                )
+            else:
+                mark_encrypted_fields_for_write(instance, "ssh_private_key_enc")
+                instance.ssh_private_key_enc = ""
         password = self.cleaned_data.get("ssh_password") or ""
         private_key = self.cleaned_data.get("ssh_private_key") or ""
         if password:
@@ -358,6 +431,7 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
             "password",
             "token_name",
             "token_value",
+            "credential_storage_backend",
             "verify_ssl",
             "enabled",
             "environment",
@@ -387,16 +461,25 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         """Only expose the clear-credential checkboxes when there is something to clear."""
+        self._request_user = kwargs.pop("request_user", None)
         super().__init__(*args, **kwargs)
         instance = getattr(self, "instance", None)
         if not (instance and getattr(instance, "pk", None)):
             self.fields.pop("clear_password", None)
             self.fields.pop("clear_token", None)
             return
-        if not getattr(instance, "password_enc", ""):
+        from netbox_proxbox.integrations.openbao import endpoint_uses_openbao_storage
+
+        uses_openbao = endpoint_uses_openbao_storage(instance)
+        has_password = bool(getattr(instance, "password_enc", "")) or (
+            uses_openbao and bool(instance.openbao_password_credential_uuid)
+        )
+        if not has_password:
             self.fields.pop("clear_password", None)
-        has_token = bool(getattr(instance, "token_name", "")) or bool(
-            getattr(instance, "token_value_enc", "")
+        has_token = (
+            bool(getattr(instance, "token_name", ""))
+            or bool(getattr(instance, "token_value_enc", ""))
+            or (uses_openbao and bool(instance.openbao_token_credential_uuid))
         )
         if not has_token:
             self.fields.pop("clear_token", None)
@@ -422,6 +505,7 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
             "password",
             "token_name",
             "token_value",
+            "credential_storage_backend",
             "verify_ssl",
             "enabled",
             "allow_writes",
@@ -445,6 +529,9 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
     def clean(self) -> dict[str, object]:
         """Require domain or IP, honour explicit credential clears, and enforce
         the password-or-complete-token invariant before save."""
+        instance = getattr(self, "instance", None)
+        if instance is not None and self._request_user is not None:
+            instance._openbao_actor_user = self._request_user
         super().clean()
         cleaned_data = self.cleaned_data
         domain = (cleaned_data.get("domain") or "").strip()
@@ -470,24 +557,18 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
             if not clear_password and not cleaned_data.get("password"):
                 try:
                     cleaned_data["password"] = self.instance.password
-                except enc_helpers.EncryptionError:
+                except (enc_helpers.EncryptionError, ValidationError) as exc:
                     self.add_error(
                         "password",
-                        _(
-                            "The stored password cannot be decrypted. Enter a "
-                            "replacement or select clear."
-                        ),
+                        str(getattr(exc, "messages", [exc])[0]),
                     )
             if not clear_token and not cleaned_data.get("token_value"):
                 try:
                     cleaned_data["token_value"] = self.instance.token_value
-                except enc_helpers.EncryptionError:
+                except (enc_helpers.EncryptionError, ValidationError) as exc:
                     self.add_error(
                         "token_value",
-                        _(
-                            "The stored token value cannot be decrypted. Enter a "
-                            "replacement or select clear."
-                        ),
+                        str(getattr(exc, "messages", [exc])[0]),
                     )
 
         # Invariant: row must have either a password or a complete (token_name,
@@ -520,6 +601,33 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
 
         self._clean_ssh_credentials()
         self._clean_service_monitoring()
+        from netbox_proxbox.integrations.openbao import (
+            validate_write_mode_openbao_requirements,
+        )
+
+        try:
+            validate_write_mode_openbao_requirements(
+                self.instance,
+                allow_writes=bool(cleaned_data.get("allow_writes")),
+                storage_backend=cleaned_data.get("credential_storage_backend") or None,
+            )
+            if cleaned_data.get("password") or cleaned_data.get("token_value"):
+                from netbox_proxbox.integrations.openbao import (
+                    validate_openbao_storage_available,
+                )
+
+                validate_openbao_storage_available(
+                    self.instance,
+                    storage_backend=cleaned_data.get("credential_storage_backend")
+                    or None,
+                )
+        except ValidationError as exc:
+            if hasattr(exc, "error_dict"):
+                for field, messages in exc.error_dict.items():
+                    for message in messages:
+                        self.add_error(field, message)
+            else:
+                self.add_error("allow_writes", exc.messages[0])
         return cleaned_data
 
     def _clean_service_monitoring(self) -> None:
@@ -580,11 +688,32 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
         username = (cleaned_data.get("ssh_username") or "").strip()
         clear_password = bool(cleaned_data.get("clear_ssh_password"))
         clear_private_key = bool(cleaned_data.get("clear_ssh_private_key"))
+        from netbox_proxbox.integrations.openbao import endpoint_uses_openbao_storage
+
+        uses_openbao = endpoint_uses_openbao_storage(instance)
         has_password = bool(cleaned_data.get("ssh_password")) or (
-            bool(getattr(instance, "ssh_password_enc", "")) and not clear_password
+            (
+                bool(getattr(instance, "ssh_password_enc", ""))
+                or (
+                    uses_openbao
+                    and bool(
+                        getattr(instance, "openbao_ssh_password_credential_uuid", None)
+                    )
+                )
+            )
+            and not clear_password
         )
         has_private_key = bool(cleaned_data.get("ssh_private_key")) or (
-            bool(getattr(instance, "ssh_private_key_enc", "")) and not clear_private_key
+            (
+                bool(getattr(instance, "ssh_private_key_enc", ""))
+                or (
+                    uses_openbao
+                    and bool(
+                        getattr(instance, "openbao_ssh_keypair_credential_uuid", None)
+                    )
+                )
+            )
+            and not clear_private_key
         )
         auth_method = cleaned_data.get("ssh_auth_method")
         has_secret = has_private_key if auth_method == AUTH_METHOD_KEY else has_password

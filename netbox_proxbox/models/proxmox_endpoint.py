@@ -13,6 +13,7 @@ from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
 
 from netbox_proxbox.choices import (
+    CredentialStorageBackendChoices,
     ProxmoxAccessMethodChoices,
     ProxmoxEndpointEnvironmentChoices,
     ProxmoxModeChoices,
@@ -134,6 +135,41 @@ class ProxmoxEndpoint(EndpointBase):
         default="",
         verbose_name=_("Encrypted token value"),
         help_text=_("Fernet-encrypted Proxmox API token value ciphertext. Internal."),
+    )
+    credential_storage_backend = models.CharField(
+        max_length=32,
+        choices=CredentialStorageBackendChoices,
+        blank=True,
+        default="",
+        verbose_name=_("Credential storage backend"),
+        help_text=_(
+            "Override the plugin default credential storage backend for this "
+            "endpoint. Leave blank to inherit the plugin setting."
+        ),
+    )
+    openbao_password_credential_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("OpenBao password credential UUID"),
+    )
+    openbao_token_credential_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("OpenBao API token credential UUID"),
+    )
+    openbao_ssh_password_credential_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("OpenBao SSH password credential UUID"),
+    )
+    openbao_ssh_keypair_credential_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("OpenBao SSH key pair credential UUID"),
     )
     pushed_credential_fingerprint = models.CharField(
         max_length=64,
@@ -753,50 +789,132 @@ class ProxmoxEndpoint(EndpointBase):
                     "the backend grant is revoked."
                 )
             )
+        self.purge_openbao_credentials()
         return super().delete(*args, **kwargs)
+
+    def purge_openbao_credentials(self, *, user: object | None = None) -> None:
+        """Delete OpenBao credential inventory rows referenced by this endpoint."""
+        from netbox_proxbox.integrations.openbao import (
+            clear_endpoint_openbao_credential,
+            endpoint_uses_openbao_storage,
+        )
+
+        if not endpoint_uses_openbao_storage(self):
+            return
+        actor = user or getattr(self, "_openbao_actor_user", None)
+        for field_name in (
+            "openbao_password_credential_uuid",
+            "openbao_token_credential_uuid",
+            "openbao_ssh_password_credential_uuid",
+            "openbao_ssh_keypair_credential_uuid",
+        ):
+            if getattr(self, field_name, None):
+                clear_endpoint_openbao_credential(
+                    self,
+                    field_name,
+                    user=actor,
+                )
 
     @property
     def password(self) -> str:
-        """Decrypt and return the Proxmox password secret."""
-        return decrypt_primary_secret(self.password_enc)
+        """Return the Proxmox password secret."""
+        from netbox_proxbox.integrations.openbao import resolve_endpoint_password
+
+        return resolve_endpoint_password(self)
 
     @password.setter
     def password(self, value: object | None) -> None:
+        from netbox_proxbox.integrations.openbao import (
+            endpoint_uses_openbao_storage,
+            store_endpoint_password,
+        )
         from netbox_proxbox.services.encryption_recovery import (
             mark_encrypted_fields_for_write,
         )
+
+        if endpoint_uses_openbao_storage(self):
+            if value:
+                store_endpoint_password(
+                    self, str(value), user=self._openbao_interaction_user()
+                )
+            else:
+                from netbox_proxbox.integrations.openbao import (
+                    clear_endpoint_openbao_credential,
+                )
+
+                clear_endpoint_openbao_credential(
+                    self,
+                    "openbao_password_credential_uuid",
+                    user=self._openbao_interaction_user(),
+                )
+                self.password_enc = ""
+            return
 
         mark_encrypted_fields_for_write(self, "password_enc")
         self.password_enc = encrypt_primary_secret(value)
 
     @property
-    def password_encryption_state(self) -> str:
-        """Return a secret-free state for forms, dashboards, and list views."""
-
-        from netbox_proxbox.services.encryption_recovery import ciphertext_state
-
-        return ciphertext_state(self.password_enc)
-
-    @property
     def token_value(self) -> str:
-        """Decrypt and return the Proxmox API token value secret."""
-        return decrypt_primary_secret(self.token_value_enc)
+        """Return the Proxmox API token value secret."""
+        from netbox_proxbox.integrations.openbao import resolve_endpoint_token_value
+
+        return resolve_endpoint_token_value(self)
 
     @token_value.setter
     def token_value(self, value: object | None) -> None:
+        from netbox_proxbox.integrations.openbao import (
+            endpoint_uses_openbao_storage,
+            store_endpoint_api_token,
+        )
         from netbox_proxbox.services.encryption_recovery import (
             mark_encrypted_fields_for_write,
         )
+
+        if endpoint_uses_openbao_storage(self):
+            if value:
+                store_endpoint_api_token(
+                    self, str(value), user=self._openbao_interaction_user()
+                )
+            else:
+                from netbox_proxbox.integrations.openbao import (
+                    clear_endpoint_openbao_credential,
+                )
+
+                clear_endpoint_openbao_credential(
+                    self,
+                    "openbao_token_credential_uuid",
+                    user=self._openbao_interaction_user(),
+                )
+                self.token_value_enc = ""
+            return
 
         mark_encrypted_fields_for_write(self, "token_value_enc")
         self.token_value_enc = encrypt_primary_secret(value)
 
     @property
-    def token_value_encryption_state(self) -> str:
-        """Return a secret-free state for the stored API-token value."""
-
+    def password_encryption_state(self) -> str:
+        """Return a secret-free state for forms, dashboards, and list views."""
+        from netbox_proxbox.integrations.openbao import endpoint_uses_openbao_storage
         from netbox_proxbox.services.encryption_recovery import ciphertext_state
 
+        if endpoint_uses_openbao_storage(self):
+            return (
+                "Configured"
+                if self.openbao_password_credential_uuid
+                else "Not configured"
+            )
+        return ciphertext_state(self.password_enc)
+
+    @property
+    def token_value_encryption_state(self) -> str:
+        """Return a secret-free state for the stored API-token value."""
+        from netbox_proxbox.integrations.openbao import endpoint_uses_openbao_storage
+        from netbox_proxbox.services.encryption_recovery import ciphertext_state
+
+        if endpoint_uses_openbao_storage(self):
+            if self.openbao_token_credential_uuid:
+                return "Configured"
+            return ciphertext_state(self.token_value_enc)
         return ciphertext_state(self.token_value_enc)
 
     @property
@@ -820,12 +938,20 @@ class ProxmoxEndpoint(EndpointBase):
 
     @property
     def has_ssh_password(self) -> bool:
-        """Return whether an endpoint fallback SSH password ciphertext is stored."""
+        """Return whether an endpoint fallback SSH password is stored."""
+        from netbox_proxbox.integrations.openbao import endpoint_uses_openbao_storage
+
+        if endpoint_uses_openbao_storage(self):
+            return bool(self.openbao_ssh_password_credential_uuid)
         return bool(self.ssh_password_enc)
 
     @property
     def has_ssh_private_key(self) -> bool:
-        """Return whether an endpoint fallback SSH private-key ciphertext is stored."""
+        """Return whether an endpoint fallback SSH private key is stored."""
+        from netbox_proxbox.integrations.openbao import endpoint_uses_openbao_storage
+
+        if endpoint_uses_openbao_storage(self):
+            return bool(self.openbao_ssh_keypair_credential_uuid)
         return bool(self.ssh_private_key_enc)
 
     @property
@@ -896,34 +1022,86 @@ class ProxmoxEndpoint(EndpointBase):
         )
 
     def set_ssh_password(self, plaintext: str, *, key: str) -> None:
-        """Encrypt and store the endpoint fallback SSH password."""
+        """Store the endpoint fallback SSH password."""
+        from netbox_proxbox.integrations.openbao import (
+            endpoint_uses_openbao_storage,
+            store_endpoint_ssh_password,
+        )
         from netbox_proxbox.services.encryption_recovery import (
             mark_encrypted_fields_for_write,
         )
+
+        if endpoint_uses_openbao_storage(self):
+            store_endpoint_ssh_password(
+                self, plaintext, user=self._openbao_interaction_user()
+            )
+            return
 
         mark_encrypted_fields_for_write(self, "ssh_password_enc")
         self.ssh_password_enc = enc_helpers.encrypt(plaintext, key=key)
 
     def get_ssh_password(self, *, key: str) -> str:
-        """Decrypt and return the endpoint fallback SSH password."""
+        """Return the endpoint fallback SSH password."""
+        from netbox_proxbox.integrations.openbao import (
+            endpoint_uses_openbao_storage,
+            resolve_endpoint_ssh_password,
+        )
+
+        if endpoint_uses_openbao_storage(self):
+            return resolve_endpoint_ssh_password(
+                self, user=self._openbao_interaction_user()
+            )
         return enc_helpers.decrypt(self.ssh_password_enc, key=key)
 
     def set_ssh_private_key(self, plaintext: str, *, key: str) -> None:
-        """Encrypt and store the endpoint fallback SSH private key."""
+        """Store the endpoint fallback SSH private key."""
+        from netbox_proxbox.integrations.openbao import (
+            endpoint_uses_openbao_storage,
+            store_endpoint_ssh_keypair,
+        )
         from netbox_proxbox.services.encryption_recovery import (
             mark_encrypted_fields_for_write,
         )
+
+        if endpoint_uses_openbao_storage(self):
+            store_endpoint_ssh_keypair(
+                self,
+                private_key=plaintext,
+                user=self._openbao_interaction_user(),
+            )
+            return
 
         mark_encrypted_fields_for_write(self, "ssh_private_key_enc")
         self.ssh_private_key_enc = enc_helpers.encrypt(plaintext, key=key)
 
     def get_ssh_private_key(self, *, key: str) -> str:
-        """Decrypt and return the endpoint fallback SSH private key."""
+        """Return the endpoint fallback SSH private key."""
+        from netbox_proxbox.integrations.openbao import (
+            endpoint_uses_openbao_storage,
+            resolve_endpoint_ssh_private_key,
+        )
+
+        if endpoint_uses_openbao_storage(self):
+            return resolve_endpoint_ssh_private_key(
+                self, user=self._openbao_interaction_user()
+            )
         return enc_helpers.decrypt(self.ssh_private_key_enc, key=key)
+
+    def _openbao_interaction_user(self) -> object | None:
+        return getattr(self, "_openbao_actor_user", None)
 
     def clean(self) -> None:
         """Validate endpoint identity plus optional SSH terminal fallback fields."""
         super().clean()
+        from netbox_proxbox.integrations.openbao import (
+            validate_write_mode_openbao_requirements,
+        )
+
+        validate_write_mode_openbao_requirements(
+            self,
+            allow_writes=bool(self.allow_writes),
+            storage_backend=self.credential_storage_backend or None,
+        )
         if self.ssh_known_host_fingerprint:
             self.ssh_known_host_fingerprint = normalize_fingerprint(
                 self.ssh_known_host_fingerprint

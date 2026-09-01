@@ -13,6 +13,7 @@ from types import SimpleNamespace
 import pytest
 
 from tests.django_stubs import django_stub_modules
+from tests.choices_stubs import attach_credential_storage_backend_choices
 
 
 class HttpResponse:
@@ -689,6 +690,7 @@ def load_plugin_module(
 
     nbp_choices.ProxmoxModeChoices = _ProxmoxModeChoices
     nbp_choices.SyncTypeChoices = _SyncTypeChoices
+    attach_credential_storage_backend_choices(nbp_choices)
     nbp_choices.NetBoxTokenVersionChoices = SimpleNamespace(V1="v1", V2="v2")
     nbp_choices.ReplicationStatusChoices = SimpleNamespace(
         ACTIVE="active", STALE="stale"

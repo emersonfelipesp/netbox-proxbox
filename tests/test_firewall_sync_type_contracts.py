@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tests.choices_stubs import attach_credential_storage_backend_choices
 import ast
 import importlib.util
 import inspect
@@ -51,6 +52,7 @@ def _load_sync_firewall(monkeypatch):
         SECURITY_GROUP="security_group",
     )
     choices.FirewallScopeChoices = SimpleNamespace(DATACENTER="datacenter")
+    attach_credential_storage_backend_choices(choices)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices)
 
     models = types.ModuleType("netbox_proxbox.models")

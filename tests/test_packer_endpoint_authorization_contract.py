@@ -44,10 +44,11 @@ def test_packer_authorization_is_wired_through_form_and_api() -> None:
 
 def test_additive_default_off_migration_exists() -> None:
     migrations = list((REPO_ROOT / "netbox_proxbox" / "migrations").glob("*.py"))
+    needle = '"allow_packer_template_builds",\n            models.BooleanField('
     matches = [
         path.read_text(encoding="utf-8")
         for path in migrations
-        if "allow_packer_template_builds" in path.read_text(encoding="utf-8")
+        if needle in path.read_text(encoding="utf-8")
     ]
     assert len(matches) == 1
     assert "add_field_idempotent(" in matches[0]

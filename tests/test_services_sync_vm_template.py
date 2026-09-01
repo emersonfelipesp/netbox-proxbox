@@ -7,6 +7,7 @@ two-phase sync behavior can be exercised without a NetBox runtime.
 
 from __future__ import annotations
 
+from tests.choices_stubs import attach_credential_storage_backend_choices
 import importlib.util
 import sys
 import types
@@ -125,6 +126,7 @@ def sync_vm_template_module(monkeypatch):
         BOOTSTRAP_ONLY="bootstrap_only",
         DISABLED="disabled",
     )
+    attach_credential_storage_backend_choices(choices)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices)
 
     class _DoesNotExist(Exception):

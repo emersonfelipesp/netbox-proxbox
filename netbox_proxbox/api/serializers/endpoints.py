@@ -233,10 +233,38 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
         if allowed_tenants is not None:
             instance.allowed_tenants.set(allowed_tenants)
 
+    def _apply_api_secrets(
+        self,
+        instance: ProxmoxEndpoint,
+        *,
+        password: object = serializers.empty,
+        token_value: object = serializers.empty,
+    ) -> None:
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request is not None else None
+        if user is not None:
+            instance._openbao_actor_user = user
+        update_fields: list[str] = []
+        if password is not serializers.empty:
+            instance.password = password or ""
+            update_fields.extend(["password_enc", "openbao_password_credential_uuid"])
+        if token_value is not serializers.empty:
+            instance.token_value = token_value or ""
+            update_fields.extend(["token_value_enc", "openbao_token_credential_uuid"])
+        if update_fields:
+            instance.save(update_fields=list(dict.fromkeys(update_fields)))
+
     def create(self, validated_data: dict[str, object]) -> ProxmoxEndpoint:
         allowed_tenants = validated_data.pop("allowed_tenants", None)
+        password = validated_data.pop("password", serializers.empty)
+        token_value = validated_data.pop("token_value", serializers.empty)
         instance = super().create(validated_data)
         self._apply_allowed_tenants(instance, allowed_tenants)
+        self._apply_api_secrets(
+            instance,
+            password=password,
+            token_value=token_value,
+        )
         return instance
 
     def update(
@@ -245,8 +273,15 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
         validated_data: dict[str, object],
     ) -> ProxmoxEndpoint:
         allowed_tenants = validated_data.pop("allowed_tenants", None)
+        password = validated_data.pop("password", serializers.empty)
+        token_value = validated_data.pop("token_value", serializers.empty)
         instance = super().update(instance, validated_data)
         self._apply_allowed_tenants(instance, allowed_tenants)
+        self._apply_api_secrets(
+            instance,
+            password=password,
+            token_value=token_value,
+        )
         return instance
 
 

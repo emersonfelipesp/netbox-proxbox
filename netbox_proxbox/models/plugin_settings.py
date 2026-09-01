@@ -13,7 +13,11 @@ from django.views.decorators.debug import sensitive_variables
 
 from netbox.models import NetBoxModel
 
-from netbox_proxbox.choices import SyncModeChoices, VMInterfaceSyncStrategyChoices
+from netbox_proxbox.choices import (
+    CredentialStorageBackendChoices,
+    SyncModeChoices,
+    VMInterfaceSyncStrategyChoices,
+)
 
 DEFAULT_BACKEND_LOG_FILE_PATH = "/var/log/proxbox.log"
 
@@ -464,8 +468,31 @@ class ProxboxPluginSettings(NetBoxModel):
         verbose_name=_("Encryption key"),
         help_text=_(
             "Fernet key used only for netbox-proxbox ciphertext stored in the "
-            "NetBox database. This is not proxbox-api's PROXBOX_ENCRYPTION_KEY "
+            "NetBox database when credential storage backend is legacy encrypted. "
+            "This is not proxbox-api's PROXBOX_ENCRYPTION_KEY "
             "and is not the API authentication key."
+        ),
+    )
+    credential_storage_backend = models.CharField(
+        max_length=32,
+        choices=CredentialStorageBackendChoices,
+        default=CredentialStorageBackendChoices.OPENBAO,
+        verbose_name=_("Credential storage backend"),
+        help_text=_(
+            "Default storage for Proxmox API tokens, passwords, and SSH secrets. "
+            "OpenBao is recommended for Write mode. Legacy encrypted storage "
+            "keeps Fernet-encrypted columns in NetBox."
+        ),
+    )
+    openbao_service_username = models.CharField(
+        max_length=150,
+        blank=True,
+        default="",
+        verbose_name=_("OpenBao service username"),
+        help_text=_(
+            "NetBox user used for automated OpenBao credential reveal during "
+            "backend sync and background jobs. Required whenever automated jobs "
+            "read OpenBao-backed Proxbox credentials."
         ),
     )
     proxmox_timeout = models.PositiveIntegerField(

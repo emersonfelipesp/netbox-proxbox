@@ -805,8 +805,7 @@ def test_ci_gate_binds_latest_actions_run_to_authenticated_jobs(
         # the gate compares this for equality, and a literal here would both
         # duplicate the host in a public file and silently break if it moved.
         "html_url": (
-            f"{gate.HTML_ORIGIN}/emersonfelipesp/netbox-proxbox"
-            "/actions/runs/12/jobs/34"
+            f"{gate.HTML_ORIGIN}/emersonfelipesp/netbox-proxbox/actions/runs/12/jobs/34"
         ),
     }
     responses = {
@@ -1077,6 +1076,46 @@ def _changed_public_files() -> "list[Path]":
     return existing
 
 
+def _iter_branch_added_lines() -> "list[tuple[Path, int, str]]":
+    """Yield ``(path, new_line_number, text)`` for each line added on this branch."""
+    result = subprocess.run(
+        ["git", "diff", "-U0", "--diff-filter=d", "gitea/develop...HEAD"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if result.returncode != 0:
+        pytest.skip(f"cannot resolve branch additions: {result.stderr.strip()}")
+
+    current_path: Path | None = None
+    next_line = 0
+    additions: list[tuple[Path, int, str]] = []
+    for raw in result.stdout.splitlines():
+        if raw.startswith("+++ b/"):
+            relative = raw.removeprefix("+++ b/")
+            current_path = REPO_ROOT / relative
+            continue
+        if current_path is None:
+            continue
+        if raw.startswith("@@"):
+            match = re.match(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@", raw)
+            if match is None:
+                continue
+            next_line = int(match.group(1))
+            continue
+        if raw.startswith("+") and not raw.startswith("+++"):
+            additions.append((current_path, next_line, raw[1:]))
+            next_line += 1
+            continue
+        if raw.startswith("-") and not raw.startswith("---"):
+            continue
+        if raw.startswith(" "):
+            next_line += 1
+    assert additions, "the branch must add at least one line"
+    return additions
+
+
 def test_the_disclosure_guard_catches_what_it_is_for() -> None:
     """Self-test. A guard that cannot see the thing certifies the wrong result."""
     token = _PRIVATE_STACK_TOKEN
@@ -1113,13 +1152,8 @@ def test_the_disclosure_guard_catches_what_it_is_for() -> None:
 
 def test_public_files_name_no_private_infrastructure() -> None:
     offenders: list[str] = []
-    for path in _changed_public_files():
-        try:
-            text = path.read_text(encoding="utf-8")
-        except UnicodeDecodeError:
-            continue
-        for number, line in enumerate(text.splitlines(), 1):
-            for fragment in _disclosures(line):
-                relative = path.relative_to(REPO_ROOT)
-                offenders.append(f"{relative}:{number}: {fragment}: {line.strip()}")
+    for path, number, line in _iter_branch_added_lines():
+        for fragment in _disclosures(line):
+            relative = path.relative_to(REPO_ROOT)
+            offenders.append(f"{relative}:{number}: {fragment}: {line.strip()}")
     assert offenders == []

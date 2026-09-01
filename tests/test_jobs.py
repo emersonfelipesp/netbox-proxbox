@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tests.choices_stubs import attach_credential_storage_backend_choices
 import asyncio
 import json
 import importlib.util
@@ -158,6 +159,7 @@ def proxbox_sync_job_module(monkeypatch):
         BOOTSTRAP_ONLY="bootstrap_only",
         DISABLED="disabled",
     )
+    attach_credential_storage_backend_choices(choices_mod)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices_mod)
 
     root = Path(__file__).resolve().parents[1]

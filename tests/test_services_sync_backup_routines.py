@@ -17,6 +17,7 @@ modules so it can exercise those paths without a NetBox environment.
 
 from __future__ import annotations
 
+from tests.choices_stubs import attach_credential_storage_backend_choices
 import importlib.util
 import sys
 import types
@@ -37,6 +38,7 @@ def sync_backup_module(monkeypatch):
 
     choices = types.ModuleType("netbox_proxbox.choices")
     choices.BackupRoutineStatusChoices = SimpleNamespace(ACTIVE="active", STALE="stale")
+    attach_credential_storage_backend_choices(choices)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices)
 
     class _DoesNotExist(Exception):

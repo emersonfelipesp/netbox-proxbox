@@ -149,6 +149,16 @@ class SettingsView(
             "additional_allowed_ip_ranges": settings_obj.additional_allowed_ip_ranges,
             "explicitly_blocked_ip_ranges": settings_obj.explicitly_blocked_ip_ranges,
             "encryption_enabled": bool(settings_obj.encryption_key),
+            "credential_storage_backend": getattr(
+                settings_obj,
+                "credential_storage_backend",
+                "openbao",
+            ),
+            "openbao_service_username": getattr(
+                settings_obj,
+                "openbao_service_username",
+                "",
+            ),
             "proxmox_timeout": settings_obj.proxmox_timeout,
             "proxmox_max_retries": settings_obj.proxmox_max_retries,
             "proxmox_retry_backoff": settings_obj.proxmox_retry_backoff,
@@ -457,6 +467,13 @@ class SettingsView(
                 # If checked but key field is blank, preserve existing key
             else:
                 settings_obj.encryption_key = ""
+            settings_obj.credential_storage_backend = form.cleaned_data.get(
+                "credential_storage_backend",
+                "openbao",
+            )
+            settings_obj.openbao_service_username = (
+                form.cleaned_data.get("openbao_service_username", "") or ""
+            ).strip()
             settings_obj.save(
                 update_fields=[
                     "use_guest_agent_interface_name",
@@ -496,6 +513,8 @@ class SettingsView(
                     "additional_allowed_ip_ranges",
                     "explicitly_blocked_ip_ranges",
                     "encryption_key",
+                    "credential_storage_backend",
+                    "openbao_service_username",
                     "proxmox_timeout",
                     "proxmox_max_retries",
                     "proxmox_retry_backoff",

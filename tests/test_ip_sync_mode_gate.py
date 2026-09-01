@@ -8,6 +8,7 @@ disable inline VM network work with sync_vm_network=false.
 
 from __future__ import annotations
 
+from tests.choices_stubs import attach_credential_storage_backend_choices
 import importlib.util
 import sys
 import types
@@ -68,6 +69,7 @@ def sync_stages_module(monkeypatch):
         REPLICATIONS="replications",
         BACKUP_ROUTINES="backup-routines",
     )
+    attach_credential_storage_backend_choices(choices_mod)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices_mod)
 
     bootstrap_mod = types.ModuleType("netbox_proxbox.netbox_bootstrap")

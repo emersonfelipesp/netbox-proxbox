@@ -154,6 +154,8 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "additional_allowed_ip_ranges",
             "explicitly_blocked_ip_ranges",
             "encryption_key",
+            "credential_storage_backend",
+            "openbao_service_username",
             "proxmox_timeout",
             "proxmox_max_retries",
             "proxmox_retry_backoff",

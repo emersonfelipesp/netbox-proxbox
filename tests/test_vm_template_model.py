@@ -16,6 +16,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from tests.choices_stubs import attach_credential_storage_backend_choices
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -245,7 +247,10 @@ class TestSyncModeFieldsOnModels:
             "netbox.models.features",
         ]:
             if mod_name not in sys.modules:
-                monkeypatch.setitem(sys.modules, mod_name, types.ModuleType(mod_name))
+                stub = types.ModuleType(mod_name)
+                if mod_name == "netbox_proxbox.choices":
+                    attach_credential_storage_backend_choices(stub)
+                monkeypatch.setitem(sys.modules, mod_name, stub)
         spec = importlib.util.spec_from_file_location(
             f"_model_{class_name}",
             REPO_ROOT / "netbox_proxbox" / "models" / filename,

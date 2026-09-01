@@ -525,3 +525,17 @@ class SdnFabricTypeChoices(ChoiceSet):
         (VXLAN, _("VXLAN"), "cyan"),
         (OSPF, _("OSPF"), "green"),
     ]
+
+
+class CredentialStorageBackendChoices(ChoiceSet):
+    """Where Proxbox stores endpoint credential material."""
+
+    key = "ProxboxPluginSettings.credential_storage_backend"
+
+    OPENBAO = "openbao"
+    LEGACY_ENCRYPTED = "legacy_encrypted"
+
+    CHOICES = [
+        (OPENBAO, _("OpenBao (default)"), "green"),
+        (LEGACY_ENCRYPTED, _("Legacy Fernet-encrypted local storage"), "orange"),
+    ]

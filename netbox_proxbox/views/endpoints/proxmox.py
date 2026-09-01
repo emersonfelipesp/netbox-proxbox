@@ -520,6 +520,11 @@ class ProxmoxEndpointEditView(generic.ObjectEditView):
     queryset = ProxmoxEndpoint.objects.all()
     form = ProxmoxEndpointForm
 
+    def get_form_kwargs(self) -> dict[str, object]:
+        kwargs = super().get_form_kwargs()
+        kwargs["request_user"] = self.request.user
+        return kwargs
+
 
 @register_model_view(ProxmoxEndpoint, "settings", path="settings")
 class ProxmoxEndpointSettingsView(ActionsMixin, generic.ObjectEditView):

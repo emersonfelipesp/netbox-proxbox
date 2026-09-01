@@ -10,6 +10,7 @@ Covers:
 
 from __future__ import annotations
 
+from tests.choices_stubs import attach_credential_storage_backend_choices
 import ast
 import importlib.util
 import sys
@@ -102,6 +103,7 @@ def sync_stages_module(monkeypatch):
         REPLICATIONS="replications",
         BACKUP_ROUTINES="backup-routines",
     )
+    attach_credential_storage_backend_choices(choices_mod)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices_mod)
 
     # --- bootstrap module ---

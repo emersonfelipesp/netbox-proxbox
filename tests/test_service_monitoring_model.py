@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from tests.choices_stubs import attach_credential_storage_backend_choices
+from tests.django_model_stubs import attach_standard_model_fields
 import importlib.util
 import sys
 import types
@@ -42,19 +44,7 @@ def _stub_proxmox_endpoint_dependencies(monkeypatch):
             self.args = args
             self.kwargs = kwargs
 
-    for name in (
-        "BooleanField",
-        "CharField",
-        "DateTimeField",
-        "DecimalField",
-        "ForeignKey",
-        "JSONField",
-        "ManyToManyField",
-        "PositiveIntegerField",
-        "PositiveSmallIntegerField",
-        "TextField",
-    ):
-        setattr(db_models, name, _Field)
+    attach_standard_model_fields(db_models, field_class=_Field)
     db_models.PROTECT = object()
     db_models.SET_NULL = object()
     db_models.UniqueConstraint = _Field
@@ -134,6 +124,7 @@ def _stub_proxmox_endpoint_dependencies(monkeypatch):
     utils_pkg = types.ModuleType("netbox_proxbox.utils")
     utils_pkg.encryption = enc_mod
 
+    attach_credential_storage_backend_choices(choices)
     for name, mod in [
         ("django", django),
         ("django.core", core),
@@ -249,6 +240,7 @@ def _stub_endpoint_serializer_dependencies(monkeypatch):
         pass
 
     serializers.ValidationError = _ValidationError
+    serializers.empty = object()
     rest_framework.serializers = serializers
 
     netbox_api_fields = types.ModuleType("netbox.api.fields")
@@ -318,6 +310,7 @@ def _stub_endpoint_serializer_dependencies(monkeypatch):
         str(REPO_ROOT / "netbox_proxbox" / "api" / "serializers")
     ]
 
+    attach_credential_storage_backend_choices(choices)
     for name, mod in [
         ("django", django),
         ("django.utils", django_utils),
@@ -356,6 +349,19 @@ def _load_endpoint_serializer(monkeypatch):
 def _stub_proxmox_form_dependencies(monkeypatch):
     django = types.ModuleType("django")
     forms = types.ModuleType("django.forms")
+    core = types.ModuleType("django.core")
+    core_exceptions = types.ModuleType("django.core.exceptions")
+
+    class ValidationError(Exception):
+        def __init__(self, message):
+            super().__init__(message)
+            self.message = message
+            self.message_dict = (
+                message if isinstance(message, dict) else {"__all__": [message]}
+            )
+
+    core_exceptions.ValidationError = ValidationError
+    core.exceptions = core_exceptions
 
     class _Field:
         def __init__(self, *args, **kwargs):
@@ -387,6 +393,7 @@ def _stub_proxmox_form_dependencies(monkeypatch):
     django_utils = types.ModuleType("django.utils")
     django_translation = types.ModuleType("django.utils.translation")
     django_translation.gettext = lambda value: value
+    django_translation.gettext_lazy = lambda value: value
     django_utils.translation = django_translation
 
     netbox_forms = types.ModuleType("netbox.forms")
@@ -463,11 +470,21 @@ def _stub_proxmox_form_dependencies(monkeypatch):
 
     np_pkg = types.ModuleType("netbox_proxbox")
     np_pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox")]
+    np_integrations = types.ModuleType("netbox_proxbox.integrations")
+    np_integrations.__path__ = [str(REPO_ROOT / "netbox_proxbox" / "integrations")]
+    np_openbao = types.ModuleType("netbox_proxbox.integrations.openbao")
+    np_openbao.endpoint_uses_openbao_storage = lambda endpoint: False
+    np_openbao.validate_write_mode_openbao_requirements = lambda *args, **kwargs: None
+    np_openbao.validate_openbao_storage_available = lambda *args, **kwargs: None
+    np_openbao.clear_endpoint_openbao_credential = lambda *args, **kwargs: None
     forms_pkg = types.ModuleType("netbox_proxbox.forms")
     forms_pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox" / "forms")]
 
+    attach_credential_storage_backend_choices(choices)
     for name, mod in [
         ("django", django),
+        ("django.core", core),
+        ("django.core.exceptions", core_exceptions),
         ("django.forms", forms),
         ("django.utils", django_utils),
         ("django.utils.translation", django_translation),
@@ -478,6 +495,8 @@ def _stub_proxmox_form_dependencies(monkeypatch):
         ("ipam.models", ipam_models),
         ("tenancy.models", tenancy_models),
         ("netbox_proxbox", np_pkg),
+        ("netbox_proxbox.integrations", np_integrations),
+        ("netbox_proxbox.integrations.openbao", np_openbao),
         ("netbox_proxbox.forms", forms_pkg),
         ("netbox_proxbox.constants", constants),
         ("netbox_proxbox.choices", choices),
