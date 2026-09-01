@@ -7,6 +7,10 @@ from . import views
 from .ha import HAClusterSummaryAPIView, HAVMResourceAPIView
 from .jobs import ProxboxJobCancelAPIView
 from .sync_jobs import ProxboxSyncJobViewSet
+from .proxmox_tags import (
+    LXCContainerProxmoxTagsAPIView,
+    VirtualMachineProxmoxTagsAPIView,
+)
 from .ssh_credentials import (
     NodeHostKeyFingerprintAPIView,
     NodeSSHCredentialByNodeAPIView,
@@ -342,6 +346,16 @@ urlpatterns = [
         "resources/virtual-disks/",
         VirtualDisksAPIView.as_view(),
         name="api-virtual-disks",
+    ),
+    path(
+        "resources/virtual-machines/<int:pk>/proxmox-tags/",
+        VirtualMachineProxmoxTagsAPIView.as_view(),
+        name="api-virtual-machines-proxmox-tags",
+    ),
+    path(
+        "resources/lxc-containers/<int:pk>/proxmox-tags/",
+        LXCContainerProxmoxTagsAPIView.as_view(),
+        name="api-lxc-containers-proxmox-tags",
     ),
     path("sync/schedule/", ScheduleSyncAPIView.as_view(), name="api-schedule-sync"),
     path("logs/", BackendLogsAPIView.as_view(), name="api-logs"),
