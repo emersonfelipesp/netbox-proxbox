@@ -10,7 +10,11 @@ from django import forms
 from dcim.models import DeviceRole
 from utilities.forms.fields import DynamicModelChoiceField
 
-from netbox_proxbox.choices import SyncModeChoices, VMInterfaceSyncStrategyChoices
+from netbox_proxbox.choices import (
+    CredentialStorageBackendChoices,
+    SyncModeChoices,
+    VMInterfaceSyncStrategyChoices,
+)
 from netbox_proxbox.constants import OVERWRITE_FIELDS, SYNC_MODE_FIELDS
 from netbox_proxbox.models.plugin_settings import (
     BRANCH_ON_CONFLICT_CHOICES,
@@ -455,9 +459,28 @@ class ProxboxPluginSettingsForm(forms.Form):
         widget=forms.PasswordInput(render_value=False),
         label="Encryption key",
         help_text=(
-            "Fernet key for plugin-owned ciphertext in NetBox. Once ciphertext "
-            "exists, use the verified rotation workflow below; ordinary settings "
-            "cannot clear or replace this key."
+            "Fernet key for plugin-owned ciphertext in NetBox when credential "
+            "storage backend is legacy encrypted. Once ciphertext exists, use "
+            "the verified rotation workflow below; ordinary settings cannot "
+            "clear or replace this key."
+        ),
+    )
+    credential_storage_backend = forms.ChoiceField(
+        required=True,
+        choices=CredentialStorageBackendChoices.CHOICES,
+        label="Credential storage backend",
+        help_text=(
+            "Default storage for Proxmox API tokens, passwords, and SSH secrets. "
+            "OpenBao is recommended for Write mode."
+        ),
+    )
+    openbao_service_username = forms.CharField(
+        required=False,
+        max_length=150,
+        label="OpenBao service username",
+        help_text=(
+            "Optional NetBox user for automated OpenBao credential reveal during "
+            "backend sync and background jobs."
         ),
     )
 

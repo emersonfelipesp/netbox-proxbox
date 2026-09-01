@@ -75,9 +75,9 @@ __all__ = [
 #: Bumped whenever the shared contract below changes shape. All five vendored
 #: copies must agree on this value; a mismatch means one repo was updated alone.
 #:
-#: v3 — narrowed 4.7 admission to exact canonical v4.7.0-beta2 identity and
-#: rejects local release-identity overrides before plugin registration.
-CONTRACT_VERSION = "netbox-compat-v3"
+#: v4 — also recognizes NetBox's documented full-version form when an allowed
+#: local build suffix follows the canonical beta2 designation.
+CONTRACT_VERSION = "netbox-compat-v4"
 
 #: Oldest NetBox release the Proxbox stack supports at all.
 STABLE_MIN_NETBOX_VERSION = "4.5.8"
@@ -116,6 +116,104 @@ _VERSION_SUFFIX_STRIP_LIMIT = 6
 SILENCE_SETTING_NAME = "silence_netbox_compatibility_warning"
 
 
+def _loader_requires_identity_check(
+    plugin_config: type[Any], netbox_version: str
+) -> bool:
+    """Return whether canonical metadata must be checked, failing closed."""
+    approved_version = plugin_config.approved_netbox_version
+    approved_designation = plugin_config.approved_netbox_designation
+    approved_display_version = f"{approved_version}-{approved_designation}"
+    candidate_text = netbox_version
+    if netbox_version.startswith(f"{approved_display_version}-"):
+        candidate_text = approved_display_version
+    try:
+        candidate = _version.parse(candidate_text)
+        approved_numeric = _version.parse(approved_version)
+        approved_prerelease = _version.parse(approved_display_version)
+    except _version.InvalidVersion as error:
+        if not netbox_version.startswith("4.7"):
+            return False
+        from core.exceptions import IncompatiblePluginError
+
+        raise IncompatiblePluginError(
+            f"Plugin {plugin_config.__module__} cannot verify malformed "
+            f"NetBox 4.7 version {netbox_version!r}."
+        ) from error
+
+    on_held_numeric_line = candidate.release[:2] == approved_numeric.release[
+        :2
+    ] and not any(candidate.release[2:])
+    if not on_held_numeric_line:
+        return False
+    if candidate in {approved_numeric, approved_prerelease}:
+        return True
+
+    from core.exceptions import IncompatiblePluginError
+
+    raise IncompatiblePluginError(
+        f"Plugin {plugin_config.__module__} is approved only for NetBox "
+        f"{approved_version}-{plugin_config.approved_netbox_designation} "
+        f"on the 4.7 line (loader: {netbox_version})."
+    )
+
+
+def _read_local_release_data(
+    plugin_config: type[Any],
+    release_base_path: Any,
+    local_release_relative_path: Any,
+    incompatible_error: type[Exception],
+) -> object:
+    """Read optional local metadata once and translate every read/parse failure."""
+    import yaml
+
+    try:
+        local_release_text = release_base_path.joinpath(
+            local_release_relative_path
+        ).read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return {}
+    except Exception as error:
+        raise incompatible_error(
+            f"Plugin {plugin_config.__module__} could not verify "
+            f"{local_release_relative_path}: {error}"
+        ) from error
+
+    try:
+        local_release_data = yaml.safe_load(local_release_text)
+    except Exception as error:
+        raise incompatible_error(
+            f"Plugin {plugin_config.__module__} could not verify "
+            f"{local_release_relative_path}: {error}"
+        ) from error
+    return {} if local_release_data is None else local_release_data
+
+
+def _validate_loader_build_suffix(
+    plugin_config: type[Any],
+    netbox_version: str,
+    local_release_data: dict[str, object],
+    incompatible_error: type[Exception],
+) -> None:
+    """Match an incoming full-version build suffix to the local snapshot."""
+    approved_display_version = (
+        f"{plugin_config.approved_netbox_version}-"
+        f"{plugin_config.approved_netbox_designation}"
+    )
+    if not netbox_version.startswith(f"{approved_display_version}-"):
+        return
+
+    local_build = local_release_data.get("build")
+    expected_display_version = approved_display_version
+    if local_build:
+        expected_display_version = f"{expected_display_version}-{local_build}"
+    if netbox_version != expected_display_version:
+        raise incompatible_error(
+            f"Plugin {plugin_config.__module__} cannot match NetBox loader "
+            f"version {netbox_version!r} to canonical/local release metadata "
+            f"({expected_display_version})."
+        )
+
+
 def validate_held_netbox_release_identity(
     plugin_config: type[Any], netbox_version: str
 ) -> None:
@@ -131,9 +229,10 @@ def validate_held_netbox_release_identity(
     Source commit, Python archive, and dependency provenance remain CI/operator
     attestations. This runtime guard attests release identity only.
     """
-    approved_version = plugin_config.approved_netbox_version
-    if netbox_version != approved_version:
+    if not _loader_requires_identity_check(plugin_config, netbox_version):
         return
+
+    approved_version = plugin_config.approved_netbox_version
 
     from pathlib import Path
 
@@ -167,26 +266,12 @@ def validate_held_netbox_release_identity(
             f"{release_path} while NetBox 4.7 is release-held."
         )
 
-    try:
-        local_release_path = release_base_path.joinpath(local_release_relative_path)
-        local_release_text = local_release_path.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        local_release_data = {}
-    except Exception as error:
-        raise IncompatiblePluginError(
-            f"Plugin {plugin_config.__module__} could not verify "
-            f"{local_release_relative_path}: {error}"
-        ) from error
-    else:
-        try:
-            local_release_data = yaml.safe_load(local_release_text)
-        except Exception as error:
-            raise IncompatiblePluginError(
-                f"Plugin {plugin_config.__module__} could not verify "
-                f"{local_release_relative_path}: {error}"
-            ) from error
-        if local_release_data is None:
-            local_release_data = {}
+    local_release_data = _read_local_release_data(
+        plugin_config,
+        release_base_path,
+        local_release_relative_path,
+        IncompatiblePluginError,
+    )
 
     unexpected_keys = (
         set(local_release_data) - {"build"}
@@ -213,6 +298,13 @@ def validate_held_netbox_release_identity(
             f"{approved_version}-{approved_designation} on the 4.7 line "
             f"(canonical: {current_release})."
         )
+
+    _validate_loader_build_suffix(
+        plugin_config,
+        netbox_version,
+        local_release_data,
+        IncompatiblePluginError,
+    )
 
 
 class NetBoxSupportLevel(StrEnum):

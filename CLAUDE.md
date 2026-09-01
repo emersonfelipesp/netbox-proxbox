@@ -134,6 +134,15 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   no data is deleted while the flag exists.
 - Companion endpoint models: `PBSEndpoint`, `PDMEndpoint`, `PDMRemote` for Proxmox Backup Server and Datacenter Manager inventory.
 - SSH and hardware discovery: `NodeSSHCredential` stores per-node SSH credentials for the optional hardware-discovery pass.
+- **Credential storage (OpenBao default, legacy Fernet opt-in).** Plugin Settings
+  `credential_storage_backend` defaults to `openbao`. With that backend,
+  `ProxmoxEndpoint` API tokens, passwords, and SSH secrets are written through
+  **netbox-openbao** (`netbox_proxbox/integrations/openbao.py`) and referenced
+  by FK — not duplicated in `*_enc` columns. Enabling `allow_writes=True` while
+  OpenBao storage is effective requires netbox-openbao installed, a default
+  `SecretEngine`, and at least one `CredentialPolicy`. Set
+  `credential_storage_backend=legacy_encrypted` (plugin-wide or per endpoint) to
+  keep the previous Fernet `*_enc` columns and encryption-key workflow.
 - `ProxmoxEndpoint.access_methods` (migration 0056, choices `api` / `api_ssh`, default `api`) is the per-endpoint **transport access method**, orthogonal to `allow_writes`. `api` = Read+Write over the Proxmox API only; `api_ssh` = API + SSH. SSH only complements API; **SSH-only is not a selectable choice**. It is the load-bearing gate for the browser SSH terminal: the credential-serving API views in `netbox_proxbox/api/ssh_credentials.py` (`ProxmoxEndpointSSHCredentialSecretsAPIView` for endpoint targets and `NodeSSHCredentialSecretsAPIView` for node targets, the latter via the owning `ProxmoxNode.endpoint`) return 403 and withhold secrets when the endpoint is API-only, which is what blocks the terminal. New endpoints default to `api`; existing rows are backfilled to `api_ssh` on upgrade (non-breaking). The value is pushed to the proxbox-api backend by `_proxmox_backend_payload()` so the backend can gate its own SSH paths.
 - `ProxmoxEndpoint.allow_packer_template_builds` (migration 0082, default
   `False`) is the narrow operator capability for netbox-packer Cloud-Init

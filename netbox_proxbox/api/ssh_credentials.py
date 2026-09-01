@@ -310,6 +310,35 @@ class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
             payload["private_key"] = ""
             return Response(payload)
 
+        from netbox_proxbox.integrations.openbao import endpoint_uses_openbao_storage
+
+        if endpoint_uses_openbao_storage(endpoint):
+            try:
+                password = (
+                    endpoint.get_ssh_password(key="")
+                    if endpoint.has_ssh_password
+                    else ""
+                )
+                private_key = (
+                    endpoint.get_ssh_private_key(key="")
+                    if endpoint.has_ssh_private_key
+                    else ""
+                )
+            except Exception as exc:
+                from django.core.exceptions import ValidationError
+
+                if not isinstance(exc, ValidationError):
+                    raise
+                detail = exc.messages[0] if getattr(exc, "messages", None) else str(exc)
+                return Response(
+                    {"detail": detail},
+                    status=status.HTTP_503_SERVICE_UNAVAILABLE,
+                )
+            payload = _endpoint_metadata_payload(endpoint)
+            payload["password"] = password
+            payload["private_key"] = private_key
+            return Response(payload)
+
         settings_obj = ProxboxPluginSettings.get_solo()
         key = settings_obj.encryption_key or ""
         if not key:

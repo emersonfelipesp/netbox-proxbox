@@ -157,6 +157,17 @@ def _stub_for_ssh_credentials(
     np_utils = types.ModuleType("netbox_proxbox.utils")
     np_utils.encryption = enc_mod
 
+    netbox_plugins = types.ModuleType("netbox.plugins")
+    netbox_plugins.PluginConfig = type("PluginConfig", (), {})
+    netbox.plugins = netbox_plugins
+
+    np_pkg = types.ModuleType("netbox_proxbox")
+    np_pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox")]
+    np_integrations = types.ModuleType("netbox_proxbox.integrations")
+    np_integrations.__path__ = [str(REPO_ROOT / "netbox_proxbox" / "integrations")]
+    np_openbao = types.ModuleType("netbox_proxbox.integrations.openbao")
+    np_openbao.endpoint_uses_openbao_storage = lambda endpoint: False
+
     for name, mod in [
         ("django", django),
         ("django.conf", django_conf),
@@ -176,6 +187,10 @@ def _stub_for_ssh_credentials(
         ("netbox_proxbox.models.ssh_credential", np_models_ssh),
         ("netbox_proxbox.utils", np_utils),
         ("netbox_proxbox.utils.encryption", enc_mod),
+        ("netbox.plugins", netbox_plugins),
+        ("netbox_proxbox", np_pkg),
+        ("netbox_proxbox.integrations", np_integrations),
+        ("netbox_proxbox.integrations.openbao", np_openbao),
     ]:
         monkeypatch.setitem(sys.modules, name, mod)
 

@@ -9,6 +9,7 @@ intercepted by in-memory fakes.
 
 from __future__ import annotations
 
+from tests.choices_stubs import attach_credential_storage_backend_choices
 import importlib.util
 import sys
 import types
@@ -104,6 +105,7 @@ def sync_fw_module(monkeypatch):
         VM_QEMU="vm_qemu",
         VM_LXC="vm_lxc",
     )
+    attach_credential_storage_backend_choices(choices)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices)
 
     # ---- minimal ORM fakes ----

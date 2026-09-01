@@ -281,17 +281,45 @@ These settings guard against Server-Side Request Forgery by validating endpoint 
 
 ---
 
-## Encryption
+## Encryption and credential storage
 
-These settings control only the Fernet encryption of plugin-owned values stored
-in the **NetBox database**. They do not configure proxbox-api's SQLite
-encryption and they are not the FastAPI endpoint key used to authenticate HTTP
-requests.
+Proxbox supports two ways to store Proxmox API tokens, endpoint passwords, and
+SSH secrets for endpoints:
+
+| Backend | Setting value | Where material lives | Write mode |
+|---|---|---|---|
+| **OpenBao (default)** | `openbao` | OpenBao KV via the **netbox-openbao** plugin; NetBox holds only credential UUID references on `ProxmoxEndpoint` | Requires **netbox-openbao** installed, a default `SecretEngine`, and at least one `CredentialPolicy` before `allow_writes=True` can be saved |
+| **Legacy Fernet** | `legacy_encrypted` | Fernet-encrypted `*_enc` columns in the NetBox database (previous behavior) | Uses the plugin **Encryption key** below; no OpenBao dependency |
+
+Configure the default on **Plugin Settings → Credential storage backend**.
+Each **Proxmox endpoint** may override that default with its own
+**Credential storage backend** field (blank = inherit).
+
+For automated backend sync and background jobs that reveal OpenBao credentials,
+set **OpenBao service username** to a NetBox user allowed by your OpenBao
+credential policies. Interactive UI edits use the signed-in operator instead.
+Automated paths fail closed when this username is not configured.
+
+!!! note "Companion plugin"
+    OpenBao storage requires the **netbox-openbao** plugin (and its
+    **netbox-rpc** dependency). Install and configure OpenBao engines/policies
+    before enabling Write mode with the OpenBao backend.
+
+---
+
+## Encryption (legacy Fernet path)
+
+These settings control Fernet encryption of plugin-owned values stored in the
+**NetBox database** when **Credential storage backend** is
+`legacy_encrypted`. They do not configure proxbox-api's SQLite encryption and
+they are not the FastAPI endpoint key used to authenticate HTTP requests.
 
 | Field | Default | Description |
 |---|---|---|
-| **Enable credential encryption** | `false` | Enables plugin-at-rest encryption. Once ciphertext exists, this control is locked until all ciphertext is removed through the recovery workflow. |
-| **Encryption key** | _(empty)_ | A canonical Fernet key or raw 32-byte secret for plugin-owned ciphertext in NetBox. Ordinary API serializers keep it write-only. The backend runtime route retains a permission-gated compatibility fallback for current proxbox-api releases. |
+| **Credential storage backend** | `openbao` | Default store for Proxmox API tokens, passwords, and SSH secrets. `openbao` uses netbox-openbao; `legacy_encrypted` keeps Fernet columns in NetBox. |
+| **OpenBao service username** | _(empty)_ | NetBox user for automated OpenBao credential reveal during backend sync and background jobs. Required for non-interactive OpenBao access. |
+| **Enable credential encryption** | `false` | Enables plugin-at-rest Fernet encryption (legacy backend only). Once ciphertext exists, this control is locked until all ciphertext is removed through the recovery workflow. |
+| **Encryption key** | _(empty)_ | A canonical Fernet key or raw 32-byte secret for plugin-owned ciphertext in NetBox when using the legacy backend. Ordinary API serializers keep it write-only. The backend runtime route retains a permission-gated compatibility fallback for current proxbox-api releases. |
 
 ### Three separate security domains
 

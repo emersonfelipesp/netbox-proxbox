@@ -15,6 +15,7 @@ as ``test_models_overwrites.py``.
 
 from __future__ import annotations
 
+from tests.choices_stubs import attach_credential_storage_backend_choices
 import importlib.util
 import sys
 import types
@@ -75,6 +76,7 @@ def sync_params_module(monkeypatch):
     choices_mod.SyncTypeChoices = SimpleNamespace(
         ALL="all", VIRTUAL_MACHINES="virtual-machines"
     )
+    attach_credential_storage_backend_choices(choices_mod)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices_mod)
 
     sync_types_mod = types.ModuleType("netbox_proxbox.sync_types")
@@ -792,6 +794,7 @@ def parser_module(monkeypatch):
         ),
         GUEST_OS_MODEL="guest_os_model",
     )
+    attach_credential_storage_backend_choices(choices_mod)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices_mod)
 
     # Stub the relative imports that forms/settings.py performs.

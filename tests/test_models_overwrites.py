@@ -12,6 +12,7 @@ Exercises both:
 
 from __future__ import annotations
 
+from tests.choices_stubs import attach_credential_storage_backend_choices
 import importlib.util
 import sys
 import types
@@ -159,6 +160,7 @@ def sync_params_module(monkeypatch):
         ALL="all",
         VIRTUAL_MACHINES="virtual-machines",
     )
+    attach_credential_storage_backend_choices(choices_mod)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices_mod)
 
     sync_types_mod = types.ModuleType("netbox_proxbox.sync_types")

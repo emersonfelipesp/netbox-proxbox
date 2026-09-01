@@ -12,6 +12,7 @@ stale — for endpoints the caller explicitly excluded.
 
 from __future__ import annotations
 
+from tests.choices_stubs import attach_credential_storage_backend_choices
 import importlib.util
 import sys
 import types
@@ -33,6 +34,7 @@ def sync_dc_module(monkeypatch):
 
     choices = types.ModuleType("netbox_proxbox.choices")
     choices.FirewallSyncStatusChoices = SimpleNamespace(ACTIVE="active", STALE="stale")
+    attach_credential_storage_backend_choices(choices)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices)
 
     cpu_mgr = SimpleNamespace(upserts=[], stale_calls=[])

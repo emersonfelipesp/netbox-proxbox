@@ -450,7 +450,23 @@ Key architectural invariants to keep in mind:
 
 - **Proxbox sync jobs are queryable over REST at `GET /api/plugins/proxbox/sync-jobs/`** ([`api/sync_jobs.py`](./netbox_proxbox/api/sync_jobs.py)). The plugin has no job model — a sync is a core `core.Job` row whose `data` carries a `proxbox_sync` block — and `/api/core/jobs/` **cannot filter on `data`**, which is the only reliable discriminator (a run scheduled with a custom `job_name` keeps that name verbatim). The view reuses `jobs.proxbox_sync_job_q()`, the same `Q` the Sync Jobs page uses, so the API and the UI can never disagree about which rows are ours, and serialises with core's own `JobSerializer` so a row is byte-identical to `/api/core/jobs/`. Its filterset subclasses core's `JobFilterSet` and adds the `data`-derived filters (`sync_type`, `proxmox_endpoint_id`, `cluster_id`, `node_id`, `netbox_vm_id`, `run_id`, `batch_object_type`, `errored`). Three semantics match `nbx proxbox jobs` on purpose: an open endpoint scope (absent, JSON `null`, or `[]`) means *every* endpoint; `sync_types: ["all"]` or no recorded types covers every requested type; an empty VM list is **not** a wildcard. Ids inside `job.data` are stored as **strings**, so containment tests must cast — a numeric test silently matches nothing. `log_entries` is dropped from list responses and restored with `?include_log_entries=true`.
 - **`NetBoxEndpoint` and `FastAPIEndpoint` are singleton-shaped.** The backend proxy (`services/backend_proxy.py`) and dashboard views resolve the first enabled backend row. Import views enforce the singleton constraint — if a record exists, the user is prompted to confirm the override before the existing record is deleted and replaced.
-- **Primary endpoint secrets are encrypted at rest.** `ProxmoxEndpoint.password`, `ProxmoxEndpoint.token_value`, `FastAPIEndpoint.token`, `PBSEndpoint.token_secret`, and `PDMEndpoint.token_secret` are public Python properties backed by Fernet-encrypted `*_enc` model fields. Runtime setters use `ProxboxPluginSettings.encryption_key` and create one when storing a primary secret if it is blank; do not reintroduce plaintext model fields for those secrets.
+- **Primary endpoint secrets support OpenBao or legacy Fernet storage.**
+  `ProxboxPluginSettings.credential_storage_backend` defaults to `openbao`.
+  When OpenBao is selected (globally or per `ProxmoxEndpoint`), API tokens,
+  passwords, and SSH secrets are stored through **netbox-openbao**
+  (`integrations/openbao.py`) and referenced by FK on the endpoint — never
+  duplicated in `*_enc` columns. Write mode (`allow_writes=True`) with the
+  OpenBao backend requires netbox-openbao installed plus a default
+  `SecretEngine` and at least one `CredentialPolicy`. Operators may opt into
+  `legacy_encrypted` to keep Fernet `*_enc` fields and the plugin encryption
+  key workflow unchanged.
+- **Legacy Fernet path (explicit opt-in).** When `credential_storage_backend` is
+  `legacy_encrypted`, `ProxmoxEndpoint.password`, `ProxmoxEndpoint.token_value`,
+  `FastAPIEndpoint.token`, `PBSEndpoint.token_secret`, and `PDMEndpoint.token_secret`
+  remain public Python properties backed by Fernet-encrypted `*_enc` model fields.
+  Runtime setters use `ProxboxPluginSettings.encryption_key` and create one when
+  storing a primary secret if it is blank; do not reintroduce plaintext model
+  fields for those secrets.
 - **Plugin encryption recovery is registry-driven and atomic.**
   `services/encryption_recovery.py::ENCRYPTED_FIELD_FAMILIES` must contain every
   plugin model `*_enc` field plus the optional netbox-pbs

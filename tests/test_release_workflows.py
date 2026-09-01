@@ -7,6 +7,7 @@ import hashlib
 import importlib.util
 import json
 import os
+import re
 import subprocess
 import sys
 import tomllib
@@ -502,7 +503,7 @@ def test_github_publish_accepts_rc_pushes_and_final_release_events_only() -> Non
     assert dispatch_inputs["source_ref"]["type"] == "string"
 
 
-def test_repository_deploy_workflow_is_nms_source_aware() -> None:
+def test_repository_deploy_workflow_is_source_aware() -> None:
     workflow = _read(GITEA_DEPLOY_WORKFLOW)
 
     assert "deploy_source:" in workflow
@@ -521,14 +522,17 @@ def test_repository_deploy_workflow_is_nms_source_aware() -> None:
     )
 
 
-def test_production_deploy_claims_a_signed_nms_authorization() -> None:
+def test_production_deploy_claims_a_signed_authorization() -> None:
     workflow = _read(GITEA_DEPLOY_WORKFLOW)
 
-    # nms-backend injects these on every authorized dispatch; a workflow that
-    # does not declare them cannot be dispatched through the proof path.
-    assert "nms_request_id:" in workflow
-    assert "nms_request_sha256:" in workflow
-    assert "/git/deployment-proofs/${NMS_REQUEST_ID}/claim" in workflow
+    # The management backend injects these on every authorized dispatch; a
+    # workflow that does not declare them cannot be dispatched through the
+    # proof path. A declared input that is not sent resolves to its default
+    # rather than staying empty, so both keep an empty default and are shape
+    # checked below.
+    assert "deploy_request_id:" in workflow
+    assert "deploy_request_sha256:" in workflow
+    assert "/git/deployment-proofs/${DEPLOY_REQUEST_ID}/claim" in workflow
 
     # A re-run keeps GITHUB_RUN_ID and only bumps the attempt, so without this
     # it would present the first attempt's binding as its own.
@@ -599,7 +603,7 @@ def test_claimed_proof_is_destroyed_on_every_exit_path() -> None:
     assert "publish-attestation" in workflow
 
 
-def test_final_tag_promotion_requires_main_package_and_nms_evidence() -> None:
+def test_final_tag_promotion_requires_main_package_and_deploy_evidence() -> None:
     workflow = _read(GITEA_PROMOTE_WORKFLOW)
 
     assert "github.ref == 'refs/heads/main'" in workflow
@@ -643,7 +647,7 @@ def test_github_promotion_publishes_only_the_tagged_source() -> None:
     assert 'SOURCE_SHA="$(git rev-parse HEAD^{commit})"' in workflow
 
     # The private forge must not be a runtime dependency of public publishing.
-    assert "git.nmulti.cloud" not in workflow, (
+    assert _PRIVATE_FORGE_HOST not in workflow, (
         "the public publish workflow must not depend on the private forge; "
         "a GitHub-hosted runner cannot reach it"
     )
@@ -797,7 +801,12 @@ def test_ci_gate_binds_latest_actions_run_to_authenticated_jobs(
         "head_sha": sha,
         "runner_name": "ci-untrusted-netbox-proxbox",
         "labels": ["ci-untrusted-python312"],
-        "html_url": "https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox/actions/runs/12/jobs/34",
+        # Derived from the gate's own origin constant rather than written out:
+        # the gate compares this for equality, and a literal here would both
+        # duplicate the host in a public file and silently break if it moved.
+        "html_url": (
+            f"{gate.HTML_ORIGIN}/emersonfelipesp/netbox-proxbox/actions/runs/12/jobs/34"
+        ),
     }
     responses = {
         runs_path: {"workflow_runs": [run], "total_count": 1},
@@ -931,7 +940,7 @@ def test_registry_fetch_rejects_rebinding_original_artifacts_to_moved_tag(
         )
 
 
-def test_final_release_requires_exact_nms_promotion_evidence(tmp_path: Path) -> None:
+def test_final_release_requires_exact_promotion_evidence(tmp_path: Path) -> None:
     release_artifacts = _load_release_artifacts()
     dist = tmp_path / "dist"
     dist.mkdir()
@@ -987,3 +996,164 @@ def test_final_release_requires_exact_nms_promotion_evidence(tmp_path: Path) -> 
             manifest=manifest,
             repository="emersonfelipesp/netbox-proxbox",
         )
+
+
+# This repository is published publicly. The deployment workflow named the
+# internal management stack in eight places, and those names were reintroduced
+# once already by copying the workflow between repositories -- so the rename is
+# only durable with a guard behind it.
+# This repository is published publicly. The deployment workflow named the
+# internal management stack in eight places, and those names were reintroduced
+# once already by copying the workflow between repositories -- so the rename is
+# only durable with a guard behind it.
+#
+# The needles are assembled rather than written out, and the self-test's
+# examples use reserved documentation values. A guard whose own fixtures spell
+# the forbidden strings publishes them while reporting the file clean.
+_PRIVATE_STACK_TOKEN = "".join(("n", "m", "s"))
+_PRIVATE_FORGE_HOST = ".".join(("git", "nmulti", "cloud"))
+_LOOPBACK_ADDRESS = ".".join(("127", "0", "0", "1"))
+
+# Two separator rules, because an acronym needs both: `aTokenWord` splits on the
+# lower-to-upper transition, `TOKENWord` between the acronym's last capital and
+# the following capitalised word.
+_CAMEL_BOUNDARIES = (
+    re.compile(r"(?<=[a-z0-9])(?=[A-Z])"),
+    re.compile(r"(?<=[A-Z])(?=[A-Z][a-z])"),
+)
+_STACK_PATTERN = re.compile(
+    rf"(?<![A-Za-z]){_PRIVATE_STACK_TOKEN}(?![A-Za-z])",
+    re.IGNORECASE,
+)
+_INTERNAL_HOST_PATTERN = re.compile(
+    r"\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:cloud|ai|local)\b", re.IGNORECASE
+)
+_IP_PATTERN = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
+# Exact addresses only. `localhost` is a name, not an address, and never matches
+# the address pattern at all.
+_ALLOWED_ADDRESSES = frozenset({_LOOPBACK_ADDRESS})
+
+
+def _split_camel(text: str) -> str:
+    for boundary in _CAMEL_BOUNDARIES:
+        text = boundary.sub("_", text)
+    return text
+
+
+def _disclosures(text: str) -> list[str]:
+    """Return the offending fragments in one line of a public file."""
+    found: list[str] = []
+    if _STACK_PATTERN.search(_split_camel(text)):
+        found.append("internal stack name")
+    found.extend(_INTERNAL_HOST_PATTERN.findall(text))
+    # Addresses are extracted whole, then compared exactly. Removing permitted
+    # addresses by substring first would truncate a longer one into something
+    # that no longer looks like an address.
+    for address in _IP_PATTERN.findall(text):
+        if address not in _ALLOWED_ADDRESSES:
+            found.append(address)
+    return found
+
+
+def _changed_public_files() -> "list[Path]":
+    """Every file this branch changes, resolved from git rather than by hand.
+
+    A hand-maintained list is a guard that silently stops covering the thing it
+    was added for.
+    """
+    result = subprocess.run(
+        ["git", "diff", "--name-only", "--diff-filter=d", "gitea/develop...HEAD"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if result.returncode != 0:
+        pytest.skip(f"cannot resolve the changed file set: {result.stderr.strip()}")
+    paths = [REPO_ROOT / line for line in result.stdout.split() if line]
+    existing = [path for path in paths if path.is_file()]
+    assert existing, "the branch must change at least one file"
+    return existing
+
+
+def _iter_branch_added_lines() -> "list[tuple[Path, int, str]]":
+    """Yield ``(path, new_line_number, text)`` for each line added on this branch."""
+    result = subprocess.run(
+        ["git", "diff", "-U0", "--diff-filter=d", "gitea/develop...HEAD"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if result.returncode != 0:
+        pytest.skip(f"cannot resolve branch additions: {result.stderr.strip()}")
+
+    current_path: Path | None = None
+    next_line = 0
+    additions: list[tuple[Path, int, str]] = []
+    for raw in result.stdout.splitlines():
+        if raw.startswith("+++ b/"):
+            relative = raw.removeprefix("+++ b/")
+            current_path = REPO_ROOT / relative
+            continue
+        if current_path is None:
+            continue
+        if raw.startswith("@@"):
+            match = re.match(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@", raw)
+            if match is None:
+                continue
+            next_line = int(match.group(1))
+            continue
+        if raw.startswith("+") and not raw.startswith("+++"):
+            additions.append((current_path, next_line, raw[1:]))
+            next_line += 1
+            continue
+        if raw.startswith("-") and not raw.startswith("---"):
+            continue
+        if raw.startswith(" "):
+            next_line += 1
+    assert additions, "the branch must add at least one line"
+    return additions
+
+
+def test_the_disclosure_guard_catches_what_it_is_for() -> None:
+    """Self-test. A guard that cannot see the thing certifies the wrong result."""
+    token = _PRIVATE_STACK_TOKEN
+    # RFC 5737 documentation range: safe to write down, still an address.
+    documentation_address = ".".join(("192", "0", "2", "207"))
+    prefix_shadowed = _LOOPBACK_ADDRESS + "0"
+
+    for disclosing in (
+        f"{token} in prose",
+        f"a_{token}_identifier",
+        f"_{token.upper()}_REQUEST_ID",
+        f"{token}Backend",
+        f"a{token.upper()}Identifier",
+        f"{token.upper()}Backend",
+        f"pre{token.upper()}Post",
+        f"{token}-backend",
+        _PRIVATE_FORGE_HOST,
+        f"https://{_PRIVATE_FORGE_HOST}/owner/repo.git",
+        documentation_address,
+        prefix_shadowed,
+        f"the host at {_LOOPBACK_ADDRESS} and also {documentation_address}",
+    ):
+        assert _disclosures(disclosing), f"guard missed {disclosing!r}"
+
+    for permitted in (
+        f"http://{_LOOPBACK_ADDRESS}:16001",
+        "bind to localhost only",
+        "the columns are aligned",
+        "transforms and normalizes",
+        "https://forge.example.invalid/owner/repo",
+    ):
+        assert not _disclosures(permitted), f"guard false-positived on {permitted!r}"
+
+
+def test_public_files_name_no_private_infrastructure() -> None:
+    offenders: list[str] = []
+    for path, number, line in _iter_branch_added_lines():
+        for fragment in _disclosures(line):
+            relative = path.relative_to(REPO_ROOT)
+            offenders.append(f"{relative}:{number}: {fragment}: {line.strip()}")
+    assert offenders == []

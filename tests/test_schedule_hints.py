@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from tests.choices_stubs import attach_credential_storage_backend_choices
 import importlib.util
 import sys
 import types
@@ -89,6 +90,7 @@ def schedule_hints(monkeypatch):
         BOOTSTRAP_ONLY="bootstrap_only",
         DISABLED="disabled",
     )
+    attach_credential_storage_backend_choices(choices_mod)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices_mod)
 
     root = Path(__file__).resolve().parents[1]
