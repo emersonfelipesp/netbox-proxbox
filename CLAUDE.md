@@ -143,7 +143,13 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   `SecretEngine`, and at least one `CredentialPolicy`. Set
   `credential_storage_backend=legacy_encrypted` (plugin-wide or per endpoint) to
   keep the previous Fernet `*_enc` columns and encryption-key workflow.
-- `ProxmoxEndpoint.access_methods` (migration 0056, choices `api` / `api_ssh`, default `api`) is the per-endpoint **transport access method**, orthogonal to `allow_writes`. `api` = Read+Write over the Proxmox API only; `api_ssh` = API + SSH. SSH only complements API; **SSH-only is not a selectable choice**. It is the load-bearing gate for the browser SSH terminal: the credential-serving API views in `netbox_proxbox/api/ssh_credentials.py` (`ProxmoxEndpointSSHCredentialSecretsAPIView` for endpoint targets and `NodeSSHCredentialSecretsAPIView` for node targets, the latter via the owning `ProxmoxNode.endpoint`) return 403 and withhold secrets when the endpoint is API-only, which is what blocks the terminal. New endpoints default to `api`; existing rows are backfilled to `api_ssh` on upgrade (non-breaking). The value is pushed to the proxbox-api backend by `_proxmox_backend_payload()` so the backend can gate its own SSH paths.
+- `ProxmoxEndpoint.access_methods` (migration 0056, choices `api` / `api_ssh`, default `api`) is the per-endpoint **transport access method**, orthogonal to `allow_writes`. `api` = Read+Write over the Proxmox API only; `api_ssh` = API + SSH. SSH only complements API; **SSH-only is not a selectable choice**. It is the load-bearing gate for the browser SSH terminal: the credential-serving API views in `netbox_proxbox/api/ssh_credentials.py` (`ProxmoxEndpointSSHCredentialSecretsAPIView` for endpoint targets and `NodeSSHCredentialSecretsAPIView` for node targets, the latter via the owning `ProxmoxNode.endpoint`) return 403 and withhold secrets when the endpoint is API-only, which is what blocks the terminal. New endpoints default to `api`
+
+**Node SSH fallback:** when no `NodeSSHCredential` row exists, `NodeSSHCredentialSecretsAPIView`
+calls `resolve_node_ssh_from_nms()` (`netbox_proxbox/api/nms_ssh_resolver.py`) to load the
+linked device's enabled SSH `DeviceService` from `netbox-network` and return password or key
+material through the credential accessors, still subject to the endpoint `access_methods` gate.
+; existing rows are backfilled to `api_ssh` on upgrade (non-breaking). The value is pushed to the proxbox-api backend by `_proxmox_backend_payload()` so the backend can gate its own SSH paths.
 - `ProxmoxEndpoint.allow_packer_template_builds` (migration 0082, default
   `False`) is the narrow operator capability for netbox-packer Cloud-Init
   template-image creation. It is effective only while the endpoint is enabled

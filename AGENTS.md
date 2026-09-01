@@ -782,6 +782,15 @@ An LLM agent MUST NOT set `access_methods="api_ssh"` autonomously to unlock SSH;
 it is a human operator assertion. The value is pushed to proxbox-api so the
 backend can gate its own SSH paths (cloud-image / Azure VHD import).
 
+
+### Node SSH fallback via netbox-nms `DeviceService`
+
+When no `NodeSSHCredential` exists for a node, `netbox_proxbox/api/ssh_credentials.py`
+falls back to `resolve_node_ssh_from_nms()` (`nms_ssh_resolver.py`): it loads the
+linked `dcim.Device`'s enabled SSH `DeviceService` from `netbox-network`, then returns
+login material through the credential accessors (password or key), subject to the same
+endpoint `access_methods` gate as stored node credentials.
+
 ### `DeletionRequest` REST API — Read-Only
 
 The `DeletionRequest` REST endpoint at `/api/plugins/proxbox/deletion-requests/`

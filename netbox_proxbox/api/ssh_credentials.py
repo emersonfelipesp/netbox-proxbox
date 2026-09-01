@@ -44,6 +44,11 @@ from netbox_proxbox.models.ssh_credential import (
 )
 from netbox_proxbox.utils import encryption as enc_helpers
 
+try:
+    from netbox_proxbox.api.nms_ssh_resolver import resolve_node_ssh_from_nms
+except ImportError:  # pragma: no cover - defensive for partial checkouts
+    resolve_node_ssh_from_nms = None
+
 _HOST_KEY_SCAN_TIMEOUT = 25
 
 
@@ -117,7 +122,10 @@ def _credential_for_node_identifier(node_id: int) -> NodeSSHCredential:
     try:
         return queryset.get(node_id=node_id)
     except NodeSSHCredential.DoesNotExist:
-        return get_object_or_404(queryset, node__netbox_device_id=node_id)
+        try:
+            return queryset.get(node__netbox_device_id=node_id)
+        except NodeSSHCredential.DoesNotExist as exc:
+            raise exc
 
 
 def _node_ssh_access_disabled(cred: NodeSSHCredential) -> bool:
@@ -213,7 +221,26 @@ class NodeSSHCredentialSecretsAPIView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        cred = _credential_for_node_identifier(node_id)
+        try:
+            cred = _credential_for_node_identifier(node_id)
+        except NodeSSHCredential.DoesNotExist:
+            if resolve_node_ssh_from_nms is None:
+                raise
+            from netbox_proxbox.models import ProxmoxNode
+
+            node = get_object_or_404(
+                ProxmoxNode.objects.select_related("netbox_device"),
+                pk=node_id,
+            )
+            payload = resolve_node_ssh_from_nms(
+                node,
+                user=request.user,
+                request=request,
+            )
+            if payload is None:
+                raise
+            return Response(payload)
+
         # Gate node-target SSH on the owning endpoint's access method.
         if _node_ssh_access_disabled(cred):
             return Response(
