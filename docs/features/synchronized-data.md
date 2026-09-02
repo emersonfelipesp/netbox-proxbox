@@ -14,11 +14,10 @@ The current plugin path is job-based and stream-backed:
 
 ## Typed Sync-State Models
 
-Proxbox is phasing out the historical NetBox custom fields that proxbox-api
-created on core NetBox objects. The first phase is additive: the plugin creates
-typed sidecar models under `/api/plugins/proxbox/sync-state/...` and backfills
-them from the existing `custom_field_data`, while proxbox-api continues to write
-the legacy custom fields.
+Proxbox has retired the historical reflection custom fields that proxbox-api
+created on core NetBox objects. The plugin exposes typed sidecar models under
+`/api/plugins/proxbox/sync-state/...`; migrations 0065 and 0066 created and
+backfilled them before the backend writer/reader cutover.
 
 The sidecars are keyed one-to-one to the affected core objects:
 
@@ -57,12 +56,19 @@ to be the same row as a Proxmox cluster tracking record.
 
 The typed `Proxbox*SyncState` models are the **standard** source of truth for
 the Proxmox-to-NetBox linkage. A normal sync writes and reads the sidecars and
-rebuilds them from live Proxmox data. Migration 0084 removes the twelve
+rebuilds them from live Proxmox data. Migration 0085 removes the twelve
 VM-only reflection custom-field definitions, strips their stale keys from each
 core VM's JSON, and removes the obsolete `custom_fields_enabled` setting.
 `ProxboxVirtualMachineSyncState` is therefore the sole read path for VM
-reflection identity and status. Shared reflection fields on other object types
-and NetBox-to-Proxmox intent fields remain outside that migration's scope.
+reflection identity and status. Migration 0086 removes the remaining thirty
+reflection definitions and strips their stale keys from every affected core
+object type. Each object's NetBox detail page shows its typed sidecar when one
+exists. It shows no empty card for an object that has never been synchronized.
+
+The `proxmox_node` and `proxmox_storage` custom fields are deliberately not
+removed. They are dual-role operator inputs used to select the target node and
+storage during NetBox-to-Proxmox CREATE intent. The other intent fields, branch
+flags, `source_packer_template`, and netbox-proxy custom fields also remain.
 
 ### Concurrency / Known Limitation
 
@@ -71,9 +77,8 @@ On NetBox 4.5.x, these sidecar REST APIs do not emit ETags and do not enforce
 on 4.5.x, not a limitation specific to the Proxbox sidecar models. Optimistic
 concurrency for these APIs is available on NetBox 4.6+.
 
-Automated writers should treat the sidecar rows as proxbox-api-owned during the
-additive migration phase. Custom fields remain the parallel source of truth until
-the paired backend writer/reader switch is released.
+Automated writers must treat the sidecar rows as proxbox-api-owned. Reflection
+custom fields are no longer a parallel source of truth.
 
 ## Sync Endpoints
 

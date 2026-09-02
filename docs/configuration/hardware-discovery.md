@@ -5,9 +5,10 @@ manufacturer, product name) or per-NIC link details (negotiated speed,
 duplex, link state). Operators that need those fields populated in NetBox
 historically had to hand-edit each `dcim.Device` and `dcim.Interface`.
 
-In the `netbox-proxbox 0.0.15` line, the plugin can store per-node SSH
-credentials, expose a token-gated credential endpoint, and register the
-NetBox custom fields used by an opt-in **SSH-driven discovery pass**. The
+In the `netbox-proxbox 0.0.15` line, the plugin added per-node SSH
+credentials, a token-gated credential endpoint, and an opt-in **SSH-driven
+discovery pass**. Current releases store the reflected results in typed
+sync-state sidecars. The
 released `proxbox-api 0.0.11` backend remains compatible and simply does
 not run this discovery pass; discovery activates with a backend build that
 includes [proxbox-api PR #80](https://github.com/emersonfelipesp/proxbox-api/pull/80).
@@ -19,8 +20,8 @@ This page is the operator-facing setup guide.
 ## When to enable it
 
 - You manage more than a handful of Proxmox hosts and want NetBox's
-  `Device.serial`, `Device.manufacturer`, and chassis-related custom
-  fields populated automatically.
+  `Device.serial`, `Device.manufacturer`, and chassis sync-state fields
+  populated automatically.
 - You want per-NIC negotiated speed / duplex / link state visible in the
   NetBox interface detail view.
 - You can dedicate a least-privilege SSH user on each node (recommended:
@@ -54,8 +55,8 @@ proxbox-api                NetBox plugin                Proxmox node
 
 3. Parse outputs ◄───────────────────────────────────── stdout
 
-4. Reflect to NetBox ────►  dcim.Device / dcim.Interface
-                            custom_fields (drift-detect)
+4. Reflect to NetBox ────►  ProxboxDeviceSyncState /
+                            ProxboxInterfaceSyncState (drift-detect)
 ```
 
 All SSH primitives — host-key pinning, sudo handling, output capping,
@@ -207,24 +208,24 @@ fingerprint, password/private-key presence flags, `password`, and `private_key`.
 
 ### What the discovery pass writes
 
-| NetBox object | Custom field | Source |
+| NetBox object | Typed sidecar field | Source |
 | --- | --- | --- |
-| `dcim.Device` | `hardware_chassis_serial` | `dmidecode -t 3 → Serial Number` |
-| `dcim.Device` | `hardware_chassis_manufacturer` | `dmidecode -t 1 → Manufacturer` |
-| `dcim.Device` | `hardware_chassis_product` | `dmidecode -t 1 → Product Name` |
-| `dcim.Interface` | `nic_speed_gbps` | `ethtool <iface> → Speed: 10000Mb/s` → `10` |
-| `dcim.Interface` | `nic_duplex` | `ethtool <iface> → Duplex: Full` |
-| `dcim.Interface` | `nic_link` | `ethtool <iface> → Link detected: yes` |
+| `dcim.Device` | `ProxboxDeviceSyncState.hardware_chassis_serial` | `dmidecode -t 3 → Serial Number` |
+| `dcim.Device` | `ProxboxDeviceSyncState.hardware_chassis_manufacturer` | `dmidecode -t 1 → Manufacturer` |
+| `dcim.Device` | `ProxboxDeviceSyncState.hardware_chassis_product` | `dmidecode -t 1 → Product Name` |
+| `dcim.Interface` | `ProxboxInterfaceSyncState.nic_speed_gbps` | `ethtool <iface> → Speed: 10000Mb/s` → `10` |
+| `dcim.Interface` | `ProxboxInterfaceSyncState.nic_duplex` | `ethtool <iface> → Duplex: Full` |
+| `dcim.Interface` | `ProxboxInterfaceSyncState.nic_link` | `ethtool <iface> → Link detected: yes` |
 
-All six fields are registered automatically by migration
-`0049_register_hardware_discovery_cfs`. They use `ui_editable=hidden`
-because the discovery pass is the source of truth — manual edits drift
-the next sync.
+Migration 0049 originally registered these names as hidden custom fields.
+Migration 0086 removes those legacy definitions and values after the typed
+writer cutover. The discovery pass now writes only the device and interface
+sync-state sidecars, which remain read-only reflection data.
 
 ### Idempotency
 
 A second consecutive successful sync emits **zero** `ObjectChange`
-rows for the six hardware fields. Drift detection lives in the
+rows for the six sidecar fields. Drift detection lives in the
 proxbox-api reflection helper introduced by issue #357.
 
 ### Disabling the feature

@@ -207,10 +207,16 @@ models by migrations `0065_proxbox_sync_state_models.py` and
 `0066_backfill_proxbox_sync_state.py`. These typed sidecars are the
 **standard** source of truth for the Proxmox-to-NetBox linkage: proxbox-api
 writes and reads them during sync and rebuilds them from live Proxmox data.
-Migration 0084 completes the VM-only cutover by removing twelve reflection
+Migration 0085 completes the VM-only cutover by removing twelve reflection
 custom-field definitions, stripping those keys from core VM JSON, and removing
 the obsolete `custom_fields_enabled` setting. VM identity readers are
 centralized in `netbox_proxbox.vm_identity` and have no custom-field fallback.
+Migration 0086 removes the other thirty reflection definitions and strips their
+stale keys from all fourteen core object types represented below. The detail
+page for each core object renders its typed sidecar when present and renders no
+empty card for an object that has never been synchronized. The dual-role
+`proxmox_node` and `proxmox_storage` custom fields remain operator-controlled
+NetBox-to-Proxmox placement inputs and are not part of either removal.
 
 `ProxboxSyncStateBase` is the shared abstract base for all sidecars. It stores
 `proxmox_last_updated` (from the legacy source timestamp custom field) and
@@ -260,6 +266,10 @@ the new columns are removed. Migration `0069` atomically removes the legacy JSON
 columns and promotes the staging FKs to the final model fields:
 `proxbox_storage` (nullable FK to `ProxmoxStorage`, `SET_NULL`) and
 `proxbox_bridge` (nullable FK to `dcim.Interface`, `SET_NULL`).
+
+Storage detail counts and the Virtual Disks tab resolve disks through
+`ProxboxVirtualDiskSyncState.proxbox_storage`; they no longer query the removed
+`proxbox_storage_id` custom-field JSON.
 
 **Backfill safety.** The backfill migration (`0066`) remains the original
 per-object migration body. It performs row-scoped `update_or_create()` work,

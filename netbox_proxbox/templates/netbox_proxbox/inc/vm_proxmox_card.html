@@ -13,10 +13,26 @@
                     <td>{{ sync_state.proxmox_vm_type|default:"—" }}</td>
                 </tr>
                 <tr>
+                    <th scope="row">{% trans "Endpoint" %}</th>
+                    <td>
+                        {% if endpoint_denied %}
+                            {% trans "Restricted" %}
+                        {% elif visible_endpoint %}
+                            <a href="{{ visible_endpoint.get_absolute_url }}" target="_blank" rel="noopener">{{ visible_endpoint }}</a>
+                        {% elif sync_state.proxmox_endpoint_raw_id %}
+                            {% blocktrans with raw_id=sync_state.proxmox_endpoint_raw_id %}Unresolved ID {{ raw_id }}{% endblocktrans %}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
                     <th scope="row">{% trans "Node" %}</th>
                     <td>
-                        {% if sync_state.proxmox_node %}
-                            <a href="{{ sync_state.proxmox_node.get_absolute_url }}">{{ sync_state.proxmox_node }}</a>
+                        {% if node_denied %}
+                            {% trans "Restricted" %}
+                        {% elif visible_node %}
+                            <a href="{{ visible_node.get_absolute_url }}" target="_blank" rel="noopener">{{ visible_node }}</a>
                         {% else %}
                             {{ sync_state.proxmox_node_name|default:"—" }}
                         {% endif %}
@@ -25,8 +41,10 @@
                 <tr>
                     <th scope="row">{% trans "Cluster" %}</th>
                     <td>
-                        {% if sync_state.proxmox_cluster %}
-                            <a href="{{ sync_state.proxmox_cluster.get_absolute_url }}">{{ sync_state.proxmox_cluster }}</a>
+                        {% if cluster_denied %}
+                            {% trans "Restricted" %}
+                        {% elif visible_cluster %}
+                            <a href="{{ visible_cluster.get_absolute_url }}" target="_blank" rel="noopener">{{ visible_cluster }}</a>
                         {% else %}
                             {{ sync_state.proxmox_cluster_name|default:"—" }}
                         {% endif %}
@@ -53,10 +71,58 @@
                     <td>{{ sync_state.proxmox_search_domain|default:"—" }}</td>
                 </tr>
                 <tr>
+                    <th scope="row">{% trans "Proxmox tags" %}</th>
+                    <td>{{ sync_state.proxmox_tags|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Operating system" %}</th>
+                    <td>{{ sync_state.proxmox_os|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Storage" %}</th>
+                    <td>{{ sync_state.proxmox_storage|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Disk (GB)" %}</th>
+                    <td>{{ sync_state.proxmox_disk|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Network interfaces" %}</th>
+                    <td>{{ sync_state.proxmox_interfaces|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Proxmox VMID reference" %}</th>
+                    <td>{{ sync_state.proxmox_vmid|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Notes" %}</th>
+                    <td>{{ sync_state.proxmox_notes|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "TCP states" %}</th>
+                    <td>{{ sync_state.proxmox_tcp_states|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "CPU type" %}</th>
+                    <td>{{ sync_state.proxmox_cpu_type|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Storage IDs" %}</th>
+                    <td>{{ sync_state.proxmox_storage_ids|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Storage names" %}</th>
+                    <td>{{ sync_state.proxmox_storage_names|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Device names" %}</th>
+                    <td>{{ sync_state.proxmox_device_names|default:"—" }}</td>
+                </tr>
+                <tr>
                     <th scope="row">{% trans "Proxmox interface" %}</th>
                     <td>
-                        {% if sync_state.proxmox_link %}
-                            <a href="{{ sync_state.proxmox_link }}" target="_blank" rel="noopener">{% trans "Open in Proxmox" %}</a>
+                        {% if proxmox_link_url %}
+                            <a href="{{ proxmox_link_url }}" target="_blank" rel="noopener">{% trans "Open in Proxmox" %}</a>
                         {% else %}
                             —
                         {% endif %}

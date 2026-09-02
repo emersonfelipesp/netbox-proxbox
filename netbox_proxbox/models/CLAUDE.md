@@ -93,8 +93,8 @@ This directory defines the plugin's persisted data model.
   `ProxboxVMInterfaceSyncState`, `ProxboxDeviceRoleSyncState`,
   `ProxboxDeviceTypeSyncState`, `ProxboxManufacturerSyncState`,
   `ProxboxSiteSyncState`, and `ProxboxClusterTypeSyncState`: additive typed
-  mirrors for the 43 legacy custom fields proxbox-api currently writes across
-  14 NetBox core object types. VM/device sidecars reuse existing
+  typed replacements for the 42 legacy reflection custom fields formerly
+  written across 14 NetBox core object types. VM/device sidecars reuse existing
   `ProxmoxEndpoint`, `ProxmoxNode`, and `ProxmoxCluster` rows as nullable FKs,
   with text/raw fallback columns for unresolved legacy values. Legacy
   `proxmox_endpoint_id` is stored as `proxmox_endpoint_raw_id` and never
@@ -204,11 +204,14 @@ This directory defines the plugin's persisted data model.
 - The typed sidecars are now the **standard** source of truth. Migrations
   0065/0066 created and backfilled them; the proxbox-api writer/reader switch has
   landed, so a normal sync writes and reads the sidecars and rebuilds them from
-  live Proxmox data. Migration 0084 removes the twelve VM-only reflection
+  live Proxmox data. Migration 0085 removes the twelve VM-only reflection
   custom fields and their stale core-VM JSON keys. All VM identity readers must
   use `vm_identity.py` and `ProxboxVirtualMachineSyncState`; do not restore the
-  removed `custom_fields_enabled` setting or a custom-field fallback. Shared
-  reflection and intent custom fields are outside migration 0084's scope.
+  removed `custom_fields_enabled` setting or a custom-field fallback. Migration
+  0086 removes the other thirty reflection definitions and stale JSON values.
+  Detail-page cards read only `obj.proxbox_sync_state` and remain absent when no
+  sidecar exists. The surviving `proxmox_node` and `proxmox_storage` custom
+  fields are live CREATE-placement inputs, not reflection fallbacks.
 - Concurrency known limitation: on NetBox 4.5.x, sync-state sidecar REST APIs
   do not emit ETags and do not enforce `If-Match`, matching the platform
   behavior for all endpoints on that release. Optimistic concurrency is

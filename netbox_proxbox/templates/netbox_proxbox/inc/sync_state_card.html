@@ -1,0 +1,22 @@
+{% load i18n %}
+<div class="card">
+    <h5 class="card-header">{% trans "Proxmox sync state" %}</h5>
+    <div class="card-body">
+        <table class="table table-hover attr-table mb-0">
+            {% for row in rows %}
+                <tr>
+                    <th scope="row">{{ row.label }}</th>
+                    <td>
+                        {% if row.url %}
+                            <a href="{{ row.url }}" target="_blank" rel="noopener">{{ row.value|default:"—" }}</a>
+                        {% elif row.date %}
+                            {{ row.value|date:"DATETIME_FORMAT"|default:"—" }}
+                        {% else %}
+                            {{ row.value|default_if_none:"—"|default:"—" }}
+                        {% endif %}
+                    </td>
+                </tr>
+            {% endfor %}
+        </table>
+    </div>
+</div>

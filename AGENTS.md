@@ -240,12 +240,16 @@ snapshot only after successful VM reconciliation.
 
 These sidecars are now the standard source of truth: the proxbox-api
 writer/reader switch has landed (commit `51866764`), so a normal sync writes
-and reads the sidecars, rebuilt from live Proxmox data. Migration 0084 removes
+and reads the sidecars, rebuilt from live Proxmox data. Migration 0085 removes
 the twelve VM-only reflection custom-field definitions and strips their stale
 `VirtualMachine.custom_field_data` keys. `ProxboxVirtualMachineSyncState` is the
 sole VM reflection read path, and the `custom_fields_enabled` plugin setting is
-gone. Shared reflection fields remain until sub-issue #403 removes them; the
-intent fields owned by #404 remain unchanged and operational.
+gone. Migration 0086 removes the remaining thirty reflection definitions and
+strips their stale values from every affected core object type. Detail pages
+show typed sidecar cards only for objects that have a sidecar row. The
+`proxmox_node` and `proxmox_storage` custom fields survive unchanged because
+they are live CREATE-placement inputs; the other intent, branch,
+netbox-packer, and netbox-proxy fields also remain operational.
 
 ## Release Procedure (summary)
 

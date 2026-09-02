@@ -133,7 +133,7 @@ These fields are set by the system and cannot be modified via PATCH:
 | `reconciliation_engine` | string | VM operation-queue engine used by proxbox-api: `python`, `compare`, or `rust`. Controlled by ProxboxPluginSettings, not backend environment variables. |
 | `reconciliation_compare_strict` | boolean | In `compare` mode, fail the sync on Rust/Python mismatch instead of only logging it. |
 | `custom_fields_request_delay` | decimal | Delay in seconds between custom field update requests |
-| `delete_orphans` | boolean | When `true`, full-update may delete Proxbox-discovered VMs with stale or missing `proxbox_last_run_id` stamps |
+| `delete_orphans` | boolean | When `true`, full-update may delete Proxbox-discovered VMs whose typed sync state has a stale or missing `last_run_id` |
 
 ### NetBox Client
 

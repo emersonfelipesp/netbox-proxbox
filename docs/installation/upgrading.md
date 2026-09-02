@@ -21,6 +21,23 @@ pip install -e /opt/netbox/netbox/netbox-proxbox
 
 ## Important Notes
 
+### Reflection custom-field retirement (migrations 0085 and 0086)
+
+Migration `0085_remove_vm_reflection_custom_fields` removes the twelve VM-only
+reflection definitions, and migration `0086_remove_other_reflection_custom_fields`
+removes the remaining thirty reflection definitions. Migration 0086 strips only
+those named keys from `custom_field_data` on the fourteen affected core object
+types; it performs no data backfill because production values were confirmed
+empty and the typed sidecars are already authoritative. Rows without those keys
+are not rewritten.
+
+After migrating, synchronized core-object detail pages display the related
+`obj.proxbox_sync_state` card when a sidecar exists. A never-synchronized object
+does not gain an empty card. The `proxmox_node` and `proxmox_storage` custom
+fields remain untouched because the NetBox-to-Proxmox CREATE pipeline uses them
+as placement inputs. All other intent fields, branch flags,
+`source_packer_template`, and netbox-proxy fields also survive.
+
 ### FastAPI key target adoption (migration 0075)
 
 Migration `0075_fastapi_backend_key_target_fingerprint` adds a durable binding

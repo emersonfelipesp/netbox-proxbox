@@ -83,7 +83,10 @@ then retry.
 
 The typed `Proxbox*SyncState` sidecar models are the standard source of truth
 for the Proxmox↔NetBox linkage. A normal full sync rebuilds sidecars from live
-Proxmox data. Migration 0084 removes the VM-only reflection custom fields and
+Proxmox data. Migration 0085 removes the VM-only reflection custom fields and
 the obsolete `custom_fields_enabled` setting, so recovery of VM identity and
 status always uses `ProxboxVirtualMachineSyncState`; there is no legacy VM
-custom-field read path to repair.
+custom-field read path to repair. Migration 0086 removes the remaining thirty
+reflection definitions and stale core-object JSON values. Recovery now rebuilds
+all reflection state through the typed sidecars; the surviving intent custom
+fields are not reflection recovery data.

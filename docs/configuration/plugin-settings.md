@@ -258,10 +258,11 @@ These fields gate the optional write-back direction in which merging a branch fl
 
 | Field | Default | Env override | Description |
 |---|---|---|---|
-| **Enable SSH-based hardware discovery** | `false` | _(plugin only)_ | Master flag for the SSH-driven hardware-discovery pass. When enabled, proxbox-api opens a pinned-fingerprint SSH session to each `ProxmoxNode` that has a stored `NodeSSHCredential` row, runs `dmidecode + ethtool + ip link` under `sudo -n`, and reflects the parsed chassis / NIC values onto the matching `dcim.Device` and `dcim.Interface` custom fields. Flipping off results in zero SSH sockets opened during sync. |
+| **Enable SSH-based hardware discovery** | `false` | _(plugin only)_ | Master flag for the SSH-driven hardware-discovery pass. When enabled, proxbox-api opens a pinned-fingerprint SSH session to each `ProxmoxNode` that has a stored `NodeSSHCredential` row, runs `dmidecode + ethtool + ip link` under `sudo -n`, and reflects the parsed chassis / NIC values into `ProxboxDeviceSyncState` and `ProxboxInterfaceSyncState`. Flipping off results in zero SSH sockets opened during sync. |
 | **Sync physical NIC MAC addresses** | `false` | _(plugin only)_ | Separate opt-in for native `dcim.MACAddress` creation and `primary_mac_address` assignment on physical node interfaces. Requires hardware discovery to be enabled. Keeping it off preserves pre-feature behavior even when SSH discovery is already enabled. |
 
-See [Hardware Discovery](./hardware-discovery.md) for the full configuration, custom-field surface, and SSH-credential model.
+See [Hardware Discovery](./hardware-discovery.md) for the full configuration,
+typed sync-state surface, and SSH-credential model.
 
 ---
 

@@ -29,6 +29,7 @@ from netbox_proxbox.models import FastAPIEndpoint, ProxmoxStorage, VMBackup, VMS
 from netbox_proxbox.schemas import ProxmoxStorageRecord, StorageContentRecord
 from netbox_proxbox.schemas._formatters import iter_scalar_records
 from netbox_proxbox.services.endpoint_scope import enabled_backend_endpoint_scope
+from netbox_proxbox.sync_state_readers import virtual_disks_for_storage
 from netbox_proxbox.tables import ProxmoxStorageTable, VMBackupTable, VMSnapshotTable
 from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
 from netbox_proxbox.views.error_utils import (
@@ -219,9 +220,7 @@ class ProxmoxStorageView(generic.ObjectView):
         """Render storage summary stats and live storage usage when available."""
         # Summary counts for the summary card (tab badges handle the full tables)
         try:
-            disk_qs = VirtualDisk.objects.filter(
-                custom_field_data__proxbox_storage_id=instance.pk
-            )
+            disk_qs = virtual_disks_for_storage(VirtualDisk.objects, instance)
             virtual_disks_count = disk_qs.count()
             virtual_disks_size = sum(disk.size or 0 for disk in disk_qs.only("size"))
         except ProgrammingError:
@@ -359,19 +358,18 @@ class ProxmoxStorageVirtualDisksTabView(generic.ObjectChildrenView):
     table = VirtualDiskTable
     tab = ViewTab(
         label="Virtual Disks",
-        badge=lambda obj: VirtualDisk.objects.filter(
-            custom_field_data__proxbox_storage_id=obj.pk
-        ).count(),
+        badge=lambda obj: virtual_disks_for_storage(VirtualDisk.objects, obj).count(),
         permission="virtualization.view_virtualdisk",
         weight=1000,
     )
 
     def get_children(self, request: HttpRequest, parent: ProxmoxStorage):
-        """Return virtual disks linked to this storage via the proxbox_storage_id custom field."""
-        return (
-            VirtualDisk.objects.restrict(request.user, "view")
-            .filter(custom_field_data__proxbox_storage_id=parent.pk)
-            .select_related("virtual_machine")
+        """Return virtual disks linked through their typed sync-state sidecar."""
+        return virtual_disks_for_storage(
+            VirtualDisk.objects.restrict(request.user, "view"), parent
+        ).select_related(
+            "virtual_machine",
+            "proxbox_sync_state__proxbox_storage",
         )
 
 

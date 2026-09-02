@@ -126,12 +126,16 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   storage, and bridge relations are masked or filtered from API responses. These
   sidecars are now the standard source of truth: the proxbox-api writer/reader
   switch has landed, so a normal sync writes and reads the sidecars (rebuilt from
-  live Proxmox data). Migration 0084 removes the twelve VM-only reflection
+  live Proxmox data). Migration 0085 removes the twelve VM-only reflection
   custom-field definitions and their stale `VirtualMachine.custom_field_data`
   keys; `ProxboxVirtualMachineSyncState` is the sole VM reflection read path.
-  The removed `custom_fields_enabled` setting must not be restored. Shared
-  reflection fields remain until their separately scoped removal, and the
-  NetBox-to-Proxmox intent custom fields remain operational.
+  Migration 0086 removes the remaining thirty reflection definitions and
+  strips their stale JSON keys from all fourteen affected core object types.
+  Core-object detail pages render the corresponding typed sidecar only when a
+  row exists. The removed `custom_fields_enabled` setting must not be restored.
+  The dual-role `proxmox_node` and `proxmox_storage` custom fields remain live
+  NetBox-to-Proxmox placement inputs, and all other intent, branch,
+  netbox-packer, and netbox-proxy custom fields remain operational.
 - Companion endpoint models: `PBSEndpoint`, `PDMEndpoint`, `PDMRemote` for Proxmox Backup Server and Datacenter Manager inventory.
 - SSH and hardware discovery: `NodeSSHCredential` stores per-node SSH credentials for the optional hardware-discovery pass.
 - **Credential storage (OpenBao default, legacy Fernet opt-in).** Plugin Settings

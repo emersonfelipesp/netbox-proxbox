@@ -243,12 +243,21 @@ fake historical models for both generations.
   sets; it should resolve only referenced raw IDs in bounded batches. 0069 is
   the guarded atomic cleanup/promotion to final field names and must refuse to
   drop legacy JSON columns if unresolved values were not preserved first.
-- Migration 0084 removes exactly the twelve VM-only reflection custom fields,
+- Migration 0085 removes exactly the twelve VM-only reflection custom fields,
   strips those exact keys from historical `VirtualMachine.custom_field_data`,
   and removes `ProxboxPluginSettings.custom_fields_enabled`. Its reverse uses
   the explicit definition table in the migration and rebinds each definition
   to `virtualization.virtualmachine`. Do not broaden its name tuple to shared,
   intent, branch, netbox-packer, or netbox-proxy custom fields.
+- Migration 0086 removes exactly the remaining thirty reflection custom fields
+  and strips those keys, in bounded batches, from Device, Interface,
+  Manufacturer, Site, DeviceRole, DeviceType, IPAddress, VLAN, Cluster,
+  ClusterGroup, ClusterType, VirtualMachine, VirtualDisk, and VMInterface JSON.
+  It does not backfill data. Its reverse restores the full canonical definition
+  table and every available original content-type binding. The dual-role
+  `proxmox_node` and `proxmox_storage` fields must survive because the intent
+  pipeline reads them as CREATE placement inputs; all other intent, branch,
+  netbox-packer, and netbox-proxy fields remain out of scope.
 
 ## Links
 

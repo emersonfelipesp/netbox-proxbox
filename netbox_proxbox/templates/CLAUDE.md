@@ -38,6 +38,11 @@ This directory contains Django templates bundled with the plugin.
   core VM detail page. It may show only the count of reflected cloud-init SSH
   keys, never their contents, and must rely on Django autoescaping for every
   sidecar and cloud-init value.
+- `netbox_proxbox/inc/sync_state_card.html` is the shared typed reflection card
+  for the other thirteen core object types. `template_content.py` supplies only
+  explicit sidecar fields, links resolved relations, and suppresses the card
+  when the reverse one-to-one row is absent. Keep Django autoescaping enabled;
+  every rendered link must use `target="_blank" rel="noopener"`.
 
 ## Links
 

@@ -10,6 +10,7 @@ from types import SimpleNamespace
 
 
 PACKAGE_ROOT = Path(__file__).resolve().parents[1] / "netbox_proxbox"
+INTENT_DEFINITIONS_PATH = PACKAGE_ROOT / "migrations" / "_v0_0_16_release_data.py"
 
 RESOLVER_READERS = (
     "views/operational.py",
@@ -107,6 +108,17 @@ def _load_intent_module(monkeypatch, name: str):
     return module
 
 
+def _load_intent_definitions():
+    spec = importlib.util.spec_from_file_location(
+        "_intent_definitions_under_test",
+        INTENT_DEFINITIONS_PATH,
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def test_intent_payload_reads_vmid_from_sidecar_and_keeps_intent_fields(
     monkeypatch,
 ) -> None:
@@ -153,3 +165,41 @@ def test_intent_snapshot_reads_vmid_from_sidecar_with_empty_custom_fields(
     assert snapshot["vmid"] == 702
     assert snapshot["node"] == "pve-a"
     assert snapshot["custom_field_data"] == {}
+
+
+def test_dual_role_node_and_storage_definitions_and_readers_survive(
+    monkeypatch,
+) -> None:
+    definitions = _load_intent_definitions()
+    operator_fields = {row[0] for row in definitions.VM_OPERATOR_FIELDS}
+    assert {"proxmox_node", "proxmox_storage"} <= operator_fields
+
+    payload_module = _load_intent_module(monkeypatch, "payload")
+    vm = SimpleNamespace(
+        proxbox_sync_state=SimpleNamespace(proxmox_vm_id=703),
+        custom_field_data={
+            "proxmox_node": "pve-intent",
+            "proxmox_storage": "ceph-intent",
+        },
+        name="vm-703",
+        vcpus=4,
+        memory=4096,
+        description="dual-role intent",
+        tags=None,
+        virtual_disks=None,
+    )
+
+    assert payload_module.build_vm_payload(vm)["node"] == "pve-intent"
+    assert payload_module.build_vm_payload(vm)["storage"] == "ceph-intent"
+    assert payload_module.build_lxc_payload(vm)["node"] == "pve-intent"
+    assert payload_module.build_lxc_payload(vm)["storage"] == "ceph-intent"
+
+    snapshot_module = _load_intent_module(monkeypatch, "snapshot")
+    vm.node = None
+    vm.cores = 4
+    vm.interfaces = None
+    vm.vminterface_set = None
+    vm.primary_ip4 = None
+    vm.primary_ip6 = None
+    snapshot = snapshot_module.build_metadata_snapshot(vm)
+    assert snapshot["node"] == "pve-intent"
