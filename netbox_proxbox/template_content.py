@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from urllib.parse import quote
+from urllib.parse import urlsplit
 
 from core.choices import JobStatusChoices
 from core.models import Job
@@ -15,7 +15,6 @@ from virtualization.models import VirtualMachine
 
 from netbox_proxbox.bug_report import build_bug_report_context, is_reportable_status
 from netbox_proxbox.jobs import is_proxbox_sync_job
-from netbox_proxbox.utils import resolve_vm_type
 from netbox_proxbox.intent.firewall_common import resolve_firewall_endpoint
 from netbox_proxbox.models import (
     ProxmoxCluster,
@@ -27,6 +26,7 @@ from netbox_proxbox.models import (
     ProxmoxFirewallSecurityGroup,
     ProxmoxNode,
     ProxmoxStorage,
+    ProxboxPluginSettings,
     VMBackup,
     VMSnapshot,
     VMTaskHistory,
@@ -65,6 +65,64 @@ def _sync_now_action_url(target) -> str | None:
         return reverse(viewname, kwargs={"pk": target.pk})
     except NoReverseMatch:
         return None
+
+
+def _console_base_url() -> str | None:
+    """Return the configured console origin, rejecting unsafe values."""
+    try:
+        value = (
+            str(ProxboxPluginSettings.get_solo().console_url or "").strip().rstrip("/")
+        )
+    except (AttributeError, RuntimeError):
+        return None
+    if any(character.isspace() for character in value):
+        return None
+    try:
+        parsed = urlsplit(value)
+        parsed.port
+    except ValueError:
+        return None
+    if (
+        parsed.scheme != "https"
+        or not parsed.hostname
+        or parsed.username is not None
+        or parsed.password is not None
+        or parsed.path not in {"", "/"}
+        or parsed.query
+        or parsed.fragment
+    ):
+        return None
+    return value
+
+
+def _synced_console_vm_type(vm: VirtualMachine) -> str | None:
+    """Return a console type only for an authoritative synchronized guest record."""
+    state = getattr(vm, "proxbox_sync_state", None)
+    vmid = getattr(state, "proxmox_vm_id", None)
+    vm_type = str(getattr(state, "proxmox_vm_type", "") or "").strip().lower()
+    endpoint = getattr(state, "endpoint", None)
+    if (
+        not isinstance(vmid, int)
+        or vmid < 1
+        or endpoint is None
+        or not bool(getattr(endpoint, "enabled", True))
+    ):
+        return None
+    return vm_type if vm_type in {"qemu", "lxc"} else None
+
+
+def _optional_related(obj: object, relation: str) -> object | None:
+    """Return an optional reverse one-to-one relation without raising."""
+    try:
+        return getattr(obj, relation, None)
+    except AttributeError:
+        return None
+
+
+def _ssh_key_count(cloud_init: object | None) -> int:
+    """Count reflected cloud-init SSH keys without exposing their contents."""
+    sshkeys = str(getattr(cloud_init, "sshkeys", "") or "")
+    return sum(1 for line in sshkeys.splitlines() if line.strip())
 
 
 class _SyncNowButtonExtension(PluginTemplateExtension):
@@ -195,6 +253,39 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
 
     models = ["virtualization.virtualmachine"]
 
+    def left_page(self) -> str:
+        """Render typed Proxmox reflection data on a VM detail page."""
+        obj = self.context["object"]
+        if not isinstance(obj, VirtualMachine):
+            return ""
+
+        vm = (
+            VirtualMachine.objects.select_related(
+                "proxbox_sync_state__proxmox_node",
+                "proxbox_sync_state__proxmox_cluster",
+                "proxmox_cloudinit",
+            )
+            .filter(pk=obj.pk)
+            .first()
+        )
+        if vm is None:
+            return ""
+        sync_state = _optional_related(vm, "proxbox_sync_state")
+        cloud_init = _optional_related(vm, "proxmox_cloudinit")
+        if sync_state is None and cloud_init is None:
+            return ""
+
+        rendered = self.render(
+            "netbox_proxbox/inc/vm_proxmox_card.html",
+            {
+                "sync_state": sync_state,
+                "cloud_init": cloud_init,
+                "ssh_key_count": _ssh_key_count(cloud_init),
+            },
+        )
+        # The rendered HTML comes from this plugin's own autoescaped template.
+        return mark_safe(rendered)  # nosec
+
     def buttons(self) -> str:
         """Handle buttons."""
         obj = self.context["object"]
@@ -250,41 +341,12 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
         if not user.has_perm(permission_enqueue_proxbox_sync()):
             return ""
 
-        vmid = obj.custom_field_data.get("proxmox_vm_id") or obj.custom_field_data.get(
-            "cf_proxmox_vm_id"
-        )
-        vm_type = resolve_vm_type(obj)
-
-        node = ""
-        if hasattr(obj, "device") and obj.device:
-            node = obj.device.name
-        else:
-            node = obj.custom_field_data.get(
-                "proxmox_node"
-            ) or obj.custom_field_data.get("cf_proxmox_node", "")
-
-        endpoint_url = ""
-        if obj.cluster:
-            proxbox_cluster = obj.cluster.proxmox_cluster_tracking.first()
-            if proxbox_cluster and proxbox_cluster.endpoint:
-                endpoint_url = proxbox_cluster.endpoint.url
-
-        if not all([vmid, node, endpoint_url]):
+        vm_type = _synced_console_vm_type(obj)
+        console_base_url = _console_base_url()
+        if vm_type is None or not console_base_url or not obj.pk:
             return ""
-
-        vmname_encoded = quote(str(obj.name), safe="")
-        node_encoded = quote(str(node), safe="")
-
-        if vm_type == "lxc":
-            console_url = (
-                f"{endpoint_url}/?console=lxc&xtermjs=1&vmid={vmid}"
-                f"&vmname={vmname_encoded}&node={node_encoded}&cmd="
-            )
-        else:
-            console_url = (
-                f"{endpoint_url}/?console=kvm&novnc=1&vmid={vmid}"
-                f"&vmname={vmname_encoded}&node={node_encoded}&resize=off&cmd="
-            )
+        resource = "lxc-containers" if vm_type == "lxc" else "virtual-machines"
+        console_url = f"{console_base_url}/virtualization/{resource}/{obj.pk}"
 
         return self.render(
             "netbox_proxbox/inc/vm_console_button.html",

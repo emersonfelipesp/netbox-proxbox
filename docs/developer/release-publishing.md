@@ -244,11 +244,23 @@ sequenceDiagram
    > no `deploy_source`, so trusting the input would silently fall back to its
    > default.
    >
-   > `latest_package` currently fails closed with a diagnostic.
-   > `release_artifacts.py fetch-gitea` needs a generic
-   > `<package>-release-manifest/<version>` package that `publish-gitea.yml`
-   > has never produced for any version. Until that producer exists, use
-   > `main_branch`, which needs no manifest.
+   > `latest_package` requires the generic
+   > `<package>-release-manifest/<version>` package that
+   > `release_artifacts.py fetch-gitea` verifies. `publish-gitea.yml` now
+   > produces it: the manifest is built from `dist/` before the upload, so its
+   > digests bind the exact published bytes, and it is uploaded only after the
+   > registry upload has been verified, so its presence is a reliable signal
+   > that a version is deployable.
+   >
+   > Producing the manifest is preparatory, not sufficient. This workflow still
+   > rejects every `latest_package` request unconditionally, because the
+   > consumer that binds and deploys a published package has not been written.
+   > Use `main_branch` for production deploys; it needs no manifest and is not
+   > affected.
+   >
+   > Versions published before that producer landed have no manifest at all; a
+   > manifest cannot be back-filled for an already-published version in a way
+   > that proves provenance.
 7. After production integration and health checks pass, dispatch each
    repository's `promote-final-tag.yml` from canonical Gitea `main`. The
    workflow verifies the exact package and protected host-issued deployment receipt before

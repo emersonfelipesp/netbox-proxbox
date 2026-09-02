@@ -204,12 +204,11 @@ This directory defines the plugin's persisted data model.
 - The typed sidecars are now the **standard** source of truth. Migrations
   0065/0066 created and backfilled them; the proxbox-api writer/reader switch has
   landed, so a normal sync writes and reads the sidecars and rebuilds them from
-  live Proxmox data. The legacy reflection custom fields are **deprecated** and
-  gated behind `ProxboxPluginSettings.custom_fields_enabled` (default `False`):
-  by default proxbox-api does not write, read, or reconcile custom fields.
-  Setting the flag `True` restores legacy custom-field behavior for a transition
-  and emits deprecation warnings. Removing the custom fields entirely is a later
-  cleanup; no custom-field data is deleted while the flag exists.
+  live Proxmox data. Migration 0084 removes the twelve VM-only reflection
+  custom fields and their stale core-VM JSON keys. All VM identity readers must
+  use `vm_identity.py` and `ProxboxVirtualMachineSyncState`; do not restore the
+  removed `custom_fields_enabled` setting or a custom-field fallback. Shared
+  reflection and intent custom fields are outside migration 0084's scope.
 - Concurrency known limitation: on NetBox 4.5.x, sync-state sidecar REST APIs
   do not emit ETags and do not enforce `If-Match`, matching the platform
   behavior for all endpoints on that release. Optimistic concurrency is

@@ -240,7 +240,7 @@ def test_create_view_has_required_headers_timeout_syncback_and_no_disk_field(vie
     assert "_PROVISION_TIMEOUT_S = 90" in view_src
     assert "sync_individual(" in view_src
     assert '"sync/individual/vm"' in view_src
-    assert "custom_field_data__proxmox_vm_id" in view_src
+    assert "proxbox_sync_state__proxmox_vm_id" in view_src
     assert '"disk_gb"' not in view_src
 
 
@@ -465,3 +465,59 @@ def test_template_fetch_posts_json_with_csrf_and_no_unsafe_js(template_src):
     assert "eval(" not in template_src
     assert "new Function" not in template_src
     assert "dangerouslySetInnerHTML" not in template_src
+
+
+def test_created_vm_url_is_scoped_to_the_endpoint_it_was_created_on(monkeypatch):
+    """A VMID is unique per endpoint, so the id alone can resolve a stranger.
+
+    After provisioning, the success response links the operator to the new
+    machine. Searching every visible virtual machine by VMID means another
+    endpoint holding the same endpoint-local VMID can win on row order, sending
+    the operator to a machine they did not create -- and inviting them to act on
+    it.
+    """
+    module = _load_create_view(monkeypatch)
+
+    endpoint = SimpleNamespace(pk=1, name="prod")
+    other_endpoint = SimpleNamespace(pk=2, name="lab")
+    own = SimpleNamespace(
+        proxbox_sync_state=SimpleNamespace(proxmox_vm_id=120, endpoint=endpoint),
+        get_absolute_url=lambda: "/virtualization/virtual-machines/7/",
+    )
+    foreign = SimpleNamespace(
+        proxbox_sync_state=SimpleNamespace(proxmox_vm_id=120, endpoint=other_endpoint),
+        get_absolute_url=lambda: "/virtualization/virtual-machines/9/",
+    )
+    captured: dict = {}
+
+    class _QS:
+        @staticmethod
+        def filter(**lookup):
+            captured.update(lookup)
+            # `foreign` deliberately sorts first: an unscoped lookup takes it.
+            rows = [foreign, own]
+            matches = [
+                row
+                for row in rows
+                if row.proxbox_sync_state.proxmox_vm_id
+                == lookup["proxbox_sync_state__proxmox_vm_id"]
+                and (
+                    "proxbox_sync_state__endpoint" not in lookup
+                    or row.proxbox_sync_state.endpoint
+                    is lookup["proxbox_sync_state__endpoint"]
+                )
+            ]
+            return SimpleNamespace(first=lambda: matches[0] if matches else None)
+
+    monkeypatch.setattr(
+        module.VirtualMachine,
+        "objects",
+        SimpleNamespace(restrict=lambda *a, **kw: _QS()),
+        raising=False,
+    )
+
+    request = SimpleNamespace(user=SimpleNamespace())
+    url = module._find_created_vm_url(request, 120, endpoint)
+
+    assert captured.get("proxbox_sync_state__endpoint") is endpoint
+    assert url == "/virtualization/virtual-machines/7/"

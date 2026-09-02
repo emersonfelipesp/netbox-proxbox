@@ -25,6 +25,19 @@ from netbox_proxbox.sync_types import (
     _TARGETED_VM_SYNC_TYPES,
     normalize_sync_types,
 )
+from netbox_proxbox.vm_identity import (
+    resolve_known_vm_type,
+    resolve_vm_cluster_name,
+    resolve_vm_node,
+    resolve_vm_type,
+    resolve_vm_vmid,
+)
+
+_resolve_vm_cluster_name = resolve_vm_cluster_name
+_resolve_vm_node = resolve_vm_node
+_resolve_known_vm_type = resolve_known_vm_type
+_resolve_vm_type = resolve_vm_type
+_resolve_vm_vmid = resolve_vm_vmid
 
 if TYPE_CHECKING:
     from netbox.jobs import Job
@@ -439,76 +452,6 @@ def _coerce_fastapi_endpoint_id(value: object) -> int | None:
         return None
 
 
-def _resolve_vm_cluster_name(vm: VirtualMachine) -> str:
-    """Derive a Proxmox cluster name from a NetBox VM record."""
-    from netbox_proxbox.models import ProxmoxCluster
-
-    cluster = getattr(vm, "cluster", None)
-    if cluster is None:
-        return ""
-    proxmox_cluster = ProxmoxCluster.objects.filter(netbox_cluster=cluster).first()
-    if proxmox_cluster is not None:
-        return str(proxmox_cluster.name)
-    return str(getattr(cluster, "name", "") or "")
-
-
-def _resolve_vm_node(vm: VirtualMachine) -> str:
-    """Derive the best-effort Proxmox node name for a NetBox VM."""
-    device = getattr(vm, "device", None)
-    if device is not None and getattr(device, "name", None):
-        return str(device.name)
-
-    custom_field_data = getattr(vm, "custom_field_data", None) or {}
-    node = custom_field_data.get("proxmox_node") or custom_field_data.get(
-        "cf_proxmox_node", ""
-    )
-    return str(node or "")
-
-
-def _resolve_known_vm_type(vm: VirtualMachine) -> str:
-    """Derive a backend-supported VM type without guessing a default."""
-    sync_state = getattr(vm, "proxbox_sync_state", None)
-    typed_type = str(getattr(sync_state, "proxmox_vm_type", None) or "").strip().lower()
-    if typed_type in {"qemu", "lxc"}:
-        return typed_type
-
-    vm_type_obj = getattr(vm, "virtual_machine_type", None)
-    if vm_type_obj and hasattr(vm_type_obj, "slug"):
-        slug = str(vm_type_obj.slug).strip().lower()
-        if "lxc" in slug:
-            return "lxc"
-        if "qemu" in slug:
-            return "qemu"
-    custom_field_data = getattr(vm, "custom_field_data", None) or {}
-    legacy_type = (
-        str(
-            custom_field_data.get("proxmox_vm_type")
-            or custom_field_data.get("cf_proxmox_vm_type")
-            or ""
-        )
-        .strip()
-        .lower()
-    )
-    return legacy_type if legacy_type in {"qemu", "lxc"} else ""
-
-
-def _resolve_vm_type(vm: VirtualMachine) -> str:
-    return _resolve_known_vm_type(vm) or "qemu"
-
-
-def _resolve_vm_vmid(vm: VirtualMachine) -> str:
-    sync_state = getattr(vm, "proxbox_sync_state", None)
-    typed_vmid = getattr(sync_state, "proxmox_vm_id", None)
-    if typed_vmid:
-        return str(typed_vmid)
-
-    custom_field_data = getattr(vm, "custom_field_data", None) or {}
-    vmid = custom_field_data.get("proxmox_vm_id") or custom_field_data.get(
-        "cf_proxmox_vm_id"
-    )
-    return str(vmid or "")
-
-
 def _resolve_storage_nodes(storage: ProxmoxStorage) -> str:
     """Return a best-effort Proxmox node name for a storage-backed row."""
     nodes = getattr(storage, "nodes", None)
@@ -546,14 +489,7 @@ def _resolve_vm_backup_batch_params(backup: VMBackup) -> dict[str, object]:
 
     cluster_name = str(getattr(getattr(storage_obj, "cluster", None), "name", "") or "")
     node = _resolve_storage_nodes(storage_obj) or _resolve_vm_node(vm_obj)
-    vmid = str(
-        getattr(backup, "vmid", None)
-        or getattr(getattr(vm_obj, "custom_field_data", None), "get", lambda *_: None)(
-            "proxmox_vm_id"
-        )
-        or _resolve_vm_vmid(vm_obj)
-        or ""
-    )
+    vmid = str(getattr(backup, "vmid", None) or _resolve_vm_vmid(vm_obj) or "")
     volume_id = str(getattr(backup, "volume_id", None) or "")
     storage_name = str(
         getattr(backup, "storage", None) or getattr(storage_obj, "name", "") or ""

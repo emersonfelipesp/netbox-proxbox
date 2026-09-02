@@ -140,9 +140,18 @@ class VirtualMachinesView(ConditionalLoginRequiredMixin, View):
         base_qs = (
             VirtualMachine.objects.restrict(request.user, "view")
             .filter(id__in=tagged_vm_ids)
-            .select_related(*vm_type_select_related_fields(VirtualMachine))
+            .select_related(
+                *vm_type_select_related_fields(VirtualMachine),
+                "proxbox_sync_state",
+            )
             .prefetch_related("interfaces__ip_addresses")
         )
+        cluster_id = str(request.GET.get("cluster_id", "")).strip()
+        if cluster_id.isdigit() and int(cluster_id) > 0:
+            base_qs = base_qs.filter(cluster_id=int(cluster_id))
+        status = str(request.GET.get("status", "")).strip()
+        if status:
+            base_qs = base_qs.filter(status=status)
         virtual_machines_qs = filter_queryset_by_proxmox_vm_type(
             base_qs,
             VirtualMachine,
@@ -204,9 +213,18 @@ class LXCContainersView(ConditionalLoginRequiredMixin, View):
         base_qs = (
             VirtualMachine.objects.restrict(request.user, "view")
             .filter(id__in=tagged_vm_ids)
-            .select_related(*vm_type_select_related_fields(VirtualMachine))
+            .select_related(
+                *vm_type_select_related_fields(VirtualMachine),
+                "proxbox_sync_state",
+            )
             .prefetch_related("interfaces__ip_addresses")
         )
+        cluster_id = str(request.GET.get("cluster_id", "")).strip()
+        if cluster_id.isdigit() and int(cluster_id) > 0:
+            base_qs = base_qs.filter(cluster_id=int(cluster_id))
+        status = str(request.GET.get("status", "")).strip()
+        if status:
+            base_qs = base_qs.filter(status=status)
         lxc_containers_qs = filter_queryset_by_proxmox_vm_type(
             base_qs,
             VirtualMachine,

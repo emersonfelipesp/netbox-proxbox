@@ -8,6 +8,7 @@ from typing import Any
 from netbox_proxbox.intent.description_metadata import (
     build_description_with_metadata,
 )
+from netbox_proxbox.vm_identity import resolve_vm_vmid
 
 
 def _embed_description_metadata_setting() -> bool:
@@ -151,7 +152,7 @@ def build_vm_payload(vm) -> dict:
     """Build a proxbox-api ``VMIntentPayload`` dictionary from a NetBox VM."""
     cf = _custom_fields(vm)
     payload = {
-        "vmid": _int_or_none(_cf_value(cf, "proxmox_vm_id", "cf_proxmox_vm_id")),
+        "vmid": _int_or_none(resolve_vm_vmid(vm)),
         "name": str(getattr(vm, "name", "") or ""),
         "node": _str_or_none(_cf_value(cf, "proxmox_node", "cf_proxmox_node")),
         "cores": _int_or_none(getattr(vm, "vcpus", None)),
@@ -175,7 +176,7 @@ def build_lxc_payload(vm) -> dict:
     """Build a proxbox-api ``LXCIntentPayload`` dictionary from a NetBox VM."""
     cf = _custom_fields(vm)
     payload = {
-        "vmid": _int_or_none(_cf_value(cf, "proxmox_vm_id", "cf_proxmox_vm_id")),
+        "vmid": _int_or_none(resolve_vm_vmid(vm)),
         "name": str(getattr(vm, "name", "") or ""),
         "node": _str_or_none(_cf_value(cf, "proxmox_node", "cf_proxmox_node")),
         "cores": _int_or_none(getattr(vm, "vcpus", None)),

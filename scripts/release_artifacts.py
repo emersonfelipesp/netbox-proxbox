@@ -26,6 +26,17 @@ class ReleaseArtifactError(ValueError):
     """The artifact or promotion evidence violates the release contract."""
 
 
+class RegistryNotFound(ReleaseArtifactError):
+    """The registry authoritatively reported the object does not exist.
+
+    Kept distinct from every other registry failure because "absent" and
+    "could not be determined" must not be conflated. A timeout, an
+    authentication failure, or a corrupt payload all mean the caller does not
+    know what is published; treating those as absence and re-uploading strands
+    an immutable version on the resulting conflict.
+    """
+
+
 class _NoRedirect(urllib.request.HTTPRedirectHandler):
     def redirect_request(self, *_args: object, **_kwargs: object) -> None:
         return None
@@ -166,6 +177,13 @@ def _request(
             if not 200 <= response.status < 300:
                 raise ReleaseArtifactError(f"Registry returned HTTP {response.status}")
             content = response.read(maximum + 1)
+    except urllib.error.HTTPError as exc:
+        # Only an authenticated 404 is evidence of absence. Everything else --
+        # 401, 403, 5xx -- means the state is unknown, and callers that decide
+        # whether to upload must be able to tell the two apart.
+        if exc.code == 404:
+            raise RegistryNotFound("Registry object does not exist") from exc
+        raise ReleaseArtifactError("Registry request failed") from exc
     except (urllib.error.URLError, TimeoutError) as exc:
         raise ReleaseArtifactError("Registry request failed") from exc
     if len(content) > maximum:
@@ -234,8 +252,130 @@ def fetch_gitea_manifest(
     return cast(dict[str, Any], value)
 
 
+def link_gitea_package(
+    *,
+    registry: str,
+    owner: str,
+    repository: str,
+    package_type: str,
+    package: str,
+    token: str,
+) -> None:
+    """Associate a published package with its repository. Idempotent.
+
+    A twine upload does not create this association, but
+    ``fetch_gitea_artifacts`` -- the consumer behind both the package deploy
+    source and ``promote-final-tag.yml`` -- requires the PyPI package's
+    metadata to name ``<owner>/<repository>`` before it will download a single
+    artifact. Every version published so far is therefore unlinked and would be
+    rejected by that consumer, independently of the manifest.
+
+    The producer creates the link rather than the verifier relaxing the
+    requirement: the requirement is what binds published bytes to the
+    repository they were built from, and dropping it to match the current
+    output would remove a provenance check instead of satisfying it.
+
+    Linking an already-linked package is accepted as success, because this runs
+    on a re-run path where the previous attempt may have got this far.
+    """
+    if not token:
+        raise ReleaseArtifactError("Gitea package token is unavailable")
+    url = (
+        registry
+        + f"{_quoted(owner)}/{_quoted(package_type)}/{_quoted(canonical_name(package))}"
+        f"/-/link/{_quoted(repository)}"
+    )
+    try:
+        _request(
+            url, token=token, maximum=MAX_RESPONSE_BYTES, method="POST", payload=b""
+        )
+    except ReleaseArtifactError:
+        # Fall through to verification rather than failing here: the link may
+        # already exist, which some registry versions report as a conflict.
+        # verify_gitea_package_artifacts is the actual gate and it requires the
+        # link to be present, so a genuinely failed link still fails the run.
+        return
+
+
+def verify_gitea_package_artifacts(
+    *,
+    registry: str,
+    owner: str,
+    repository: str,
+    package: str,
+    version: str,
+    manifest: dict[str, Any],
+    token: str,
+) -> None:
+    """Require the registry to hold exactly the artifacts the manifest names.
+
+    The previous check searched the owner's package list and counted entries
+    whose ``version`` matched. That is satisfied by any package of any name at
+    that version, so it could pass while this package's own upload was absent,
+    incomplete, or carrying different bytes -- and the manifest would then be
+    published against a release that does not exist as it describes. The
+    manifest is the provenance record every later deploy and promotion verifies
+    against, so it must not be published until the artifacts it names are
+    provably present with the exact sizes and digests it recorded.
+
+    The repository link is required here, matching ``fetch_gitea_artifacts``,
+    which refuses to download an artifact whose PyPI metadata does not name
+    ``<owner>/<repository>``. A twine upload does not create that link, so
+    ``link_gitea_package`` creates it first; verifying it here is what makes a
+    published version actually consumable by the deploy and promotion paths
+    rather than merely present in the registry.
+    """
+    base = (
+        registry
+        + f"{_quoted(owner)}/pypi/{_quoted(canonical_name(package))}/{_quoted(version)}"
+    )
+    metadata = json.loads(_request(base, token=token, maximum=MAX_RESPONSE_BYTES))
+    files = json.loads(
+        _request(f"{base}/files", token=token, maximum=MAX_RESPONSE_BYTES)
+    )
+    repo = metadata.get("repository") if isinstance(metadata, dict) else None
+    if (
+        not isinstance(metadata, dict)
+        or metadata.get("type") != "pypi"
+        or canonical_name(str(metadata.get("name", ""))) != canonical_name(package)
+        or metadata.get("version") != version
+        or not isinstance(repo, dict)
+        or repo.get("full_name") != f"{owner}/{repository}"
+    ):
+        raise ReleaseArtifactError("Published package identity or link is invalid")
+    if not isinstance(files, list):
+        raise ReleaseArtifactError("Published package inventory is invalid")
+
+    expected = {
+        str(record["name"]): (int(record["size"]), str(record["sha256"]).lower())
+        for record in manifest["artifacts"]
+    }
+    published: dict[str, tuple[int, str]] = {}
+    for entry in files:
+        if not isinstance(entry, dict):
+            raise ReleaseArtifactError("Published package inventory is invalid")
+        name, size, digest = entry.get("name"), entry.get("size"), entry.get("sha256")
+        if (
+            not isinstance(name, str)
+            or isinstance(size, bool)
+            or not isinstance(size, int)
+            or not isinstance(digest, str)
+            or DIGEST_RE.fullmatch(digest.lower()) is None
+        ):
+            raise ReleaseArtifactError("Published package inventory is invalid")
+        if name in published:
+            raise ReleaseArtifactError("Published package inventory repeats a file")
+        published[name] = (size, digest.lower())
+
+    if published != expected:
+        raise ReleaseArtifactError(
+            "Published artifacts do not match the release manifest"
+        )
+
+
 def publish_gitea_manifest(
     *,
+    registry: str,
     owner: str,
     repository: str,
     manifest: dict[str, Any],
@@ -247,6 +387,56 @@ def publish_gitea_manifest(
     package = release_manifest_package(manifest)
     version = str(manifest["version"])
     raw = _manifest_bytes(manifest)
+
+    # Uploading, linking and reading back are separate requests, so a timeout
+    # or a dropped connection after the server has already accepted one of them
+    # is ambiguous: the workflow fails, but the manifest may exist. Package
+    # versions here are immutable, and unlike every other post-upload step a
+    # missing manifest is unrecoverable -- that exact release can then never be
+    # deployed from the package source nor promoted, because both verify
+    # provenance against it. So an already-present manifest is tolerated, but
+    # only when it is byte-for-byte the one being published and carries the
+    # expected repository link; anything else stays fatal rather than being
+    # overwritten or accepted.
+    def _published() -> dict[str, Any]:
+        return fetch_gitea_manifest(
+            owner=owner,
+            repository=repository,
+            package=str(manifest["package"]),
+            version=version,
+            token=token,
+        )
+
+    try:
+        existing: dict[str, Any] | None = _published()
+    except RegistryNotFound:
+        # The only state that authorizes an upload: the registry answered, and
+        # the object is genuinely not there.
+        existing = None
+    except ReleaseArtifactError:
+        # Anything else means the manifest may exist in a partial state -- most
+        # plausibly uploaded but not yet linked, which is exactly what an
+        # interrupted previous run leaves behind and what fetch rejects. Repair
+        # the one operation that can be missing and look again. If it still
+        # does not resolve, the original failure is propagated rather than
+        # being retried as an upload, because re-PUTting an immutable version
+        # conflicts instead of repairing and strands the release.
+        link_gitea_package(
+            registry=registry,
+            owner=owner,
+            repository=repository,
+            package_type="generic",
+            package=package,
+            token=token,
+        )
+        existing = _published()
+    if existing is not None:
+        if existing != manifest:
+            raise ReleaseArtifactError(
+                "A different release manifest is already published for this version"
+            )
+        return existing
+
     upload_url = (
         "https://git.nmulti.cloud/api/packages/"
         f"{_quoted(owner)}/generic/{_quoted(package)}/{_quoted(version)}/release-manifest.json"
@@ -536,7 +726,16 @@ def main() -> None:
     publish_attest.add_argument("--repository", required=True)
     publish_attest.add_argument("--manifest", type=Path, required=True)
     publish_attest.add_argument("--attestation", type=Path, required=True)
+    verify_registry = subparsers.add_parser("verify-registry")
+    verify_registry.add_argument("--registry", required=True)
+    verify_registry.add_argument("--owner", required=True)
+    verify_registry.add_argument("--repository", required=True)
+    verify_registry.add_argument("--package", required=True)
+    verify_registry.add_argument("--version", required=True)
+    verify_registry.add_argument("--manifest", type=Path, required=True)
+
     publish_manifest = subparsers.add_parser("publish-manifest")
+    publish_manifest.add_argument("--registry", required=True)
     publish_manifest.add_argument("--owner", required=True)
     publish_manifest.add_argument("--repository", required=True)
     publish_manifest.add_argument("--manifest", type=Path, required=True)
@@ -583,6 +782,29 @@ def main() -> None:
             repository=args.repository,
             manifest=manifest,
         )
+    elif args.command == "verify-registry":
+        manifest = load_manifest(args.manifest)
+        token = os.getenv("GITEA_PACKAGE_TOKEN", "")
+        # A twine upload leaves the package unlinked, and the deploy and
+        # promotion consumers both refuse an unlinked package, so the link is
+        # created here and then required by the verification below.
+        link_gitea_package(
+            registry=args.registry,
+            owner=args.owner,
+            repository=args.repository,
+            package_type="pypi",
+            package=args.package,
+            token=token,
+        )
+        verify_gitea_package_artifacts(
+            registry=args.registry,
+            owner=args.owner,
+            repository=args.repository,
+            package=args.package,
+            version=args.version,
+            manifest=manifest,
+            token=token,
+        )
     elif args.command == "publish-attestation":
         manifest = load_manifest(args.manifest)
         evidence = json.loads(args.attestation.read_text(encoding="utf-8"))
@@ -596,6 +818,7 @@ def main() -> None:
     else:
         manifest = load_manifest(args.manifest)
         publish_gitea_manifest(
+            registry=args.registry,
             owner=args.owner,
             repository=args.repository,
             manifest=manifest,

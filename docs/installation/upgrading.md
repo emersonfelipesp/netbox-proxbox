@@ -87,12 +87,11 @@ sudo systemctl restart proxbox
 If you run the backend in Docker, pull the new image tag and recreate the container.
 
 After upgrading from a backend older than `0.0.13`, run a **Full Update** from
-the Proxbox home page. That pass repopulates the `proxmox_vm_id` custom field
-on VMs created before the VM config fix; the VM IP-address stage depends on
-that field when it matches Proxmox VMs back to NetBox objects. If the FastAPI
-card shows the PR #156 advisory for `proxbox-api` `0.0.13` or `0.0.14`, install
-a backend build containing that fix, or the next fixed backend release, before
-re-testing VM IP sync.
+the Proxbox home page. That pass rebuilds `ProxboxVirtualMachineSyncState`,
+including `proxmox_vm_id`, for VMs created before the VM config fix. If the
+FastAPI card shows the PR #156 advisory for `proxbox-api` `0.0.13` or `0.0.14`,
+install a backend build containing that fix, or the next fixed backend release,
+before re-testing VM IP sync.
 
 
 > **Current release:** netbox-proxbox `0.0.25` pairs with proxbox-api `0.0.20` (NetBox `4.5.8`-`4.6.99` stable; exact canonical `4.7.0-beta2` experimental). Current backend-runtime pairing: netbox-proxbox 0.0.25 <-> proxbox-api 0.0.20 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.

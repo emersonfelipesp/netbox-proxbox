@@ -14,7 +14,11 @@ Both views are **read-only** and **fetched live** from the proxbox-api backend o
 
 ## Visibility
 
-The VM HA tab only registers when the VM has a resolvable `proxmox_vm_id` custom field. VMs that were never synced through Proxbox (or that lost the custom-field value) will not show the tab — that is expected behavior, not a misconfiguration. The cluster-wide HA Status page is always available under **Plugins → Proxbox → HA Status** regardless of any single VM's sync state.
+The VM HA tab only registers when the VM has a resolvable
+`ProxboxVirtualMachineSyncState.proxmox_vm_id`. VMs that were never synced
+through Proxbox, and therefore have no populated sidecar, will not show the tab.
+The cluster-wide HA Status page is always available under **Plugins → Proxbox
+→ HA Status** regardless of any single VM's sync state.
 
 ## VM HA Tab
 
@@ -48,7 +52,7 @@ The page renders three sections:
 
 - **Cluster Status** — node-level CRM state and quorum, derived from rows in `/cluster/ha/status/current` where `type == "node"`.
 - **HA Groups** — table of HA group definitions (name, member nodes, restricted, nofailback).
-- **HA Resources** — every HA-managed VM/CT (sid, group, current state, CRM state, max-restart, max-relocate). When a NetBox `VirtualMachine` exists with the matching `proxmox_vm_id` custom field, the SID column links to it.
+- **HA Resources** — every HA-managed VM/CT (sid, group, current state, CRM state, max-restart, max-relocate). When a NetBox `VirtualMachine` has a typed sync-state row with the matching `proxmox_vm_id`, the SID column links to it.
 
 When the cluster has no HA configured, each section renders an empty-state row instead of a missing table.
 

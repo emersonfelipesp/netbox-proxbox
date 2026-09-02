@@ -55,20 +55,14 @@ data: `proxmox_endpoint_id` becomes `proxmox_endpoint_raw_id`, and
 nullable FK to the core NetBox cluster. A single NetBox cluster is not guaranteed
 to be the same row as a Proxmox cluster tracking record.
 
-The typed `Proxbox*SyncState` models are now the **standard** source of truth
-for the Proxmox-to-NetBox linkage. The legacy reflection custom fields are
-**deprecated** and, by default, no longer used: the `custom_fields_enabled`
-plugin setting defaults to `false`, so a normal sync writes and reads the
-sidecar models only and does not write, read, or reconcile the custom fields.
-The sidecars are (re)built from live Proxmox data on each sync, so a plain
-re-sync recovers them even when a NetBox upgrade has already dropped the custom
-fields.
-
-Operators who need the old behavior during a transition can set
-`custom_fields_enabled = true`; while enabled, proxbox-api restores the legacy
-custom-field writes/reads/reconcile and emits deprecation warnings. The custom
-fields (and this flag) will be removed entirely in a future release; the flag is
-non-destructive and no custom-field data is deleted while it exists.
+The typed `Proxbox*SyncState` models are the **standard** source of truth for
+the Proxmox-to-NetBox linkage. A normal sync writes and reads the sidecars and
+rebuilds them from live Proxmox data. Migration 0084 removes the twelve
+VM-only reflection custom-field definitions, strips their stale keys from each
+core VM's JSON, and removes the obsolete `custom_fields_enabled` setting.
+`ProxboxVirtualMachineSyncState` is therefore the sole read path for VM
+reflection identity and status. Shared reflection fields on other object types
+and NetBox-to-Proxmox intent fields remain outside that migration's scope.
 
 ### Concurrency / Known Limitation
 

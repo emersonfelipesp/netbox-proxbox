@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
 from netbox_proxbox.type_defs import FastAPIAuthSource, FastAPIUrlSource
+from netbox_proxbox.vm_identity import resolve_vm_type as _resolve_vm_type
 
 if TYPE_CHECKING:
     from django.http import HttpRequest
@@ -189,16 +190,8 @@ def get_proxbox_tagged_object_ids(model_class: type) -> list[int]:
 
 
 def resolve_vm_type(vm: object) -> str:
-    """Return 'lxc' or 'qemu' for a VirtualMachine, preferring native VirtualMachineType."""
-    vm_type_obj = getattr(vm, "virtual_machine_type", None)
-    if vm_type_obj and hasattr(vm_type_obj, "slug"):
-        slug = str(vm_type_obj.slug)
-        if "lxc" in slug:
-            return "lxc"
-        if "qemu" in slug:
-            return "qemu"
-    cf = getattr(vm, "custom_field_data", None) or {}
-    return str(cf.get("proxmox_vm_type") or cf.get("cf_proxmox_vm_type") or "qemu")
+    """Return the VM type through the canonical typed identity resolver."""
+    return _resolve_vm_type(vm)
 
 
 def has_virtual_machine_type_field(model_class: type[object]) -> bool:
@@ -228,17 +221,15 @@ def filter_queryset_by_proxmox_vm_type(
     vm_type: str,
     vm_type_slug: str,
 ) -> object:
-    """Filter a VirtualMachine queryset by Proxmox type across NetBox 4.5 and 4.6."""
+    """Filter a VM queryset by typed Proxmox sync state and the NetBox 4.6 type."""
     from django.db.models import Q
 
-    legacy_filter = Q(custom_field_data__proxmox_vm_type=vm_type) | Q(
-        custom_field_data__cf_proxmox_vm_type=vm_type
-    )
+    sync_state_filter = Q(proxbox_sync_state__proxmox_vm_type=vm_type)
     if has_virtual_machine_type_field(model_class):
         return queryset.filter(
-            Q(virtual_machine_type__slug=vm_type_slug) | legacy_filter
+            Q(virtual_machine_type__slug=vm_type_slug) | sync_state_filter
         )
-    return queryset.filter(legacy_filter)
+    return queryset.filter(sync_state_filter)
 
 
 def get_fastapi_url(endpoint: FastAPIUrlSource) -> dict[str, object]:

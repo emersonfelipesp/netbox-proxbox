@@ -16,6 +16,11 @@ Proxbox stores synchronized compute inventory in NetBox's built-in `virtualizati
 - `GuestVMInterfaceAddress` links a guest OS interface to an existing core
   `ipam.IPAddress`. It does not create duplicate IP rows; the IP object remains
   the same NetBox IP used by the core VM interface assignment.
-- VMs that carry a resolvable `proxmox_vm_id` (custom field set during sync) gain a read-only **HA** tab on the detail page, sibling to **Proxmox Config**. The tab queries the paired `proxbox-api` and is hidden when the VM has not been synced through Proxbox. See [High Availability (HA)](../features/ha.md).
+- VMs whose `ProxboxVirtualMachineSyncState` has a resolvable
+  `proxmox_vm_id` gain a read-only **HA** tab on the detail page, sibling to
+  **Proxmox Config**. The main detail page also shows a **Proxmox** card backed
+  by typed sync state and cloud-init inventory; it omits the card when neither
+  related row exists and shows only an SSH-key count, never key material. See
+  [High Availability (HA)](../features/ha.md).
 
 See [Virtual Machine](../features/virtual-machine.md) for the user-facing view split between VMs and containers.

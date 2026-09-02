@@ -34,6 +34,10 @@ This directory contains Django templates bundled with the plugin.
   stored values. The destructive reset form is omitted unless the user holds
   the separate reset permission; keep all recovery rendering free of dynamic
   `innerHTML` and ciphertext/key material.
+- `netbox_proxbox/inc/vm_proxmox_card.html` is the typed reflection card on a
+  core VM detail page. It may show only the count of reflected cloud-init SSH
+  keys, never their contents, and must rely on Django autoescaping for every
+  sidecar and cloud-init value.
 
 ## Links
 

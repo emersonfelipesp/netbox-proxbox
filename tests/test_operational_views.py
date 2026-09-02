@@ -74,10 +74,11 @@ def _make_vm(*, pk=42, vmid=100, endpoint_id=7, vm_type="qemu"):
         pk=pk,
         name=f"vm-{pk}",
         cluster=cluster,
-        custom_field_data={
-            "proxmox_vm_id": vmid,
-            "proxmox_vm_type": vm_type,
-        },
+        proxbox_sync_state=SimpleNamespace(
+            proxmox_vm_id=vmid,
+            proxmox_vm_type=vm_type,
+        ),
+        custom_field_data={},
         virtual_machine_type=None,
         device=None,
         get_absolute_url=lambda: f"/virtualization/virtual-machines/{pk}/",
@@ -165,7 +166,7 @@ def test_resolver_returns_none_without_endpoint_tracking(monkeypatch):
 def test_resolver_returns_none_without_vmid(monkeypatch):
     operational = _load(monkeypatch)
     vm = _make_vm()
-    vm.custom_field_data = {}
+    vm.proxbox_sync_state.proxmox_vm_id = None
     assert operational.resolve_vm_endpoint_context(vm) is None
 
 
@@ -204,7 +205,7 @@ def test_verb_post_forwards_to_backend(monkeypatch, view_attr, verb):
 def test_verb_post_skips_backend_when_unresolvable(monkeypatch):
     operational = _load(monkeypatch)
     vm = _make_vm()
-    vm.custom_field_data = {}
+    vm.proxbox_sync_state.proxmox_vm_id = None
     _bind_vm(monkeypatch, operational, vm)
 
     posts: list[object] = []

@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from netbox_proxbox.vm_identity import resolve_known_vm_type
+
 _INTENT_ACTIONS = {"create", "update", "delete"}
 
 
@@ -55,8 +57,6 @@ def _contains_lxc_marker(value: Any) -> bool:
 
 def _kind_from_custom_fields(cf: dict[str, Any]) -> str | None:
     for key in (
-        "proxmox_vm_type",
-        "cf_proxmox_vm_type",
         "proxmox_type",
         "cf_proxmox_type",
         "proxmox_kind",
@@ -106,6 +106,10 @@ def _classify_kind(change_diff: Any) -> str:
     postchange_data = _data_dict(change_diff, "postchange_data")
     prechange_data = _data_dict(change_diff, "prechange_data")
     data = postchange_data or prechange_data
+
+    kind = resolve_known_vm_type(vm) if vm is not None else ""
+    if kind:
+        return kind
 
     kind = _kind_from_custom_fields(_custom_fields_from_vm(vm))
     if kind is not None:

@@ -111,7 +111,11 @@ The backend returns `null` for VMs that are not HA-managed; the shim normalizes 
 
 ## Per-VM tab gating
 
-The corresponding **HA tab** on the `VirtualMachine` detail page only registers when the VM has a resolvable `proxmox_vm_id` custom field. If the field is absent or null, the tab is hidden — the REST endpoint still works, but there is no UI affordance until the VM has been synced through Proxbox at least once.
+The corresponding **HA tab** on the `VirtualMachine` detail page only registers
+when `ProxboxVirtualMachineSyncState.proxmox_vm_id` is populated. If the
+sidecar is absent or its VM ID is null, the tab is hidden. The REST endpoint
+still works, but there is no UI affordance until the VM has been synced through
+Proxbox at least once.
 
 ---
 

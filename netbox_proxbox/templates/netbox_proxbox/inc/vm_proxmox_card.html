@@ -1,0 +1,90 @@
+{% load i18n %}
+<div class="card">
+    <h5 class="card-header">{% trans "Proxmox" %}</h5>
+    <div class="card-body">
+        <table class="table table-hover attr-table mb-0">
+            {% if sync_state %}
+                <tr>
+                    <th scope="row">{% trans "Proxmox VM ID" %}</th>
+                    <td>{{ sync_state.proxmox_vm_id|default_if_none:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "VM type" %}</th>
+                    <td>{{ sync_state.proxmox_vm_type|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Node" %}</th>
+                    <td>
+                        {% if sync_state.proxmox_node %}
+                            <a href="{{ sync_state.proxmox_node.get_absolute_url }}">{{ sync_state.proxmox_node }}</a>
+                        {% else %}
+                            {{ sync_state.proxmox_node_name|default:"—" }}
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Cluster" %}</th>
+                    <td>
+                        {% if sync_state.proxmox_cluster %}
+                            <a href="{{ sync_state.proxmox_cluster.get_absolute_url }}">{{ sync_state.proxmox_cluster }}</a>
+                        {% else %}
+                            {{ sync_state.proxmox_cluster_name|default:"—" }}
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Status" %}</th>
+                    <td>{{ sync_state.proxmox_status|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Start at boot" %}</th>
+                    <td>{% if sync_state.proxmox_start_at_boot is None %}—{% elif sync_state.proxmox_start_at_boot %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Unprivileged container" %}</th>
+                    <td>{% if sync_state.proxmox_unprivileged_container is None %}—{% elif sync_state.proxmox_unprivileged_container %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "QEMU guest agent" %}</th>
+                    <td>{% if sync_state.proxmox_qemu_agent is None %}—{% elif sync_state.proxmox_qemu_agent %}{% trans "Yes" %}{% else %}{% trans "No" %}{% endif %}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Search domain" %}</th>
+                    <td>{{ sync_state.proxmox_search_domain|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Proxmox interface" %}</th>
+                    <td>
+                        {% if sync_state.proxmox_link %}
+                            <a href="{{ sync_state.proxmox_link }}" target="_blank" rel="noopener">{% trans "Open in Proxmox" %}</a>
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Last synced" %}</th>
+                    <td>{{ sync_state.proxmox_last_updated|date:"DATETIME_FORMAT"|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Last run ID" %}</th>
+                    <td>{{ sync_state.last_run_id|default:"—" }}</td>
+                </tr>
+            {% endif %}
+            {% if cloud_init %}
+                <tr>
+                    <th scope="row">{% trans "Cloud-init user" %}</th>
+                    <td>{{ cloud_init.ciuser|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Cloud-init ipconfig0" %}</th>
+                    <td>{{ cloud_init.ipconfig0|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Stored SSH keys" %}</th>
+                    <td>{{ ssh_key_count }}</td>
+                </tr>
+            {% endif %}
+        </table>
+    </div>
+</div>

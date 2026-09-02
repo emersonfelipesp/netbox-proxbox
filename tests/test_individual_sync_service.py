@@ -190,7 +190,11 @@ def test_vm_sync_now_view_fails_fast_without_cluster(monkeypatch):
         name="vm-101",
         cluster=None,
         device=None,
-        custom_field_data={"cf_proxmox_vm_id": 101, "cf_proxmox_vm_type": "qemu"},
+        proxbox_sync_state=SimpleNamespace(
+            proxmox_vm_id=101,
+            proxmox_vm_type="qemu",
+        ),
+        custom_field_data={},
         get_absolute_url=lambda: "/virtualization/virtual-machines/101/",
     )
 

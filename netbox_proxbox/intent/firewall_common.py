@@ -28,6 +28,7 @@ from netbox_proxbox.services.http_client import (
     HttpError,
     get_default_http_client,
 )
+from netbox_proxbox.vm_identity import resolve_vm_node, resolve_vm_vmid
 
 FIREWALL_PUSH_TIMEOUT_SECONDS = 30
 
@@ -110,7 +111,8 @@ def validation_errors_for_rule(
             errors["virtual_machine"] = "VM firewall rules require a virtual machine."
         elif _extract_vm_id(vm) is None:
             errors["virtual_machine"] = (
-                "The virtual machine must have a proxmox_vm_id custom field."
+                "The virtual machine must have a Proxbox sync-state record with "
+                "a Proxmox VM ID. Run a Proxbox sync."
             )
 
     if zone == FirewallZoneChoices.VNET and not _value(data, instance, "iface"):
@@ -136,7 +138,8 @@ def validation_errors_for_scoped_object(
             errors["virtual_machine"] = "VM-scoped firewall objects require a VM."
         elif _extract_vm_id(vm) is None:
             errors["virtual_machine"] = (
-                "The virtual machine must have a proxmox_vm_id custom field."
+                "The virtual machine must have a Proxbox sync-state record with "
+                "a Proxmox VM ID. Run a Proxbox sync."
             )
 
     return errors
@@ -160,7 +163,8 @@ def validation_errors_for_options(
             errors["virtual_machine"] = "VM firewall options require a virtual machine."
         elif _extract_vm_id(vm) is None:
             errors["virtual_machine"] = (
-                "The virtual machine must have a proxmox_vm_id custom field."
+                "The virtual machine must have a Proxbox sync-state record with "
+                "a Proxmox VM ID. Run a Proxbox sync."
             )
 
     if zone in {FirewallZoneChoices.SECURITY_GROUP, FirewallZoneChoices.VNET}:
@@ -948,13 +952,8 @@ def _value(data: dict[str, Any], instance: object | None, field: str) -> Any:
 def _extract_vm_id(vm: object | None) -> int | None:
     if vm is None:
         return None
-    cf = getattr(vm, "custom_field_data", None)
-    if cf is None and isinstance(vm, dict):
-        cf = vm.get("custom_field_data") or vm.get("custom_fields")
-    cf = cf or {}
-    raw = cf.get("proxmox_vm_id") or cf.get("cf_proxmox_vm_id")
     try:
-        return int(raw)
+        return int(resolve_vm_vmid(vm))
     except (TypeError, ValueError):
         return None
 
@@ -962,11 +961,7 @@ def _extract_vm_id(vm: object | None) -> int | None:
 def _vm_node_name(vm: object | None) -> str:
     if vm is None:
         return ""
-    device = getattr(vm, "device", None)
-    if device is not None and getattr(device, "name", None):
-        return str(device.name)
-    cf = getattr(vm, "custom_field_data", None) or {}
-    return str(cf.get("proxmox_node") or cf.get("cf_proxmox_node") or "").strip()
+    return resolve_vm_node(vm).strip()
 
 
 def _vm_context(
@@ -981,7 +976,8 @@ def _vm_context(
     if vmid is None:
         raise FirewallPushError(
             "vmid_required",
-            "VM-scoped firewall pushes require proxmox_vm_id on the virtual machine.",
+            "VM-scoped firewall pushes require a Proxmox VM ID in the Proxbox "
+            "sync-state record. Run a Proxbox sync.",
             status_code=400,
         )
     if not node:

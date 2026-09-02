@@ -11,11 +11,11 @@ from virtualization.models import VirtualMachine
 from netbox_proxbox.services._endpoint_errors import translate_request_exception
 from netbox_proxbox.services.backend_context import get_fastapi_request_context
 from netbox_proxbox.services.endpoint_scope import enabled_backend_endpoint_scope
+from netbox_proxbox.vm_identity import resolve_vm_vmid
 
 
 def _extract_vmid(vm: VirtualMachine) -> int | None:
-    cf = getattr(vm, "custom_field_data", {}) or {}
-    raw = cf.get("proxmox_vm_id") or cf.get("cf_proxmox_vm_id")
+    raw = resolve_vm_vmid(vm)
     if raw in (None, ""):
         return None
     try:
@@ -51,7 +51,8 @@ class ProxmoxVMHATabView(generic.ObjectView):
 
         if vmid is None:
             context["detail"] = (
-                "Missing custom field proxmox_vm_id on this virtual machine."
+                "The Proxbox sync-state record has no Proxmox VM ID. "
+                "Run a Proxbox sync and try again."
             )
             return context
 

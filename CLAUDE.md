@@ -126,12 +126,12 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   storage, and bridge relations are masked or filtered from API responses. These
   sidecars are now the standard source of truth: the proxbox-api writer/reader
   switch has landed, so a normal sync writes and reads the sidecars (rebuilt from
-  live Proxmox data). The legacy reflection custom fields are deprecated and
-  gated behind `ProxboxPluginSettings.custom_fields_enabled` (default `False`);
-  by default proxbox-api does not write, read, or reconcile custom fields.
-  Setting the flag `True` restores legacy custom-field behavior for a transition
-  and emits deprecation warnings. Full custom-field removal is a later cleanup;
-  no data is deleted while the flag exists.
+  live Proxmox data). Migration 0084 removes the twelve VM-only reflection
+  custom-field definitions and their stale `VirtualMachine.custom_field_data`
+  keys; `ProxboxVirtualMachineSyncState` is the sole VM reflection read path.
+  The removed `custom_fields_enabled` setting must not be restored. Shared
+  reflection fields remain until their separately scoped removal, and the
+  NetBox-to-Proxmox intent custom fields remain operational.
 - Companion endpoint models: `PBSEndpoint`, `PDMEndpoint`, `PDMRemote` for Proxmox Backup Server and Datacenter Manager inventory.
 - SSH and hardware discovery: `NodeSSHCredential` stores per-node SSH credentials for the optional hardware-discovery pass.
 - **Credential storage (OpenBao default, legacy Fernet opt-in).** Plugin Settings
@@ -1494,5 +1494,22 @@ input — a canonical-main dispatch sends no `deploy_source`, so the input would
 default to `latest_package`. The authorization is single-use and expires in
 15 minutes, and `run_attempt` is a constant 1: a re-run needs a fresh dispatch.
 
-`latest_package` fails closed until `publish-gitea.yml` publishes a
-`<package>-release-manifest` generic package; no version has one today.
+`publish-gitea.yml` publishes the `<package>-release-manifest` generic package
+that `latest_package` and `promote-final-tag.yml` both require. It builds the
+manifest from `dist/` before the wheel and sdist are uploaded, so the recorded
+digests describe exactly the bytes that were published, and uploads it only
+after the registry upload has been verified, so the manifest never advertises a
+version whose artifacts are not there. Its `source_sha` is the commit the tag
+resolves to (`git rev-parse "${TAG}^{commit}"`), because that is what
+`fetch-gitea` compares the deploy target against.
+
+This is **preparatory**. Publishing manifests does not by itself enable a
+package deploy: `deploy-production.yml` still rejects every `latest_package`
+request unconditionally, because its consumer -- a four-phase privileged
+protocol against the deploy host -- has not been written yet. Until that lands,
+production deploys use `main_branch`, which needs no manifest and works today.
+
+Versions published before this producer landed have no manifest at all, and a
+manifest cannot be back-filled for an already-published version in a way that
+proves provenance. So the first version published after it is the first one
+that will be eligible for `latest_package` once the consumer exists.

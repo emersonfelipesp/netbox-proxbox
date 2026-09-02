@@ -5,7 +5,10 @@ The Proxbox plugin now separates Proxmox compute inventory into two dedicated vi
 - **Virtual Machines**: renders only QEMU entries
 - **LXC Containers**: renders only container entries
 
-Both pages are sourced from NetBox `VirtualMachine` objects tagged by Proxbox and filtered by the custom field `proxmox_vm_type` (`qemu` or `lxc`).
+Both pages are sourced from NetBox `VirtualMachine` objects tagged by Proxbox.
+They filter on `ProxboxVirtualMachineSyncState.proxmox_vm_type` (`qemu` or
+`lxc`) and retain the native NetBox `virtual_machine_type` branch where that
+field is available.
 
 ## Why the split exists
 

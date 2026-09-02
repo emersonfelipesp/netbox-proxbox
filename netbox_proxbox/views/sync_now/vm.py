@@ -14,7 +14,12 @@ from utilities.views import (
 from virtualization.models import VirtualMachine
 
 from netbox_proxbox.models import ProxmoxCluster
-from netbox_proxbox.utils import resolve_vm_type
+from netbox_proxbox.vm_identity import (
+    resolve_vm_cluster_name,
+    resolve_vm_node,
+    resolve_vm_type,
+    resolve_vm_vmid,
+)
 from netbox_proxbox.services.branch_lifecycle import get_active_branch_schema_id
 from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
 from netbox_proxbox.services.tenant_assignment import (
@@ -46,29 +51,22 @@ class VirtualMachineSyncNowView(
             VirtualMachine.objects.restrict(request.user, "view"), pk=pk
         )
 
-        vmid = vm.custom_field_data.get("proxmox_vm_id") or vm.custom_field_data.get(
-            "cf_proxmox_vm_id"
-        )
+        vmid = resolve_vm_vmid(vm)
         vm_type = resolve_vm_type(vm)
         proxmox_cluster = ProxmoxCluster.objects.filter(
             netbox_cluster=vm.cluster
         ).first()
-        cluster_name = (
-            proxmox_cluster.name
-            if proxmox_cluster
-            else (vm.cluster.name if vm.cluster else "")
-        )
-
-        node = ""
-        if hasattr(vm, "device") and vm.device:
-            node = vm.device.name
-        else:
-            node = vm.custom_field_data.get("proxmox_node") or vm.custom_field_data.get(
-                "cf_proxmox_node", ""
-            )
+        cluster_name = resolve_vm_cluster_name(vm)
+        node = resolve_vm_node(vm)
 
         if not vmid:
-            messages.error(request, _("Virtual machine does not have a Proxmox VM ID."))
+            messages.error(
+                request,
+                _(
+                    "The Proxbox sync-state record has no Proxmox VM ID. "
+                    "Run a Proxbox sync and try again."
+                ),
+            )
             return HttpResponseRedirect(vm.get_absolute_url())
 
         if not cluster_name:

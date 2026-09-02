@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from netbox_proxbox.vm_identity import resolve_vm_vmid
+
 
 def _custom_fields(vm: Any) -> dict[str, Any]:
     custom_field_data = getattr(vm, "custom_field_data", None)
@@ -114,15 +116,7 @@ def build_metadata_snapshot(vm: Any) -> dict[str, Any]:
     """Capture stable VM metadata for a later safe-delete executor."""
     custom_fields = _custom_fields(vm)
     return {
-        "vmid": _int_or_none(
-            _attr_or_cf(
-                vm,
-                "vmid",
-                custom_fields,
-                "proxmox_vm_id",
-                "cf_proxmox_vm_id",
-            )
-        ),
+        "vmid": _int_or_none(getattr(vm, "vmid", None) or resolve_vm_vmid(vm)),
         "node": _str_or_none(
             _attr_or_cf(
                 vm,

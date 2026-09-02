@@ -57,8 +57,8 @@ def backend_version_advisories(version: object) -> list[BackendVersionAdvisory]:
                 message=(
                     f"proxbox-api {version_label} is too old for reliable VM IP "
                     "sync. Upgrade proxbox-api to 0.0.13 or later, then run a "
-                    "Full Update so existing VMs get the proxmox_vm_id custom "
-                    "field before IP-address sync runs."
+                    "Full Update so existing VMs get populated Proxbox "
+                    "sync-state records before IP-address sync runs."
                 ),
             )
         ]

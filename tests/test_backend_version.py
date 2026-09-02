@@ -39,7 +39,7 @@ def test_backend_version_advisory_blocks_pre_vm_config_fix_backend():
 
     assert [advisory.severity for advisory in advisories] == ["error"]
     assert advisories[0].code == "vm_ip_sync_backend_too_old"
-    assert "proxmox_vm_id" in advisories[0].message
+    assert "sync-state" in advisories[0].message
 
 
 def test_backend_version_advisory_warns_for_agent_kv_flag_release_window():

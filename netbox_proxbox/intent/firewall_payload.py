@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from typing import Any
 
 from netbox_proxbox.choices import FirewallScopeChoices, FirewallZoneChoices
+from netbox_proxbox.vm_identity import resolve_vm_node, resolve_vm_vmid
 
 FIREWALL_MODEL_NAMES = (
     "proxmoxfirewallsecuritygroup",
@@ -454,34 +455,19 @@ def _object_id(value: object | None) -> int | None:
 
 
 def _vmid(vm: object | None, data: dict[str, Any]) -> int | None:
-    cf = _custom_fields(vm)
     return _int_or_none(
-        cf.get("proxmox_vm_id")
-        or cf.get("cf_proxmox_vm_id")
+        (resolve_vm_vmid(vm) if vm is not None else "")
         or data.get("vmid")
         or data.get("proxmox_vm_id")
     )
 
 
 def _vm_node(vm: object | None, data: dict[str, Any]) -> str | None:
-    device = getattr(vm, "device", None)
-    if device is not None and getattr(device, "name", None):
-        return str(device.name)
-    cf = _custom_fields(vm)
     return _str_or_none(
-        cf.get("proxmox_node")
-        or cf.get("cf_proxmox_node")
+        (resolve_vm_node(vm) if vm is not None else "")
         or data.get("node")
         or data.get("proxmox_node")
     )
-
-
-def _custom_fields(value: object | None) -> dict[str, Any]:
-    if isinstance(value, dict):
-        cf = value.get("custom_field_data") or value.get("custom_fields")
-    else:
-        cf = getattr(value, "custom_field_data", None)
-    return cf if isinstance(cf, dict) else {}
 
 
 def _str_or_none(value: object) -> str | None:

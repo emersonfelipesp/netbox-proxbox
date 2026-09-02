@@ -140,6 +140,58 @@ MIGRATION_0066 = ("netbox_proxbox", "0066_backfill_proxbox_sync_state")
 MIGRATION_0067 = ("netbox_proxbox", "0067_sync_state_relation_fks")
 MIGRATION_0068 = ("netbox_proxbox", "0068_sync_state_relation_fk_data")
 MIGRATION_0069 = ("netbox_proxbox", "0069_sync_state_relation_fk_cleanup")
+MIGRATION_0083 = ("netbox_proxbox", "0083_openbao_credential_storage")
+MIGRATION_0084 = (
+    "netbox_proxbox",
+    "0085_remove_vm_reflection_custom_fields",
+)
+
+VM_REFLECTION_CUSTOM_FIELDS = {
+    "proxmox_vm_id",
+    "proxmox_vm_type",
+    "proxmox_start_at_boot",
+    "proxmox_unprivileged_container",
+    "proxmox_qemu_agent",
+    "proxmox_search_domain",
+    "proxmox_status",
+    "proxmox_uptime",
+    "proxmox_migration_duration",
+    "proxmox_migration_type",
+    "proxmox_endpoint_id",
+    "proxmox_last_synced_role_id",
+}
+
+OUT_OF_SCOPE_CUSTOM_FIELDS = {
+    "proxmox_last_updated",
+    "proxbox_last_run_id",
+    "proxmox_cluster",
+    "proxmox_node",
+    "proxmox_link",
+    "proxmox_tags",
+    "proxmox_os",
+    "proxmox_storage",
+    "proxmox_disk",
+    "proxmox_interfaces",
+    "proxmox_vmid",
+    "proxmox_notes",
+    "proxmox_tcp_states",
+    "proxmox_cpu_type",
+    "proxmox_storage_ids",
+    "proxmox_storage_names",
+    "proxmox_device_names",
+    "proxmox_iso",
+    "proxmox_template_vmid",
+    "cloud_init_user",
+    "cloud_init_ssh_keys",
+    "cloud_init_user_data",
+    "cloud_init_network",
+    "proxbox_intent_state",
+    "proxbox_last_apply_run_id",
+    "apply_to_proxmox",
+    "apply_destroy_confirmed",
+    "source_packer_template",
+    "netbox_proxy_url",
+}
 
 
 def _slug(prefix: str, value: int) -> str:
@@ -2475,6 +2527,100 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
             apps_0069_after_reapply = self._migrate_to(MIGRATION_0069)
             self._assert_all_sidecars_exist(apps_0069_after_reapply, ids)
             self._assert_0069_relation_payloads(apps_0069_after_reapply, ids)
+        finally:
+            self._restore_current_leaf()
+
+    def test_forward_removes_only_vm_reflection_fields_and_reverse_restores_them(
+        self,
+    ) -> None:
+        vm = create_test_virtualmachine("migration-vm-reflection-removal")
+
+        try:
+            apps_0083 = self._migrate_to(MIGRATION_0083)
+            CustomField0083 = apps_0083.get_model("extras", "CustomField")
+            ContentType0083 = apps_0083.get_model("contenttypes", "ContentType")
+            VirtualMachine0083 = apps_0083.get_model("virtualization", "VirtualMachine")
+            vm_content_type = ContentType0083.objects.get(
+                app_label="virtualization",
+                model="virtualmachine",
+            )
+
+            for name in OUT_OF_SCOPE_CUSTOM_FIELDS:
+                custom_field, _created = CustomField0083.objects.get_or_create(
+                    name=name,
+                    defaults={
+                        "type": "text",
+                        "label": name,
+                        "description": "Out-of-scope migration guard",
+                    },
+                )
+                custom_field.object_types.add(vm_content_type)
+
+            stale_data = {
+                **{name: f"removed-{name}" for name in VM_REFLECTION_CUSTOM_FIELDS},
+                **{name: f"preserved-{name}" for name in OUT_OF_SCOPE_CUSTOM_FIELDS},
+            }
+            VirtualMachine0083.objects.filter(pk=vm.pk).update(
+                custom_field_data=stale_data
+            )
+
+            apps_0084 = self._migrate_to(MIGRATION_0084)
+            CustomField0084 = apps_0084.get_model("extras", "CustomField")
+            VirtualMachine0084 = apps_0084.get_model("virtualization", "VirtualMachine")
+            Settings0084 = apps_0084.get_model(
+                "netbox_proxbox", "ProxboxPluginSettings"
+            )
+
+            self.assertFalse(
+                CustomField0084.objects.filter(
+                    name__in=VM_REFLECTION_CUSTOM_FIELDS
+                ).exists()
+            )
+            self.assertEqual(
+                set(
+                    CustomField0084.objects.filter(
+                        name__in=OUT_OF_SCOPE_CUSTOM_FIELDS
+                    ).values_list("name", flat=True)
+                ),
+                OUT_OF_SCOPE_CUSTOM_FIELDS,
+            )
+            cleaned_data = VirtualMachine0084.objects.get(pk=vm.pk).custom_field_data
+            self.assertTrue(VM_REFLECTION_CUSTOM_FIELDS.isdisjoint(cleaned_data))
+            self.assertEqual(set(cleaned_data), OUT_OF_SCOPE_CUSTOM_FIELDS)
+            self.assertNotIn(
+                "custom_fields_enabled",
+                {field.name for field in Settings0084._meta.get_fields()},
+            )
+
+            restored_apps = self._migrate_to(MIGRATION_0083)
+            RestoredCustomField = restored_apps.get_model("extras", "CustomField")
+            RestoredSettings = restored_apps.get_model(
+                "netbox_proxbox", "ProxboxPluginSettings"
+            )
+            restored = RestoredCustomField.objects.filter(
+                name__in=VM_REFLECTION_CUSTOM_FIELDS
+            )
+            self.assertEqual(
+                set(restored.values_list("name", flat=True)),
+                VM_REFLECTION_CUSTOM_FIELDS,
+            )
+            for custom_field in restored:
+                self.assertTrue(
+                    custom_field.object_types.filter(
+                        app_label="virtualization",
+                        model="virtualmachine",
+                    ).exists(),
+                    custom_field.name,
+                )
+            vmid_field = restored.get(name="proxmox_vm_id")
+            self.assertEqual(vmid_field.type, "integer")
+            self.assertEqual(vmid_field.label, "VM ID")
+            self.assertEqual(vmid_field.ui_visible, "always")
+            self.assertEqual(vmid_field.ui_editable, "hidden")
+            self.assertIn(
+                "custom_fields_enabled",
+                {field.name for field in RestoredSettings._meta.get_fields()},
+            )
         finally:
             self._restore_current_leaf()
 

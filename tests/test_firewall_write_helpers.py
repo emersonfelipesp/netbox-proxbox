@@ -246,7 +246,13 @@ def test_disabled_endpoint_sets_error_status_and_raises(fw_common):
 def test_vm_rule_path_keeps_vm_query_params_before_endpoint_id(fw_common):
     endpoint = _endpoint(fw_common)
     vm = SimpleNamespace(
-        custom_field_data={"proxmox_vm_id": "101", "proxmox_node": "pve-a"},
+        device=None,
+        proxbox_sync_state=SimpleNamespace(
+            proxmox_vm_id=101,
+            proxmox_node=SimpleNamespace(name="pve-a"),
+            proxmox_node_name="",
+        ),
+        custom_field_data={},
     )
     rule = _rule(fw_common, endpoint)
     rule.zone = fw_common.FirewallZoneChoices.VM_QEMU
@@ -296,7 +302,13 @@ def test_rule_validation_requires_vm_id_and_vnet_name(fw_common):
 def test_vm_scope_validation_rejects_mismatched_vmid(fw_common):
     endpoint = _endpoint(fw_common)
     vm = SimpleNamespace(
-        custom_field_data={"proxmox_vm_id": "101", "proxmox_node": "pve-a"},
+        device=None,
+        proxbox_sync_state=SimpleNamespace(
+            proxmox_vm_id=101,
+            proxmox_node=SimpleNamespace(name="pve-a"),
+            proxmox_node_name="",
+        ),
+        custom_field_data={},
     )
     rule = _rule(fw_common, endpoint)
     rule.zone = fw_common.FirewallZoneChoices.VM_QEMU
@@ -312,6 +324,23 @@ def test_vm_scope_validation_rejects_mismatched_vmid(fw_common):
         )
 
     assert exc.value.reason == "firewall_scope_mismatch"
+
+
+def test_firewall_payload_reads_vm_identity_from_sidecar_with_empty_custom_fields(
+    fw_payload,
+):
+    vm = SimpleNamespace(
+        device=None,
+        proxbox_sync_state=SimpleNamespace(
+            proxmox_vm_id=101,
+            proxmox_node=SimpleNamespace(name="pve-a"),
+            proxmox_node_name="",
+        ),
+        custom_field_data={},
+    )
+
+    assert fw_payload._vmid(vm, {}) == 101
+    assert fw_payload._vm_node(vm, {}) == "pve-a"
 
 
 def test_vnet_scope_validation_rejects_mismatched_vnet(fw_common):

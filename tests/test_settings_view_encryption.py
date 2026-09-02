@@ -14,12 +14,12 @@ from tests.conftest import load_plugin_module
 # ---------------------------------------------------------------------------
 
 _BASE_CLEANED_DATA = {
+    "console_url": "",
     "use_guest_agent_interface_name": False,
     "proxbox_fetch_max_concurrency": 8,
     "ignore_ipv6_link_local_addresses": False,
     "ensure_netbox_objects": True,
     "delete_orphans": False,
-    "custom_fields_enabled": False,
     "primary_ip_preference": "ipv4",
     "netbox_max_concurrent": 1,
     "netbox_timeout": 120,
@@ -68,12 +68,12 @@ def _fake_settings_obj(encryption_key: str = "") -> SimpleNamespace:
         saved.append(kwargs)
 
     return SimpleNamespace(
+        console_url="",
         use_guest_agent_interface_name=False,
         proxbox_fetch_max_concurrency=8,
         ignore_ipv6_link_local_addresses=False,
         ensure_netbox_objects=True,
         delete_orphans=False,
-        custom_fields_enabled=False,
         primary_ip_preference="ipv4",
         netbox_max_concurrent=1,
         netbox_timeout=120,

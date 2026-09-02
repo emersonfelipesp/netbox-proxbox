@@ -408,7 +408,7 @@ class FirecrackerNetworkModeChoices(ChoiceSet):
 
 
 class ProxmoxVMTypeChoices(ChoiceSet):
-    """Proxmox hypervisor VM type (QEMU vs LXC) as stored in the proxmox_vm_type custom field."""
+    """Proxmox hypervisor VM type stored in typed VM sync state."""
 
     key = "VirtualMachine.proxmox_vm_type"
 

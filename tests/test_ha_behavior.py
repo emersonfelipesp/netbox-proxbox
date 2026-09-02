@@ -384,33 +384,31 @@ def vm_ha_module(monkeypatch: pytest.MonkeyPatch) -> Any:
 
 
 @pytest.mark.parametrize(
-    ("custom_fields", "expected"),
+    ("typed_vmid", "expected"),
     [
-        ({}, None),
-        ({"proxmox_vm_id": None}, None),
-        ({"proxmox_vm_id": ""}, None),
-        ({"proxmox_vm_id": "abc"}, None),
-        ({"proxmox_vm_id": 100}, 100),
-        ({"proxmox_vm_id": "100"}, 100),
-        ({"cf_proxmox_vm_id": "200"}, 200),
-        ({"proxmox_vm_id": "300", "cf_proxmox_vm_id": "999"}, 300),
+        (None, None),
+        ("", None),
+        ("abc", None),
+        (100, 100),
+        ("100", 100),
     ],
 )
 def test_extract_vmid_handles_all_input_shapes(
-    vm_ha_module: Any, custom_fields: dict[str, object], expected: int | None
+    vm_ha_module: Any, typed_vmid: object, expected: int | None
 ) -> None:
-    vm = SimpleNamespace(custom_field_data=custom_fields)
+    vm = SimpleNamespace(
+        proxbox_sync_state=SimpleNamespace(proxmox_vm_id=typed_vmid),
+        custom_field_data={},
+    )
     assert vm_ha_module._extract_vmid(vm) == expected
 
 
 def test_extract_vmid_returns_none_when_attribute_missing(vm_ha_module: Any) -> None:
-    """A VM without ``custom_field_data`` should return None, not raise."""
+    """A VM without a sync-state row should return None, not raise."""
     vm = SimpleNamespace()
     assert vm_ha_module._extract_vmid(vm) is None
 
 
-def test_extract_vmid_returns_none_when_custom_field_data_is_none(
-    vm_ha_module: Any,
-) -> None:
-    vm = SimpleNamespace(custom_field_data=None)
+def test_extract_vmid_ignores_removed_custom_field(vm_ha_module: Any) -> None:
+    vm = SimpleNamespace(custom_field_data={"proxmox_vm_id": 200})
     assert vm_ha_module._extract_vmid(vm) is None

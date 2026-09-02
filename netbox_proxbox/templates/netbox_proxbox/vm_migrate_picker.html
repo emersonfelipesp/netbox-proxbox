@@ -7,12 +7,12 @@
 <div class="container-fluid">
   <h1>{% trans "Migrate VM" %} — {{ vm.name }}</h1>
   <p class="text-muted">
-    {% blocktrans with vmid=vm.custom_field_data.proxmox_vm_id %}Pick a target Proxmox node for migration of VMID {{ vmid }}.{% endblocktrans %}
+    {% blocktrans %}Pick a target Proxmox node for migration of VMID {{ vmid }}.{% endblocktrans %}
   </p>
 
   {% if not resolvable %}
     <div class="alert alert-warning" role="alert">
-      {% trans "This VM is not linked to a Proxmox endpoint or is missing a proxmox_vm_id custom field." %}
+      {% trans "This VM is not linked to a Proxmox endpoint, or its Proxbox sync-state record has no Proxmox VM ID. Run a Proxbox sync and try again." %}
     </div>
     <a class="btn btn-secondary" href="{{ vm.get_absolute_url }}">{% trans "Back to VM" %}</a>
   {% elif not targets %}

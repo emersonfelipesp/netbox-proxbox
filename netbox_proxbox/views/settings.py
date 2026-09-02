@@ -102,6 +102,7 @@ class SettingsView(
         encryption_statuses = _encrypted_family_statuses(settings_obj)
         initial = {
             "use_guest_agent_interface_name": settings_obj.use_guest_agent_interface_name,
+            "console_url": getattr(settings_obj, "console_url", ""),
             "vm_interface_sync_strategy": getattr(
                 settings_obj,
                 "vm_interface_sync_strategy",
@@ -111,7 +112,6 @@ class SettingsView(
             "ignore_ipv6_link_local_addresses": settings_obj.ignore_ipv6_link_local_addresses,
             "ensure_netbox_objects": settings_obj.ensure_netbox_objects,
             "delete_orphans": settings_obj.delete_orphans,
-            "custom_fields_enabled": settings_obj.custom_fields_enabled,
             "primary_ip_preference": settings_obj.primary_ip_preference,
             "netbox_max_concurrent": settings_obj.netbox_max_concurrent,
             "netbox_timeout": settings_obj.netbox_timeout,
@@ -272,6 +272,7 @@ class SettingsView(
             settings_obj.use_guest_agent_interface_name = form.cleaned_data[
                 "use_guest_agent_interface_name"
             ]
+            settings_obj.console_url = form.cleaned_data.get("console_url", "").strip()
             settings_obj.vm_interface_sync_strategy = form.cleaned_data.get(
                 "vm_interface_sync_strategy",
                 "guest_os_model",
@@ -286,9 +287,6 @@ class SettingsView(
                 "ensure_netbox_objects", True
             )
             settings_obj.delete_orphans = form.cleaned_data.get("delete_orphans", False)
-            settings_obj.custom_fields_enabled = form.cleaned_data.get(
-                "custom_fields_enabled", False
-            )
             settings_obj.primary_ip_preference = form.cleaned_data[
                 "primary_ip_preference"
             ]
@@ -475,6 +473,7 @@ class SettingsView(
             settings_obj.save(
                 update_fields=[
                     "use_guest_agent_interface_name",
+                    "console_url",
                     "vm_interface_sync_strategy",
                     "proxbox_fetch_max_concurrency",
                     "ignore_ipv6_link_local_addresses",

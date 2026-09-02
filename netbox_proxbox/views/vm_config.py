@@ -15,6 +15,7 @@ from virtualization.models import VirtualMachine
 from netbox_proxbox.models import FastAPIEndpoint, ProxmoxEndpoint, VMSnapshot
 from netbox_proxbox.schemas.proxmox_vm import ProxmoxVMConfig
 from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
+from netbox_proxbox.vm_identity import resolve_vm_node, resolve_vm_type, resolve_vm_vmid
 from netbox_proxbox.views.backend_sync import (
     proxmox_backend_name,
     sync_proxmox_endpoint_to_backend,
@@ -26,8 +27,7 @@ from netbox_proxbox.views.error_utils import (
 
 
 def _extract_vmid(vm: VirtualMachine) -> int | None:
-    cf = getattr(vm, "custom_field_data", {}) or {}
-    raw = cf.get("proxmox_vm_id") or cf.get("cf_proxmox_vm_id")
+    raw = resolve_vm_vmid(vm)
     if raw in (None, ""):
         return None
     try:
@@ -37,21 +37,11 @@ def _extract_vmid(vm: VirtualMachine) -> int | None:
 
 
 def _extract_vm_type(vm: VirtualMachine) -> str:
-    vm_type_obj = getattr(vm, "virtual_machine_type", None)
-    if vm_type_obj and hasattr(vm_type_obj, "slug"):
-        slug = str(vm_type_obj.slug).lower()
-        if "lxc" in slug:
-            return "lxc"
-        if "qemu" in slug:
-            return "qemu"
-    cf = getattr(vm, "custom_field_data", {}) or {}
-    vm_type = str(cf.get("proxmox_vm_type") or "qemu").strip().lower()
-    return vm_type if vm_type in {"qemu", "lxc"} else "qemu"
+    return resolve_vm_type(vm)
 
 
 def _extract_node(vm: VirtualMachine, vmid: int | None) -> str | None:
-    cf = getattr(vm, "custom_field_data", {}) or {}
-    node = (cf.get("proxmox_node") or cf.get("node") or "").strip()
+    node = resolve_vm_node(vm).strip()
     if node:
         return node
 
@@ -123,13 +113,14 @@ class ProxmoxVMConfigTabView(generic.ObjectView):
 
         if vmid is None:
             context["detail"] = (
-                "Missing custom field proxmox_vm_id on this virtual machine."
+                "The Proxbox sync-state record has no Proxmox VM ID. "
+                "Run a Proxbox sync and try again."
             )
             return context
         if not node:
             context["detail"] = (
                 "Unable to determine Proxmox node for this VM. "
-                "Sync snapshots once or add custom field proxmox_node."
+                "Run a Proxbox sync to populate its sync-state record."
             )
             return context
 

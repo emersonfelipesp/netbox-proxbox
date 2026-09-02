@@ -54,6 +54,21 @@ def test_get_populates_hardware_discovery_enabled_false(monkeypatch):
     assert captured_initial[0]["hardware_discovery_enabled"] is False
 
 
+def test_get_populates_console_url(monkeypatch):
+    captured_initial: list[dict] = []
+    form_cls = _fake_form_class({}, capture_initial=captured_initial)
+    module = _load_settings_view(monkeypatch, form_class=form_cls)
+    settings_obj = _settings_with_hardware_discovery(enabled=False)
+    settings_obj.console_url = "https://console.example.invalid"
+    monkeypatch.setattr(
+        module, "ProxboxPluginSettings", SimpleNamespace(get_solo=lambda: settings_obj)
+    )
+
+    module.SettingsView().get(_get_request())
+
+    assert captured_initial[0]["console_url"] == "https://console.example.invalid"
+
+
 def test_get_populates_hardware_discovery_enabled_true(monkeypatch):
     captured_initial: list[dict] = []
     form_cls = _fake_form_class({}, capture_initial=captured_initial)
@@ -106,6 +121,20 @@ def test_post_sets_hardware_discovery_enabled_from_cleaned_data(monkeypatch):
     assert "hardware_discovery_enabled" in settings_obj._saved[0].get(
         "update_fields", []
     )
+
+
+def test_post_sets_console_url_from_cleaned_data(monkeypatch):
+    cleaned = {**_BASE_CLEANED_DATA, "console_url": "https://console.example.invalid"}
+    module = _load_settings_view(monkeypatch, form_class=_fake_form_class(cleaned))
+    settings_obj = _settings_with_hardware_discovery(enabled=False)
+    monkeypatch.setattr(
+        module, "ProxboxPluginSettings", SimpleNamespace(get_solo=lambda: settings_obj)
+    )
+
+    module.SettingsView().post(_post_request())
+
+    assert settings_obj.console_url == "https://console.example.invalid"
+    assert "console_url" in settings_obj._saved[0].get("update_fields", [])
 
 
 def test_post_sets_physical_nic_mac_opt_in_from_cleaned_data(monkeypatch):

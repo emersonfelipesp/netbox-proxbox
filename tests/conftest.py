@@ -526,6 +526,10 @@ def load_plugin_module(
     )
 
     def _resolve_vm_type_stub(vm: object) -> str:
+        sync_state = getattr(vm, "proxbox_sync_state", None)
+        typed_type = str(getattr(sync_state, "proxmox_vm_type", "") or "").lower()
+        if typed_type in {"lxc", "qemu"}:
+            return typed_type
         vm_type_obj = getattr(vm, "virtual_machine_type", None)
         if vm_type_obj and hasattr(vm_type_obj, "slug"):
             slug = str(vm_type_obj.slug)
@@ -533,8 +537,7 @@ def load_plugin_module(
                 return "lxc"
             if "qemu" in slug:
                 return "qemu"
-        cf = getattr(vm, "custom_field_data", None) or {}
-        return str(cf.get("proxmox_vm_type") or cf.get("cf_proxmox_vm_type") or "qemu")
+        return "qemu"
 
     utils_module.resolve_vm_type = _resolve_vm_type_stub
 

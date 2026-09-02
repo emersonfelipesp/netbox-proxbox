@@ -45,7 +45,7 @@ from virtualization.models import VirtualMachine
 from netbox_proxbox.models import ProxmoxNode
 from netbox_proxbox.services._endpoint_errors import translate_request_exception
 from netbox_proxbox.services.backend_context import get_fastapi_request_context
-from netbox_proxbox.utils import resolve_vm_type
+from netbox_proxbox.vm_identity import resolve_vm_node, resolve_vm_type, resolve_vm_vmid
 from netbox_proxbox.views.proxbox_access import permission_run_proxmox_action
 
 __all__ = (
@@ -77,10 +77,9 @@ def resolve_vm_endpoint_context(
     endpoint = getattr(proxmox_cluster, "endpoint", None)
     if endpoint is not None and not bool(getattr(endpoint, "enabled", True)):
         return None
-    cf = getattr(vm, "custom_field_data", None) or {}
-    raw_vmid = cf.get("proxmox_vm_id") or cf.get("cf_proxmox_vm_id")
     try:
-        vmid = int(raw_vmid) if raw_vmid is not None else None
+        raw_vmid = resolve_vm_vmid(vm)
+        vmid = int(raw_vmid) if raw_vmid else None
     except (TypeError, ValueError):
         return None
     if vmid is None:
@@ -168,8 +167,9 @@ class OperationalMigrateView(
         ctx = resolve_vm_endpoint_context(vm)
         targets: list[ProxmoxNode] = []
         current_node = ""
+        vmid: int | None = None
         if ctx is not None:
-            endpoint_id, _vmid, _vm_type = ctx
+            endpoint_id, vmid, _vm_type = ctx
             qs = ProxmoxNode.objects.filter(endpoint_id=endpoint_id)
             current_node = _current_node_name(vm)
             if current_node:
@@ -182,6 +182,7 @@ class OperationalMigrateView(
                 "vm": vm,
                 "targets": targets,
                 "current_node": current_node,
+                "vmid": vmid,
                 "resolvable": ctx is not None,
                 "action_url": f"{vm.get_absolute_url()}proxbox-operational-migrate/",
             },
@@ -212,11 +213,7 @@ class OperationalMigrateView(
 
 def _current_node_name(vm: VirtualMachine) -> str:
     """Best-effort current Proxmox node name for the VM (used to exclude self-target)."""
-    device = getattr(vm, "device", None)
-    if device is not None and getattr(device, "name", None):
-        return str(device.name)
-    cf = getattr(vm, "custom_field_data", None) or {}
-    return str(cf.get("proxmox_node") or cf.get("cf_proxmox_node") or "")
+    return resolve_vm_node(vm)
 
 
 def _forward_verb(
@@ -233,8 +230,9 @@ def _forward_verb(
         messages.error(
             request,
             _(
-                "This VM is not linked to a Proxmox endpoint, or is missing a "
-                "proxmox_vm_id custom field. Operational verbs are unavailable."
+                "This VM is not linked to a Proxmox endpoint, or its Proxbox "
+                "sync-state record has no Proxmox VM ID. Run a Proxbox sync; "
+                "operational verbs are unavailable until the state is populated."
             ),
         )
         return HttpResponseRedirect(redirect_to)

@@ -147,6 +147,7 @@ nav:
     - Scheduled Sync: 'features/scheduled-sync.md'
     - Background Jobs: 'features/background-jobs.md'
     - Virtual Machine: 'features/virtual-machine.md'
+    - Browser Console: 'features/browser-console.md'
     - Firecracker Cloud: 'features/firecracker.md'
     - Proxmox Config Tab: 'features/proxmox-config-tab.md'
     - Containers: 'features/containers.md'

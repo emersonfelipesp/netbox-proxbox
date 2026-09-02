@@ -466,7 +466,7 @@ def test_task_history_real_resolver_refuses_missing_vmid(monkeypatch):
 
 
 @pytest.mark.parametrize(
-    ("stored_vm_type", "vm_type_slug", "legacy_vm_type", "expected_type"),
+    ("stored_vm_type", "vm_type_slug", "typed_vm_type", "expected_type"),
     (
         ("unknown", "lxc-container", None, "lxc"),
         ("", "qemu-virtual-machine", None, "qemu"),
@@ -474,18 +474,15 @@ def test_task_history_real_resolver_refuses_missing_vmid(monkeypatch):
         ("openvz", "qemu-virtual-machine", None, "qemu"),
     ),
 )
-def test_task_history_real_resolver_derives_supported_type_for_legacy_rows(
+def test_task_history_real_resolver_derives_supported_type_from_typed_state_or_native(
     monkeypatch,
     stored_vm_type,
     vm_type_slug,
-    legacy_vm_type,
+    typed_vm_type,
     expected_type,
 ):
     resolver = _load_real_task_history_resolver(monkeypatch)
     cluster = SimpleNamespace(pk=41, name="shared-cluster")
-    custom_fields = {"proxmox_vm_id": 100}
-    if legacy_vm_type is not None:
-        custom_fields["proxmox_vm_type"] = legacy_vm_type
     vm = SimpleNamespace(
         cluster=cluster,
         cluster_id=cluster.pk,
@@ -493,7 +490,11 @@ def test_task_history_real_resolver_derives_supported_type_for_legacy_rows(
         virtual_machine_type=(
             SimpleNamespace(slug=vm_type_slug) if vm_type_slug is not None else None
         ),
-        custom_field_data=custom_fields,
+        proxbox_sync_state=SimpleNamespace(
+            proxmox_vm_id=100,
+            proxmox_vm_type=typed_vm_type or "",
+        ),
+        custom_field_data={},
     )
     task_history = SimpleNamespace(
         pk=17,
@@ -515,7 +516,7 @@ def test_task_history_real_resolver_derives_supported_type_for_legacy_rows(
     }
 
 
-def test_task_history_real_resolver_refuses_underivable_legacy_type(monkeypatch):
+def test_task_history_real_resolver_refuses_underivable_type(monkeypatch):
     resolver = _load_real_task_history_resolver(monkeypatch)
     cluster = SimpleNamespace(pk=41, name="shared-cluster")
     vm = SimpleNamespace(
@@ -523,7 +524,11 @@ def test_task_history_real_resolver_refuses_underivable_legacy_type(monkeypatch)
         cluster_id=cluster.pk,
         device=SimpleNamespace(name="pve-a"),
         virtual_machine_type=SimpleNamespace(slug="legacy-guest"),
-        custom_field_data={"proxmox_vm_id": 100},
+        proxbox_sync_state=SimpleNamespace(
+            proxmox_vm_id=100,
+            proxmox_vm_type="",
+        ),
+        custom_field_data={},
     )
     task_history = SimpleNamespace(
         pk=17,
@@ -565,7 +570,11 @@ def test_task_history_action_refuses_underivable_type_without_syncing(monkeypatc
             cluster_id=cluster.pk,
             device=SimpleNamespace(name="pve-a"),
             virtual_machine_type=SimpleNamespace(slug="legacy-guest"),
-            custom_field_data={"proxmox_vm_id": 100},
+            proxbox_sync_state=SimpleNamespace(
+                proxmox_vm_id=100,
+                proxmox_vm_type="",
+            ),
+            custom_field_data={},
         ),
         node="pve-a",
         vm_type="legacy-openvz",

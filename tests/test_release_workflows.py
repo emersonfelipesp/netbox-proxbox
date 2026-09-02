@@ -25,6 +25,18 @@ GITHUB_PUBLISH_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "publish-testpyp
 GITEA_DEPLOY_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "deploy-production.yml"
 GITEA_PROMOTE_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "promote-final-tag.yml"
 RELEASE_ARTIFACTS_PATH = REPO_ROOT / "scripts" / "release_artifacts.py"
+# Read back from the module's own pinned origin check rather than written
+# down here: this repository is public and its disclosure guard forbids
+# naming the private forge on any newly added line. Reading the pin also
+# keeps these tests correct if the permitted origin is ever changed.
+_TEST_REGISTRY = (
+    "https://"
+    + re.search(
+        r'parsed\.netloc != "([^"]+)"',
+        RELEASE_ARTIFACTS_PATH.read_text(encoding="utf-8"),
+    ).group(1)
+    + "/api/v1/packages/"
+)
 CI_GATE_PATH = REPO_ROOT / "scripts" / "gitea_ci_gate.py"
 RUNNER_GATE_PATH = REPO_ROOT / "scripts" / "gitea_release_runner_gate.py"
 RUNNER_ACCEPTANCE_PATH = REPO_ROOT / ".gitea" / "release-runner-acceptance.json"
@@ -804,9 +816,7 @@ def test_ci_gate_binds_latest_actions_run_to_authenticated_jobs(
         # Derived from the gate's own origin constant rather than written out:
         # the gate compares this for equality, and a literal here would both
         # duplicate the host in a public file and silently break if it moved.
-        "html_url": (
-            f"{gate.HTML_ORIGIN}/emersonfelipesp/netbox-proxbox/actions/runs/12/jobs/34"
-        ),
+        "html_url": f"{gate.HTML_ORIGIN}/emersonfelipesp/netbox-proxbox/actions/runs/12/jobs/34",
     }
     responses = {
         runs_path: {"workflow_runs": [run], "total_count": 1},
@@ -1157,3 +1167,380 @@ def test_public_files_name_no_private_infrastructure() -> None:
             relative = path.relative_to(REPO_ROOT)
             offenders.append(f"{relative}:{number}: {fragment}: {line.strip()}")
     assert offenders == []
+
+
+def test_publish_workflow_produces_the_manifest_its_consumers_require() -> None:
+    """The publish workflow must build and publish the release manifest.
+
+    `deploy-production.yml`'s `latest_package` source and
+    `promote-final-tag.yml` both call `release_artifacts.py fetch-gitea`,
+    which fetches a `<package>-release-manifest` generic package for the
+    version being deployed or promoted. The script has always been able to
+    build and publish that manifest, but the publish workflow called neither
+    subcommand, so no published version had one and both consumers were
+    unreachable for every version.
+
+    The assertions below are on the parsed step list rather than on substrings
+    of the file, because the two properties that make the manifest trustworthy
+    are both about *order*: the manifest must describe the same bytes that are
+    uploaded, and it must not exist for a version whose upload was not verified.
+    A substring test cannot see either.
+    """
+    workflow = yaml.safe_load(_read(GITEA_PUBLISH_WORKFLOW))
+    job = workflow["jobs"]["publish-gitea"]
+    steps = job["steps"]
+    names = [step.get("name") for step in steps if isinstance(step, dict)]
+
+    assert "Build release manifest" in names, (
+        "publish-gitea must build a release manifest; without it "
+        "`fetch-gitea` fails for every published version"
+    )
+    assert "Publish release manifest" in names, (
+        "publish-gitea must upload the release manifest to the registry"
+    )
+
+    build_dists = names.index("Build distributions")
+    build_manifest = names.index("Build release manifest")
+    upload = names.index("Publish to Gitea Package Registry")
+    verify = names.index("Verify package in Gitea registry")
+    publish_manifest = names.index("Publish release manifest")
+
+    # The manifest records a sha256 per artifact. Building it from `dist/`
+    # before the upload is what makes those digests describe the bytes that
+    # were actually published; a manifest built afterwards could be computed
+    # from a rebuilt or mutated tree.
+    assert build_dists < build_manifest < upload
+
+    # The manifest is the signal `latest_package` uses to decide a version is
+    # deployable. Publishing it before the registry upload is verified would
+    # advertise a version whose artifacts may not be there.
+    assert verify < publish_manifest
+
+    manifest_step = _step(job, "Build release manifest")
+    manifest_run = manifest_step["run"]
+    assert "release_artifacts.py manifest" in manifest_run
+    assert "--manifest release-manifest.json" in manifest_run
+
+    # `fetch-gitea` compares the manifest's source_sha against the commit the
+    # requested tag resolves to. Taking it from the ambient `GITHUB_SHA`, or
+    # from an annotated tag's own object id, yields a value that never matches
+    # and fails every deploy at the provenance check -- after the version has
+    # been consumed. `^{commit}` peels the tag to its commit.
+    assert '"${TAG}^{commit}"' in manifest_run
+    assert "GITHUB_SHA" not in manifest_run
+
+    publish_step = _step(job, "Publish release manifest")
+    publish_run = publish_step["run"]
+    assert "release_artifacts.py publish-manifest" in publish_run
+    assert "--owner emersonfelipesp" in publish_run
+    # publish-manifest reads the token from the environment, not from argv, so
+    # the step must export it or the upload fails as unauthenticated.
+    assert publish_step["env"]["GITEA_PACKAGE_TOKEN"]
+
+
+def _artifact_manifest(tmp_path: Path) -> tuple[object, dict[str, object]]:
+    """Build a real two-artifact manifest for registry-verification tests."""
+    release_artifacts = _load_release_artifacts()
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    (dist / "netbox_proxbox-0.0.26-py3-none-any.whl").write_bytes(b"wheel-bytes")
+    (dist / "netbox_proxbox-0.0.26.tar.gz").write_bytes(b"sdist-bytes")
+    manifest = release_artifacts.create_manifest(
+        dist=dist, package="netbox-proxbox", version="0.0.26", source_sha="b" * 40
+    )
+    return release_artifacts, manifest
+
+
+def _registry_responses(manifest: dict[str, object]) -> dict[str, object]:
+    files = [
+        {
+            "name": record["name"],
+            "size": record["size"],
+            "sha256": record["sha256"],
+        }
+        for record in manifest["artifacts"]
+    ]
+    return {
+        "metadata": {
+            "type": "pypi",
+            "name": "netbox-proxbox",
+            "version": "0.0.26",
+            "repository": {"full_name": "emersonfelipesp/netbox-proxbox"},
+        },
+        "files": files,
+    }
+
+
+def _patch_requests(
+    monkeypatch: pytest.MonkeyPatch, release_artifacts: object, responses: dict
+) -> None:
+    def fake_request(url: str, **_kwargs: object) -> bytes:
+        payload = (
+            responses["files"] if url.endswith("/files") else responses["metadata"]
+        )
+        return json.dumps(payload).encode()
+
+    monkeypatch.setattr(release_artifacts, "_request", fake_request)
+
+
+def test_registry_verification_requires_the_exact_published_artifact_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Counting version-matched search hits is not evidence the release exists.
+
+    The old check listed the owner's packages and counted entries whose
+    `version` field matched, which any package of any name at that version
+    satisfies. The manifest published immediately afterwards is the provenance
+    record every deploy and promotion verifies against, so the gate in front of
+    it must prove this package's own wheel and sdist are present with the exact
+    sizes and digests the manifest recorded.
+    """
+    release_artifacts, manifest = _artifact_manifest(tmp_path)
+    responses = _registry_responses(manifest)
+    _patch_requests(monkeypatch, release_artifacts, responses)
+
+    # The honest case passes.
+    release_artifacts.verify_gitea_package_artifacts(
+        registry=_TEST_REGISTRY,
+        owner="emersonfelipesp",
+        repository="netbox-proxbox",
+        package="netbox-proxbox",
+        version="0.0.26",
+        manifest=manifest,
+        token="t",
+    )
+
+    def rejects() -> None:
+        with pytest.raises(release_artifacts.ReleaseArtifactError):
+            release_artifacts.verify_gitea_package_artifacts(
+                registry=_TEST_REGISTRY,
+                owner="emersonfelipesp",
+                repository="netbox-proxbox",
+                package="netbox-proxbox",
+                version="0.0.26",
+                manifest=manifest,
+                token="t",
+            )
+
+    # A digest that differs -- the registry holds different bytes than the
+    # manifest attests to. This is the case the count could never see.
+    original = list(responses["files"])
+    responses["files"] = [dict(original[0], sha256="c" * 64), original[1]]
+    rejects()
+
+    # A size that differs, with the digest left intact.
+    responses["files"] = [dict(original[0], size=original[0]["size"] + 1), original[1]]
+    rejects()
+
+    # An incomplete upload: the sdist never arrived.
+    responses["files"] = [original[0]]
+    rejects()
+
+    # An extra file nobody attested to.
+    responses["files"] = [
+        *original,
+        {"name": "extra.whl", "size": 1, "sha256": "d" * 64},
+    ]
+    rejects()
+
+    # A different package that merely happens to carry this version -- exactly
+    # what the old count-based check accepted.
+    responses["files"] = original
+    responses["metadata"] = {"type": "pypi", "name": "some-other", "version": "0.0.26"}
+    rejects()
+
+    # The right name at the wrong version.
+    responses["metadata"] = {
+        "type": "pypi",
+        "name": "netbox-proxbox",
+        "version": "0.0.25",
+        "repository": {"full_name": "emersonfelipesp/netbox-proxbox"},
+    }
+    rejects()
+
+    # No repository association. A twine upload leaves the package in exactly
+    # this state, and `fetch_gitea_artifacts` -- the deploy and promotion
+    # consumer -- refuses to download an artifact whose package does not name
+    # the repository. Accepting it here would publish a manifest for a release
+    # that the consumer still rejects.
+    responses["metadata"] = {
+        "type": "pypi",
+        "name": "netbox-proxbox",
+        "version": "0.0.26",
+    }
+    rejects()
+
+    # Associated with somebody else's repository.
+    responses["metadata"] = {
+        "type": "pypi",
+        "name": "netbox-proxbox",
+        "version": "0.0.26",
+        "repository": {"full_name": "someone-else/netbox-proxbox"},
+    }
+    rejects()
+
+
+def test_manifest_publication_tolerates_only_a_byte_identical_republish(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """An ambiguous failure after the upload must be recoverable, exactly once.
+
+    Upload, repository link and read-back are separate requests, so a timeout
+    after the server accepted one of them fails the workflow while the manifest
+    may already exist. Package versions are immutable and this is the one
+    post-upload step whose loss is unrecoverable: without the manifest that
+    exact release can never be deployed from the package source nor promoted.
+    Re-running must therefore succeed against an identical published manifest --
+    and must still refuse a different one rather than overwrite it.
+    """
+    release_artifacts, manifest = _artifact_manifest(tmp_path)
+    calls: list[str] = []
+
+    def fake_fetch(**_kwargs: object) -> dict[str, object]:
+        calls.append("fetch")
+        return manifest
+
+    monkeypatch.setattr(release_artifacts, "fetch_gitea_manifest", fake_fetch)
+
+    def explode(*_args: object, **_kwargs: object) -> bytes:
+        raise AssertionError("must not re-upload over an identical manifest")
+
+    monkeypatch.setattr(release_artifacts, "_request", explode)
+
+    assert (
+        release_artifacts.publish_gitea_manifest(
+            registry=_TEST_REGISTRY,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            manifest=manifest,
+            token="t",
+        )
+        == manifest
+    )
+    assert calls == ["fetch"]
+
+    # A manifest that differs is never overwritten and never accepted: that
+    # would silently rebind a consumed version to different provenance.
+    divergent = dict(manifest, source_sha="e" * 40)
+    monkeypatch.setattr(
+        release_artifacts, "fetch_gitea_manifest", lambda **_k: divergent
+    )
+    with pytest.raises(release_artifacts.ReleaseArtifactError):
+        release_artifacts.publish_gitea_manifest(
+            registry=_TEST_REGISTRY,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            manifest=manifest,
+            token="t",
+        )
+
+
+def test_publish_workflow_verifies_the_artifact_set_before_the_manifest() -> None:
+    """The registry gate must be the manifest-based one, not the old count."""
+    workflow = _read(GITEA_PUBLISH_WORKFLOW)
+    assert "release_artifacts.py verify-registry" in workflow
+    # The count-based check is what this replaced; if it comes back, the
+    # ordering assertion in the sibling test stops meaning anything.
+    assert "Found ${COUNT} package(s)" not in workflow
+
+
+def test_only_an_authenticated_not_found_authorizes_a_manifest_upload(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Absence and "could not tell" must not be the same state.
+
+    The fetch that decides whether to upload can fail for reasons that are not
+    absence: a timeout, a 401, a 5xx, a corrupt payload, or the partial state
+    where a previous run uploaded the manifest but did not link it. Treating any
+    of those as "not published" and re-uploading conflicts against an immutable
+    version instead of repairing it, which strands the release -- the exact
+    outcome this recovery path exists to avoid.
+    """
+    release_artifacts, manifest = _artifact_manifest(tmp_path)
+
+    def unavailable(**_kwargs: object) -> dict[str, object]:
+        raise release_artifacts.ReleaseArtifactError("Registry request failed")
+
+    monkeypatch.setattr(release_artifacts, "fetch_gitea_manifest", unavailable)
+    monkeypatch.setattr(release_artifacts, "link_gitea_package", lambda **_k: None)
+
+    def explode(*_args: object, **_kwargs: object) -> bytes:
+        raise AssertionError("must not upload when the published state is unknown")
+
+    monkeypatch.setattr(release_artifacts, "_request", explode)
+    with pytest.raises(release_artifacts.ReleaseArtifactError):
+        release_artifacts.publish_gitea_manifest(
+            registry=_TEST_REGISTRY,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            manifest=manifest,
+            token="t",
+        )
+
+    # The uploaded-but-unlinked case: the first fetch rejects it for the missing
+    # link, the link is repaired, and the second fetch resolves. Still no
+    # upload, because the bytes are already there.
+    attempts = {"n": 0}
+    linked = {"done": False}
+
+    def fetch_twice(**_kwargs: object) -> dict[str, object]:
+        attempts["n"] += 1
+        if not linked["done"]:
+            raise release_artifacts.ReleaseArtifactError("identity is invalid")
+        return manifest
+
+    def do_link(**_kwargs: object) -> None:
+        linked["done"] = True
+
+    monkeypatch.setattr(release_artifacts, "fetch_gitea_manifest", fetch_twice)
+    monkeypatch.setattr(release_artifacts, "link_gitea_package", do_link)
+    assert (
+        release_artifacts.publish_gitea_manifest(
+            registry=_TEST_REGISTRY,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            manifest=manifest,
+            token="t",
+        )
+        == manifest
+    )
+    assert attempts["n"] == 2 and linked["done"]
+
+
+def test_registry_not_found_is_distinguishable_from_every_other_failure() -> None:
+    """`RegistryNotFound` must be raised only for an authoritative 404.
+
+    Every other status leaves the published state unknown. Classifying one of
+    them as absence is what would let the caller re-upload an immutable version.
+    """
+    release_artifacts = _load_release_artifacts()
+    assert issubclass(
+        release_artifacts.RegistryNotFound, release_artifacts.ReleaseArtifactError
+    )
+    probe_url = _TEST_REGISTRY + "probe"
+
+    def raiser(code: int):
+        def opener(*_args: object, **_kwargs: object):
+            raise release_artifacts.urllib.error.HTTPError(
+                probe_url, code, "boom", {}, None
+            )
+
+        return opener
+
+    for code, expected in (
+        (404, release_artifacts.RegistryNotFound),
+        (401, release_artifacts.ReleaseArtifactError),
+        (403, release_artifacts.ReleaseArtifactError),
+        (500, release_artifacts.ReleaseArtifactError),
+    ):
+        opener = type("O", (), {"open": staticmethod(raiser(code))})()
+        with pytest.MonkeyPatch.context() as patch:
+            patch.setattr(
+                release_artifacts.urllib.request, "build_opener", lambda *_a: opener
+            )
+            with pytest.raises(expected) as caught:
+                release_artifacts._request(probe_url, token="t", maximum=10)
+            if expected is release_artifacts.ReleaseArtifactError:
+                assert not isinstance(
+                    caught.value, release_artifacts.RegistryNotFound
+                ), f"HTTP {code} must not read as absence"

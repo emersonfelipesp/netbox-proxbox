@@ -149,6 +149,25 @@ jobs:
           uv build
           ls dist/
 
+      - name: Build release manifest
+        run: |
+          set -euo pipefail
+          # Bind the artifacts to the tagged commit before either is uploaded.
+          # `fetch-gitea` -- the deploy and promotion consumer -- compares the
+          # manifest's `source_sha` against the tag it was asked to deploy, so
+          # the value must be the commit the tag resolves to, not the tag
+          # object's own SHA. `^{commit}` peels an annotated tag; a lightweight
+          # tag already points at the commit and is unaffected.
+          SOURCE_SHA="$(git rev-parse "${TAG}^{commit}")"
+          PKG_NAME=$(grep '^name' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          python3 scripts/release_artifacts.py manifest \
+            --dist dist \
+            --package "${PKG_NAME}" \
+            --version "${VERSION}" \
+            --source-sha "${SOURCE_SHA}" \
+            --manifest release-manifest.json
+          echo "Release manifest built for ${PKG_NAME} ${VERSION} at ${SOURCE_SHA}"
+
       - name: Publish to Gitea Package Registry
         env:
           TWINE_USERNAME: emersonfelipesp
@@ -164,21 +183,68 @@ jobs:
 
       - name: Verify package in Gitea registry
         env:
-          GITEA_TOKEN: ${{ secrets.PKG_TOKEN }}
+          GITEA_PACKAGE_TOKEN: ${{ secrets.PKG_TOKEN }}
         run: |
           set -euo pipefail
+          # Verified against the manifest rather than by counting search hits.
+          # The previous check listed the owner's packages and counted entries
+          # whose version matched, which any package of any name at that
+          # version satisfies -- so it could pass while this package's own
+          # upload was absent, incomplete, or carrying different bytes. Since
+          # the very next step publishes the manifest as the provenance record
+          # every deploy and promotion verifies against, that gate has to prove
+          # the exact artifact set is present, with the exact sizes and digests
+          # the manifest recorded.
           PKG_NAME=$(grep '^name' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
           sleep 5
-          COUNT=$(curl -sf \
-            "https://git.nmulti.cloud/api/v1/packages/emersonfelipesp?type=pypi&q=${PKG_NAME}&limit=50" \
-            -H "Authorization: token ${GITEA_TOKEN}" \
-            | VERSION="${VERSION}" python3 -c 'import json, os, sys; pkgs = json.load(sys.stdin); print(sum(1 for p in pkgs if p.get("version") == os.environ["VERSION"]))')
-          echo "Found ${COUNT} package(s) matching ${PKG_NAME} ${VERSION}"
-          if [ "${COUNT}" -lt 1 ]; then
-            echo "ERROR: Package ${PKG_NAME} ${VERSION} not found in Gitea registry"
-            exit 1
-          fi
-          echo "Package ${PKG_NAME} ${VERSION} successfully published to Gitea registry"
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          # The forge origin comes from the runner rather than being written
+          # down here. release_artifacts still pins the permitted origin
+          # itself, so a wrong value fails closed rather than reaching an
+          # unexpected host.
+          python3 scripts/release_artifacts.py verify-registry \
+            --registry "${GITHUB_SERVER_URL}/api/v1/packages/" \
+            --owner emersonfelipesp \
+            --repository "${REPO_NAME}" \
+            --package "${PKG_NAME}" \
+            --version "${VERSION}" \
+            --manifest release-manifest.json
+          echo "Package ${PKG_NAME} ${VERSION} matches the release manifest in Gitea"
+
+      - name: Publish release manifest
+        env:
+          GITEA_PACKAGE_TOKEN: ${{ secrets.PKG_TOKEN }}
+        run: |
+          set -euo pipefail
+          # Published last, deliberately. The manifest asserts that this exact
+          # artifact set exists for this version, so it must not appear for a
+          # version whose wheel/sdist upload failed or was never verified --
+          # `latest_package` treats the manifest's presence as the signal that
+          # a version is deployable. The helper uploads the canonical bytes,
+          # links the package to this repository (repository linkage is what
+          # `fetch-gitea` checks; an unlinked package is rejected), and reads
+          # the result back, failing if the stored bytes differ from what was
+          # sent.
+          #
+          # If this step fails after the wheel and sdist are already uploaded,
+          # the version is consumed without a manifest and is not deployable
+          # through the package source. Do NOT try to repair it by re-running
+          # with the upload skipped: package versions here are immutable and
+          # this repository's release policy is fix-forward -- bump to the next
+          # rcN or .postN, which republishes both artifacts and a manifest
+          # together. That is the same property every post-upload step in this
+          # workflow already has (the GitHub tag push and release creation sit
+          # after the upload for the same reason), so this step introduces no
+          # new class of failure. Reusing a consumed version is prohibited
+          # repository-wide and a contract test enforces that the upload never
+          # tolerates an already-published version.
+          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          python3 scripts/release_artifacts.py publish-manifest \
+            --registry "${GITHUB_SERVER_URL}/api/v1/packages/" \
+            --owner emersonfelipesp \
+            --repository "${REPO_NAME}" \
+            --manifest release-manifest.json
+          echo "Release manifest published and verified for ${VERSION}"
 
   push-to-github:
     needs: [validate-version, publish-gitea]

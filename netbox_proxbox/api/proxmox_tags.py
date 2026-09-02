@@ -75,7 +75,8 @@ def _resolve_tags_context(vm: VirtualMachine) -> tuple[int, int, str, str] | Res
                 "status": "error",
                 "reason": "vm_not_addressable",
                 "detail": (
-                    "VM is not linked to a Proxmox endpoint or is missing proxmox_vm_id metadata."
+                    "VM is not linked to a Proxmox endpoint, or its Proxbox "
+                    "sync-state record has no Proxmox VM ID. Run a Proxbox sync."
                 ),
             },
             status=status.HTTP_422_UNPROCESSABLE_ENTITY,

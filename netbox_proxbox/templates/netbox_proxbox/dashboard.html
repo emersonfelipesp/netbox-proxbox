@@ -102,7 +102,7 @@
                             <th scope="row">{% trans "VMs Running" %}</th>
                             <td>
                               {% if item.netbox_cluster %}
-                                <a href="{% url 'virtualization:virtualmachine_list' %}?cluster_id={{ item.netbox_cluster.pk }}&cf_proxmox_vm_type=qemu&status=active">{{ item.guest_summary.virtual_machines.running }}</a>
+                                <a href="{% url 'plugins:netbox_proxbox:virtual_machines' %}?cluster_id={{ item.netbox_cluster.pk }}&status=active">{{ item.guest_summary.virtual_machines.running }}</a>
                               {% else %}
                                 {{ item.guest_summary.virtual_machines.running }}
                               {% endif %}
@@ -112,7 +112,7 @@
                             <th scope="row">{% trans "VMs Stopped" %}</th>
                             <td>
                               {% if item.netbox_cluster %}
-                                <a href="{% url 'virtualization:virtualmachine_list' %}?cluster_id={{ item.netbox_cluster.pk }}&cf_proxmox_vm_type=qemu&status=offline">{{ item.guest_summary.virtual_machines.stopped }}</a>
+                                <a href="{% url 'plugins:netbox_proxbox:virtual_machines' %}?cluster_id={{ item.netbox_cluster.pk }}&status=offline">{{ item.guest_summary.virtual_machines.stopped }}</a>
                               {% else %}
                                 {{ item.guest_summary.virtual_machines.stopped }}
                               {% endif %}
@@ -122,7 +122,7 @@
                             <th scope="row">{% trans "VM Templates" %}</th>
                             <td>
                               {% if item.netbox_cluster %}
-                                <a href="{% url 'virtualization:virtualmachine_list' %}?cluster_id={{ item.netbox_cluster.pk }}&cf_proxmox_vm_type=qemu&status=staged">{{ item.guest_summary.virtual_machines.templates }}</a>
+                                <a href="{% url 'plugins:netbox_proxbox:virtual_machines' %}?cluster_id={{ item.netbox_cluster.pk }}&status=staged">{{ item.guest_summary.virtual_machines.templates }}</a>
                               {% else %}
                                 {{ item.guest_summary.virtual_machines.templates }}
                               {% endif %}
@@ -132,7 +132,7 @@
                             <th scope="row">{% trans "LXC Running" %}</th>
                             <td>
                               {% if item.netbox_cluster %}
-                                <a href="{% url 'virtualization:virtualmachine_list' %}?cluster_id={{ item.netbox_cluster.pk }}&cf_proxmox_vm_type=lxc&status=active">{{ item.guest_summary.lxc_containers.running }}</a>
+                                <a href="{% url 'plugins:netbox_proxbox:lxc_containers' %}?cluster_id={{ item.netbox_cluster.pk }}&status=active">{{ item.guest_summary.lxc_containers.running }}</a>
                               {% else %}
                                 {{ item.guest_summary.lxc_containers.running }}
                               {% endif %}
@@ -142,7 +142,7 @@
                             <th scope="row">{% trans "LXC Stopped" %}</th>
                             <td>
                               {% if item.netbox_cluster %}
-                                <a href="{% url 'virtualization:virtualmachine_list' %}?cluster_id={{ item.netbox_cluster.pk }}&cf_proxmox_vm_type=lxc&status=offline">{{ item.guest_summary.lxc_containers.stopped }}</a>
+                                <a href="{% url 'plugins:netbox_proxbox:lxc_containers' %}?cluster_id={{ item.netbox_cluster.pk }}&status=offline">{{ item.guest_summary.lxc_containers.stopped }}</a>
                               {% else %}
                                 {{ item.guest_summary.lxc_containers.stopped }}
                               {% endif %}
@@ -152,7 +152,7 @@
                             <th scope="row">{% trans "LXC Templates" %}</th>
                             <td>
                               {% if item.netbox_cluster %}
-                                <a href="{% url 'virtualization:virtualmachine_list' %}?cluster_id={{ item.netbox_cluster.pk }}&cf_proxmox_vm_type=lxc&status=staged">{{ item.guest_summary.lxc_containers.templates }}</a>
+                                <a href="{% url 'plugins:netbox_proxbox:lxc_containers' %}?cluster_id={{ item.netbox_cluster.pk }}&status=staged">{{ item.guest_summary.lxc_containers.templates }}</a>
                               {% else %}
                                 {{ item.guest_summary.lxc_containers.templates }}
                               {% endif %}

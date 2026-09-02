@@ -339,7 +339,8 @@ class _FakeVM:
         self.tenant_id = tenant_id
         self.tags = _TagList(tags or [])
         self.cluster = cluster
-        self.custom_field_data = {"proxmox_vm_type": vm_type}
+        self.proxbox_sync_state = SimpleNamespace(proxmox_vm_type=vm_type)
+        self.custom_field_data = {}
         self.saved_with: list[list[str]] = []
 
     def save(self, update_fields=None):

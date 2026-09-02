@@ -81,13 +81,9 @@ then retry.
 
 ## Notes On The Sync-State Sidecar Model
 
-The typed `Proxbox*SyncState` sidecar models are now the standard source of
-truth for the Proxmox↔NetBox linkage: the proxbox-api writer/reader switch has
-landed, so by default (`ProxboxPluginSettings.custom_fields_enabled=False`)
-proxbox-api writes and reads the sidecars and does not write, read, or reconcile
-the deprecated legacy reflection custom fields. A normal full sync rebuilds the
-sidecars from live Proxmox data, so the repair action recovers sync-state even
-when the legacy custom fields are missing. The custom-field reconcile step it
-runs first is a best-effort compatibility path for deployments that have flipped
-`custom_fields_enabled` back on for a transition; its failure never blocks the
-rebuild sync (see above).
+The typed `Proxbox*SyncState` sidecar models are the standard source of truth
+for the Proxmox↔NetBox linkage. A normal full sync rebuilds sidecars from live
+Proxmox data. Migration 0084 removes the VM-only reflection custom fields and
+the obsolete `custom_fields_enabled` setting, so recovery of VM identity and
+status always uses `ProxboxVirtualMachineSyncState`; there is no legacy VM
+custom-field read path to repair.

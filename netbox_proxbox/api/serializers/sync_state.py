@@ -470,8 +470,8 @@ VM_PROXMOX_FIELDS = (
     # tell a Proxmox-side rename apart from an operator renaming the VM in
     # NetBox (issue #617), so it must be round-trippable over the API.
     "proxmox_vm_name",
-    # Role-ownership evidence is backend-managed independently of the legacy
-    # custom-field toggle and must remain readable/writable over the sidecar API.
+    # Role-ownership evidence is backend-managed and remains readable/writable
+    # over the sidecar API after removal of the legacy VM custom field.
     "proxmox_last_synced_role_id",
     "proxmox_start_at_boot",
     "proxmox_unprivileged_container",

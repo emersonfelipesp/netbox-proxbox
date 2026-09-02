@@ -871,12 +871,22 @@ def sync_vm_firewall(
 
     from virtualization.models import VirtualMachine  # noqa: PLC0415
 
+    # Scoped to the endpoint whose firewall data was just fetched. A Proxmox
+    # VMID is unique per endpoint, not across the estate, so matching on the id
+    # alone can resolve another endpoint's virtual machine and write these rules
+    # against it -- and mark that machine's real rules stale in the same pass.
+    # The sidecar carries the owning endpoint, which the custom field this
+    # replaced never did, so the ambiguity is now fixable rather than inherent.
     vm_obj = VirtualMachine.objects.filter(
-        custom_field_data__proxmox_vm_id=vmid
+        proxbox_sync_state__proxmox_vm_id=vmid,
+        proxbox_sync_state__endpoint=endpoint,
     ).first()
     if vm_obj is None:
         logger.debug(
-            "VM with proxmox_vm_id=%d not found in DB — skipping VM firewall sync", vmid
+            "VM with Proxbox sync-state VM ID %d on endpoint %s not found in DB "
+            "— skipping VM firewall sync",
+            vmid,
+            getattr(endpoint, "pk", None),
         )
         return
 

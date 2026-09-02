@@ -318,6 +318,78 @@ def test_no_fastapi_url_and_no_context_returns_error(sync_fw_module):
     mock_get.assert_not_called()
 
 
+def test_vm_firewall_lookup_uses_typed_sidecar_row(sync_fw_module, monkeypatch) -> None:
+    typed_vm = SimpleNamespace(
+        pk=7,
+        proxbox_sync_state=SimpleNamespace(
+            proxmox_vm_id=101, endpoint=sync_fw_module._endpoint_obj
+        ),
+        custom_field_data={},
+    )
+    legacy_only_vm = SimpleNamespace(
+        pk=8,
+        custom_field_data={"proxmox_vm_id": 101},
+    )
+    captured = {}
+
+    class _VMManager:
+        @staticmethod
+        def filter(**lookup):
+            captured.update(lookup)
+            expected = lookup["proxbox_sync_state__proxmox_vm_id"]
+            wanted_endpoint = lookup.get("proxbox_sync_state__endpoint")
+            rows = (legacy_only_vm, typed_vm)
+            matches = [
+                row
+                for row in rows
+                if getattr(
+                    getattr(row, "proxbox_sync_state", None),
+                    "proxmox_vm_id",
+                    None,
+                )
+                == expected
+                and (
+                    wanted_endpoint is None
+                    or getattr(
+                        getattr(row, "proxbox_sync_state", None), "endpoint", None
+                    )
+                    == wanted_endpoint
+                )
+            ]
+            return SimpleNamespace(first=lambda: matches[0] if matches else None)
+
+    virtualization = types.ModuleType("virtualization")
+    virtualization_models = types.ModuleType("virtualization.models")
+    virtualization_models.VirtualMachine = type(
+        "VirtualMachine", (), {"objects": _VMManager()}
+    )
+    monkeypatch.setitem(sys.modules, "virtualization", virtualization)
+    monkeypatch.setitem(sys.modules, "virtualization.models", virtualization_models)
+
+    response = SimpleNamespace(
+        raise_for_status=lambda: None,
+        json=lambda: [],
+    )
+    monkeypatch.setattr(sync_fw_module.requests, "get", lambda *a, **kw: response)
+
+    sync_fw_module.sync_vm_firewall(
+        sync_fw_module._endpoint_obj,
+        101,
+        "qemu",
+        "https://backend.example",
+        {},
+    )
+
+    # The endpoint term is part of the contract, not incidental. A Proxmox VMID
+    # is unique per endpoint, so resolving on the id alone can attach one
+    # endpoint's firewall rules to another endpoint's virtual machine.
+    assert captured == {
+        "proxbox_sync_state__proxmox_vm_id": 101,
+        "proxbox_sync_state__endpoint": sync_fw_module._endpoint_obj,
+    }
+    assert sync_fw_module._rule_mgr._stale_marked == 1
+
+
 def test_fastapi_endpoint_id_is_forwarded_to_the_context_resolver(sync_fw_module):
     """The caller's chosen backend must be the one this pass resolves.
 
@@ -622,3 +694,75 @@ def test_options_without_enable_does_not_crash(sync_fw_module, monkeypatch):
 
     assert result.success is True
     assert result.options_created == 1
+
+
+def test_vm_firewall_never_attaches_rules_to_another_endpoints_vm(
+    sync_fw_module, monkeypatch
+) -> None:
+    """A Proxmox VMID is unique per endpoint, not across the estate.
+
+    Two endpoints can each hold a VM with VMID 101. Resolving on the id alone
+    lets ``.first()`` pick whichever row the database returns first, so this
+    endpoint's freshly fetched firewall rules can be written against a virtual
+    machine belonging to a different Proxmox installation -- and that machine's
+    real rules are marked stale in the same pass. Ordering makes it silent and
+    intermittent rather than a visible failure.
+    """
+    other_endpoint = SimpleNamespace(pk=999, name="other-endpoint")
+    # Deliberately first in iteration order, so a lookup that ignores the
+    # endpoint resolves to it.
+    foreign_vm = SimpleNamespace(
+        pk=8,
+        proxbox_sync_state=SimpleNamespace(proxmox_vm_id=101, endpoint=other_endpoint),
+        custom_field_data={},
+    )
+    own_vm = SimpleNamespace(
+        pk=7,
+        proxbox_sync_state=SimpleNamespace(
+            proxmox_vm_id=101, endpoint=sync_fw_module._endpoint_obj
+        ),
+        custom_field_data={},
+    )
+    captured: dict = {}
+
+    class _VMManager:
+        @staticmethod
+        def filter(**lookup):
+            captured.update(lookup)
+            rows = (foreign_vm, own_vm)
+            matches = [
+                row
+                for row in rows
+                if getattr(row.proxbox_sync_state, "proxmox_vm_id", None)
+                == lookup["proxbox_sync_state__proxmox_vm_id"]
+                and (
+                    "proxbox_sync_state__endpoint" not in lookup
+                    or getattr(row.proxbox_sync_state, "endpoint", None)
+                    is lookup["proxbox_sync_state__endpoint"]
+                )
+            ]
+            return SimpleNamespace(first=lambda: matches[0] if matches else None)
+
+    virtualization = types.ModuleType("virtualization")
+    virtualization_models = types.ModuleType("virtualization.models")
+    virtualization_models.VirtualMachine = type(
+        "VirtualMachine", (), {"objects": _VMManager()}
+    )
+    monkeypatch.setitem(sys.modules, "virtualization", virtualization)
+    monkeypatch.setitem(sys.modules, "virtualization.models", virtualization_models)
+
+    response = SimpleNamespace(raise_for_status=lambda: None, json=lambda: [])
+    monkeypatch.setattr(sync_fw_module.requests, "get", lambda *a, **kw: response)
+
+    sync_fw_module.sync_vm_firewall(
+        sync_fw_module._endpoint_obj,
+        101,
+        "qemu",
+        "https://backend.example",
+        {},
+    )
+
+    assert captured.get("proxbox_sync_state__endpoint") is sync_fw_module._endpoint_obj
+    # The resolved VM must be this endpoint's, not the colliding foreign row
+    # that sorts ahead of it.
+    assert sync_fw_module._rule_mgr._stale_marked == 1

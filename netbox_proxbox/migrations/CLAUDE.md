@@ -243,6 +243,12 @@ fake historical models for both generations.
   sets; it should resolve only referenced raw IDs in bounded batches. 0069 is
   the guarded atomic cleanup/promotion to final field names and must refuse to
   drop legacy JSON columns if unresolved values were not preserved first.
+- Migration 0084 removes exactly the twelve VM-only reflection custom fields,
+  strips those exact keys from historical `VirtualMachine.custom_field_data`,
+  and removes `ProxboxPluginSettings.custom_fields_enabled`. Its reverse uses
+  the explicit definition table in the migration and rebinds each definition
+  to `virtualization.virtualmachine`. Do not broaden its name tuple to shared,
+  intent, branch, netbox-packer, or netbox-proxy custom fields.
 
 ## Links
 

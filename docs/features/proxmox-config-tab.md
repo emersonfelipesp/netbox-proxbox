@@ -19,14 +19,17 @@ The data is **fetched live** from Proxmox on every page load — no NetBox-side 
 
 ## How It Resolves The VM
 
-The tab determines which Proxmox VM to query using the following lookup order:
+The tab resolves identity through the plugin's canonical typed VM resolver:
 
-1. **`proxmox_vm_id` custom field** on the NetBox `VirtualMachine` (preferred).
-2. Legacy `cf_proxmox_vm_id` custom field, if present.
-3. `proxmox_node` / `node` custom field, falling back to a regex match against the VM `description` (`Synced from Proxmox node <name>`).
-4. `virtual_machine_type` slug to pick `qemu` vs `lxc`; falls back to `proxmox_vm_type` custom field, defaulting to `qemu`.
+1. VM ID comes from `ProxboxVirtualMachineSyncState.proxmox_vm_id`.
+2. Node prefers the VM's assigned NetBox device, then the sidecar's resolved
+   `ProxmoxNode`, then `proxmox_node_name`. The existing description/snapshot
+   compatibility hint remains available where the live config view needs it.
+3. Type prefers `ProxboxVirtualMachineSyncState.proxmox_vm_type`, then the
+   native `virtual_machine_type` slug, and defaults to `qemu`.
 
-If the VM ID cannot be resolved, the tab renders an explanatory message instead of attempting a backend call.
+If the sidecar VM ID cannot be resolved, the tab tells the operator to run a
+sync instead of attempting a backend call.
 
 ## Backend Path
 

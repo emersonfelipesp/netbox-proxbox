@@ -564,7 +564,7 @@ def _success_response_after_sync(
         vm_type=vm_type,
         new_vmid=new_vmid,
     )
-    netbox_url = _find_created_vm_url(request, new_vmid)
+    netbox_url = _find_created_vm_url(request, new_vmid, endpoint)
     if sync_note:
         detail_text = f"{detail_text} {sync_note}".strip()
     elif not netbox_url:
@@ -627,18 +627,22 @@ def _sync_created_instance(
     )
 
 
-def _find_created_vm_url(request: HttpRequest, new_vmid: int) -> str | None:
+def _find_created_vm_url(
+    request: HttpRequest, new_vmid: int, endpoint: ProxmoxEndpoint
+) -> str | None:
+    """Return the new VM's NetBox URL, scoped to the endpoint it was created on.
+
+    A Proxmox VMID is unique per endpoint rather than across the estate, so a
+    lookup by id alone can resolve a different endpoint's virtual machine and
+    send the operator to a machine they did not just create. ``.first()`` makes
+    which one entirely dependent on row ordering.
+    """
     qs = VirtualMachine.objects.restrict(request.user, "view")
-    for lookup in (
-        {"custom_field_data__proxmox_vm_id": new_vmid},
-        {"custom_field_data__proxmox_vm_id": str(new_vmid)},
-        {"custom_field_data__cf_proxmox_vm_id": new_vmid},
-        {"custom_field_data__cf_proxmox_vm_id": str(new_vmid)},
-    ):
-        vm = qs.filter(**lookup).first()
-        if vm is not None:
-            return str(vm.get_absolute_url())
-    return None
+    vm = qs.filter(
+        proxbox_sync_state__proxmox_vm_id=new_vmid,
+        proxbox_sync_state__endpoint=endpoint,
+    ).first()
+    return str(vm.get_absolute_url()) if vm is not None else None
 
 
 def _backend_error_response(response: object) -> JsonResponse | None:
