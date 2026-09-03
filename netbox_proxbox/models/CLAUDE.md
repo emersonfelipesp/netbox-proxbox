@@ -209,6 +209,7 @@ This directory defines the plugin's persisted data model.
   use `vm_identity.py` and `ProxboxVirtualMachineSyncState`; do not restore the
   removed `custom_fields_enabled` setting or a custom-field fallback. Migration
   0086 removes the other thirty reflection definitions and stale JSON values.
+  Migration 0087 finishes that removal: 0086 compares each field's label against its own definition table, and proxbox-api's inventory reconcile had rewritten the six hardware-discovery labels, so 0086 failed closed and skipped them. 0087 selects candidates by data type plus `ui_editable="hidden"` -- the two attributes both writers agree on -- and then gates the destructive step on the question that does not require guessing provenance NetBox never recorded: **a field holding a value on any row is left alone in full**, definition, bindings and values, whoever wrote it. Only `None` and the empty string count as blank, the check is repeated once the definitions are locked and again as each key is stripped, and the reverse applies it too, so neither a late writer nor a rollback can expose somebody's data as a Proxbox field.
   Detail-page cards read only `obj.proxbox_sync_state` and remain absent when no
   sidecar exists. The surviving `proxmox_node` and `proxmox_storage` custom
   fields are live CREATE-placement inputs, not reflection fallbacks.

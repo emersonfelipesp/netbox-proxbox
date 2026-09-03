@@ -21,7 +21,7 @@ pip install -e /opt/netbox/netbox/netbox-proxbox
 
 ## Important Notes
 
-### Reflection custom-field retirement (migrations 0085 and 0086)
+### Reflection custom-field retirement (migrations 0085, 0086, and 0087)
 
 Migration `0085_remove_vm_reflection_custom_fields` removes the twelve VM-only
 reflection definitions, and migration `0086_remove_other_reflection_custom_fields`
@@ -31,12 +31,32 @@ types; it performs no data backfill because production values were confirmed
 empty and the typed sidecars are already authoritative. Rows without those keys
 are not rewritten.
 
-After migrating, synchronized core-object detail pages display the related
-`obj.proxbox_sync_state` card when a sidecar exists. A never-synchronized object
-does not gain an empty card. The `proxmox_node` and `proxmox_storage` custom
-fields remain untouched because the NetBox-to-Proxmox CREATE pipeline uses them
-as placement inputs. All other intent fields, branch flags,
-`source_packer_template`, and netbox-proxy fields also survive.
+Migration `0087_remove_hardware_discovery_custom_fields` removes the six
+hardware-discovery definitions that 0086 skipped -- `hardware_chassis_manufacturer`,
+`hardware_chassis_product`, `hardware_chassis_serial`, `nic_duplex`, `nic_link`,
+and `nic_speed_gbps`. 0086 refuses a field whose label differs from the one it
+expects, and proxbox-api's inventory reconcile had rewritten these six.
+
+0087 does not try to prove which field is ours, because NetBox records nothing
+that could. It takes the fields of the original data type that are not
+operator-editable as candidates, and then **leaves alone, completely, any field
+that still holds a value on any device or interface** -- definition, bindings
+and stored values -- no matter who wrote that value. If you have reused one of
+these names for your own data, or an integration of yours populates one through
+the API, nothing about it changes. Only a null or an empty string counts as
+blank: a stored empty list or object is treated as a value and protects the
+field. A key present with a null or blank value is stale metadata from the
+retired reflection pipeline and is removed.
+
+The check is not a single snapshot. The definitions are locked for the duration
+of the migration, the scan is repeated under that lock, and each key is
+re-tested as it is removed, so a value written while the migration runs is not
+lost.
+
+Reversing 0087 restores the six definitions and their bindings with the metadata
+they carried, and leaves any field it skipped untouched. As with 0085 and 0086,
+values stripped from `custom_field_data` are not restored; only fields that held
+no value are stripped.
 
 ### FastAPI key target adoption (migration 0075)
 

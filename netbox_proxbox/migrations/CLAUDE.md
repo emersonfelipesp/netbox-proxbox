@@ -258,6 +258,53 @@ fake historical models for both generations.
   `proxmox_node` and `proxmox_storage` fields must survive because the intent
   pipeline reads them as CREATE placement inputs; all other intent, branch,
   netbox-packer, and netbox-proxy fields remain out of scope.
+- Migration 0087 removes the six hardware-discovery reflection custom fields
+  that 0086 skipped: `hardware_chassis_manufacturer`,
+  `hardware_chassis_product`, `hardware_chassis_serial`, `nic_duplex`,
+  `nic_link`, and `nic_speed_gbps`. 0086's ownership check compares a field's
+  label against its own definition table, and proxbox-api's inventory reconcile
+  had rewritten all six -- not merely recased: `Chassis product name` became
+  `Chassis Product`, and the chassis-manufacturer description moved from
+  `dmidecode -t 1` to `-t 3`. The check failed closed, correctly, since it
+  cannot tell a changed field from somebody else's.
+- **0087's real guard is emptiness, not provenance.** This project's own two
+  writers disagree about label and description, so neither is an ownership
+  signal; and NetBox records no provenance at all -- there is no owner column,
+  every attribute an operator can reach is mutable, and `ui_editable="hidden"`
+  stops the edit form but not the REST API, so a hidden field can still be
+  where an integration keeps data. Data **type** plus `ui_editable="hidden"`
+  therefore only selects candidates. Any field holding a value anywhere keeps
+  its definition, its bindings and its values, whoever wrote it. Deletion is
+  reached only for a field of our type, not operator-editable, and empty
+  everywhere. Do not weaken this to a shape check; shape cannot distinguish our
+  field from an operator's, and emptiness makes that distinction unnecessary.
+- **Only `None` and `""` are blank.** `custom_field_data` is raw JSON, so an
+  integration can leave a list or an object in a field NetBox declares as text.
+  An empty one of those is still something somebody stored, and an unexpected
+  shape reads as data rather than absence. Do not extend the blank set.
+- **The check runs three times, because one pass is a race.** The opening scan
+  is an early exit, not the authority: the definitions are then locked with
+  `select_for_update()` for the rest of the transaction so their metadata
+  cannot be repurposed between check and delete, the scan is repeated under
+  that lock, and `_strip_values` re-tests each key as it removes it so a value
+  that landed in between is not lost. Removing any of the three reopens the
+  window.
+- Migration 0087's reverse carries the full production metadata --
+  `ui_visible`, `ui_editable`, `weight`, `filter_logic`, `required`,
+  `search_weight`, `group_name` -- and uses `get_or_create` so an
+  operator-owned definition is never rewritten. It re-attaches the canonical
+  binding only to a row it created or to one that is ours **and still
+  empty**: forward leaves no record of what it skipped, and a populated
+  field of our exact shape whose binding an operator had already removed is
+  indistinguishable from one forward released, so rebinding it would expose
+  that data as a Proxbox field. A row forward released is empty by
+  construction and still gets its binding back. Like 0085
+  and 0086, forward strips `custom_field_data` keys without journaling them, so
+  values do not come back on reverse; with the emptiness gate there is nothing
+  to journal. On this estate that was also confirmed directly -- all 44
+  production devices and 1,459 interfaces carried no value for any of the six.
+  Do not edit 0086 to fix this; it is applied on staging and production, and
+  its skip is safe.
 
 ## Links
 

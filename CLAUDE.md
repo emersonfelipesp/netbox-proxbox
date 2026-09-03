@@ -131,6 +131,7 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   keys; `ProxboxVirtualMachineSyncState` is the sole VM reflection read path.
   Migration 0086 removes the remaining thirty reflection definitions and
   strips their stale JSON keys from all fourteen affected core object types.
+  Migration 0087 finishes that removal: 0086 compares each field's label against its own definition table, and proxbox-api's inventory reconcile had rewritten the six hardware-discovery labels, so 0086 failed closed and skipped them. 0087 selects candidates by data type plus `ui_editable="hidden"` -- the two attributes both writers agree on -- and then gates the destructive step on the question that does not require guessing provenance NetBox never recorded: **a field holding a value on any row is left alone in full**, definition, bindings and values, whoever wrote it. Only `None` and the empty string count as blank, the check is repeated once the definitions are locked and again as each key is stripped, and the reverse applies it too, so neither a late writer nor a rollback can expose somebody's data as a Proxbox field.
   Core-object detail pages render the corresponding typed sidecar only when a
   row exists. The removed `custom_fields_enabled` setting must not be restored.
   The dual-role `proxmox_node` and `proxmox_storage` custom fields remain live

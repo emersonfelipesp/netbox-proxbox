@@ -87,6 +87,6 @@ Proxmox data. Migration 0085 removes the VM-only reflection custom fields and
 the obsolete `custom_fields_enabled` setting, so recovery of VM identity and
 status always uses `ProxboxVirtualMachineSyncState`; there is no legacy VM
 custom-field read path to repair. Migration 0086 removes the remaining thirty
-reflection definitions and stale core-object JSON values. Recovery now rebuilds
+reflection definitions and stale core-object JSON values. Migration 0087 finishes that removal: 0086 compares each field's label against its own definition table, and proxbox-api's inventory reconcile had rewritten the six hardware-discovery labels, so 0086 failed closed and skipped them. 0087 selects candidates by data type plus `ui_editable="hidden"` -- the two attributes both writers agree on -- and then gates the destructive step on the question that does not require guessing provenance NetBox never recorded: **a field holding a value on any row is left alone in full**, definition, bindings and values, whoever wrote it. Only `None` and the empty string count as blank, the check is repeated once the definitions are locked and again as each key is stripped, and the reverse applies it too, so neither a late writer nor a rollback can expose somebody's data as a Proxbox field. Recovery now rebuilds
 all reflection state through the typed sidecars; the surviving intent custom
 fields are not reflection recovery data.

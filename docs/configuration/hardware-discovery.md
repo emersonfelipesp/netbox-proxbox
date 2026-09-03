@@ -218,8 +218,12 @@ fingerprint, password/private-key presence flags, `password`, and `private_key`.
 | `dcim.Interface` | `ProxboxInterfaceSyncState.nic_link` | `ethtool <iface> → Link detected: yes` |
 
 Migration 0049 originally registered these names as hidden custom fields.
-Migration 0086 removes those legacy definitions and values after the typed
-writer cutover. The discovery pass now writes only the device and interface
+Migrations 0086 and 0087 remove those legacy definitions and values after the
+typed writer cutover. 0087 covers these six specifically: 0086's ownership
+check compares labels, and these had been reconciled with different ones, so
+it failed closed and skipped them. 0087 selects candidates by data type and
+`ui_editable="hidden"`, then leaves alone any of the six that still holds a
+value on any device or interface, whoever wrote it. The discovery pass now writes only the device and interface
 sync-state sidecars, which remain read-only reflection data.
 
 ### Idempotency
