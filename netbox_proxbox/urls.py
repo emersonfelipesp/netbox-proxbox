@@ -306,6 +306,14 @@ urlpatterns = [
         "vm-cloudinit/",
         include(get_model_urls("netbox_proxbox", "proxmoxvmcloudinit", detail=False)),
     ),
+    path(
+        "vm-intents/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxvmintent")),
+    ),
+    path(
+        "vm-intents/",
+        include(get_model_urls("netbox_proxbox", "proxmoxvmintent", detail=False)),
+    ),
     # Firewall models
     path(
         "firewall/security-groups/<int:pk>/",

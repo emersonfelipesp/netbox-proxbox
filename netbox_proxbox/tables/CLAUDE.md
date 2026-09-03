@@ -23,6 +23,7 @@ This directory defines `django_tables2` and NetBox tables for plugin list and ta
 - [`vm_backup.py`](./vm_backup.py): table for `VMBackup`.
 - [`vm_snapshot.py`](./vm_snapshot.py): table for `VMSnapshot`.
 - [`vm_task_history.py`](./vm_task_history.py): table for `VMTaskHistory`.
+- [`vm_intent.py`](./vm_intent.py): table for operator-owned `ProxmoxVMIntent` rows.
 
 ## Dependencies
 

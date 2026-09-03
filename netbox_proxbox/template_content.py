@@ -26,6 +26,7 @@ from netbox_proxbox.models import (
     ProxmoxFirewallSecurityGroup,
     ProxmoxNode,
     ProxmoxStorage,
+    ProxmoxVMIntent,
     ProxboxPluginSettings,
     VMBackup,
     VMSnapshot,
@@ -571,6 +572,37 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
             return ""
         user = self.context["request"].user
         parts: list[str] = []
+        intent = _optional_related(obj, "proxbox_intent")
+        if intent is not None and user.has_perm(
+            get_permission_for_model(ProxmoxVMIntent, "change")
+        ):
+            parts.append(
+                self.render(
+                    "netbox_proxbox/inc/vm_intent_button.html",
+                    {
+                        "intent_url": reverse(
+                            "plugins:netbox_proxbox:proxmoxvmintent_edit",
+                            args=[intent.pk],
+                        ),
+                        "intent_label": "Edit Proxmox intent",
+                    },
+                )
+            )
+        elif intent is None and user.has_perm(
+            get_permission_for_model(ProxmoxVMIntent, "add")
+        ):
+            parts.append(
+                self.render(
+                    "netbox_proxbox/inc/vm_intent_button.html",
+                    {
+                        "intent_url": (
+                            reverse("plugins:netbox_proxbox:proxmoxvmintent_add")
+                            + f"?virtual_machine={obj.pk}"
+                        ),
+                        "intent_label": "Set Proxmox intent",
+                    },
+                )
+            )
         if user.has_perm(permission_enqueue_proxbox_sync()):
             action_url = _sync_now_action_url(obj)
             if action_url is not None:
@@ -609,6 +641,44 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
                 )
         # Joined HTML comes from this plugin's own templates rendered above.
         return mark_safe("".join(parts)) if parts else ""  # nosec
+
+    def right_page(self) -> str:
+        """Render the intent card only when this VM has an intent row."""
+        obj = self.context["object"]
+        if not isinstance(obj, VirtualMachine):
+            return ""
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        view_permission = get_permission_for_model(ProxmoxVMIntent, "view")
+        has_perm = getattr(user, "has_perm", None)
+        if not callable(has_perm) or not has_perm(view_permission):
+            return ""
+
+        manager = ProxmoxVMIntent.objects
+        restrict = getattr(manager, "restrict", None)
+        if not callable(restrict):
+            return ""
+        try:
+            queryset = restrict(user, "view")
+            intent = (
+                queryset.select_related("virtual_machine")
+                .filter(virtual_machine=obj)
+                .first()
+            )
+        except Exception:  # noqa: BLE001 - authorization must fail closed
+            return ""
+        if intent is None:
+            return ""
+        edit_url = None
+        if user.has_perm(get_permission_for_model(ProxmoxVMIntent, "change")):
+            edit_url = reverse(
+                "plugins:netbox_proxbox:proxmoxvmintent_edit", args=[intent.pk]
+            )
+        rendered = self.render(
+            "netbox_proxbox/inc/vm_proxmox_intent_card.html",
+            {"intent": intent, "edit_url": edit_url},
+        )
+        return mark_safe(rendered)  # nosec - autoescaped plugin template
 
     def console_button(self) -> str:
         """Handle console button."""

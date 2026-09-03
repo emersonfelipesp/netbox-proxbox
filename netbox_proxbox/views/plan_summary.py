@@ -10,10 +10,13 @@ from django.views import View
 from utilities.views import ConditionalLoginRequiredMixin
 
 from netbox_proxbox.intent.diff_classify import classify_diff
+from netbox_proxbox.intent.diff_union import (
+    virtual_machine_diff_id,
+    virtual_machine_diff_name,
+    virtual_machine_diff_union,
+)
 from netbox_proxbox.intent.plan_client import PlanClientError, call_plan_endpoint
 from netbox_proxbox.models import ProxboxPluginSettings
-
-_VM_MODEL = "virtualmachine"
 
 
 def _maybe_restrict(queryset: Any, user: Any) -> Any:
@@ -40,45 +43,25 @@ def _intent_enabled() -> bool:
     return bool(settings_obj and settings_obj.netbox_to_proxmox_enabled)
 
 
-def _changediff_rows(branch: Any) -> list[Any]:
-    manager = getattr(branch, "changediff_set", None)
-    if manager is None:
-        return []
-    rows = manager.filter(object_type__model=_VM_MODEL)
-    order_by = getattr(rows, "order_by", None)
-    if callable(order_by):
-        rows = order_by("pk")
-    return list(rows)
-
-
-def _row_name(row: Any) -> str:
-    vm = getattr(row, "object", None)
-    for value in (
-        getattr(vm, "name", None),
-        getattr(row, "object_repr", None),
-        getattr(row, "object_id", None),
-    ):
+def _vm_name(vm: Any) -> str:
+    for value in (getattr(vm, "name", None), getattr(vm, "pk", None)):
         if value not in (None, ""):
             return str(value)
     return ""
 
 
-def _row_netbox_id(row: Any) -> Any:
-    return getattr(row, "object_id", None)
-
-
-def _row_plan_diff(row: Any) -> dict[str, Any]:
+def _vm_plan_diff(vm: Any, requested_op: str, row: Any) -> dict[str, Any]:
     try:
-        op, kind = classify_diff(row)
+        op, kind = classify_diff(vm, requested_op, row)
     except Exception:  # pragma: no cover - defensive display fallback
-        op = str(getattr(row, "action", "") or "update").lower()
+        op = str(requested_op or "update").lower()
         kind = "qemu"
     return {
         "changediff_id": getattr(row, "pk", None),
         "op": op,
         "kind": kind,
-        "netbox_id": _row_netbox_id(row),
-        "name": _row_name(row),
+        "netbox_id": virtual_machine_diff_id(vm, row),
+        "name": virtual_machine_diff_name(vm, row),
     }
 
 
@@ -136,8 +119,10 @@ class IntentPlanSummaryView(ConditionalLoginRequiredMixin, View):
             context["error"] = f"Branch {branch_id} was not found."
             return render(request, self.template_name, context)
 
-        rows = _changediff_rows(branch)
-        diffs = [_row_plan_diff(row) for row in rows]
+        diffs = [
+            _vm_plan_diff(vm, op, row)
+            for vm, op, row in virtual_machine_diff_union(branch)
+        ]
         intent_enabled = _intent_enabled()
         apply_to_proxmox = _branch_flag(branch, "apply_to_proxmox")
         apply_destroy_confirmed = _branch_flag(branch, "apply_destroy_confirmed")

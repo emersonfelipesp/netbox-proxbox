@@ -1,49 +1,64 @@
 name: Gitea Package Registry — Publish
 
 on:
-  # Deliberately `push` only. Gitea emits both `create` and `push` for a tag;
-  # subscribing to both starts two immutable package uploads for one version.
-  push:
-    tags:
-      - 'v*'
   workflow_dispatch:
     inputs:
       tag_name:
         description: 'Tag to publish (e.g. v0.0.16rc1 or v0.0.16)'
         required: true
+      resume_existing:
+        description: 'Resume after an interrupted publish only when the registry bytes exactly match the rebuilt manifest'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+concurrency:
+  group: package-publication-${{ github.repository }}
+  cancel-in-progress: false
 
 jobs:
   validate-version:
+    if: ${{ github.repository == 'emersonfelipesp/netbox-proxbox' && github.ref == 'refs/heads/main' }}
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.extract.outputs.version }}
       is_rc: ${{ steps.extract.outputs.is_rc }}
       tag: ${{ steps.extract.outputs.tag }}
+      tag_object: ${{ steps.extract.outputs.tag_object }}
+      source_sha: ${{ steps.extract.outputs.source_sha }}
+      resume_existing: ${{ steps.resolve_tag.outputs.resume_existing }}
     steps:
       - name: Determine tag
         id: resolve_tag
         env:
-          EVENT_NAME: ${{ github.event_name }}
           INPUT_TAG: ${{ inputs.tag_name }}
+          INPUT_RESUME_EXISTING: ${{ inputs.resume_existing }}
         run: |
           set -euo pipefail
           TAG_PATTERN='^v[0-9]+\.[0-9]+\.[0-9]+(rc[0-9]+|\.post[0-9]+)?$'
-          if [ "$EVENT_NAME" = "workflow_dispatch" ]; then
-            TAG="$INPUT_TAG"
-          else
-            TAG="${GITHUB_REF_NAME}"
-          fi
+          TAG="$INPUT_TAG"
           if ! echo "${TAG}" | grep -qE "${TAG_PATTERN}"; then
             echo "ERROR: tag '${TAG}' does not match expected pattern ${TAG_PATTERN}"
             exit 1
           fi
           echo "tag=${TAG}" >> "$GITHUB_ENV"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          RESUME_EXISTING=false
+          if [ "$INPUT_RESUME_EXISTING" = "true" ]; then
+            RESUME_EXISTING=true
+          fi
+          echo "resume_existing=${RESUME_EXISTING}" >> "$GITHUB_OUTPUT"
 
       - name: Checkout tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           ref: ${{ steps.resolve_tag.outputs.tag }}
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
 
       - id: extract
         name: Extract and validate version
@@ -54,6 +69,10 @@ jobs:
           VERSION="${TAG#v}"
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "tag=${TAG}" >> "$GITHUB_OUTPUT"
+          TAG_OBJECT="$(git rev-parse "refs/tags/${TAG}")"
+          SOURCE_SHA="$(git rev-parse "refs/tags/${TAG}^{commit}")"
+          echo "tag_object=${TAG_OBJECT}" >> "$GITHUB_OUTPUT"
+          echo "source_sha=${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
           if echo "${VERSION}" | grep -qE 'rc[0-9]+$'; then
             echo "is_rc=true" >> "$GITHUB_OUTPUT"
             echo "RC release: ${VERSION}"
@@ -81,72 +100,94 @@ jobs:
 
   publish-gitea:
     needs: validate-version
-    if: ${{ needs.validate-version.outputs.version != '' }}
+    if: ${{ github.repository == 'emersonfelipesp/netbox-proxbox' && github.ref == 'refs/heads/main' && needs.validate-version.outputs.version != '' }}
     runs-on: mirror-host
     env:
-      HOME: /root
       VERSION: ${{ needs.validate-version.outputs.version }}
       TAG: ${{ needs.validate-version.outputs.tag }}
+      EXPECTED_TAG_OBJECT: ${{ needs.validate-version.outputs.tag_object }}
+      EXPECTED_SOURCE_SHA: ${{ needs.validate-version.outputs.source_sha }}
+      IS_RC: ${{ needs.validate-version.outputs.is_rc }}
+      RESUME_EXISTING: ${{ needs.validate-version.outputs.resume_existing }}
     steps:
-      - name: Checkout tag
-        uses: actions/checkout@v4
+      - name: Checkout canonical publisher control
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: ${{ needs.validate-version.outputs.tag }}
+          ref: ${{ github.sha }}
+          persist-credentials: false
 
-      - name: Install build tools
+      - name: Checkout candidate tag as passive build input
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          ref: ${{ needs.validate-version.outputs.source_sha }}
+          path: candidate
+          fetch-depth: 0
+          fetch-tags: true
+          persist-credentials: false
+
+      - name: Bind candidate tag to validated objects
+        run: |
+          set -euo pipefail
+          git -C candidate fetch --force --no-tags origin \
+            "+refs/tags/${TAG}:refs/release-policy/candidate-tag"
+          test "$(git -C candidate rev-parse refs/release-policy/candidate-tag)" = \
+            "${EXPECTED_TAG_OBJECT}"
+          test "$(git -C candidate rev-parse refs/release-policy/candidate-tag^{commit})" = \
+            "${EXPECTED_SOURCE_SHA}"
+          test "$(git -C candidate rev-parse HEAD^{commit})" = \
+            "${EXPECTED_SOURCE_SHA}"
+
+      - name: Verify pre-provisioned build tools
         env:
-          # Pinned deliberately. The previous bootstrap fetched whatever the
-          # unversioned installer served and then accepted whatever answered
-          # `uv --version`, so two builds of one tag could come from different
-          # toolchains -- and this path is live: the runner that failed this
-          # release had no uv at all.
+          PYTHON_VERSION: "3.12.14"
           UV_VERSION: "0.12.5"
         run: |
           set -euo pipefail
-          # Assert the tools the *post-upload* verification needs, on the
-          # default PATH it will actually run with, before anything is built.
-          # The verifier is a fresh shell -- it does not inherit the PATH export
-          # below -- and it uses both curl and python3. A user-local python3
-          # visible only to this step would pass a naive check here and be
-          # missing there, after an immutable version had been consumed.
-          for tool in python3 curl; do
+          # Release jobs install no executable tooling. The accepted runner
+          # image must already provide the exact reviewed uv version; otherwise
+          # this fails before candidate code is built or a credential is used.
+          for tool in python3 uv; do
             command -v "${tool}" >/dev/null 2>&1 || {
-              echo "ERROR: ${tool} is required by the post-upload registry verification"
+              echo "ERROR: pre-provisioned ${tool} is required"
               exit 1
             }
           done
-          python3 --version
-          curl --version | head -1
-
-          uv_is_pinned() {
-            command -v uv >/dev/null 2>&1 && \
-              [ "$(uv --version 2>/dev/null | awk '{print $2}')" = "${UV_VERSION}" ]
-          }
-          if ! uv_is_pinned; then
-            curl -LsSf "https://astral.sh/uv/${UV_VERSION}/install.sh" \
-              | sh -s -- --no-modify-path
-            export PATH="${HOME}/.local/bin:${PATH}"
-          fi
-          export PATH="${HOME}/.local/bin:${PATH}"
-          ACTUAL_UV="$(uv --version | awk '{print $2}')"
-          if [ "${ACTUAL_UV}" != "${UV_VERSION}" ]; then
-            echo "ERROR: expected uv ${UV_VERSION}, got ${ACTUAL_UV}"
+          ACTUAL_PYTHON="$(python3 --version 2>&1)"
+          if [ "${ACTUAL_PYTHON}" != "Python ${PYTHON_VERSION}" ]; then
+            echo "ERROR: expected 'Python ${PYTHON_VERSION}', got '${ACTUAL_PYTHON}'"
             exit 1
           fi
-          uv --version
+          ACTUAL_UV="$(uv --version)"
+          if [ "${ACTUAL_UV}" != "uv ${UV_VERSION}" ]; then
+            echo "ERROR: expected 'uv ${UV_VERSION}', got '${ACTUAL_UV}'"
+            exit 1
+          fi
+          printf '%s\n' "${ACTUAL_PYTHON}"
+          printf '%s\n' "${ACTUAL_UV}"
 
       - name: Build distributions
         run: |
           set -euo pipefail
-          export PATH="${HOME}/.local/bin:${PATH}"
           # Build and upload from the repository's own locked `publish` group
           # rather than resolving a backend and an ephemeral twine at run time.
           # `uv.lock` carries hashes for that group, so the PEP 517 backend and
           # the credential-bearing uploader are the reviewed, pinned ones
           # (hatchling 1.31.0, twine 6.2.0) instead of whatever resolution
           # happens to pick on the day.
-          uv sync --only-group publish --locked --no-install-project
-          uv build
+          uv sync --python "$(command -v python3)" --no-python-downloads \
+            --only-group publish --locked --no-install-project
+          ACTUAL_HATCHLING="$(.venv/bin/python -c \
+            'from importlib.metadata import version; print(version("hatchling"))')"
+          test "${ACTUAL_HATCHLING}" = "1.31.0" || {
+            echo "ERROR: expected hatchling 1.31.0, got ${ACTUAL_HATCHLING}"
+            exit 1
+          }
+          test "$(.venv/bin/python --version 2>&1)" = "Python 3.12.14"
+          python3 scripts/release_artifacts.py sanitize-build-source \
+            --source candidate --destination sanitized-candidate \
+            --package netbox-proxbox --version "${VERSION}"
+          uv build --no-build-isolation --python .venv/bin/python \
+            --out-dir dist sanitized-candidate
           ls dist/
 
       - name: Build release manifest
@@ -158,8 +199,8 @@ jobs:
           # the value must be the commit the tag resolves to, not the tag
           # object's own SHA. `^{commit}` peels an annotated tag; a lightweight
           # tag already points at the commit and is unaffected.
-          SOURCE_SHA="$(git rev-parse "${TAG}^{commit}")"
-          PKG_NAME=$(grep '^name' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
+          SOURCE_SHA="${EXPECTED_SOURCE_SHA}"
+          PKG_NAME=netbox-proxbox
           python3 scripts/release_artifacts.py manifest \
             --dist dist \
             --package "${PKG_NAME}" \
@@ -168,14 +209,145 @@ jobs:
             --manifest release-manifest.json
           echo "Release manifest built for ${PKG_NAME} ${VERSION} at ${SOURCE_SHA}"
 
+      - name: Recreate fixed publisher environment
+        run: |
+          set -euo pipefail
+          # Candidate bytes are now passive files in dist/. Recreate every
+          # executable that will later receive a credential from canonical
+          # control metadata, then prove candidate processing did not modify
+          # the reviewed helper or lock inputs.
+          rm -rf -- .venv
+          uv sync --python "$(command -v python3)" --no-python-downloads \
+            --only-group publish --locked --no-install-project
+          test "$(.venv/bin/python --version 2>&1)" = "Python 3.12.14"
+          test "$(.venv/bin/python -c \
+            'from importlib.metadata import version; print(version("hatchling"))')" = \
+            "1.31.0"
+          test "$(.venv/bin/python -c \
+            'from importlib.metadata import version; print(version("twine"))')" = \
+            "6.2.0"
+          git diff --exit-code -- scripts/release_artifacts.py pyproject.toml uv.lock
+
+      - name: Preflight immutable package state
+        env:
+          GITEA_PACKAGE_TOKEN: ${{ secrets.PKG_TOKEN }}
+        run: |
+          set -euo pipefail
+          REPO_NAME=netbox-proxbox
+          PKG_NAME=netbox-proxbox
+          RESUME_ARGS=()
+          if [ "${RESUME_EXISTING}" = "true" ]; then
+            RESUME_ARGS+=(--resume-existing --attempts 12 --delay-seconds 5)
+          fi
+          ARTIFACT_ACTION="$(python3 scripts/release_artifacts.py prepare-upload \
+            --registry "${GITHUB_SERVER_URL}/api/v1/packages/" \
+            --owner emersonfelipesp \
+            --repository "${REPO_NAME}" \
+            --package "${PKG_NAME}" \
+            --version "${VERSION}" \
+            --manifest release-manifest.json \
+            "${RESUME_ARGS[@]}")"
+          case "${ARTIFACT_ACTION}" in
+            upload|reuse) ;;
+            *) echo "ERROR: invalid artifact action '${ARTIFACT_ACTION}'"; exit 1 ;;
+          esac
+          printf 'ARTIFACT_ACTION=%s\n' "${ARTIFACT_ACTION}" >> "${GITHUB_ENV}"
+
+      - name: Reserve and verify RC promotion
+        if: env.IS_RC == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+        run: |
+          set -euo pipefail
+          REPO_NAME=netbox-proxbox
+          # Only release candidates are promoted to GitHub at this stage.
+          # Final tags stay private until production validation and the
+          # dedicated final-tag promotion workflow have succeeded.
+          command -v gh >/dev/null 2>&1 || {
+            echo "ERROR: pre-provisioned gh is required for RC promotion"
+            exit 1
+          }
+          SECRET_ROOT="${RUNNER_TEMP}/netbox-proxbox-rc-preflight-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "${SECRET_ROOT}"
+          umask 077
+          mkdir -m 0700 "${SECRET_ROOT}"
+          trap 'rm -rf -- "${SECRET_ROOT}"' EXIT
+          export GH_CONFIG_DIR="${SECRET_ROOT}/gh"
+          mkdir -m 0700 "${GH_CONFIG_DIR}"
+          cat > "${SECRET_ROOT}/askpass" <<'EOF'
+          #!/bin/sh
+          case "$1" in
+            *Username*) printf '%s\n' x-access-token ;;
+            *Password*) printf '%s\n' "$GH_TOKEN" ;;
+            *) exit 1 ;;
+          esac
+          EOF
+          chmod 0500 "${SECRET_ROOT}/askpass"
+          gh --version
+          gh auth status --hostname github.com
+          GH_REPO="emersonfelipesp/${REPO_NAME}"
+          test "$(gh repo view "${GH_REPO}" --json nameWithOwner --jq .nameWithOwner)" = "${GH_REPO}"
+          test "$(gh api "repos/${GH_REPO}" --jq '.permissions.push')" = "true" || {
+            echo "ERROR: GitHub token lacks push permission for ${GH_REPO}"
+            exit 1
+          }
+          RULESET_IDS="$(gh api \
+            "repos/${GH_REPO}/rulesets?targets=tag&includes_parents=true&per_page=100" \
+            --jq '.[].id')"
+          test -n "${RULESET_IDS}" || {
+            echo "ERROR: no GitHub tag ruleset protects release reservations"
+            exit 1
+          }
+          mkdir -m 0700 "${SECRET_ROOT}/rulesets"
+          while IFS= read -r RULESET_ID; do
+            case "${RULESET_ID}" in
+              ''|*[!0-9]*) echo "ERROR: invalid GitHub ruleset id"; exit 1 ;;
+            esac
+            gh api "repos/${GH_REPO}/rulesets/${RULESET_ID}?includes_parents=true" \
+              > "${SECRET_ROOT}/rulesets/${RULESET_ID}.json"
+          done <<< "${RULESET_IDS}"
+          env -u GH_TOKEN python3 scripts/release_artifacts.py \
+            validate-github-tag-rulesets \
+            --rulesets "${SECRET_ROOT}/rulesets" \
+            --repository "${GH_REPO}"
+          git -C candidate remote add github "https://github.com/${GH_REPO}.git" \
+            || git -C candidate remote set-url github "https://github.com/${GH_REPO}.git"
+          test "$(git -C candidate remote get-url github)" = \
+            "https://github.com/emersonfelipesp/netbox-proxbox.git"
+          LOCAL_TAG_OBJECT="$(git -C candidate rev-parse refs/release-policy/candidate-tag)"
+          REMOTE_TAG_LINE="$(GIT_ASKPASS="${SECRET_ROOT}/askpass" \
+            GIT_TERMINAL_PROMPT=0 git -C candidate ls-remote github "refs/tags/${TAG}")"
+          if [ -n "${REMOTE_TAG_LINE}" ]; then
+            REMOTE_TAG_OBJECT="${REMOTE_TAG_LINE%%[[:space:]]*}"
+            test "${REMOTE_TAG_OBJECT}" = "${LOCAL_TAG_OBJECT}" || {
+              echo "ERROR: GitHub tag ${TAG} points to different bytes"
+              exit 1
+            }
+            test "${RESUME_EXISTING}" = "true" || {
+              echo "ERROR: GitHub tag ${TAG} already exists; use explicit resume mode"
+              exit 1
+            }
+          else
+            GIT_ASKPASS="${SECRET_ROOT}/askpass" GIT_TERMINAL_PROMPT=0 \
+              git -C candidate push --dry-run github \
+              "refs/release-policy/candidate-tag:refs/tags/${TAG}"
+            GIT_ASKPASS="${SECRET_ROOT}/askpass" GIT_TERMINAL_PROMPT=0 \
+              git -C candidate push github \
+              "refs/release-policy/candidate-tag:refs/tags/${TAG}"
+          fi
+          VERIFIED_TAG_OBJECT="$(GIT_ASKPASS="${SECRET_ROOT}/askpass" \
+            GIT_TERMINAL_PROMPT=0 git -C candidate ls-remote --exit-code github \
+            "refs/tags/${TAG}" | awk '{print $1}')"
+          test "${VERIFIED_TAG_OBJECT}" = "${LOCAL_TAG_OBJECT}"
+
       - name: Publish to Gitea Package Registry
+        if: env.ARTIFACT_ACTION == 'upload'
         env:
           TWINE_USERNAME: emersonfelipesp
           TWINE_PASSWORD: ${{ secrets.PKG_TOKEN }}
           TWINE_REPOSITORY_URL: https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi
         run: |
           set -euo pipefail
-          export PATH="${HOME}/.local/bin:${PATH}"
           # The pinned twine from the locked `publish` group synced above; the
           # previous `--with twine` resolved a separate ephemeral layer at run
           # time, and that layer ran with the registry credential.
@@ -195,9 +367,8 @@ jobs:
           # every deploy and promotion verifies against, that gate has to prove
           # the exact artifact set is present, with the exact sizes and digests
           # the manifest recorded.
-          PKG_NAME=$(grep '^name' pyproject.toml | head -1 | sed 's/.*"\(.*\)".*/\1/')
-          sleep 5
-          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          PKG_NAME=netbox-proxbox
+          REPO_NAME=netbox-proxbox
           # The forge origin comes from the runner rather than being written
           # down here. release_artifacts still pins the permitted origin
           # itself, so a wrong value fails closed rather than reaching an
@@ -208,7 +379,9 @@ jobs:
             --repository "${REPO_NAME}" \
             --package "${PKG_NAME}" \
             --version "${VERSION}" \
-            --manifest release-manifest.json
+            --manifest release-manifest.json \
+            --attempts 12 \
+            --delay-seconds 5
           echo "Package ${PKG_NAME} ${VERSION} matches the release manifest in Gitea"
 
       - name: Publish release manifest
@@ -226,102 +399,15 @@ jobs:
           # the result back, failing if the stored bytes differ from what was
           # sent.
           #
-          # If this step fails after the wheel and sdist are already uploaded,
-          # the version is consumed without a manifest and is not deployable
-          # through the package source. Do NOT try to repair it by re-running
-          # with the upload skipped: package versions here are immutable and
-          # this repository's release policy is fix-forward -- bump to the next
-          # rcN or .postN, which republishes both artifacts and a manifest
-          # together. That is the same property every post-upload step in this
-          # workflow already has (the GitHub tag push and release creation sit
-          # after the upload for the same reason), so this step introduces no
-          # new class of failure. Reusing a consumed version is prohibited
-          # repository-wide and a contract test enforces that the upload never
-          # tolerates an already-published version.
-          REPO_NAME="${GITHUB_REPOSITORY#*/}"
+          # An interrupted run resumes only after the preflight has rebuilt the
+          # candidate and proved every existing wheel/sdist byte identical to
+          # the local manifest. The manifest helper is itself idempotent only
+          # for the same canonical bytes, so recovery cannot overwrite or
+          # silently rebind an immutable release.
+          REPO_NAME=netbox-proxbox
           python3 scripts/release_artifacts.py publish-manifest \
             --registry "${GITHUB_SERVER_URL}/api/v1/packages/" \
             --owner emersonfelipesp \
             --repository "${REPO_NAME}" \
             --manifest release-manifest.json
           echo "Release manifest published and verified for ${VERSION}"
-
-  push-to-github:
-    needs: [validate-version, publish-gitea]
-    if: ${{ needs.validate-version.outputs.version != '' }}
-    runs-on: mirror-host
-    env:
-      HOME: /root
-      VERSION: ${{ needs.validate-version.outputs.version }}
-      TAG: ${{ needs.validate-version.outputs.tag }}
-      IS_RC: ${{ needs.validate-version.outputs.is_rc }}
-      GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
-      GITHUB_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
-    steps:
-      - name: Install GitHub CLI
-        run: |
-          set -euo pipefail
-          if command -v gh >/dev/null 2>&1; then gh --version; exit 0; fi
-          # Best-effort for the same reason as the build job's bootstrap -- and
-          # it matters more here, because this job runs *after* the package has
-          # been uploaded. A broken third-party APT source would strand an
-          # already-published immutable version with no tag or release on
-          # GitHub, and a re-run would then collide with that upload. The
-          # `apt-get install` calls below remain the real gate, as does the
-          # closing `gh --version`.
-          apt-get update -qq || true
-          apt-get install -y ca-certificates curl gnupg
-          mkdir -p -m 755 /etc/apt/keyrings
-          curl -fsSL https://cli.github.com/packages/githubcli-archive-keyring.gpg \
-            | tee /etc/apt/keyrings/githubcli-archive-keyring.gpg >/dev/null
-          chmod go+r /etc/apt/keyrings/githubcli-archive-keyring.gpg
-          echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/githubcli-archive-keyring.gpg] https://cli.github.com/packages stable main" \
-            | tee /etc/apt/sources.list.d/github-cli.list >/dev/null
-          apt-get update -qq || true
-          apt-get install -y gh
-          gh --version
-
-      - name: Checkout tag
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.validate-version.outputs.tag }}
-          fetch-depth: 0
-          fetch-tags: true
-
-      - name: Push tag to GitHub
-        run: |
-          set -euo pipefail
-          REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          git config user.email "gitea-actions@git.nmulti.cloud"
-          git config user.name "Gitea Actions"
-          gh auth setup-git --hostname github.com --force
-          git remote add github "https://github.com/emersonfelipesp/${REPO_NAME}.git" \
-            || git remote set-url github "https://github.com/emersonfelipesp/${REPO_NAME}.git"
-          git push github "refs/tags/${TAG}:refs/tags/${TAG}"
-          echo "Tag ${TAG} pushed to GitHub"
-
-      - name: Create GitHub Release (non-RC only)
-        if: env.IS_RC == 'false'
-        run: |
-          set -euo pipefail
-          REPO_NAME="${GITHUB_REPOSITORY#*/}"
-          GH_REPO="emersonfelipesp/${REPO_NAME}"
-          NOTES_FILE="docs/release-notes/version-${VERSION}.md"
-          if [ -f "${NOTES_FILE}" ]; then
-            NOTES_ARGS="--notes-file ${NOTES_FILE}"
-          else
-            NOTES_ARGS="--generate-notes"
-          fi
-          TARGET_BRANCH="develop"
-          if gh release view "${TAG}" --repo "${GH_REPO}" >/dev/null 2>&1; then
-            echo "Release ${TAG} already exists — ensuring it is not a draft"
-            gh release edit "${TAG}" --repo "${GH_REPO}" --draft=false
-            echo "Release ${TAG} published (was draft)"
-          else
-            gh release create "${TAG}" \
-              --repo "${GH_REPO}" \
-              --target "${TARGET_BRANCH}" \
-              --title "${TAG}" \
-              ${NOTES_ARGS}
-            echo "GitHub release ${TAG} created for ${GH_REPO}"
-          fi

@@ -83,6 +83,7 @@ from .serializers import (
     ProxmoxSdnZoneSerializer,
     ProxmoxStorageSerializer,
     ProxmoxVMCloudInitSerializer,
+    ProxmoxVMIntentSerializer,
     ProxmoxVMTemplateSerializer,
     PVETemplateBuildRequestSerializer,
     PVETemplateBuildResponseSerializer,
@@ -145,6 +146,7 @@ class ProxBoxRootView(APIRootView):
             }
         response.data["logs"] = f"{base}/logs/"
         response.data["cloud_image_templates"] = f"{base}/cloud-image-templates/"
+        response.data["vm_intents"] = f"{base}/vm-intents/"
         response.data["metrics_influxdb"] = f"{base}/metrics-influxdb/"
         response.data["firecracker"] = {
             "host_pools": f"{base}/firecracker-host-pools/",
@@ -432,6 +434,18 @@ class _RelationRestrictedSyncStateViewSetMixin(_ParentRestrictedSyncStateViewSet
                 | Q(**{f"{field_name}__in": relation_queryset.values("pk")})
             )
         return queryset
+
+
+class ProxmoxVMIntentViewSet(
+    _ParentRestrictedSyncStateViewSetMixin,
+    NetBoxModelViewSet,
+):
+    """REST API for operator-owned virtual-machine intent."""
+
+    parent_field_name = "virtual_machine"
+    queryset = models.ProxmoxVMIntent.objects.select_related("virtual_machine")
+    serializer_class = ProxmoxVMIntentSerializer
+    filterset_class = filtersets.ProxmoxVMIntentFilterSet
 
 
 class ProxboxVirtualMachineSyncStateViewSet(

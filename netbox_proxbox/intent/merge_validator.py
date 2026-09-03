@@ -35,10 +35,16 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING, Any
 
+from netbox_proxbox.intent.diff_classify import classify_diff
 from netbox_proxbox.intent.firewall_payload import (
     build_firewall_plan_diffs,
     default_proxmox_endpoint_id,
     first_endpoint_id_from_diffs,
+)
+from netbox_proxbox.intent.diff_union import (
+    virtual_machine_diff_id,
+    virtual_machine_diff_name,
+    virtual_machine_diff_union,
 )
 from netbox_proxbox.intent.plan_client import (
     PlanClientError,
@@ -54,9 +60,6 @@ if TYPE_CHECKING:  # pragma: no cover - import only for type hints
 logger = logging.getLogger(__name__)
 
 
-# The kinds we currently classify. Sub-PR K may add ``lxc`` once the
-# LXC apply dispatchers land in proxbox-api; for now both CREATE and
-# UPDATE diffs default to ``virtualmachine``.
 _VM_MODEL = "virtualmachine"
 
 
@@ -120,60 +123,28 @@ def _classify_vm_diffs(branch: Any) -> list[dict[str, Any]]:
     """
     diffs: list[dict[str, Any]] = []
 
-    changediff_qs = getattr(branch, "changediff_set", None)
-    if changediff_qs is None:
-        return diffs
-
-    rows = changediff_qs.filter(object_type__model=_VM_MODEL)
-    for row in rows:
-        action = getattr(row, "action", None)
-        if action not in {"create", "update", "delete"}:
-            continue
+    for vm, action, row in virtual_machine_diff_union(branch):
+        op, kind = classify_diff(vm, action, row)
         diffs.append(
             {
-                "op": action,
+                "op": op,
                 "kind": _VM_MODEL,
-                "netbox_id": getattr(row, "object_id", None),
-                "name": getattr(row, "object_repr", "") or None,
+                "netbox_id": virtual_machine_diff_id(vm, row),
+                "name": virtual_machine_diff_name(vm, row) or None,
             }
         )
 
     return diffs
 
 
-def _custom_fields_from_data(data: Any) -> dict[str, Any]:
-    if not isinstance(data, dict):
-        return {}
-    for key in ("custom_field_data", "custom_fields"):
-        cf = data.get(key)
-        if isinstance(cf, dict):
-            return cf
-    return {}
-
-
-def _custom_fields_from_row(row: Any) -> dict[str, Any]:
-    vm = getattr(row, "object", None)
-    cf = getattr(vm, "custom_field_data", None)
-    if isinstance(cf, dict):
-        return cf
-
-    for attr in ("postchange_data", "prechange_data"):
-        cf = _custom_fields_from_data(getattr(row, attr, None))
-        if cf:
-            return cf
-    return {}
-
-
 def _contains_plaintext_password(user_data: Any) -> bool:
     return "password:" in str(user_data or "").lower()
 
 
-def _row_vm_name(row: Any) -> str:
-    vm = getattr(row, "object", None)
+def _vm_name(vm: Any) -> str:
     for value in (
         getattr(vm, "name", None),
-        getattr(row, "object_repr", None),
-        getattr(row, "object_id", None),
+        getattr(vm, "pk", None),
     ):
         if value not in (None, ""):
             return str(value)
@@ -184,21 +155,17 @@ def _plaintext_password_warnings(branch: Any) -> list[dict[str, str]]:
     if not _warn_plaintext_password_enabled():
         return []
 
-    changediff_qs = getattr(branch, "changediff_set", None)
-    if changediff_qs is None:
-        return []
-
     warnings: list[dict[str, str]] = []
-    rows = changediff_qs.filter(object_type__model=_VM_MODEL)
-    for row in rows:
-        if getattr(row, "action", None) == "delete":
+    for vm, op, _row in virtual_machine_diff_union(branch):
+        if op == "delete":
             continue
-        user_data = _custom_fields_from_row(row).get("cloud_init_user_data")
+        intent = getattr(vm, "proxbox_intent", None)
+        user_data = getattr(intent, "cloud_init_user_data", None)
         if not _contains_plaintext_password(user_data):
             continue
         warnings.append(
             {
-                "vm": _row_vm_name(row),
+                "vm": _vm_name(vm),
                 "level": "warn",
                 "code": "plaintext_password_warning",
                 "message": "cloud_init_user_data contains a plaintext password line",

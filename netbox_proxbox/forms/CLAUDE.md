@@ -71,6 +71,11 @@ Each endpoint type has an `ImportForm` (e.g. `ProxmoxEndpointImportForm`, `NetBo
   and enter bounded auto-configuration; a non-empty candidate remains required
   when the operator is deliberately rotating the key.
 - These forms define how plugin fields are presented in the NetBox UI; model constraints and the API serializers still remain the source of truth for persistence and credential rules.
+- `ProxmoxVMIntentForm` is the operator edit surface for desired VM state. It
+  includes all thirteen operator inputs and excludes `intent_state` and
+  `last_apply_run_id`; only the apply job writes those stamps. The form rejects
+  changing an existing intent's parent VM because one intent row belongs to one
+  guest for its whole lifetime.
 - `ProxmoxMetricsInfluxDBForm` clears the edit-page initial value whenever a
   persisted InfluxDB URL fails the model's credential-free HTTP(S) display check.
   Its warning asks the operator to replace the hidden value or delete the mapping;

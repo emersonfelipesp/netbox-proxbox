@@ -235,6 +235,13 @@ from .vm_cloudinit import (
     ProxmoxVMCloudInitTabView,
     ProxmoxVMCloudInitView,
 )
+from .vm_intent import (
+    ProxmoxVMIntentBulkDeleteView,
+    ProxmoxVMIntentDeleteView,
+    ProxmoxVMIntentEditView,
+    ProxmoxVMIntentListView,
+    ProxmoxVMIntentView,
+)
 
 # Task History tab and detail views live in ``vm_task_history``.
 from .ha import HAClusterView

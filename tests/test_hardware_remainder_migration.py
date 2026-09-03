@@ -172,17 +172,27 @@ class _ObjManager:
     def __init__(self, rows):
         self.rows = rows
         self.bulk_updated: list = []
+        self.select_for_update_calls = 0
+        self.calls: list[str] = []
 
     def using(self, _a):
         return self
 
     def only(self, *_f):
+        self.calls.append("only")
+        return self
+
+    def select_for_update(self):
+        self.select_for_update_calls += 1
+        self.calls.append("select_for_update")
         return self
 
     def iterator(self, chunk_size=None):
+        self.calls.append("iterator")
         return iter(list(self.rows))
 
     def bulk_update(self, objs, fields, batch_size=None):
+        self.calls.append("bulk_update")
         self.bulk_updated.extend(o.pk for o in objs)
 
 

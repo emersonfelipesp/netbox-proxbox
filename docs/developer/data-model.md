@@ -199,6 +199,8 @@ erDiagram
 > - `Proxbox*SyncState` sidecars → the matching NetBox core object via
 >   `OneToOneField`; VM/device sidecars also reuse `ProxmoxEndpoint`,
 >   `ProxmoxNode`, and `ProxmoxCluster` as nullable resolved references.
+> - `ProxmoxVMIntent.virtual_machine` → `virtualization.VirtualMachine` via a
+>   cascading `OneToOneField` for operator-owned desired state.
 
 ### Custom-field Sidecars
 
@@ -214,9 +216,11 @@ centralized in `netbox_proxbox.vm_identity` and have no custom-field fallback.
 Migration 0086 removes the other thirty reflection definitions and strips their
 stale keys from all fourteen core object types represented below. Migration 0087 finishes that removal: 0086 compares each field's label against its own definition table, and proxbox-api's inventory reconcile had rewritten the six hardware-discovery labels, so 0086 failed closed and skipped them. 0087 selects candidates by data type plus `ui_editable="hidden"` -- the two attributes both writers agree on -- and then gates the destructive step on the question that does not require guessing provenance NetBox never recorded: **a field holding a value on any row is left alone in full**, definition, bindings and values, whoever wrote it. Only `None` and the empty string count as blank, the check is repeated once the definitions are locked and again as each key is stripped, and the reverse applies it too, so neither a late writer nor a rollback can expose somebody's data as a Proxbox field. The detail
 page for each core object renders its typed sidecar when present and renders no
-empty card for an object that has never been synchronized. The dual-role
-`proxmox_node` and `proxmox_storage` custom fields remain operator-controlled
-NetBox-to-Proxmox placement inputs and are not part of either removal.
+empty card for an object that has never been synchronized. Migration 0088 adds
+`ProxmoxVMIntent`, moves desired placement, LXC, and cloud-init values into that
+one-to-one model, and retires the ten superseded VM-intent definitions behind
+the same lock-and-emptiness boundary. The branch, netbox-packer, and
+netbox-proxy custom fields remain operational.
 
 `ProxboxSyncStateBase` is the shared abstract base for all sidecars. It stores
 `proxmox_last_updated` (from the legacy source timestamp custom field) and
@@ -449,6 +453,7 @@ payloads, skipped reasons, termination conflicts, and generated-object bindings.
 | `BackupRoutine` | Backup routine definitions synced from Proxmox (vzdump jobs) |
 | `Replication` | Replication job definitions synced from Proxmox |
 | `ProxmoxApplyJob` | Tracks a NetBox-to-Proxmox intent apply job |
+| `ProxmoxVMIntent` | Stores desired VM placement, LXC, cloud-init, and apply state |
 | `DeletionRequest` | Auditable delete-request workflow requiring explicit authorization |
 | `ProxboxPluginSettings` | Singleton plugin settings including sync modes, batch tunables, and feature flags |
 

@@ -71,6 +71,7 @@ from netbox_proxbox.models.sync_state import (
 )
 from netbox_proxbox.models.vm_backup import VMBackup
 from netbox_proxbox.models.vm_cloudinit import ProxmoxVMCloudInit
+from netbox_proxbox.models.vm_intent import ProxmoxVMIntent
 from netbox_proxbox.models.vm_snapshot import VMSnapshot
 from netbox_proxbox.models.vm_task_history import VMTaskHistory
 from netbox_proxbox.models.vm_template import ProxmoxVMTemplate
@@ -117,6 +118,7 @@ __all__ = (
     "ProxmoxServiceSample",
     "ProxmoxServiceStatus",
     "ProxmoxVMCloudInit",
+    "ProxmoxVMIntent",
     "Replication",
     "ProxmoxStorage",
     "ProxmoxStorageVirtualDisk",

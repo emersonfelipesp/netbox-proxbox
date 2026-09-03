@@ -91,6 +91,29 @@ def _step(job: dict[str, object], name: str) -> dict[str, object]:
     )
 
 
+@pytest.mark.parametrize(
+    "workflow_path",
+    [GITEA_PUBLISH_WORKFLOW, GITEA_PROMOTE_WORKFLOW],
+)
+def test_release_workflow_shell_blocks_parse(workflow_path: Path) -> None:
+    workflow = yaml.safe_load(_read(workflow_path))
+    for job_name, job in workflow["jobs"].items():
+        for step in job.get("steps", []):
+            script = step.get("run")
+            if not isinstance(script, str):
+                continue
+            result = subprocess.run(
+                ["/bin/bash", "-n"],
+                input=script,
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            assert result.returncode == 0, (
+                f"{workflow_path.name}:{job_name}:{step.get('name')}: {result.stderr}"
+            )
+
+
 def test_release_runner_gate_rejects_sentinel_and_wrong_runner(tmp_path: Path) -> None:
     gate = _load_runner_gate()
     with pytest.raises(gate.RunnerGateError, match="not activated"):
@@ -618,7 +641,10 @@ def test_claimed_proof_is_destroyed_on_every_exit_path() -> None:
 def test_final_tag_promotion_requires_main_package_and_deploy_evidence() -> None:
     workflow = _read(GITEA_PROMOTE_WORKFLOW)
 
+    assert "github.repository == 'emersonfelipesp/netbox-proxbox'" in workflow
     assert "github.ref == 'refs/heads/main'" in workflow
+    assert "ref: ${{ github.sha }}" in workflow
+    assert 'test "$(git rev-parse HEAD^{commit})" = "${GITHUB_SHA}"' in workflow
     assert "refs/remotes/gitea/release-main" in workflow
     assert "refs/remotes/gitea/release-develop" in workflow
     assert "scripts/release_artifacts.py fetch-gitea" in workflow
@@ -628,6 +654,10 @@ def test_final_tag_promotion_requires_main_package_and_deploy_evidence() -> None
     assert 'GIT_ASKPASS="$SECRET_ROOT/askpass"' in workflow
     assert "http.https://github.com/.extraheader" not in workflow
     assert workflow.index("fetch-attestation") < workflow.index("GH_TOKEN:")
+    assert '"refs/tags/${TAG}"' in workflow
+    assert '"refs/tags/${TAG}^{}"' in workflow
+    assert 'test "$REMOTE_TAG_OBJECT" = "$LOCAL_TAG_OBJECT"' in workflow
+    assert 'test "$REMOTE_SOURCE_SHA" = "$SOURCE_SHA"' in workflow
     assert "gh release create" not in workflow
     assert (
         "rc[0-9]" not in workflow.split('python3 - "$VERSION"', 1)[1].split("PY", 1)[0]
@@ -1065,6 +1095,19 @@ def _disclosures(text: str) -> list[str]:
     return found
 
 
+def _review_base() -> str:
+    result = subprocess.run(
+        ["git", "merge-base", "HEAD", "gitea/develop"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    if result.returncode != 0 or not result.stdout.strip():
+        pytest.skip(f"cannot resolve the review base: {result.stderr.strip()}")
+    return result.stdout.strip()
+
+
 def _changed_public_files() -> "list[Path]":
     """Every file this branch changes, resolved from git rather than by hand.
 
@@ -1072,7 +1115,7 @@ def _changed_public_files() -> "list[Path]":
     was added for.
     """
     result = subprocess.run(
-        ["git", "diff", "--name-only", "--diff-filter=d", "gitea/develop...HEAD"],
+        ["git", "diff", "--name-only", "--diff-filter=d", _review_base()],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -1089,7 +1132,7 @@ def _changed_public_files() -> "list[Path]":
 def _iter_branch_added_lines() -> "list[tuple[Path, int, str]]":
     """Yield ``(path, new_line_number, text)`` for each line added on this branch."""
     result = subprocess.run(
-        ["git", "diff", "-U0", "--diff-filter=d", "gitea/develop...HEAD"],
+        ["git", "diff", "-U0", "--diff-filter=d", _review_base()],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
@@ -1226,7 +1269,7 @@ def test_publish_workflow_produces_the_manifest_its_consumers_require() -> None:
     # from an annotated tag's own object id, yields a value that never matches
     # and fails every deploy at the provenance check -- after the version has
     # been consumed. `^{commit}` peels the tag to its commit.
-    assert '"${TAG}^{commit}"' in manifest_run
+    assert 'SOURCE_SHA="${EXPECTED_SOURCE_SHA}"' in manifest_run
     assert "GITHUB_SHA" not in manifest_run
 
     publish_step = _step(job, "Publish release manifest")
@@ -1251,6 +1294,129 @@ def _artifact_manifest(tmp_path: Path) -> tuple[object, dict[str, object]]:
     return release_artifacts, manifest
 
 
+def test_candidate_build_source_must_be_passive_hatchling_metadata(
+    tmp_path: Path,
+) -> None:
+    release_artifacts = _load_release_artifacts()
+    source = tmp_path / "candidate"
+    source.mkdir()
+    pyproject = source / "pyproject.toml"
+    pyproject.write_text(
+        _read(PYPROJECT_PATH).replace('version = "0.0.25"', 'version = "0.0.26"', 1),
+        encoding="utf-8",
+    )
+
+    release_artifacts.validate_build_source(
+        source=source,
+        package="netbox-proxbox",
+        version="0.0.26",
+    )
+
+    pyproject.write_text(
+        pyproject.read_text(encoding="utf-8")
+        + '\n[tool.hatch.build.hooks.custom]\npath = "hatch_build.py"\n',
+        encoding="utf-8",
+    )
+    with pytest.raises(
+        release_artifacts.ReleaseArtifactError,
+        match="passive Hatchling contract",
+    ):
+        release_artifacts.validate_build_source(
+            source=source,
+            package="netbox-proxbox",
+            version="0.0.26",
+        )
+
+
+def test_candidate_source_is_copied_without_symlink_or_special_file_escapes(
+    tmp_path: Path,
+) -> None:
+    release_artifacts = _load_release_artifacts()
+    source = tmp_path / "candidate"
+    source.mkdir()
+    (source / "pyproject.toml").write_text(
+        _read(PYPROJECT_PATH).replace('version = "0.0.25"', 'version = "0.0.26"', 1),
+        encoding="utf-8",
+    )
+    (source / "README.md").write_text("readme\n", encoding="utf-8")
+    (source / "LICENSE").write_text("license\n", encoding="utf-8")
+    package = source / "netbox_proxbox"
+    package.mkdir()
+    (package / "__init__.py").write_text("value = 1\n", encoding="utf-8")
+    cli = source / "proxbox_cli"
+    cli.mkdir()
+    (cli / "__init__.py").write_text("value = 2\n", encoding="utf-8")
+
+    sanitized = tmp_path / "sanitized"
+    release_artifacts.sanitize_build_source(
+        source=source,
+        destination=sanitized,
+        package="netbox-proxbox",
+        version="0.0.26",
+    )
+    assert (sanitized / "README.md").read_text(encoding="utf-8") == "readme\n"
+    assert not any(path.is_symlink() for path in sanitized.rglob("*"))
+
+    (source / "outside-link").symlink_to(tmp_path / "outside")
+    with pytest.raises(
+        release_artifacts.ReleaseArtifactError,
+        match="unsafe file",
+    ):
+        release_artifacts.sanitize_build_source(
+            source=source,
+            destination=tmp_path / "rejected",
+            package="netbox-proxbox",
+            version="0.0.26",
+        )
+
+
+def test_release_tag_ruleset_must_be_active_immutable_and_no_bypass(
+    tmp_path: Path,
+) -> None:
+    release_artifacts = _load_release_artifacts()
+    rulesets = tmp_path / "rulesets"
+    rulesets.mkdir()
+    ruleset_path = rulesets / "42.json"
+    ruleset = {
+        "source_type": "Repository",
+        "source": "emersonfelipesp/netbox-proxbox",
+        "target": "tag",
+        "enforcement": "active",
+        "bypass_actors": [],
+        "conditions": {
+            "ref_name": {"exclude": [], "include": ["refs/tags/v*"]},
+        },
+        "rules": [{"type": "deletion"}, {"type": "non_fast_forward"}],
+    }
+    ruleset_path.write_text(json.dumps(ruleset), encoding="utf-8")
+
+    release_artifacts.validate_github_tag_rulesets(
+        rulesets=rulesets,
+        repository="emersonfelipesp/netbox-proxbox",
+    )
+
+    for unsafe in (
+        {**ruleset, "enforcement": "evaluate"},
+        {**ruleset, "bypass_actors": [{"actor_type": "User", "actor_id": 1}]},
+        {
+            **ruleset,
+            "conditions": {
+                "ref_name": {"exclude": [], "include": ["refs/tags/release-*"]}
+            },
+        },
+        {**ruleset, "rules": [{"type": "deletion"}]},
+    ):
+        ruleset_path.write_text(json.dumps(unsafe), encoding="utf-8")
+        with pytest.raises(
+            release_artifacts.ReleaseArtifactError,
+            match="No active no-bypass ruleset",
+        ):
+            release_artifacts.validate_github_tag_rulesets(
+                rulesets=rulesets,
+                repository="emersonfelipesp/netbox-proxbox",
+            )
+
+
 def _registry_responses(manifest: dict[str, object]) -> dict[str, object]:
     files = [
         {
@@ -1268,6 +1434,10 @@ def _registry_responses(manifest: dict[str, object]) -> dict[str, object]:
             "repository": {"full_name": "emersonfelipesp/netbox-proxbox"},
         },
         "files": files,
+        "content": {
+            "netbox_proxbox-0.0.26-py3-none-any.whl": b"wheel-bytes",
+            "netbox_proxbox-0.0.26.tar.gz": b"sdist-bytes",
+        },
     }
 
 
@@ -1275,6 +1445,9 @@ def _patch_requests(
     monkeypatch: pytest.MonkeyPatch, release_artifacts: object, responses: dict
 ) -> None:
     def fake_request(url: str, **_kwargs: object) -> bytes:
+        if "/pypi/files/" in url:
+            name = url.rsplit("/", 1)[1]
+            return responses["content"][name]
         payload = (
             responses["files"] if url.endswith("/files") else responses["metadata"]
         )
@@ -1378,6 +1551,354 @@ def test_registry_verification_requires_the_exact_published_artifact_set(
         "repository": {"full_name": "someone-else/netbox-proxbox"},
     }
     rejects()
+
+
+def test_registry_verification_downloads_and_hashes_every_artifact(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    release_artifacts, manifest = _artifact_manifest(tmp_path)
+    responses = _registry_responses(manifest)
+    responses["content"]["netbox_proxbox-0.0.26.tar.gz"] = b"different-bytes"
+    _patch_requests(monkeypatch, release_artifacts, responses)
+
+    with pytest.raises(
+        release_artifacts.ReleaseArtifactError,
+        match="Downloaded artifact differs from the release manifest",
+    ):
+        release_artifacts.verify_gitea_package_artifacts(
+            registry=_TEST_REGISTRY,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            package="netbox-proxbox",
+            version="0.0.26",
+            manifest=manifest,
+            token="t",
+        )
+
+
+def test_registry_verification_retries_delayed_visibility(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    release_artifacts, manifest = _artifact_manifest(tmp_path)
+    attempts: list[int] = []
+    delays: list[float] = []
+
+    monkeypatch.setattr(release_artifacts, "link_gitea_package", lambda **_k: None)
+
+    def delayed(**_kwargs: object) -> None:
+        attempts.append(len(attempts) + 1)
+        if len(attempts) < 3:
+            raise release_artifacts.RegistryNotFound("not visible yet")
+
+    monkeypatch.setattr(release_artifacts, "verify_gitea_package_artifacts", delayed)
+    monkeypatch.setattr(release_artifacts.time, "sleep", delays.append)
+
+    release_artifacts.verify_gitea_package_artifacts_with_retry(
+        registry=_TEST_REGISTRY,
+        owner="emersonfelipesp",
+        repository="netbox-proxbox",
+        package="netbox-proxbox",
+        version="0.0.26",
+        manifest=manifest,
+        token="t",
+        attempts=3,
+        delay_seconds=0.25,
+    )
+
+    assert attempts == [1, 2, 3]
+    assert delays == [0.25, 0.25]
+
+
+def test_registry_verification_retries_malformed_success_responses(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    release_artifacts, manifest = _artifact_manifest(tmp_path)
+    requests: list[str] = []
+    delays: list[float] = []
+
+    monkeypatch.setattr(release_artifacts, "link_gitea_package", lambda **_k: None)
+
+    def malformed(url: str, **_kwargs: object) -> bytes:
+        requests.append(url)
+        return b"not-json"
+
+    monkeypatch.setattr(release_artifacts, "_request", malformed)
+    monkeypatch.setattr(release_artifacts.time, "sleep", delays.append)
+
+    with pytest.raises(
+        release_artifacts.ReleaseArtifactError,
+        match="did not match after 3 attempts",
+    ):
+        release_artifacts.verify_gitea_package_artifacts_with_retry(
+            registry=_TEST_REGISTRY,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            package="netbox-proxbox",
+            version="0.0.26",
+            manifest=manifest,
+            token="t",
+            attempts=3,
+            delay_seconds=0.25,
+        )
+
+    assert len(requests) == 3
+    assert delays == [0.25, 0.25]
+
+
+def test_upload_preflight_requires_explicit_byte_identical_resume(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    release_artifacts, manifest = _artifact_manifest(tmp_path)
+    monkeypatch.setattr(
+        release_artifacts, "verify_gitea_token_identity", lambda **_k: None
+    )
+
+    def absent(**_kwargs: object) -> None:
+        raise release_artifacts.RegistryNotFound("absent")
+
+    monkeypatch.setattr(release_artifacts, "verify_gitea_package_artifacts", absent)
+    assert (
+        release_artifacts.prepare_gitea_package_upload(
+            registry=_TEST_REGISTRY,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            package="netbox-proxbox",
+            version="0.0.26",
+            manifest=manifest,
+            token="t",
+            resume_existing=False,
+            attempts=1,
+            delay_seconds=0,
+        )
+        == "upload"
+    )
+
+    monkeypatch.setattr(
+        release_artifacts, "verify_gitea_package_artifacts", lambda **_k: None
+    )
+    with pytest.raises(release_artifacts.ReleaseArtifactError, match="already exists"):
+        release_artifacts.prepare_gitea_package_upload(
+            registry=_TEST_REGISTRY,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            package="netbox-proxbox",
+            version="0.0.26",
+            manifest=manifest,
+            token="t",
+            resume_existing=False,
+            attempts=1,
+            delay_seconds=0,
+        )
+
+    monkeypatch.setattr(
+        release_artifacts,
+        "verify_gitea_package_artifacts_with_retry",
+        lambda **_k: None,
+    )
+    assert (
+        release_artifacts.prepare_gitea_package_upload(
+            registry=_TEST_REGISTRY,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            package="netbox-proxbox",
+            version="0.0.26",
+            manifest=manifest,
+            token="t",
+            resume_existing=True,
+            attempts=12,
+            delay_seconds=5,
+        )
+        == "reuse"
+    )
+
+    def absent_after_reservation(**_kwargs: object) -> None:
+        try:
+            raise release_artifacts.RegistryNotFound("absent")
+        except release_artifacts.RegistryNotFound as cause:
+            raise release_artifacts.ReleaseArtifactError("retry exhausted") from cause
+
+    monkeypatch.setattr(
+        release_artifacts,
+        "verify_gitea_package_artifacts_with_retry",
+        absent_after_reservation,
+    )
+    assert (
+        release_artifacts.prepare_gitea_package_upload(
+            registry=_TEST_REGISTRY,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            package="netbox-proxbox",
+            version="0.0.26",
+            manifest=manifest,
+            token="t",
+            resume_existing=True,
+            attempts=12,
+            delay_seconds=5,
+        )
+        == "upload"
+    )
+
+
+def test_upload_preflight_requires_the_package_owner_token(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    release_artifacts = _load_release_artifacts()
+
+    def fake_request(_url: str, **_kwargs: object) -> bytes:
+        return b'{"login":"someone-else"}'
+
+    monkeypatch.setattr(release_artifacts, "_request", fake_request)
+    with pytest.raises(release_artifacts.ReleaseArtifactError, match="does not match"):
+        release_artifacts.verify_gitea_token_identity(
+            registry=_TEST_REGISTRY, owner="emersonfelipesp", token="token"
+        )
+    with pytest.raises(release_artifacts.ReleaseArtifactError, match="unavailable"):
+        release_artifacts.verify_gitea_token_identity(
+            registry=_TEST_REGISTRY, owner="emersonfelipesp", token=""
+        )
+
+
+def test_gitea_publish_uses_preprovisioned_tools_and_resumable_upload() -> None:
+    workflow_text = _read(GITEA_PUBLISH_WORKFLOW)
+    workflow = yaml.safe_load(workflow_text)
+    publish = workflow["jobs"]["publish-gitea"]
+    steps = publish["steps"]
+    names = [step["name"] for step in steps]
+    tools = _step(publish, "Verify pre-provisioned build tools")["run"]
+    package_preflight_step = _step(publish, "Preflight immutable package state")
+    preflight = package_preflight_step["run"]
+    rc_preflight_step = _step(publish, "Reserve and verify RC promotion")
+    rc_preflight = rc_preflight_step["run"]
+    upload = _step(publish, "Publish to Gitea Package Registry")
+    verify = _step(publish, "Verify package in Gitea registry")["run"]
+    build = _step(publish, "Build distributions")["run"]
+    recreate = _step(publish, "Recreate fixed publisher environment")["run"]
+
+    triggers = workflow.get("on", workflow.get(True))
+    assert triggers["workflow_dispatch"]["inputs"]["resume_existing"] == {
+        "description": "Resume after an interrupted publish only when the registry bytes exactly match the rebuilt manifest",
+        "required": False,
+        "type": "boolean",
+        "default": False,
+    }
+    assert "for tool in python3 uv" in tools
+    assert 'ACTUAL_PYTHON="$(python3 --version 2>&1)"' in tools
+    assert "Python ${PYTHON_VERSION}" in tools
+    assert 'ACTUAL_UV="$(uv --version)"' in tools
+    assert "curl" not in tools
+    assert "install.sh" not in workflow_text
+    assert "apt-get" not in workflow_text
+    assert "Install GitHub CLI" not in names
+    assert "GH_TOKEN" not in package_preflight_step.get("env", {})
+    assert "command -v gh" in rc_preflight
+    assert "gh auth status --hostname github.com" in rc_preflight
+    assert "gh api \"repos/${GH_REPO}\" --jq '.permissions.push'" in rc_preflight
+    assert "rulesets?targets=tag" in rc_preflight
+    assert "validate-github-tag-rulesets" in rc_preflight
+    assert "env -u GH_TOKEN python3" in rc_preflight
+    assert "git -C candidate push --dry-run github" in rc_preflight
+    assert "git -C candidate push github" in rc_preflight
+    assert "VERIFIED_TAG_OBJECT" in rc_preflight
+    assert "trap 'rm -rf -- \"${SECRET_ROOT}\"' EXIT" in rc_preflight
+    assert "prepare-upload" in preflight
+    assert "--resume-existing --attempts 12 --delay-seconds 5" in preflight
+    assert upload["if"] == "env.ARTIFACT_ACTION == 'upload'"
+    assert "--attempts 12" in verify and "--delay-seconds 5" in verify
+    assert "sleep 5" not in verify
+    assert "uv build --no-build-isolation --python .venv/bin/python" in build
+    assert "release_artifacts.py sanitize-build-source" in build
+    assert "--source candidate --destination sanitized-candidate" in build
+    assert "--out-dir dist sanitized-candidate" in build
+    assert 'version("hatchling")' in build
+    assert 'ACTUAL_HATCHLING}" = "1.31.0"' in build
+    assert "rm -rf -- .venv" in recreate
+    assert 'version("twine")' in recreate
+    assert "git diff --exit-code -- scripts/release_artifacts.py" in recreate
+    assert workflow["concurrency"] == {
+        "group": "package-publication-${{ github.repository }}",
+        "cancel-in-progress": False,
+    }
+    for job in workflow["jobs"].values():
+        for step in job.get("steps", []):
+            if str(step.get("uses", "")).startswith("actions/checkout@"):
+                assert step["uses"] == (
+                    "actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd"
+                )
+                assert step.get("with", {}).get("persist-credentials") is False
+    assert "gh auth setup-git" not in workflow_text
+    assert "push-to-github" not in workflow["jobs"]
+    names = [step["name"] for step in publish["steps"]]
+    assert names.index("Reserve and verify RC promotion") < names.index(
+        "Publish to Gitea Package Registry"
+    )
+    assert (
+        names.index("Build distributions")
+        < names.index("Recreate fixed publisher environment")
+        < names.index("Preflight immutable package state")
+    )
+    assert rc_preflight_step["if"] == "env.IS_RC == 'true'"
+
+    control_checkout = _step(publish, "Checkout canonical publisher control")
+    candidate_checkout = _step(publish, "Checkout candidate tag as passive build input")
+    bind_candidate = _step(publish, "Bind candidate tag to validated objects")["run"]
+    assert control_checkout["with"] == {
+        "ref": "${{ github.sha }}",
+        "persist-credentials": False,
+    }
+    assert candidate_checkout["with"]["path"] == "candidate"
+    assert candidate_checkout["with"]["ref"] == (
+        "${{ needs.validate-version.outputs.source_sha }}"
+    )
+    assert "refs/release-policy/candidate-tag" in bind_candidate
+    assert "${EXPECTED_TAG_OBJECT}" in bind_candidate
+    assert "${EXPECTED_SOURCE_SHA}" in bind_candidate
+    assert "refs/release-policy/candidate-tag:refs/tags/${TAG}" in rc_preflight
+    for step in publish["steps"]:
+        if "GITEA_PACKAGE_TOKEN" in step.get("env", {}):
+            assert "candidate/scripts" not in step["run"]
+        if "TWINE_PASSWORD" in step.get("env", {}):
+            assert ".venv/bin/python -m twine" in step["run"]
+
+
+@pytest.mark.parametrize(
+    ("commands", "expected_success"),
+    [
+        ({"uv": "uv 0.12.5"}, False),
+        ({"python3": "Python 3.12.14"}, False),
+        ({"python3": "Python 3.11.9", "uv": "uv 0.12.5"}, False),
+        ({"python3": "Python 3.12.14", "uv": "uv 9.9.9"}, False),
+        ({"python3": "Python 3.12.14", "uv": "uv 0.12.5"}, True),
+    ],
+)
+def test_preprovisioned_tool_gate_fails_closed(
+    tmp_path: Path, commands: dict[str, str], expected_success: bool
+) -> None:
+    workflow = yaml.safe_load(_read(GITEA_PUBLISH_WORKFLOW))
+    run = _step(
+        workflow["jobs"]["publish-gitea"], "Verify pre-provisioned build tools"
+    )["run"]
+    binary_dir = tmp_path / "bin"
+    binary_dir.mkdir()
+    for command, output in commands.items():
+        executable = binary_dir / command
+        executable.write_text(
+            f"#!/bin/sh\nprintf '%s\\n' '{output}'\n", encoding="utf-8"
+        )
+        executable.chmod(0o755)
+
+    result = subprocess.run(
+        ["/bin/bash", "-c", run],
+        capture_output=True,
+        env={
+            "PATH": str(binary_dir),
+            "PYTHON_VERSION": "3.12.14",
+            "UV_VERSION": "0.12.5",
+        },
+        text=True,
+        timeout=10,
+    )
+
+    assert (result.returncode == 0) is expected_success, result.stderr
 
 
 def test_manifest_publication_tolerates_only_a_byte_identical_republish(

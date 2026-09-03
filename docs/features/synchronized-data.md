@@ -65,10 +65,12 @@ reflection definitions and strips their stale keys from every affected core
 object type. Migration 0087 finishes that removal: 0086 compares each field's label against its own definition table, and proxbox-api's inventory reconcile had rewritten the six hardware-discovery labels, so 0086 failed closed and skipped them. 0087 selects candidates by data type plus `ui_editable="hidden"` -- the two attributes both writers agree on -- and then gates the destructive step on the question that does not require guessing provenance NetBox never recorded: **a field holding a value on any row is left alone in full**, definition, bindings and values, whoever wrote it. Only `None` and the empty string count as blank, the check is repeated once the definitions are locked and again as each key is stripped, and the reverse applies it too, so neither a late writer nor a rollback can expose somebody's data as a Proxbox field. Each object's NetBox detail page shows its typed sidecar when one
 exists. It shows no empty card for an object that has never been synchronized.
 
-The `proxmox_node` and `proxmox_storage` custom fields are deliberately not
-removed. They are dual-role operator inputs used to select the target node and
-storage during NetBox-to-Proxmox CREATE intent. The other intent fields, branch
-flags, `source_packer_template`, and netbox-proxy custom fields also remain.
+Desired VM placement is separate from reflection. `ProxmoxVMIntent.target_node`
+and `target_storage` drive NetBox-to-Proxmox writes, while
+`ProxboxVirtualMachineSyncState` records the actual node and storage reported by
+Proxmox. Migration 0088 retires the ten superseded VM-intent custom fields. The
+branch flags, `source_packer_template`, and netbox-proxy fields remain custom
+fields.
 
 ### Concurrency / Known Limitation
 

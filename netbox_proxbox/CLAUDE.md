@@ -569,7 +569,10 @@ This package contains the NetBox plugin itself. It defines the plugin config, UR
 - [`services/`](./services): backend proxy, schema caching, service status, and sync coordination helpers.
 - [`management/`](./management): Django management commands package.
 - [`templatetags/`](./templatetags): custom template tags for ProxBox templates.
-- [`models/`](./models): persisted plugin models for Proxmox, remote NetBox, FastAPI, clusters, nodes, storage, backups, snapshots, task history, backup routines, replications, and settings.
+- [`models/`](./models): persisted plugin models for Proxmox, remote NetBox,
+  FastAPI, clusters, nodes, storage, backups, snapshots, task history, backup
+  routines, replications, settings, and the operator-owned
+  `ProxmoxVMIntent` one-to-one desired-state row.
 - [`forms/`](./forms): create/edit, filter, and scheduling forms for plugin models and sync actions.
 - [`tables/`](./tables): list-view table classes for endpoint, storage, backup, snapshot, replication, and cluster views.
 - [`views/`](./views): dashboard pages, endpoint CRUD, sync actions, job helpers, status checks, and targeted sync buttons.

@@ -94,17 +94,16 @@ def test_release_mocked_suites_disable_pytest_django():
     )
 
 
-def test_gitea_package_publish_has_one_automatic_tag_trigger():
-    """A tag must create one immutable package upload, never push+create twins."""
+def test_gitea_package_publish_requires_manual_main_dispatch():
+    """A tag cannot invoke the credential-bearing package publisher."""
     workflow = GITEA_PUBLISH_WORKFLOW.read_text()
     trigger_block = workflow.split("jobs:", 1)[0]
 
-    assert "push:" in trigger_block
-    assert "tags:" in trigger_block
-    assert "create:" not in trigger_block, (
-        "Gitea emits both create and push for a tag; subscribing to both starts "
-        "duplicate immutable package uploads for the same version"
-    )
+    assert "workflow_dispatch:" in trigger_block
+    assert "push:" not in trigger_block
+    assert "create:" not in trigger_block
+    assert "github.repository == 'emersonfelipesp/netbox-proxbox'" in workflow
+    assert "github.ref == 'refs/heads/main'" in workflow
 
 
 def test_real_django_workflow_enforces_autoconfiguration_branch_coverage():

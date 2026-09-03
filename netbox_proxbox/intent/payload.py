@@ -35,14 +35,16 @@ def _resolve_description(vm: Any) -> str | None:
     return build_description_with_metadata(vm, description)
 
 
-def _custom_fields(vm: Any) -> dict[str, Any]:
-    cf = getattr(vm, "custom_field_data", None)
-    return cf if isinstance(cf, dict) else {}
+def _intent(vm: Any) -> Any:
+    try:
+        return getattr(vm, "proxbox_intent", None)
+    except AttributeError:
+        return None
 
 
-def _cf_value(cf: dict[str, Any], *keys: str) -> Any:
-    for key in keys:
-        value = cf.get(key)
+def _intent_value(intent: Any, *attributes: str) -> Any:
+    for attribute in attributes:
+        value = getattr(intent, attribute, None)
         if value not in (None, ""):
             return value
     return None
@@ -92,22 +94,22 @@ def _cloud_init_network(value: Any) -> dict[str, Any] | None:
     return parsed if isinstance(parsed, dict) and parsed else None
 
 
-def _cloud_init_payload(cf: dict[str, Any]) -> dict[str, Any] | None:
+def _cloud_init_payload(intent: Any) -> dict[str, Any] | None:
     cloud_init: dict[str, Any] = {}
 
-    user = _str_or_none(_cf_value(cf, "cloud_init_user"))
+    user = _str_or_none(_intent_value(intent, "cloud_init_user"))
     if user is not None:
         cloud_init["user"] = user
 
-    ssh_keys = _cloud_init_ssh_keys(_cf_value(cf, "cloud_init_ssh_keys"))
+    ssh_keys = _cloud_init_ssh_keys(_intent_value(intent, "cloud_init_ssh_keys"))
     if ssh_keys is not None:
         cloud_init["ssh_keys"] = ssh_keys
 
-    user_data = _cloud_init_text(_cf_value(cf, "cloud_init_user_data"))
+    user_data = _cloud_init_text(_intent_value(intent, "cloud_init_user_data"))
     if user_data is not None:
         cloud_init["user_data"] = user_data
 
-    network = _cloud_init_network(_cf_value(cf, "cloud_init_network"))
+    network = _cloud_init_network(_intent_value(intent, "cloud_init_network"))
     if network is not None:
         cloud_init["network"] = network
 
@@ -150,23 +152,21 @@ def _tag_names(vm: Any) -> list[str]:
 
 def build_vm_payload(vm) -> dict:
     """Build a proxbox-api ``VMIntentPayload`` dictionary from a NetBox VM."""
-    cf = _custom_fields(vm)
+    intent = _intent(vm)
     payload = {
         "vmid": _int_or_none(resolve_vm_vmid(vm)),
         "name": str(getattr(vm, "name", "") or ""),
-        "node": _str_or_none(_cf_value(cf, "proxmox_node", "cf_proxmox_node")),
+        "node": _str_or_none(_intent_value(intent, "target_node")),
         "cores": _int_or_none(getattr(vm, "vcpus", None)),
         "memory": _int_or_none(getattr(vm, "memory", None)),
         "disk_gb": _disk_gb(vm),
-        "storage": _str_or_none(_cf_value(cf, "proxmox_storage", "cf_proxmox_storage")),
-        "iso": _str_or_none(_cf_value(cf, "proxmox_iso", "cf_proxmox_iso")),
-        "template_vmid": _int_or_none(
-            _cf_value(cf, "proxmox_template_vmid", "cf_proxmox_template_vmid")
-        ),
+        "storage": _str_or_none(_intent_value(intent, "target_storage")),
+        "iso": _str_or_none(_intent_value(intent, "iso")),
+        "template_vmid": _int_or_none(_intent_value(intent, "template_vmid")),
         "tags": _tag_names(vm),
         "description": _resolve_description(vm),
     }
-    cloud_init = _cloud_init_payload(cf)
+    cloud_init = _cloud_init_payload(intent)
     if cloud_init is not None:
         payload["cloud_init"] = cloud_init
     return payload
@@ -174,29 +174,21 @@ def build_vm_payload(vm) -> dict:
 
 def build_lxc_payload(vm) -> dict:
     """Build a proxbox-api ``LXCIntentPayload`` dictionary from a NetBox VM."""
-    cf = _custom_fields(vm)
+    intent = _intent(vm)
     payload = {
         "vmid": _int_or_none(resolve_vm_vmid(vm)),
         "name": str(getattr(vm, "name", "") or ""),
-        "node": _str_or_none(_cf_value(cf, "proxmox_node", "cf_proxmox_node")),
+        "node": _str_or_none(_intent_value(intent, "target_node")),
         "cores": _int_or_none(getattr(vm, "vcpus", None)),
         "memory": _int_or_none(getattr(vm, "memory", None)),
-        "swap": _int_or_none(_cf_value(cf, "proxmox_swap", "cf_proxmox_swap")),
-        "rootfs": _str_or_none(_cf_value(cf, "proxmox_rootfs", "cf_proxmox_rootfs")),
-        "storage": _str_or_none(_cf_value(cf, "proxmox_storage", "cf_proxmox_storage")),
-        "ostemplate": _str_or_none(
-            _cf_value(
-                cf,
-                "proxmox_ostemplate",
-                "cf_proxmox_ostemplate",
-                "proxmox_iso",
-                "cf_proxmox_iso",
-            )
-        ),
+        "swap": _int_or_none(_intent_value(intent, "swap")),
+        "rootfs": _str_or_none(_intent_value(intent, "rootfs")),
+        "storage": _str_or_none(_intent_value(intent, "target_storage")),
+        "ostemplate": _str_or_none(_intent_value(intent, "ostemplate", "iso")),
         "tags": _tag_names(vm),
         "description": _resolve_description(vm),
     }
-    cloud_init = _cloud_init_payload(cf)
+    cloud_init = _cloud_init_payload(intent)
     if cloud_init is not None:
         payload["cloud_init"] = cloud_init
     return payload

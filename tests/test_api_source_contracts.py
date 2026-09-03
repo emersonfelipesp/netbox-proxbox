@@ -614,6 +614,7 @@ def test_plugin_api_routes_register_all_plugin_objects():
         "snapshots",
         "task-history",
         "vm-cloudinit",
+        "vm-intents",
         "vm-templates",
     }
 

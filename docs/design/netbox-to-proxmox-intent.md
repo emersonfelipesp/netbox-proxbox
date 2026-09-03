@@ -14,8 +14,8 @@ to *change* infrastructure must do it in Proxmox (UI or API), and the
 plugin reflects the change shortly after.
 
 The intent layer inverts that flow for opt-in branches. Operators
-edit `VirtualMachine` records (and their cloud-init / placement
-custom fields) inside a NetBox *branch*, review the diff, and on
+edit `VirtualMachine` records and their plugin-owned `ProxmoxVMIntent` rows
+inside a NetBox *branch*, review the diff, and on
 merge the plugin dispatches Proxmox writes (CREATE / UPDATE / DELETE)
 through `proxbox-api`. The result is a GitOps-style declarative
 workflow on top of NetBox.
@@ -83,7 +83,8 @@ executor.
 
 ## 5. Diff classification
 
-The validator reads `branch.changediff_set.filter(object_type__model='virtualmachine')` and classifies each diff:
+The validator unions `virtualmachine` and `proxmoxvmintent` ChangeDiff streams,
+keyed by virtual-machine ID, and classifies each resulting VM once:
 
 | diff kind | NetBox semantics | Plan check | Apply dispatcher |
 |---|---|---|---|
@@ -94,22 +95,48 @@ The validator reads `branch.changediff_set.filter(object_type__model='virtualmac
 DELETE never destroys directly. It triggers the four-eyes deletion
 flow (see §11).
 
-## 6. Custom fields landed by Sub-PR C
+A VM diff keeps its own create, update, or delete operation. If the same VM also
+has an intent diff, the VM operation wins and is dispatched once. An intent-only
+create, update, or delete becomes a VM update; deleting an intent means applying
+the same all-null desired values as clearing every former intent custom field.
+Deleted intent rows resolve their parent from `ChangeDiff.original`. A deleted
+core VM remains in the union after its generic relation disappears. That entry
+retains the originating `ChangeDiff`, and the apply job builds the pending
+deletion snapshot from its `original`/`current`, `object_repr`, and `object_id`
+values. It never treats the NetBox object ID as a Proxmox VMID; missing VMID,
+node, or name identity fails that diff instead of silently discarding it.
 
-**10 VM CFs (attach to `virtualization.virtualmachine`):**
+## 6. VM intent model and branch custom fields
+
+`ProxmoxVMIntent` is a plugin-owned `NetBoxModel` with one row per
+`virtualization.VirtualMachine`. Operators edit it from the VM detail page. An
+existing intent cannot be reassigned to another VM through either the form or
+REST serializer; delete it and create a new row instead. This lifetime ownership
+prevents the old guest from retaining an undispatched desired-state change.
 
 ```
-proxmox_node                text
-proxmox_storage             text
-proxmox_iso                 text
-proxmox_template_vmid       integer
+target_node                 text
+target_storage              text
+iso                         text
+template_vmid               integer
+swap                        integer
+rootfs                      text
+ostemplate                  text
 cloud_init_user             text
 cloud_init_ssh_keys         text (long)
 cloud_init_user_data        text (long)
-cloud_init_network          text
-proxbox_intent_state        text   # pending|applied|failed|deleted
-proxbox_last_apply_run_id   text   # UUID of last ProxmoxApplyJob
+cloud_init_network          text (long)
+intent_state                text   # apply-managed
+last_apply_run_id           text   # apply-managed UUID
 ```
+
+`target_node` is desired placement. Delete authorization snapshots use
+`vm_identity.resolve_vm_node()` for the reflected current location and record
+the intent separately as audit metadata.
+
+Successful applies update stamp fields only when the intent row still exists.
+An intent-only deletion deliberately becomes a VM update, and its successful
+stamp must not recreate the row the operator removed.
 
 **2 Branch CFs (attach to `netbox_branching.branch`):**
 
@@ -167,7 +194,7 @@ Promoted to full schema in Sub-PR E (migration `0040_apply_job_full`).
 |---|---|---|
 | `branch` | FK `netbox_branching.branch` | `on_delete=SET_NULL` (branch may be deleted; job history survives) |
 | `user` | FK | the user who merged the branch |
-| `run_uuid` | UUIDField | stamps `proxbox_last_apply_run_id` on each VM |
+| `run_uuid` | UUIDField | stamps `ProxmoxVMIntent.last_apply_run_id` |
 | `state` | CharField | `queued|running|succeeded|failed|partial` |
 | `per_vm_results` | JSONField | per-VMID outcome + reason |
 | `started_at` | DateTime | nullable until pickup |
@@ -205,10 +232,11 @@ Self-approval is blocked at three layers (see §2 invariant 3).
 
 ## 11. Cloud-Init (Sub-PR K)
 
-The 4 cloud-init CFs feed into a `CloudInitPayload` Pydantic v2 model
+The four `ProxmoxVMIntent` cloud-init fields feed into a `CloudInitPayload`
+Pydantic v2 model
 on the backend, which the dispatchers map to Proxmox API arguments:
 
-| NetBox CF | Proxmox arg |
+| Intent field | Proxmox arg |
 |---|---|
 | `cloud_init_user` | `ciuser` |
 | `cloud_init_ssh_keys` | `sshkeys` (URL-encoded) |
@@ -302,20 +330,24 @@ adds the two new kinds.
 |---|---|---|
 | `0037_v0_0_15_release` | (already on `origin/develop`) | n/a |
 | `0038_intent_permissions` | 7 RBAC perms | B |
-| `0039_intent_custom_fields` | 12 intent CFs | C |
+| `0039_intent_custom_fields` | Original 12 intent custom fields | C |
 | `0040_apply_job_full` | `ProxmoxApplyJob` schema | E |
 | `0041_deletion_request_full` | `DeletionRequest` schema | H |
 | `0042_intent_warn_plaintext_password` | settings toggle | K |
+| `0088_proxmox_vm_intent` | Plugin-owned VM intent schema | model cutover |
+| `0089_remove_vm_intent_custom_fields` | Retire the ten empty VM definitions | model cutover |
 
-One migration per sub-PR keeps the chain auditable.
+The historical rollout used one migration per sub-PR. The later intent-model
+cutover deliberately separates additive schema from conservative custom-field
+removal while keeping a single migration leaf.
 
 ## 16. proxbox-api inline SQLite migrations
 
 proxbox-api uses inline column migrations in
 `proxbox_api/database.py::_migrate_*_columns()`. Sub-PR F adds a new
 section there only if intent state needs to be persisted on the
-backend side (current design holds intent state in NetBox CFs; the
-backend remains stateless for `/intent/*`).
+backend side. The current design holds intent state in
+`ProxmoxVMIntent`; the backend remains stateless for `/intent/*`.
 
 ## 17. Rollout phases
 

@@ -16,8 +16,8 @@ try:
 except ImportError:  # pragma: no cover - test stubs expose only JobRunner
     Job = Any  # type: ignore[misc,assignment]
 
-from netbox_proxbox.intent.cf_writes import stamp_intent_state
 from netbox_proxbox.intent.diff_classify import classify_diff
+from netbox_proxbox.intent.diff_union import virtual_machine_diff_union
 from netbox_proxbox.intent.firewall_common import save_status_for_firewall_object
 from netbox_proxbox.intent.firewall_payload import (
     build_firewall_apply_diff,
@@ -31,8 +31,12 @@ from netbox_proxbox.intent.payload import (
     build_update_delta,
     build_vm_payload,
 )
+from netbox_proxbox.intent.intent_writes import stamp_intent_state
 from netbox_proxbox.intent.proxmox_tags import tag_pending_deletion
-from netbox_proxbox.intent.snapshot import build_metadata_snapshot
+from netbox_proxbox.intent.snapshot import (
+    build_deleted_metadata_snapshot,
+    build_metadata_snapshot,
+)
 from netbox_proxbox.models import (
     DeletionRequest,
     ProxmoxApplyJob as ProxmoxApplyJobModel,
@@ -46,7 +50,6 @@ __all__ = ("PROXBOX_APPLY_JOB_TIMEOUT", "ProxmoxApplyJob")
 
 logger = logging.getLogger(__name__)
 
-_VM_MODEL = "virtualmachine"
 _CREATE_PERMISSIONS = {
     "qemu": "netbox_proxbox.intent_create_vm",
     "lxc": "netbox_proxbox.intent_create_lxc",
@@ -78,10 +81,8 @@ def _normalize_run_uuid(value: uuid.UUID | str | None) -> uuid.UUID:
 
 
 def _virtualmachine_changediffs(branch: Any) -> Any:
-    changediff_qs = getattr(branch, "changediff_set", None)
-    if changediff_qs is None:
-        return []
-    return changediff_qs.filter(object_type__model=_VM_MODEL)
+    """Return the VM-keyed union with each originating ChangeDiff retained."""
+    return virtual_machine_diff_union(branch)
 
 
 def _diff_identifier(row: Any, fallback: int) -> str:
@@ -90,20 +91,6 @@ def _diff_identifier(row: Any, fallback: int) -> str:
         if value not in (None, ""):
             return str(value)
     return f"changediff-{fallback}"
-
-
-def _changediff_vm(row: Any) -> Any:
-    vm = getattr(row, "object", None)
-    if vm is not None:
-        return vm
-
-    object_id = getattr(row, "object_id", None)
-    if object_id is None:
-        return None
-
-    from virtualization.models import VirtualMachine  # noqa: PLC0415
-
-    return VirtualMachine.objects.get(pk=object_id)
 
 
 def _call_apply_endpoint(
@@ -226,6 +213,19 @@ def _state_from_results(results: dict[str, dict[str, object]]) -> str:
     return ProxmoxApplyJobModel.State.partial
 
 
+def _deletion_identity(snapshot: dict[str, Any]) -> tuple[int, str, str]:
+    vmid = snapshot.get("vmid")
+    node = snapshot.get("node")
+    name = snapshot.get("name")
+    if type(vmid) is not int or vmid <= 0:
+        raise ValueError("Deletion metadata does not contain a valid Proxmox VMID.")
+    if node in (None, ""):
+        raise ValueError("Deletion metadata does not contain a Proxmox node.")
+    if name in (None, ""):
+        raise ValueError("Deletion metadata does not contain a VM name.")
+    return vmid, str(node), str(name)
+
+
 class ProxmoxApplyJob(JobRunner):
     """Dispatch supported merged branch intent diffs to proxbox-api."""
 
@@ -302,15 +302,15 @@ class ProxmoxApplyJob(JobRunner):
             )
 
             results: dict[str, dict[str, object]] = {}
-            for index, row in enumerate(_virtualmachine_changediffs(branch), start=1):
-                vm = None
+            for index, (vm, requested_op, row) in enumerate(
+                _virtualmachine_changediffs(branch), start=1
+            ):
                 vmid = None
                 key = _diff_identifier(row, index)
                 op = "update"
                 kind = "qemu"
                 try:
-                    op, kind = classify_diff(row)
-                    vm = _changediff_vm(row)
+                    op, kind = classify_diff(vm, requested_op, row)
                     build_payload = (
                         build_lxc_payload if kind == "lxc" else build_vm_payload
                     )
@@ -318,7 +318,7 @@ class ProxmoxApplyJob(JobRunner):
                     vmid = payload.get("vmid")
                     key = _result_key(row, vm, vmid, index)
 
-                    if vm is None:
+                    if vm is None and op != "delete":
                         results[key] = _result_entry(
                             vmid=vmid,
                             op=op,
@@ -367,19 +367,27 @@ class ProxmoxApplyJob(JobRunner):
                             )
                             continue
 
-                        snapshot = build_metadata_snapshot(vm)
-                        snapshot_vmid = snapshot.get("vmid")
-                        snapshot_node = snapshot.get("node")
+                        snapshot = (
+                            build_deleted_metadata_snapshot(row)
+                            if vm is None
+                            else build_metadata_snapshot(vm)
+                        )
+                        snapshot_vmid, snapshot_node, snapshot_name = (
+                            _deletion_identity(snapshot)
+                        )
+                        vmid = snapshot_vmid
+                        key = _result_key(row, vm, vmid, index)
                         deletion_request = DeletionRequest(
                             branch_id=getattr(branch, "pk", None),
                             branch_name=str(getattr(branch, "name", "") or ""),
                             requested_by=actor,
                             state=DeletionRequest.State.PENDING,
                             vmid=snapshot_vmid,
-                            node=snapshot_node or "",
+                            node=snapshot_node,
                             kind=kind,
                             metadata_snapshot=snapshot,
                             requested_at=timezone.now(),
+                            name=str(snapshot_name),
                         )
                         deletion_request.save()
 
@@ -411,8 +419,7 @@ class ProxmoxApplyJob(JobRunner):
                         continue
 
                     if op == "update":
-                        prev_state = getattr(row, "prechange_data", None) or {}
-                        delta = build_update_delta(vm, prev_state)
+                        delta = build_update_delta(vm, {})
                         if not delta:
                             results[key] = _result_entry(
                                 vmid=vmid,

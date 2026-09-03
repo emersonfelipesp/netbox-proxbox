@@ -58,6 +58,7 @@ These follow the standard `NetBoxModelViewSet` + `NetBoxRouter` pattern:
 | `ProxmoxServiceSampleViewSet` | `service-samples/` | GET/HEAD/OPTIONS only — raw projected systemd rows |
 | `ProxmoxServiceStatusViewSet` | `service-statuses/` | GET/HEAD/OPTIONS only — latest projected service state |
 | `ProxmoxVMCloudInitViewSet` | `vm-cloudinit/` | Full CRUD; reflection fields + create-time intent; `sshkeys_intent` write-only (encrypted → `sshkeys_enc`), `has_sshkeys` read-only |
+| `ProxmoxVMIntentViewSet` | `vm-intents/` | Full CRUD operator intent restricted by parent VM visibility; apply stamps are read-only and an existing row's parent VM is immutable |
 | `ProxmoxVMTemplateViewSet` | `vm-templates/` | Full CRUD |
 | `Proxbox*SyncStateViewSet` | `sync-state/.../` | Full CRUD typed sidecars for the legacy custom-field payload; additive until proxbox-api switches writers/readers |
 | `ProxboxPluginSettingsViewSet` | `settings/` | GET+PATCH only (singleton); `encryption_key` is write-only on ordinary serializers, ordinary key mutation is rejected while ciphertext exists, all validation/mutation entry frames are redact-all for exception reports, and `/runtime/` retains the existing permission-gated key response for current proxbox-api compatibility plus `encryption_key_configured`. Remove the fallback only with a paired backend migration. |

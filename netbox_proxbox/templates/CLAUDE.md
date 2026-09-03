@@ -38,6 +38,13 @@ This directory contains Django templates bundled with the plugin.
   core VM detail page. It may show only the count of reflected cloud-init SSH
   keys, never their contents, and must rely on Django autoescaping for every
   sidecar and cloud-init value.
+- `netbox_proxbox/inc/vm_proxmox_intent_card.html` shows the separate desired
+  state only when a `ProxmoxVMIntent` row exists and the request user has model
+  view permission plus object visibility through `objects.restrict(user,
+  "view")`. If restriction is unavailable or fails, the extension renders
+  nothing. All operator text, especially `cloud_init_user_data`, must pass
+  through Django autoescaping; never apply the `safe` filter or call `mark_safe`
+  on an individual field value.
 - `netbox_proxbox/inc/sync_state_card.html` is the shared typed reflection card
   for the other thirteen core object types. `template_content.py` supplies only
   explicit sidecar fields, links resolved relations, and suppresses the card

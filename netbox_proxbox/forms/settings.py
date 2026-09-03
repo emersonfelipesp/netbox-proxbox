@@ -721,7 +721,8 @@ class ProxboxPluginSettingsForm(forms.Form):
         initial=True,
         label="Warn on plaintext cloud-init passwords",
         help_text=(
-            "When enabled, branch merge validation warns if cloud_init_user_data "
+            "When enabled, branch merge validation warns if "
+            "ProxmoxVMIntent.cloud_init_user_data "
             "contains a plaintext password line."
         ),
     )

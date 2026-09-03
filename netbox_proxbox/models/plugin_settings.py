@@ -940,7 +940,7 @@ class ProxboxPluginSettings(NetBoxModel):
         verbose_name=_("Warn on plaintext cloud-init passwords"),
         help_text=_(
             "When enabled, the intent merge validator emits a warning if "
-            "cloud_init_user_data contains a plaintext password line."
+            "ProxmoxVMIntent.cloud_init_user_data contains a plaintext password line."
         ),
     )
     apply_destroy_confirmed = models.BooleanField(

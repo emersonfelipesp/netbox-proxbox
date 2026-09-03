@@ -188,6 +188,7 @@ router.register("task-history", views.VMTaskHistoryViewSet)
 router.register(
     "vm-cloudinit", views.ProxmoxVMCloudInitViewSet, basename="proxmoxvmcloudinit"
 )
+router.register("vm-intents", views.ProxmoxVMIntentViewSet, basename="proxmoxvmintent")
 router.register(
     "vm-templates", views.ProxmoxVMTemplateViewSet, basename="proxmoxvmtemplate"
 )

@@ -55,6 +55,7 @@ from .ssh_credential import *
 from .storage import *
 from .vm_backup import *
 from .vm_cloudinit import *
+from .vm_intent import *
 from .vm_snapshot import *
 from .vm_task_history import *
 from .vm_template import *

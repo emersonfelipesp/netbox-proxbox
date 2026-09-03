@@ -83,7 +83,7 @@ The validator checks:
 
 - The plugin master flag.
 - The branch `apply_to_proxmox` custom field.
-- VirtualMachine and LXC diffs on the branch.
+- VirtualMachine, LXC, and `ProxmoxVMIntent` diffs on the branch.
 - Operator RBAC for create, update, and delete requests.
 - The `apply_destroy_confirmed` branch field for deletions.
 - Backend plan verdicts from proxbox-api.
@@ -103,6 +103,18 @@ it blocks, the merge does not complete and Proxmox is not touched.
 
 : Required when the branch contains DELETE diffs. This does not authorize a
   destroy. It only allows the merge to create pending deletion requests.
+
+## Virtual-machine intent
+
+Open a virtual machine and select **Set Proxmox intent**. The form owns desired
+placement (`target_node`, `target_storage`, ISO or template VMID), optional LXC
+placement (`swap`, `rootfs`, `ostemplate`), and cloud-init values. Existing
+intent rows show a Proxmox Intent card and an edit link on the VM detail page.
+
+The apply job writes `intent_state` and `last_apply_run_id`; they are visible on
+the card but are excluded from the operator form and read-only through the API.
+If no intent row exists, the VM keeps the prior all-empty payload and the detail
+page renders no empty card.
 
 ## Plan Summary Page
 
@@ -126,7 +138,7 @@ fix the branch or permissions before merge review.
 
 1. Operator creates a netbox-branching branch.
 2. Operator sets `apply_to_proxmox=True`.
-3. Operator changes VMs or LXC records inside the branch.
+3. Operator changes VMs, LXC records, or their Proxmox intent rows inside the branch.
 4. Operator requests a merge.
 5. The merge validator runs a read-only plan.
 6. Reviewers inspect the plan summary.
@@ -175,8 +187,10 @@ Common create blockers:
 
 ## Update Behavior
 
-UPDATE diffs compare the branch object with the pre-change data from the
-`ChangeDiff`. No-op updates are skipped. Real deltas are sent to proxbox-api.
+UPDATE diffs build the current desired payload from the VM and its intent row.
+An intent-only change is an update, including creation, editing, or clearing of
+the intent row. A simultaneous VM and intent change is dispatched once with the
+VM diff's operation.
 
 Common update blockers:
 

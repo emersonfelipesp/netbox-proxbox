@@ -19,6 +19,7 @@ import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = REPO_ROOT / ".gitea/workflows/publish-gitea.yml"
+PROMOTION_WORKFLOW = REPO_ROOT / ".gitea/workflows/promote-final-tag.yml"
 
 # Labels advertised by runners that exist today. A job pinned outside this set
 # cannot be scheduled, which is exactly the failure that blocked this release.
@@ -60,9 +61,16 @@ def test_workflow_publishes_to_the_gitea_package_registry() -> None:
     assert "twine upload" in text
 
 
-def test_release_tags_are_validated_before_anything_is_published() -> None:
+def test_manual_release_tags_are_validated_before_anything_is_published() -> None:
     jobs = _workflow()["jobs"]
     assert "validate-version" in jobs
+    triggers = _workflow().get("on", _workflow().get(True))
+    assert set(triggers) == {"workflow_dispatch"}
+    assert (
+        "github.repository == 'emersonfelipesp/netbox-proxbox'"
+        in jobs["validate-version"]["if"]
+    )
+    assert "github.ref == 'refs/heads/main'" in jobs["validate-version"]["if"]
     # publish must depend on validation, not merely run after it by luck
     assert "validate-version" in jobs["publish-gitea"]["needs"]
 
@@ -77,24 +85,40 @@ def test_github_push_targets_only_the_authorised_destination() -> None:
     )
 
 
-def test_github_release_is_created_only_for_non_rc_tags() -> None:
-    """An rc must not produce a public GitHub Release.
+def test_publish_workflow_reserves_only_rc_tags() -> None:
+    """The package publisher must not make a final release public.
 
     A GitHub Release fires the `release: published` event, which is the sole
     trigger for the public PyPI upload. Creating one for a release candidate
     would publish an rc to PyPI as though it were final.
     """
-    steps = _workflow()["jobs"]["push-to-github"]["steps"]
-    release_steps = [s for s in steps if "Release" in str(s.get("name", ""))]
-    assert release_steps, "no GitHub Release step found"
-    for step in release_steps:
-        assert step.get("if") == "env.IS_RC == 'false'", (
-            f"release step {step.get('name')!r} is not gated on a non-rc tag"
-        )
+    workflow = _workflow()
+    publish = workflow["jobs"]["publish-gitea"]
+    reserve = next(
+        step
+        for step in publish["steps"]
+        if step.get("name") == "Reserve and verify RC promotion"
+    )
+    assert reserve["if"] == "env.IS_RC == 'true'"
+    assert "git -C candidate push github" in reserve["run"]
+    assert "push-to-github" not in workflow["jobs"]
+    assert "gh release create" not in WORKFLOW.read_text(encoding="utf-8")
 
 
-def test_release_notes_file_is_preferred_over_generated_notes() -> None:
-    """The curated notes are what describe features and fixes to users."""
-    text = WORKFLOW.read_text(encoding="utf-8")
-    assert "docs/release-notes/version-${VERSION}.md" in text
-    assert "--notes-file" in text
+def test_final_tags_use_the_production_evidence_promotion_path() -> None:
+    """Final tags remain private until the production evidence gate passes."""
+    text = PROMOTION_WORKFLOW.read_text(encoding="utf-8")
+    assert "scripts/release_artifacts.py fetch-gitea" in text
+    assert "scripts/release_artifacts.py fetch-attestation" in text
+    assert "refs/remotes/gitea/release-main" in text
+    assert "refs/remotes/gitea/release-develop" in text
+    assert "https://github.com/emersonfelipesp/netbox-proxbox.git" in text
+    assert text.index("fetch-attestation") < text.index("git push github")
+    assert '"refs/tags/${TAG}"' in text
+    assert '"refs/tags/${TAG}^{}"' in text
+    assert 'test "$REMOTE_TAG_OBJECT" = "$LOCAL_TAG_OBJECT"' in text
+    assert 'test "$REMOTE_SOURCE_SHA" = "$SOURCE_SHA"' in text
+    assert "github.repository == 'emersonfelipesp/netbox-proxbox'" in text
+    assert "ref: ${{ github.sha }}" in text
+    assert 'test "$(git rev-parse HEAD^{commit})" = "${GITHUB_SHA}"' in text
+    assert "gh release create" not in text

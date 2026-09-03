@@ -72,6 +72,7 @@ from .models import (
     ProxmoxNode,
     ProxmoxStorage,
     ProxmoxVMCloudInit,
+    ProxmoxVMIntent,
     ProxmoxVMTemplate,
     Replication,
     VMBackup,
@@ -618,6 +619,44 @@ class ProxmoxVMCloudInitFilterSet(ProxboxModelFilterSet):
             Q(virtual_machine__name__icontains=value)
             | Q(ciuser__icontains=value)
             | Q(ipconfig0__icontains=value)
+        )
+
+
+@register_filterset
+class ProxmoxVMIntentFilterSet(ProxboxSyncStateFilterSet):
+    """Filter intent rows while honoring visibility of the parent VM."""
+
+    virtual_machine = MultiValueNumberFilter(
+        field_name="virtual_machine",
+        method="_filter_visible_relation_id",
+    )
+    virtual_machine_id = MultiValueNumberFilter(
+        field_name="virtual_machine",
+        method="_filter_visible_relation_id",
+        label="Virtual machine (ID)",
+    )
+
+    class Meta:
+        model = ProxmoxVMIntent
+        fields = (
+            "id",
+            "virtual_machine",
+            "virtual_machine_id",
+            "target_node",
+            "target_storage",
+            "template_vmid",
+            "intent_state",
+            "last_apply_run_id",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(virtual_machine__name__icontains=value)
+            | Q(target_node__icontains=value)
+            | Q(target_storage__icontains=value)
+            | Q(cloud_init_user__icontains=value)
         )
 
 

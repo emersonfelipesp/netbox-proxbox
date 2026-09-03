@@ -254,10 +254,11 @@ fake historical models for both generations.
   Manufacturer, Site, DeviceRole, DeviceType, IPAddress, VLAN, Cluster,
   ClusterGroup, ClusterType, VirtualMachine, VirtualDisk, and VMInterface JSON.
   It does not backfill data. Its reverse restores the full canonical definition
-  table and every available original content-type binding. The dual-role
-  `proxmox_node` and `proxmox_storage` fields must survive because the intent
-  pipeline reads them as CREATE placement inputs; all other intent, branch,
-  netbox-packer, and netbox-proxy fields remain out of scope.
+  table and every available original content-type binding. At that historical
+  boundary, `proxmox_node` and `proxmox_storage` survive
+  because the intent pipeline still reads them as CREATE placement inputs;
+  migration 0088 owns their later retirement. Other intent, branch,
+  netbox-packer, and netbox-proxy fields remain out of scope for 0086.
 - Migration 0087 removes the six hardware-discovery reflection custom fields
   that 0086 skipped: `hardware_chassis_manufacturer`,
   `hardware_chassis_product`, `hardware_chassis_serial`, `nic_duplex`,
@@ -305,6 +306,17 @@ fake historical models for both generations.
   production devices and 1,459 interfaces carried no value for any of the six.
   Do not edit 0086 to fix this; it is applied on staging and production, and
   its skip is safe.
+- Migration `0088_proxmox_vm_intent` is an additive, idempotent schema step for
+  the plugin-owned `ProxmoxVMIntent` model. The separate
+  `0089_remove_vm_intent_custom_fields` migration is the only new leaf and
+  depends on the additive step. It retires exactly the ten superseded intent
+  definitions. Its forward and reverse use the same three-stage emptiness,
+  locking, binding-release, and populated-row protections as 0087; only the
+  definition table and affected object types differ. The authoritative scan and
+  stripping pass also lock affected VM and device rows with
+  `select_for_update()` before reading and rewriting their JSON documents, using
+  bounded iterator and bulk-update batches so a concurrent unrelated
+  custom-field write cannot be overwritten. Migrations 0085-0087 are immutable.
 
 ## Links
 

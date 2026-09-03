@@ -134,9 +134,12 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   Migration 0087 finishes that removal: 0086 compares each field's label against its own definition table, and proxbox-api's inventory reconcile had rewritten the six hardware-discovery labels, so 0086 failed closed and skipped them. 0087 selects candidates by data type plus `ui_editable="hidden"` -- the two attributes both writers agree on -- and then gates the destructive step on the question that does not require guessing provenance NetBox never recorded: **a field holding a value on any row is left alone in full**, definition, bindings and values, whoever wrote it. Only `None` and the empty string count as blank, the check is repeated once the definitions are locked and again as each key is stripped, and the reverse applies it too, so neither a late writer nor a rollback can expose somebody's data as a Proxbox field.
   Core-object detail pages render the corresponding typed sidecar only when a
   row exists. The removed `custom_fields_enabled` setting must not be restored.
-  The dual-role `proxmox_node` and `proxmox_storage` custom fields remain live
-  NetBox-to-Proxmox placement inputs, and all other intent, branch,
-  netbox-packer, and netbox-proxy custom fields remain operational.
+  NetBox-to-Proxmox placement and cloud-init input now lives in the
+  plugin-owned `ProxmoxVMIntent` one-to-one model. Its `target_node` and
+  `target_storage` fields are desired placement and must never be used as the
+  VM's reflected location. Migration 0088 retires the ten superseded intent
+  custom fields behind the 0087-style emptiness gate. Branch, netbox-packer,
+  and netbox-proxy custom fields remain operational.
 - Companion endpoint models: `PBSEndpoint`, `PDMEndpoint`, `PDMRemote` for Proxmox Backup Server and Datacenter Manager inventory.
 - SSH and hardware discovery: `NodeSSHCredential` stores per-node SSH credentials for the optional hardware-discovery pass.
 - **Credential storage (OpenBao default, legacy Fernet opt-in).** Plugin Settings
@@ -805,6 +808,8 @@ credentials with `gh auth setup-git`, and pushes only
 
 ### Gitea Package Registry publish (`.gitea/workflows/publish-gitea.yml`)
 
+#### Planned locked-control target (inactive)
+
 Handles `push: tags:` only. It deliberately does not subscribe to Gitea's
 overlapping `create` event: Gitea emits both events for one tag, which would
 race duplicate immutable release requests. The tag must equal current
@@ -873,23 +878,6 @@ receives no package, mirror, job, runtime, or write credential.
 Two job-bound ephemeral `ci-release-netbox-proxbox` registrations provide
 distinct validation and build runner identities; each advertises only that
 release label and terminates after its one assigned job. Every RC, final, or
-> **Current state — publication is restored to in-repository jobs.**
-> The locked control plane described below is **implemented and reviewed
-> in-tree but not active**, because the isolated runner fleet it requires
-> (`ci-release-netbox-proxbox`, `release-builder`, `release-publisher`) does not
-> exist — no runner in the estate advertises those labels, and
-> `N-MultiCloud/release-control` has zero runners. `.gitea/workflows/publish-gitea.yml`
-> therefore publishes directly on the existing `mirror-host` runner: it builds
-> the wheel/sdist, uploads to the Gitea Package Registry, verifies the package,
-> pushes the tag to the authorised GitHub repository, and creates the GitHub
-> Release for final tags only.
->
-> This restores the path that shipped `0.0.23`. It is a deliberate, tracked
-> deferral of the hardening, not a regression, and it is consistent with the
-> rule stated below: an unprovisioned control repository is a release freeze,
-> not a reason to remove publication. Re-landing the control plane is tracked as
-> a follow-up and requires the runner fleet first.
-
 post request requires a freshly registered and reviewed pair. The build job produces
 the manifest-bound wheel/sdist and uploads
 exactly six data files: wheel, sdist,
@@ -920,6 +908,27 @@ Only after production validation may canonical-main `promote-final-tag.yml`
 verify the package and host-issued deployment receipt and push the final tag to the exact
 authorized GitHub repository; the operator then creates the GitHub Release
 that authorizes PyPI.
+
+#### Active in-repository fallback
+
+> **Current state — publication is restored to in-repository jobs.**
+> The locked control plane described above is **implemented and reviewed
+> in-tree but not active**, because the isolated runner fleet it requires
+> (`ci-release-netbox-proxbox`, `release-builder`, `release-publisher`) does not
+> exist — no runner in the estate advertises those labels, and
+> `N-MultiCloud/release-control` has zero runners. `.gitea/workflows/publish-gitea.yml`
+> therefore publishes directly on the existing `mirror-host` runner. An
+> operator must dispatch it from canonical Gitea `main` with an existing tag;
+> tag pushes do not invoke it. It builds the wheel/sdist from a sanitized
+> passive candidate tree under immutable canonical-main control, reserves only
+> protected RC tags on GitHub before the immutable upload, uploads and
+> byte-verifies the Gitea package, and publishes its manifest. Final tags and
+> GitHub Releases remain behind production validation and the separate
+> promotion procedure.
+>
+> This restores the path that shipped `0.0.23`. It is a deliberate, tracked
+> deferral of the isolated control plane, not a regression. Re-landing that
+> control plane remains a follow-up that requires its runner fleet first.
 
 ### Branch-tier deployment (`.gitea/workflows/deploy-production.yml`)
 
@@ -1507,6 +1516,40 @@ after the registry upload has been verified, so the manifest never advertises a
 version whose artifacts are not there. Its `source_sha` is the commit the tag
 resolves to (`git rev-parse "${TAG}^{commit}"`), because that is what
 `fetch-gitea` compares the deploy target against.
+
+The publisher is manual-dispatch-only from canonical Gitea `main`; both release
+workflows require the exact canonical repository identity, and a tag push cannot
+invoke publication. It checks out the immutable dispatch SHA as its control tree
+and the validated peeled tag commit under `candidate/` as passive build input,
+then requires a second tag read to match both the validated raw object and
+commit. The canonical helper requires the exact package/version, static
+Hatchling backend, hook-free build configuration, and fixed README/license
+paths. It rejects symlinks, hard-linked or special files, and out-of-root paths,
+then copies the bounded candidate inventory through no-follow descriptors into a
+sanitized build tree. Secret-bearing steps execute only canonical control code
+and a freshly recreated locked environment. The publisher installs
+no executable tooling. The release runner must already
+provide exactly Python 3.12.14 and uv 0.12.5. It synchronizes the locked publish
+group into that interpreter, verifies Hatchling 1.31.0, and disables PEP 517
+build isolation so a rebuild cannot resolve another backend. RC promotion also
+requires an authenticated GitHub CLI. Fresh publication requires authoritative
+registry absence. An interrupted run may be dispatched with
+`resume_existing=true`; the rerun rebuilds the manifest, polls with a fixed
+bound, treats malformed success responses as retryable failures, downloads both
+existing distributions, and skips Twine only when their names, sizes, and
+SHA-256 digests match exactly. Repository-wide workflow concurrency serializes
+all tag and manual publication attempts. RC preflight proves GitHub repository
+push permission, requires an active no-bypass `refs/tags/v*` ruleset that blocks
+deletion and non-fast-forward changes, and dry-runs the exact tag update. It then
+reserves and reads back the exact RC tag object before the immutable upload. Its private per-run
+askpass/config directory is removed unconditionally and checkout credentials
+are never persisted. If the package is still authoritatively absent after a tag
+reservation, explicit resume performs the first upload; an existing package is
+reused only when every byte matches. The publisher sends only RC tags to GitHub.
+Final and post-release tags remain private until production validation and
+`promote-final-tag.yml`, which checks out the immutable dispatch SHA, verifies it
+against current canonical main, and verifies both the raw tag object and its
+peeled source commit for annotated and lightweight tags.
 
 This is **preparatory**. Publishing manifests does not by itself enable a
 package deploy: `deploy-production.yml` still rejects every `latest_package`

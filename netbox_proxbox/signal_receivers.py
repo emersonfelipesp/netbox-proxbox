@@ -22,9 +22,6 @@ else:
     logger.info("netbox_branching is not enabled; post_merge receiver disabled.")
 
 
-_VM_MODEL = "virtualmachine"
-
-
 def _custom_field_enabled(obj: Any, field_name: str) -> bool:
     cf = getattr(obj, "custom_field_data", None) or {}
     if not isinstance(cf, dict):
@@ -32,11 +29,24 @@ def _custom_field_enabled(obj: Any, field_name: str) -> bool:
     return cf.get(field_name) is True
 
 
-def _virtualmachine_changediffs(branch: Any) -> Any:
-    changediff_qs = getattr(branch, "changediff_set", None)
-    if changediff_qs is None:
-        return None
-    return changediff_qs.filter(object_type__model=_VM_MODEL)
+def _mergeable_virtual_machines(branch: Any) -> list:
+    """VM operations this branch changes, through either diff stream.
+
+    This must use the same union the validator and the apply job use. Gating on
+    the core virtual-machine stream alone makes an intent-only branch a silent
+    no-op: it has no virtualmachine ChangeDiff, so the job is never queued, the
+    merge still reports success, and Proxmox is never touched.
+
+    A deleted core VM remains mergeable with a ``None`` object because its
+    originating ChangeDiff carries the deletion identity for the apply job.
+    """
+    if getattr(branch, "changediff_set", None) is None:
+        return []
+    from netbox_proxbox.intent.diff_union import (  # noqa: PLC0415
+        virtual_machine_diff_union,
+    )
+
+    return virtual_machine_diff_union(branch)
 
 
 if post_merge is not None:
@@ -64,10 +74,10 @@ if post_merge is not None:
                 logger.debug("Intent post_merge ignored: branch is not opted in.")
                 return
 
-            vm_diffs = _virtualmachine_changediffs(branch)
-            if vm_diffs is None or not vm_diffs.exists():
+            if not _mergeable_virtual_machines(branch):
                 logger.info(
-                    "Intent post_merge ignored for branch %s: no VM ChangeDiff rows.",
+                    "Intent post_merge ignored for branch %s: no virtual-machine "
+                    "or intent ChangeDiff rows.",
                     getattr(branch, "pk", None),
                 )
                 return

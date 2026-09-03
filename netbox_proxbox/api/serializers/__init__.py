@@ -107,6 +107,7 @@ from netbox_proxbox.api.serializers.storage import (
 )
 from netbox_proxbox.api.serializers.vm_backup import VMBackupSerializer
 from netbox_proxbox.api.serializers.vm_cloudinit import ProxmoxVMCloudInitSerializer
+from netbox_proxbox.api.serializers.vm_intent import ProxmoxVMIntentSerializer
 from netbox_proxbox.api.serializers.vm_snapshot import VMSnapshotSerializer
 from netbox_proxbox.api.serializers.vm_task_history import VMTaskHistorySerializer
 from netbox_proxbox.api.serializers.vm_template import (
@@ -189,6 +190,7 @@ __all__ = (
     "ProxmoxSdnPrefixListSerializer",
     "ProxmoxSdnRouteMapSerializer",
     "ProxmoxVMCloudInitSerializer",
+    "ProxmoxVMIntentSerializer",
     "ProxmoxVMTemplateSerializer",
     "PVETemplateBuildRequestSerializer",
     "PVETemplateBuildResponseSerializer",

@@ -1,0 +1,15 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-6">
+    {% include 'netbox_proxbox/inc/vm_proxmox_intent_card.html' with intent=object %}
+  </div>
+  <div class="col-md-6">
+    {% include 'inc/panels/tags.html' %}
+    {% include 'inc/panels/custom_fields.html' %}
+  </div>
+</div>
+{% endblock %}

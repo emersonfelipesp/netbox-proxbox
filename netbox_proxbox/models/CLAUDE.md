@@ -110,6 +110,14 @@ This directory defines the plugin's persisted data model.
   erase the evidence used to distinguish a sync-managed value from an operator
   edit. proxbox-api reads this typed value first and persists it only after a
   successful VM reconcile.
+- `ProxmoxVMIntent`: operator-owned desired state linked one-to-one to a core
+  `VirtualMachine`. It stores target node/storage, ISO or template placement,
+  LXC swap/rootfs/template values, and cloud-init input. `intent_state` and
+  `last_apply_run_id` are apply-job-managed stamps and are excluded from the
+  operator form and writable API fields. An existing row belongs to its parent
+  VM for its lifetime; both the form and API serializer reject reassignment.
+  Desired `target_node` must never be used as the reflected current node for
+  deletion authorization.
 - `BackupRoutine`: stores backup routine inventory for NetBox-backed ProxBox sync.
 - `Replication`: stores replication job inventory for NetBox-backed ProxBox sync.
 - `VMBackup`: stores backup inventory for NetBox virtual machines.

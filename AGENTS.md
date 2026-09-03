@@ -246,10 +246,14 @@ the twelve VM-only reflection custom-field definitions and strips their stale
 sole VM reflection read path, and the `custom_fields_enabled` plugin setting is
 gone. Migration 0086 removes the remaining thirty reflection definitions and
 strips their stale values from every affected core object type. Migration 0087 finishes that removal: 0086 compares each field's label against its own definition table, and proxbox-api's inventory reconcile had rewritten the six hardware-discovery labels, so 0086 failed closed and skipped them. 0087 selects candidates by data type plus `ui_editable="hidden"` -- the two attributes both writers agree on -- and then gates the destructive step on the question that does not require guessing provenance NetBox never recorded: **a field holding a value on any row is left alone in full**, definition, bindings and values, whoever wrote it. Only `None` and the empty string count as blank, the check is repeated once the definitions are locked and again as each key is stripped, and the reverse applies it too, so neither a late writer nor a rollback can expose somebody's data as a Proxbox field. Detail pages
-show typed sidecar cards only for objects that have a sidecar row. The
-`proxmox_node` and `proxmox_storage` custom fields survive unchanged because
-they are live CREATE-placement inputs; the other intent, branch,
-netbox-packer, and netbox-proxy fields also remain operational.
+show typed sidecar cards only for objects that have a sidecar row.
+
+VM intent is stored in the plugin-owned `ProxmoxVMIntent` one-to-one model.
+Its target node and storage are desired placement, distinct from the reflected
+location in `ProxboxVirtualMachineSyncState`. Migration 0088 adds the model,
+then removes the ten superseded VM-intent custom-field definitions with the
+same lock-and-emptiness boundary as 0087. The branch flags, netbox-packer field,
+and netbox-proxy fields remain operational custom fields.
 
 ## Release Procedure (summary)
 
@@ -341,32 +345,38 @@ boundary.
 
 ### End-to-end release pipeline (Gitea-first)
 
+#### Planned locked-control target (inactive)
+
 The official release pipeline runs in this order:
 
 1. **Activation gate** — do not merge the target cutover until the private control repository has a positive policy-pinned ID and its protected workflows, host boundaries, sockets, and repository-scoped runners pass readiness. Leave the existing publisher active until then.
 2. **Gitea tag push** — push an annotated RC or final tag to Gitea.
 3. **Data-only request** — `.gitea/workflows/publish-gitea.yml` gives both release jobs `actions: read` plus `contents: read` only for checksum-pinned runner/CI evidence gates. Both jobs use repository-unique `ci-release-netbox-proxbox`, and before candidate processing their trusted gate requires the live runner ID, name, and sole label to equal `.gitea/release-runner-acceptance.json` plus a fresh signed external-supervisor attestation bound to repository/run/job/source, complete registered labels, runtime image, and network/runtime policy. Zero/empty identity and all-zero key/image/policy digests keep tag releases disabled until exact live acceptance is reviewed; missing, stale, invalidly signed, or mismatched job evidence fails before candidate execution. The build fetches validated public source without checkout credentials and never passes its step-scoped Gitea token across the candidate boundary. Gitea's public-repository floor can still make public Actions data readable, and the outer job receives an artifact runtime token. All candidate-controlled dependency installation/build/check/manifest work therefore runs behind a separate numeric UID, minimal token-free environment, no-new-privileges, a fail-closed x86-64 Landlock ABI 3+ write allowlist limited to the per-run build root, a fail-closed x86-64 seccomp deny for every socket syscall, all `io_uring` entry points, and every x32-tagged syscall, exact immutable wheelhouse revalidation, hard cgroup-v2 one-CPU/2-GiB/zero-swap/64-PID ceilings, a hard one-GiB/50,000-inode `/nmc-build` tmpfs, parent-enforced 900-second-wall/live-plus-reaped-CPU/RSS/PID/logical-size/filesystem-block/file-count/output checks, root-parent `/proc` denial, and surviving-process cleanup. Linux CPU records are parsed after the process-name delimiter so whitespace in candidate names cannot evade aggregate accounting. The filesystem boundary prevents candidate writes to runner workflow-command files and shared temporary storage. The activation canary must prove that the exact accepted runner/container denies management and production network access, bind that result and runtime digest to the same runner ID, and re-attest the live state for every job; a label or historical canary is insufficient evidence. Candidate output is captured rather than passed to the runner command parser; live legacy command probes must not affect the next step. Reviewed outer code copies an exact bounded regular-file inventory with no-follow descriptors and re-hashes each copy. After candidate process cleanup, the root-only external supervisor signs a canonical completion statement binding the initial attestation, live job/runner policy, request digest, and every final artifact byte; candidate code cannot access the signer socket. The controller independently verifies that signature before sealing. Candidate code receives no job, runtime, package, mirror, or write credential and cannot publish or push tags.
    The workflow is globally serialized per repository. Validation and build have independent pinned repository-registration scope digests, and the completion statement binds the supervisor-derived build digest; the target client and controller require each role's evidence to equal its pinned acceptance value. Every RC, final, or post request consumes its ephemeral validation/build pair, so the next request requires freshly registered and reviewed identities.
+4. **Locked validation and publication** — dispatch `validate.yml` first, then the separate irreversible `publish.yml`, each with exactly the repository name, first-attempt target run ID, and request SHA-256. The isolated builder verifies and seals the bytes; the isolated publisher uploads the exact package and promotes only RC tags to GitHub.
+5. **Production gate** — link and verify the final Gitea package, then deploy through the management backend with `latest_package` by default (or explicitly selected `main_branch`).
+6. **Public promotion** — after production health validation, promote the final tag and create the GitHub Release; `release: published` authorizes PyPI.
+
+#### Active in-repository fallback
+
 > **Current state — publication is restored to in-repository jobs.**
-> The locked control plane described below is **implemented and reviewed
+> The locked control plane described above is **implemented and reviewed
 > in-tree but not active**, because the isolated runner fleet it requires
 > (`ci-release-netbox-proxbox`, `release-builder`, `release-publisher`) does not
 > exist — no runner in the estate advertises those labels, and
 > `N-MultiCloud/release-control` has zero runners. `.gitea/workflows/publish-gitea.yml`
-> therefore publishes directly on the existing `mirror-host` runner: it builds
-> the wheel/sdist, uploads to the Gitea Package Registry, verifies the package,
-> pushes the tag to the authorised GitHub repository, and creates the GitHub
-> Release for final tags only.
+> therefore publishes directly on the existing `mirror-host` runner. An
+> operator must dispatch it from canonical Gitea `main` with an existing tag;
+> tag pushes do not invoke it. It builds the wheel/sdist from a sanitized
+> passive candidate tree under immutable canonical-main control, reserves only
+> protected RC tags on GitHub before the immutable upload, uploads and
+> byte-verifies the Gitea package, and publishes its manifest. Final tags and
+> GitHub Releases remain behind production validation and the separate
+> promotion procedure.
 >
 > This restores the path that shipped `0.0.23`. It is a deliberate, tracked
-> deferral of the hardening, not a regression, and it is consistent with the
-> rule stated below: an unprovisioned control repository is a release freeze,
-> not a reason to remove publication. Re-landing the control plane is tracked as
-> a follow-up and requires the runner fleet first.
-
-4. **Locked validation and publication** — dispatch `validate.yml` first, then the separate irreversible `publish.yml`, each with exactly the repository name, first-attempt target run ID, and request SHA-256. The isolated builder verifies and seals the bytes; the isolated publisher uploads the exact package and promotes only RC tags to GitHub.
-5. **Production gate** — link and verify the final Gitea package, then deploy through NMS with `latest_package` by default (or explicitly selected `main_branch`).
-6. **Public promotion** — after production health validation, promote the final tag and create the GitHub Release; `release: published` authorizes PyPI.
+> deferral of the isolated control plane, not a regression. Re-landing that
+> control plane remains a follow-up that requires its runner fleet first.
 
 ### RC (release-candidate) pipeline
 
@@ -857,6 +867,40 @@ after the registry upload has been verified, so the manifest never advertises a
 version whose artifacts are not there. Its `source_sha` is the commit the tag
 resolves to (`git rev-parse "${TAG}^{commit}"`), because that is what
 `fetch-gitea` compares the deploy target against.
+
+The publisher is manual-dispatch-only from canonical Gitea `main`; both release
+workflows require the exact canonical repository identity, and a tag push cannot
+invoke publication. It checks out the immutable dispatch SHA as its control tree
+and the validated peeled tag commit under `candidate/` as passive build input,
+then requires a second tag read to match both the validated raw object and
+commit. The canonical helper requires the exact package/version, static
+Hatchling backend, hook-free build configuration, and fixed README/license
+paths. It rejects symlinks, hard-linked or special files, and out-of-root paths,
+then copies the bounded candidate inventory through no-follow descriptors into a
+sanitized build tree. Secret-bearing steps execute only canonical control code
+and a freshly recreated locked environment. The publisher installs
+no executable tooling. The release runner must already
+provide exactly Python 3.12.14 and uv 0.12.5. It synchronizes the locked publish
+group into that interpreter, verifies Hatchling 1.31.0, and disables PEP 517
+build isolation so a rebuild cannot resolve another backend. RC promotion also
+requires an authenticated GitHub CLI. Fresh publication requires authoritative
+registry absence. An interrupted run may be dispatched with
+`resume_existing=true`; the rerun rebuilds the manifest, polls with a fixed
+bound, treats malformed success responses as retryable failures, downloads both
+existing distributions, and skips Twine only when their names, sizes, and
+SHA-256 digests match exactly. Repository-wide workflow concurrency serializes
+all tag and manual publication attempts. RC preflight proves GitHub repository
+push permission, requires an active no-bypass `refs/tags/v*` ruleset that blocks
+deletion and non-fast-forward changes, and dry-runs the exact tag update. It then
+reserves and reads back the exact RC tag object before the immutable upload. Its private per-run
+askpass/config directory is removed unconditionally and checkout credentials
+are never persisted. If the package is still authoritatively absent after a tag
+reservation, explicit resume performs the first upload; an existing package is
+reused only when every byte matches. The publisher sends only RC tags to GitHub.
+Final and post-release tags remain private until production validation and
+`promote-final-tag.yml`, which checks out the immutable dispatch SHA, verifies it
+against current canonical main, and verifies both the raw tag object and its
+peeled source commit for annotated and lightweight tags.
 
 This is **preparatory**. Publishing manifests does not by itself enable a
 package deploy: `deploy-production.yml` still rejects every `latest_package`

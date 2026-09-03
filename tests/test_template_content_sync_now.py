@@ -56,6 +56,19 @@ class _ObjectQuery:
         return self.value
 
 
+class _RestrictableObjectQuery(_ObjectQuery):
+    def __init__(self):
+        super().__init__()
+        self.restrict_calls = []
+        self.visible = True
+
+    def restrict(self, user, action):
+        self.restrict_calls.append((user, action))
+        if self.visible:
+            return self
+        return _ObjectQuery()
+
+
 def _model_class(name: str, *, app_label: str, model_name: str | None = None):
     model = type(name, (), {})
     model._meta = SimpleNamespace(
@@ -87,9 +100,11 @@ def template_content_module(monkeypatch):
             prefix = f"plugins:{prefix}"
         return f"{prefix}_{action}" if action else prefix
 
-    def reverse(viewname, kwargs=None):
-        calls["reverse"].append((viewname, kwargs))
-        return f"/route/{viewname}/{kwargs['pk']}/"
+    def reverse(viewname, kwargs=None, args=None):
+        values = kwargs or ({"pk": args[0]} if args else {})
+        calls["reverse"].append((viewname, values))
+        suffix = f"{values['pk']}/" if "pk" in values else ""
+        return f"/route/{viewname}/{suffix}"
 
     class PluginTemplateExtension:
         def __init__(self, context):
@@ -117,6 +132,7 @@ def template_content_module(monkeypatch):
             "ProxmoxFirewallSecurityGroup",
             "ProxmoxNode",
             "ProxmoxStorage",
+            "ProxmoxVMIntent",
             "VMBackup",
             "VMSnapshot",
             "VMTaskHistory",
@@ -125,6 +141,7 @@ def template_content_module(monkeypatch):
     model_classes["ProxmoxEndpoint"] = _model_class(
         "ProxmoxEndpoint", app_label="netbox_proxbox"
     )
+    model_classes["ProxmoxVMIntent"].objects = _RestrictableObjectQuery()
     virtual_machine = _model_class(
         "VirtualMachine",
         app_label="virtualization",
@@ -243,6 +260,88 @@ def _set_console_url(harness, value: str) -> None:
     harness.module.ProxboxPluginSettings.get_solo = lambda: SimpleNamespace(
         console_url=value
     )
+
+
+def test_vm_intent_card_is_absent_without_an_intent_row(template_content_module):
+    harness = template_content_module
+    vm = harness.virtual_machine()
+    vm.pk = 70
+    extension = harness.module.ProxboxVirtualMachineTemplateExtension(_context(vm))
+
+    assert extension.right_page() == ""
+    assert extension.render_calls == []
+
+
+def test_vm_intent_card_has_a_permission_checked_edit_link(
+    template_content_module,
+):
+    harness = template_content_module
+    vm = harness.virtual_machine()
+    vm.pk = 71
+    intent = SimpleNamespace(pk=91, virtual_machine=vm)
+    harness.classes["ProxmoxVMIntent"].objects.value = intent
+    view_permission = "netbox_proxbox.view_proxmoxvmintent"
+    change_permission = "netbox_proxbox.change_proxmoxvmintent"
+    extension = harness.module.ProxboxVirtualMachineTemplateExtension(
+        _context(vm, view_permission, change_permission)
+    )
+
+    assert extension.right_page() == ""
+    assert harness.classes["ProxmoxVMIntent"].objects.restrict_calls == [
+        (extension.context["request"].user, "view")
+    ]
+    template, context = extension.render_calls[-1]
+    assert template == "netbox_proxbox/inc/vm_proxmox_intent_card.html"
+    assert context == {
+        "intent": intent,
+        "edit_url": "/route/plugins:netbox_proxbox:proxmoxvmintent_edit/91/",
+    }
+
+
+def test_vm_intent_card_is_hidden_without_view_permission(template_content_module):
+    harness = template_content_module
+    vm = harness.virtual_machine()
+    vm.pk = 72
+    harness.classes["ProxmoxVMIntent"].objects.value = SimpleNamespace(
+        pk=92, virtual_machine=vm
+    )
+    extension = harness.module.ProxboxVirtualMachineTemplateExtension(
+        _context(vm, "netbox_proxbox.change_proxmoxvmintent")
+    )
+
+    assert extension.right_page() == ""
+    assert extension.render_calls == []
+    assert harness.classes["ProxmoxVMIntent"].objects.restrict_calls == []
+
+
+def test_vm_intent_card_honors_object_visibility(template_content_module):
+    harness = template_content_module
+    vm = harness.virtual_machine()
+    vm.pk = 73
+    manager = harness.classes["ProxmoxVMIntent"].objects
+    manager.value = SimpleNamespace(pk=93, virtual_machine=vm)
+    manager.visible = False
+    extension = harness.module.ProxboxVirtualMachineTemplateExtension(
+        _context(vm, "netbox_proxbox.view_proxmoxvmintent")
+    )
+
+    assert extension.right_page() == ""
+    assert extension.render_calls == []
+
+
+def test_vm_intent_card_fails_closed_without_restrict(template_content_module):
+    harness = template_content_module
+    vm = harness.virtual_machine()
+    vm.pk = 74
+    unrestricted = _ObjectQuery()
+    unrestricted.value = SimpleNamespace(pk=94, virtual_machine=vm)
+    harness.classes["ProxmoxVMIntent"].objects = unrestricted
+    extension = harness.module.ProxboxVirtualMachineTemplateExtension(
+        _context(vm, "netbox_proxbox.view_proxmoxvmintent")
+    )
+
+    assert extension.right_page() == ""
+    assert extension.render_calls == []
 
 
 @pytest.mark.parametrize(

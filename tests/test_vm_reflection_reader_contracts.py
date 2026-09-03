@@ -58,13 +58,18 @@ def test_package_has_no_live_vm_reflection_custom_field_lookup() -> None:
             assert removed_lookup not in source, f"{path}: {removed_lookup}"
 
 
-def test_intent_payloads_keep_only_the_out_of_scope_custom_fields() -> None:
+def test_intent_payloads_use_the_plugin_owned_model_fields() -> None:
     payload = (PACKAGE_ROOT / "intent" / "payload.py").read_text()
     snapshot = (PACKAGE_ROOT / "intent" / "snapshot.py").read_text()
 
     for required in (
-        "proxmox_iso",
-        "proxmox_template_vmid",
+        "target_node",
+        "target_storage",
+        "iso",
+        "template_vmid",
+        "swap",
+        "rootfs",
+        "ostemplate",
         "cloud_init_user",
         "cloud_init_ssh_keys",
         "cloud_init_user_data",
@@ -72,6 +77,8 @@ def test_intent_payloads_keep_only_the_out_of_scope_custom_fields() -> None:
     ):
         assert required in payload
     assert '"custom_field_data": custom_fields' in snapshot
+    assert '"intent": _intent_snapshot(vm)' in snapshot
+    assert "custom_field_data" not in payload
     assert "proxmox_vm_id" not in payload
     assert "proxmox_vm_id" not in snapshot
 
@@ -89,7 +96,10 @@ def _load_intent_module(monkeypatch, name: str):
         SimpleNamespace(
             resolve_vm_vmid=lambda vm: str(
                 getattr(vm.proxbox_sync_state, "proxmox_vm_id", "") or ""
-            )
+            ),
+            resolve_vm_node=lambda vm: str(
+                getattr(vm.proxbox_sync_state, "proxmox_node_name", "") or ""
+            ),
         ),
     )
     monkeypatch.setitem(
@@ -125,10 +135,11 @@ def test_intent_payload_reads_vmid_from_sidecar_and_keeps_intent_fields(
     module = _load_intent_module(monkeypatch, "payload")
     vm = SimpleNamespace(
         proxbox_sync_state=SimpleNamespace(proxmox_vm_id=701),
-        custom_field_data={
-            "proxmox_iso": "local:iso/debian.iso",
-            "cloud_init_user": "debian",
-        },
+        proxbox_intent=SimpleNamespace(
+            iso="local:iso/debian.iso",
+            cloud_init_user="debian",
+        ),
+        custom_field_data={},
         name="vm-701",
         vcpus=2,
         memory=2048,
@@ -148,8 +159,9 @@ def test_intent_snapshot_reads_vmid_from_sidecar_with_empty_custom_fields(
     module = _load_intent_module(monkeypatch, "snapshot")
     vm = SimpleNamespace(
         vmid=None,
-        node="pve-a",
-        proxbox_sync_state=SimpleNamespace(proxmox_vm_id=702),
+        proxbox_sync_state=SimpleNamespace(
+            proxmox_vm_id=702, proxmox_node_name="pve-a"
+        ),
         custom_field_data={},
         name="vm-702",
         tags=None,
@@ -165,22 +177,22 @@ def test_intent_snapshot_reads_vmid_from_sidecar_with_empty_custom_fields(
     assert snapshot["vmid"] == 702
     assert snapshot["node"] == "pve-a"
     assert snapshot["custom_field_data"] == {}
+    assert snapshot["intent"] == {}
 
 
-def test_dual_role_node_and_storage_definitions_and_readers_survive(
+def test_target_node_and_storage_are_read_from_the_intent_model(
     monkeypatch,
 ) -> None:
-    definitions = _load_intent_definitions()
-    operator_fields = {row[0] for row in definitions.VM_OPERATOR_FIELDS}
-    assert {"proxmox_node", "proxmox_storage"} <= operator_fields
-
     payload_module = _load_intent_module(monkeypatch, "payload")
     vm = SimpleNamespace(
-        proxbox_sync_state=SimpleNamespace(proxmox_vm_id=703),
-        custom_field_data={
-            "proxmox_node": "pve-intent",
-            "proxmox_storage": "ceph-intent",
-        },
+        proxbox_sync_state=SimpleNamespace(
+            proxmox_vm_id=703, proxmox_node_name="pve-reflected"
+        ),
+        proxbox_intent=SimpleNamespace(
+            target_node="pve-intent",
+            target_storage="ceph-intent",
+        ),
+        custom_field_data={},
         name="vm-703",
         vcpus=4,
         memory=4096,
@@ -195,11 +207,10 @@ def test_dual_role_node_and_storage_definitions_and_readers_survive(
     assert payload_module.build_lxc_payload(vm)["storage"] == "ceph-intent"
 
     snapshot_module = _load_intent_module(monkeypatch, "snapshot")
-    vm.node = None
     vm.cores = 4
     vm.interfaces = None
     vm.vminterface_set = None
     vm.primary_ip4 = None
     vm.primary_ip6 = None
     snapshot = snapshot_module.build_metadata_snapshot(vm)
-    assert snapshot["node"] == "pve-intent"
+    assert snapshot["node"] == "pve-reflected"

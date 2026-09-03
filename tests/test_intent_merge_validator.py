@@ -124,7 +124,7 @@ def test_validator_enforces_delete_destroy_confirmed_at_plugin_layer():
 
 
 def test_validator_classifies_create_update_delete_diffs():
-    text = VALIDATOR_PATH.read_text()
+    text = (INTENT_DIR / "diff_union.py").read_text()
     for verb in ("create", "update", "delete"):
         assert f'"{verb}"' in text, (
             f"merge_validator must classify '{verb}' ChangeDiff rows"

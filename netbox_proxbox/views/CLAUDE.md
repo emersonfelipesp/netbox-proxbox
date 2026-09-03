@@ -223,6 +223,9 @@ per node, or issuing an authenticated request for every membership entry.
 - [`sync_now/`](./sync_now/): targeted per-object sync handlers for plugin cluster, node, storage, backup, snapshot, and task-history actions. The core VM action remains in `vm_sync_now.py`.
 - [`vm_backup.py`](./vm_backup.py): CRUD list/detail/delete views and the VirtualMachine tab for `VMBackup`.
 - [`vm_config.py`](./vm_config.py): live Proxmox config tab for `VirtualMachine` records.
+- [`vm_intent.py`](./vm_intent.py): CRUD list/detail/edit/delete views for
+  operator-owned `ProxmoxVMIntent` rows. The VM template extension supplies the
+  add/edit button and renders no intent card until a row exists.
 - [`vm_snapshot.py`](./vm_snapshot.py): CRUD list/detail/delete views and the VirtualMachine tab for `VMSnapshot`.
 - [`vm_sync_now.py`](./vm_sync_now.py): targeted per-VM sync action button handler.
 - [`vm_task_history.py`](./vm_task_history.py): detail and VirtualMachine tab views for `VMTaskHistory`.

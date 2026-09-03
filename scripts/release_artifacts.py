@@ -9,6 +9,8 @@ import json
 import os
 import re
 import stat
+import time
+import tomllib
 import urllib.error
 import urllib.parse
 import urllib.request
@@ -17,6 +19,8 @@ from typing import Any, cast
 
 MAX_RESPONSE_BYTES = 1024 * 1024
 MAX_ARTIFACT_BYTES = 128 * 1024 * 1024
+MAX_SOURCE_BYTES = 512 * 1024 * 1024
+MAX_SOURCE_FILES = 50_000
 SHA_RE = re.compile(r"^[a-f0-9]{40}$")
 DIGEST_RE = re.compile(r"^[a-f0-9]{64}$")
 SAFE_NAME_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*$")
@@ -45,6 +49,205 @@ class _NoRedirect(urllib.request.HTTPRedirectHandler):
 def canonical_name(value: str) -> str:
     """Return the PEP 503 spelling used by the registry contract."""
     return re.sub(r"[-_.]+", "-", value).lower()
+
+
+def validate_build_source(*, source: Path, package: str, version: str) -> None:
+    """Require a passive Hatchling source tree before building it."""
+    pyproject = source / "pyproject.toml"
+    metadata = pyproject.lstat()
+    if (
+        pyproject.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_size > MAX_RESPONSE_BYTES
+    ):
+        raise ReleaseArtifactError("Candidate pyproject.toml is unsafe")
+    try:
+        document = tomllib.loads(pyproject.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, tomllib.TOMLDecodeError) as exc:
+        raise ReleaseArtifactError("Candidate pyproject.toml is invalid") from exc
+
+    project = document.get("project")
+    build_system = document.get("build-system")
+    hatch_build = document.get("tool", {}).get("hatch", {}).get("build")
+    expected_hatch_build = {
+        "targets": {
+            "wheel": {"packages": ["netbox_proxbox", "proxbox_cli"]},
+        }
+    }
+    expected_project_fields = {
+        "authors",
+        "classifiers",
+        "dependencies",
+        "description",
+        "license",
+        "license-files",
+        "name",
+        "optional-dependencies",
+        "readme",
+        "requires-python",
+        "scripts",
+        "urls",
+        "version",
+    }
+    if (
+        not isinstance(project, dict)
+        or set(project) != expected_project_fields
+        or project.get("name") != package
+        or project.get("version") != version
+        or project.get("readme") != "README.md"
+        or project.get("license") != "Apache-2.0"
+        or project.get("license-files") != ["LICENSE"]
+        or build_system
+        != {
+            "requires": ["hatchling>=1.27,<1.32"],
+            "build-backend": "hatchling.build",
+        }
+        or hatch_build != expected_hatch_build
+    ):
+        raise ReleaseArtifactError(
+            "Candidate build metadata is not the reviewed passive Hatchling contract"
+        )
+
+
+def _validated_source_file(path: Path, source_root: Path) -> os.stat_result:
+    """Return stable metadata for one regular file beneath the source root."""
+    metadata = path.lstat()
+    if (
+        path.is_symlink()
+        or not stat.S_ISREG(metadata.st_mode)
+        or metadata.st_nlink != 1
+        or metadata.st_size > MAX_ARTIFACT_BYTES
+        or not path.resolve(strict=True).is_relative_to(source_root)
+    ):
+        raise ReleaseArtifactError("Candidate source contains an unsafe file")
+    return metadata
+
+
+def _copy_source_file(
+    *, source: Path, destination: Path, metadata: os.stat_result
+) -> None:
+    """Copy one file through no-follow descriptors and detect replacement."""
+    no_follow = getattr(os, "O_NOFOLLOW", 0)
+    if no_follow == 0:
+        raise ReleaseArtifactError("No-follow file access is unavailable")
+    source_fd = os.open(source, os.O_RDONLY | no_follow)
+    try:
+        opened = os.fstat(source_fd)
+        if (
+            opened.st_dev != metadata.st_dev
+            or opened.st_ino != metadata.st_ino
+            or opened.st_mode != metadata.st_mode
+            or opened.st_size != metadata.st_size
+        ):
+            raise ReleaseArtifactError("Candidate source changed while being copied")
+        target_fd = os.open(
+            destination,
+            os.O_WRONLY | os.O_CREAT | os.O_EXCL | no_follow,
+            0o600 | (metadata.st_mode & 0o111),
+        )
+        try:
+            while chunk := os.read(source_fd, 1024 * 1024):
+                remaining = memoryview(chunk)
+                while remaining:
+                    remaining = remaining[os.write(target_fd, remaining) :]
+        finally:
+            os.close(target_fd)
+    finally:
+        os.close(source_fd)
+
+
+def sanitize_build_source(
+    *, source: Path, destination: Path, package: str, version: str
+) -> None:
+    """Copy a bounded regular-file source tree for passive package building."""
+    source_root = source.resolve(strict=True)
+    destination_root = destination.resolve(strict=False)
+    if source.is_symlink() or not source_root.is_dir() or destination.exists():
+        raise ReleaseArtifactError(
+            "Candidate source or sanitized destination is unsafe"
+        )
+    if destination_root == source_root or destination_root.is_relative_to(source_root):
+        raise ReleaseArtifactError(
+            "Sanitized destination must be outside candidate source"
+        )
+
+    files: list[tuple[Path, Path, os.stat_result]] = []
+    total_size = 0
+    for current, directories, names in os.walk(source_root, followlinks=False):
+        current_path = Path(current)
+        directories[:] = sorted(name for name in directories if name != ".git")
+        for name in directories:
+            directory = current_path / name
+            metadata = directory.lstat()
+            if directory.is_symlink() or not stat.S_ISDIR(metadata.st_mode):
+                raise ReleaseArtifactError(
+                    "Candidate source contains an unsafe directory"
+                )
+        for name in sorted(names):
+            if name == ".git":
+                continue
+            path = current_path / name
+            metadata = _validated_source_file(path, source_root)
+            total_size += metadata.st_size
+            relative = path.relative_to(source_root)
+            files.append((path, relative, metadata))
+            if len(files) > MAX_SOURCE_FILES or total_size > MAX_SOURCE_BYTES:
+                raise ReleaseArtifactError(
+                    "Candidate source exceeds its bounded inventory"
+                )
+
+    destination.mkdir(mode=0o700)
+    for path, relative, metadata in files:
+        target = destination / relative
+        target.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+        _copy_source_file(source=path, destination=target, metadata=metadata)
+    validate_build_source(source=destination, package=package, version=version)
+
+
+def _is_release_tag_ruleset(value: object, repository: str) -> bool:
+    """Return whether one ruleset makes release-tag reservations immutable."""
+    if not isinstance(value, dict):
+        return False
+    if value.get("source_type") != "Repository" or value.get("source") != repository:
+        return False
+    if value.get("target") != "tag" or value.get("enforcement") != "active":
+        return False
+    if value.get("bypass_actors") != []:
+        return False
+    conditions = value.get("conditions")
+    if not isinstance(conditions, dict):
+        return False
+    ref_name = conditions.get("ref_name")
+    if ref_name != {"exclude": [], "include": ["refs/tags/v*"]}:
+        return False
+    rules = value.get("rules")
+    if not isinstance(rules, list):
+        return False
+    rule_types = {rule.get("type") for rule in rules if isinstance(rule, dict)}
+    return {"deletion", "non_fast_forward"}.issubset(rule_types)
+
+
+def validate_github_tag_rulesets(*, rulesets: Path, repository: str) -> None:
+    """Require an active, no-bypass immutable release-tag ruleset."""
+    if not rulesets.is_dir() or rulesets.is_symlink():
+        raise ReleaseArtifactError("GitHub ruleset directory is unsafe")
+    for path in sorted(rulesets.iterdir()):
+        metadata = path.lstat()
+        if (
+            path.is_symlink()
+            or not stat.S_ISREG(metadata.st_mode)
+            or metadata.st_size > MAX_RESPONSE_BYTES
+        ):
+            raise ReleaseArtifactError("GitHub ruleset response is unsafe")
+        try:
+            value = json.loads(path.read_bytes())
+        except json.JSONDecodeError as exc:
+            raise ReleaseArtifactError("GitHub ruleset response is not JSON") from exc
+        if _is_release_tag_ruleset(value, repository):
+            return
+    raise ReleaseArtifactError(
+        "No active no-bypass ruleset protects release tags from update and deletion"
+    )
 
 
 def _record(path: Path) -> dict[str, object]:
@@ -197,6 +400,37 @@ def _quoted(value: str) -> str:
     return urllib.parse.quote(value, safe="")
 
 
+def _registry_json(raw: bytes, description: str) -> object:
+    """Decode a bounded registry response into the workflow error contract."""
+    try:
+        return json.loads(raw)
+    except json.JSONDecodeError as exc:
+        raise ReleaseArtifactError(f"Registry {description} is not valid JSON") from exc
+
+
+def _registry_origin(registry: str) -> str:
+    parsed = urllib.parse.urlsplit(registry)
+    return f"{parsed.scheme}://{parsed.netloc}"
+
+
+def verify_gitea_token_identity(*, registry: str, owner: str, token: str) -> None:
+    """Require an authenticated registry principal matching the package owner."""
+    if not token:
+        raise ReleaseArtifactError("Gitea package token is unavailable")
+    try:
+        identity = json.loads(
+            _request(
+                f"{_registry_origin(registry)}/api/v1/user",
+                token=token,
+                maximum=MAX_RESPONSE_BYTES,
+            )
+        )
+    except json.JSONDecodeError as exc:
+        raise ReleaseArtifactError("Gitea token identity is not valid JSON") from exc
+    if not isinstance(identity, dict) or identity.get("login") != owner:
+        raise ReleaseArtifactError("Gitea package token identity does not match owner")
+
+
 def fetch_gitea_manifest(
     *, owner: str, repository: str, package: str, version: str, token: str = ""
 ) -> dict[str, Any]:
@@ -206,9 +440,12 @@ def fetch_gitea_manifest(
         "https://git.nmulti.cloud/api/v1/packages/"
         f"{_quoted(owner)}/generic/{_quoted(manifest_package)}/{_quoted(version)}"
     )
-    metadata = json.loads(_request(base, token=token, maximum=MAX_RESPONSE_BYTES))
-    files = json.loads(
-        _request(f"{base}/files", token=token, maximum=MAX_RESPONSE_BYTES)
+    metadata = _registry_json(
+        _request(base, token=token, maximum=MAX_RESPONSE_BYTES), "metadata"
+    )
+    files = _registry_json(
+        _request(f"{base}/files", token=token, maximum=MAX_RESPONSE_BYTES),
+        "file inventory",
     )
     repo = metadata.get("repository") if isinstance(metadata, dict) else None
     if (
@@ -297,59 +534,58 @@ def link_gitea_package(
         return
 
 
-def verify_gitea_package_artifacts(
-    *,
-    registry: str,
-    owner: str,
-    repository: str,
-    package: str,
-    version: str,
-    manifest: dict[str, Any],
-    token: str,
+def _require_gitea_package_identity(
+    *, metadata: object, owner: str, repository: str, package: str, version: str
 ) -> None:
-    """Require the registry to hold exactly the artifacts the manifest names.
-
-    The previous check searched the owner's package list and counted entries
-    whose ``version`` matched. That is satisfied by any package of any name at
-    that version, so it could pass while this package's own upload was absent,
-    incomplete, or carrying different bytes -- and the manifest would then be
-    published against a release that does not exist as it describes. The
-    manifest is the provenance record every later deploy and promotion verifies
-    against, so it must not be published until the artifacts it names are
-    provably present with the exact sizes and digests it recorded.
-
-    The repository link is required here, matching ``fetch_gitea_artifacts``,
-    which refuses to download an artifact whose PyPI metadata does not name
-    ``<owner>/<repository>``. A twine upload does not create that link, so
-    ``link_gitea_package`` creates it first; verifying it here is what makes a
-    published version actually consumable by the deploy and promotion paths
-    rather than merely present in the registry.
-    """
-    base = (
-        registry
-        + f"{_quoted(owner)}/pypi/{_quoted(canonical_name(package))}/{_quoted(version)}"
-    )
-    metadata = json.loads(_request(base, token=token, maximum=MAX_RESPONSE_BYTES))
-    files = json.loads(
-        _request(f"{base}/files", token=token, maximum=MAX_RESPONSE_BYTES)
-    )
+    """Require the exact package, version, type, and repository association."""
     repo = metadata.get("repository") if isinstance(metadata, dict) else None
-    if (
-        not isinstance(metadata, dict)
-        or metadata.get("type") != "pypi"
-        or canonical_name(str(metadata.get("name", ""))) != canonical_name(package)
-        or metadata.get("version") != version
-        or not isinstance(repo, dict)
-        or repo.get("full_name") != f"{owner}/{repository}"
-    ):
+    actual = (
+        metadata.get("type") if isinstance(metadata, dict) else None,
+        canonical_name(str(metadata.get("name", "")))
+        if isinstance(metadata, dict)
+        else "",
+        metadata.get("version") if isinstance(metadata, dict) else None,
+        repo.get("full_name") if isinstance(repo, dict) else None,
+    )
+    if actual != ("pypi", canonical_name(package), version, f"{owner}/{repository}"):
         raise ReleaseArtifactError("Published package identity or link is invalid")
+
+
+def _manifest_artifact_inventory(
+    manifest: dict[str, Any],
+) -> dict[str, tuple[int, str]]:
+    """Return the validated artifact identity map from one release manifest."""
+    expected: dict[str, tuple[int, str]] = {}
+    artifacts = manifest.get("artifacts")
+    if not isinstance(artifacts, list):
+        raise ReleaseArtifactError("Release manifest artifact inventory is invalid")
+    for record in artifacts:
+        if not isinstance(record, dict):
+            raise ReleaseArtifactError("Release manifest artifact inventory is invalid")
+        name, size, digest = (
+            record.get("name"),
+            record.get("size"),
+            record.get("sha256"),
+        )
+        if (
+            not isinstance(name, str)
+            or SAFE_NAME_RE.fullmatch(name) is None
+            or name in expected
+            or isinstance(size, bool)
+            or not isinstance(size, int)
+            or not 0 <= size <= MAX_ARTIFACT_BYTES
+            or not isinstance(digest, str)
+            or DIGEST_RE.fullmatch(digest.lower()) is None
+        ):
+            raise ReleaseArtifactError("Release manifest artifact inventory is invalid")
+        expected[name] = (size, digest.lower())
+    return expected
+
+
+def _published_artifact_inventory(files: object) -> dict[str, tuple[int, str]]:
+    """Return the validated artifact identity map from the registry response."""
     if not isinstance(files, list):
         raise ReleaseArtifactError("Published package inventory is invalid")
-
-    expected = {
-        str(record["name"]): (int(record["size"]), str(record["sha256"]).lower())
-        for record in manifest["artifacts"]
-    }
     published: dict[str, tuple[int, str]] = {}
     for entry in files:
         if not isinstance(entry, dict):
@@ -366,11 +602,185 @@ def verify_gitea_package_artifacts(
         if name in published:
             raise ReleaseArtifactError("Published package inventory repeats a file")
         published[name] = (size, digest.lower())
+    return published
+
+
+def _download_and_verify_gitea_artifacts(
+    *,
+    registry: str,
+    owner: str,
+    package: str,
+    version: str,
+    expected: dict[str, tuple[int, str]],
+    token: str,
+) -> None:
+    """Download each published distribution and compare its actual bytes."""
+    for name, (size, digest) in expected.items():
+        download = (
+            f"{_registry_origin(registry)}/api/packages/"
+            f"{_quoted(owner)}/pypi/files/{_quoted(canonical_name(package))}/"
+            f"{_quoted(version)}/{_quoted(name)}"
+        )
+        content = _request(download, token=token, maximum=size)
+        if len(content) != size or hashlib.sha256(content).hexdigest() != digest:
+            raise ReleaseArtifactError(
+                "Downloaded artifact differs from the release manifest"
+            )
+
+
+def verify_gitea_package_artifacts(
+    *,
+    registry: str,
+    owner: str,
+    repository: str,
+    package: str,
+    version: str,
+    manifest: dict[str, Any],
+    token: str,
+) -> None:
+    """Require the registry to hold the exact downloaded manifest artifact set."""
+    base = (
+        registry
+        + f"{_quoted(owner)}/pypi/{_quoted(canonical_name(package))}/{_quoted(version)}"
+    )
+    metadata = _registry_json(
+        _request(base, token=token, maximum=MAX_RESPONSE_BYTES), "metadata"
+    )
+    files = _registry_json(
+        _request(f"{base}/files", token=token, maximum=MAX_RESPONSE_BYTES),
+        "file inventory",
+    )
+    _require_gitea_package_identity(
+        metadata=metadata,
+        owner=owner,
+        repository=repository,
+        package=package,
+        version=version,
+    )
+    expected = _manifest_artifact_inventory(manifest)
+    published = _published_artifact_inventory(files)
 
     if published != expected:
         raise ReleaseArtifactError(
             "Published artifacts do not match the release manifest"
         )
+
+    _download_and_verify_gitea_artifacts(
+        registry=registry,
+        owner=owner,
+        package=package,
+        version=version,
+        expected=expected,
+        token=token,
+    )
+
+
+def verify_gitea_package_artifacts_with_retry(
+    *,
+    registry: str,
+    owner: str,
+    repository: str,
+    package: str,
+    version: str,
+    manifest: dict[str, Any],
+    token: str,
+    attempts: int,
+    delay_seconds: float,
+) -> None:
+    """Wait a bounded interval for an exact, repository-linked artifact set."""
+    if not 1 <= attempts <= 30:
+        raise ReleaseArtifactError(
+            "Registry verification attempts must be 1 through 30"
+        )
+    if not 0 <= delay_seconds <= 60:
+        raise ReleaseArtifactError(
+            "Registry verification delay must be 0 through 60 seconds"
+        )
+
+    last_error: ReleaseArtifactError | None = None
+    for attempt in range(1, attempts + 1):
+        try:
+            link_gitea_package(
+                registry=registry,
+                owner=owner,
+                repository=repository,
+                package_type="pypi",
+                package=package,
+                token=token,
+            )
+            verify_gitea_package_artifacts(
+                registry=registry,
+                owner=owner,
+                repository=repository,
+                package=package,
+                version=version,
+                manifest=manifest,
+                token=token,
+            )
+            return
+        except ReleaseArtifactError as exc:
+            last_error = exc
+            if attempt < attempts:
+                time.sleep(delay_seconds)
+
+    raise ReleaseArtifactError(
+        f"Published artifacts did not match after {attempts} attempts"
+    ) from last_error
+
+
+def prepare_gitea_package_upload(
+    *,
+    registry: str,
+    owner: str,
+    repository: str,
+    package: str,
+    version: str,
+    manifest: dict[str, Any],
+    token: str,
+    resume_existing: bool,
+    attempts: int,
+    delay_seconds: float,
+) -> str:
+    """Authorize either one fresh upload or reuse of one exact existing set."""
+    verify_gitea_token_identity(registry=registry, owner=owner, token=token)
+    if resume_existing:
+        try:
+            verify_gitea_package_artifacts_with_retry(
+                registry=registry,
+                owner=owner,
+                repository=repository,
+                package=package,
+                version=version,
+                manifest=manifest,
+                token=token,
+                attempts=attempts,
+                delay_seconds=delay_seconds,
+            )
+        except ReleaseArtifactError as exc:
+            if isinstance(exc.__cause__, RegistryNotFound):
+                return "upload"
+            raise
+        return "reuse"
+
+    try:
+        verify_gitea_package_artifacts(
+            registry=registry,
+            owner=owner,
+            repository=repository,
+            package=package,
+            version=version,
+            manifest=manifest,
+            token=token,
+        )
+    except RegistryNotFound:
+        return "upload"
+    except ReleaseArtifactError as exc:
+        raise ReleaseArtifactError(
+            "Cannot prove the package version is absent; refusing a fresh upload"
+        ) from exc
+    raise ReleaseArtifactError(
+        "The package version already exists; use resume mode only with identical bytes"
+    )
 
 
 def publish_gitea_manifest(
@@ -695,6 +1105,45 @@ def publish_gitea_attestation(
     return verified
 
 
+def _run_local_command(args: argparse.Namespace) -> dict[str, Any] | None:
+    """Run commands that neither read nor write a registry."""
+    if args.command == "manifest":
+        return write_manifest(
+            dist=args.dist,
+            package=args.package,
+            version=args.version,
+            source_sha=args.source_sha,
+            output=args.manifest,
+        )
+    if args.command == "verify":
+        return verify_manifest(
+            manifest_path=args.manifest,
+            dist=args.dist,
+            package=args.package,
+            version=args.version,
+            source_sha=args.source_sha,
+        )
+    if args.command == "validate-build-source":
+        validate_build_source(
+            source=args.source,
+            package=args.package,
+            version=args.version,
+        )
+    elif args.command == "sanitize-build-source":
+        sanitize_build_source(
+            source=args.source,
+            destination=args.destination,
+            package=args.package,
+            version=args.version,
+        )
+    else:
+        validate_github_tag_rulesets(
+            rulesets=args.rulesets,
+            repository=args.repository,
+        )
+    return None
+
+
 def main() -> None:
     parser = argparse.ArgumentParser()
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -733,6 +1182,34 @@ def main() -> None:
     verify_registry.add_argument("--package", required=True)
     verify_registry.add_argument("--version", required=True)
     verify_registry.add_argument("--manifest", type=Path, required=True)
+    verify_registry.add_argument("--attempts", type=int, default=1)
+    verify_registry.add_argument("--delay-seconds", type=float, default=0)
+
+    prepare_upload = subparsers.add_parser("prepare-upload")
+    prepare_upload.add_argument("--registry", required=True)
+    prepare_upload.add_argument("--owner", required=True)
+    prepare_upload.add_argument("--repository", required=True)
+    prepare_upload.add_argument("--package", required=True)
+    prepare_upload.add_argument("--version", required=True)
+    prepare_upload.add_argument("--manifest", type=Path, required=True)
+    prepare_upload.add_argument("--resume-existing", action="store_true")
+    prepare_upload.add_argument("--attempts", type=int, default=1)
+    prepare_upload.add_argument("--delay-seconds", type=float, default=0)
+
+    validate_source = subparsers.add_parser("validate-build-source")
+    validate_source.add_argument("--source", type=Path, required=True)
+    validate_source.add_argument("--package", required=True)
+    validate_source.add_argument("--version", required=True)
+
+    sanitize_source = subparsers.add_parser("sanitize-build-source")
+    sanitize_source.add_argument("--source", type=Path, required=True)
+    sanitize_source.add_argument("--destination", type=Path, required=True)
+    sanitize_source.add_argument("--package", required=True)
+    sanitize_source.add_argument("--version", required=True)
+
+    validate_rulesets = subparsers.add_parser("validate-github-tag-rulesets")
+    validate_rulesets.add_argument("--rulesets", type=Path, required=True)
+    validate_rulesets.add_argument("--repository", required=True)
 
     publish_manifest = subparsers.add_parser("publish-manifest")
     publish_manifest.add_argument("--registry", required=True)
@@ -740,22 +1217,17 @@ def main() -> None:
     publish_manifest.add_argument("--repository", required=True)
     publish_manifest.add_argument("--manifest", type=Path, required=True)
     args = parser.parse_args()
-    if args.command == "manifest":
-        manifest = write_manifest(
-            dist=args.dist,
-            package=args.package,
-            version=args.version,
-            source_sha=args.source_sha,
-            output=args.manifest,
-        )
-    elif args.command == "verify":
-        manifest = verify_manifest(
-            manifest_path=args.manifest,
-            dist=args.dist,
-            package=args.package,
-            version=args.version,
-            source_sha=args.source_sha,
-        )
+    if args.command in {
+        "manifest",
+        "verify",
+        "validate-build-source",
+        "sanitize-build-source",
+        "validate-github-tag-rulesets",
+    }:
+        local_result = _run_local_command(args)
+        if local_result is None:
+            return
+        manifest = local_result
     elif args.command == "fetch-gitea":
         manifest = fetch_gitea_artifacts(
             owner=args.owner,
@@ -782,21 +1254,26 @@ def main() -> None:
             repository=args.repository,
             manifest=manifest,
         )
-    elif args.command == "verify-registry":
+    elif args.command == "prepare-upload":
         manifest = load_manifest(args.manifest)
-        token = os.getenv("GITEA_PACKAGE_TOKEN", "")
-        # A twine upload leaves the package unlinked, and the deploy and
-        # promotion consumers both refuse an unlinked package, so the link is
-        # created here and then required by the verification below.
-        link_gitea_package(
+        action = prepare_gitea_package_upload(
             registry=args.registry,
             owner=args.owner,
             repository=args.repository,
-            package_type="pypi",
             package=args.package,
-            token=token,
+            version=args.version,
+            manifest=manifest,
+            token=os.getenv("GITEA_PACKAGE_TOKEN", ""),
+            resume_existing=args.resume_existing,
+            attempts=args.attempts,
+            delay_seconds=args.delay_seconds,
         )
-        verify_gitea_package_artifacts(
+        print(action)
+        return
+    elif args.command == "verify-registry":
+        manifest = load_manifest(args.manifest)
+        token = os.getenv("GITEA_PACKAGE_TOKEN", "")
+        verify_gitea_package_artifacts_with_retry(
             registry=args.registry,
             owner=args.owner,
             repository=args.repository,
@@ -804,6 +1281,8 @@ def main() -> None:
             version=args.version,
             manifest=manifest,
             token=token,
+            attempts=args.attempts,
+            delay_seconds=args.delay_seconds,
         )
     elif args.command == "publish-attestation":
         manifest = load_manifest(args.manifest)

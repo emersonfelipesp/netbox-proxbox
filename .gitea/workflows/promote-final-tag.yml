@@ -18,13 +18,13 @@ concurrency:
 jobs:
   promote-final-tag:
     name: Verify production evidence and promote exact tag
-    if: ${{ github.ref == 'refs/heads/main' }}
+    if: ${{ github.repository == 'emersonfelipesp/netbox-proxbox' && github.ref == 'refs/heads/main' }}
     runs-on: mirror-host
     steps:
       - name: Checkout canonical-main promotion policy
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
-          ref: main
+          ref: ${{ github.sha }}
           fetch-depth: 0
           persist-credentials: false
 
@@ -42,6 +42,7 @@ jobs:
             "+refs/heads/develop:refs/remotes/gitea/release-develop" \
             "+refs/tags/${TAG}:refs/release-policy/candidate"
           SOURCE_SHA="$(git rev-parse refs/release-policy/candidate^{commit})"
+          test "$(git rev-parse HEAD^{commit})" = "${GITHUB_SHA}"
           test "$SOURCE_SHA" = "$(git rev-parse refs/remotes/gitea/release-main^{commit})"
           test "$SOURCE_SHA" = "$(git rev-parse refs/remotes/gitea/release-develop^{commit})"
           test "$SOURCE_SHA" = "$(git rev-parse HEAD^{commit})"
@@ -110,6 +111,18 @@ jobs:
           EOF
           chmod 0500 "$SECRET_ROOT/askpass"
           GIT_ASKPASS="$SECRET_ROOT/askpass" GIT_TERMINAL_PROMPT=0 \
-            git push github "refs/tags/${TAG}:refs/tags/${TAG}"
-          REMOTE_SHA="$(git ls-remote --exit-code github "refs/tags/${TAG}^{}" | awk '{print $1}')"
-          test "$REMOTE_SHA" = "$SOURCE_SHA"
+            git push github "refs/release-policy/candidate:refs/tags/${TAG}"
+          LOCAL_TAG_OBJECT="$(git rev-parse refs/release-policy/candidate)"
+          REMOTE_TAG_OBJECT="$(GIT_ASKPASS="$SECRET_ROOT/askpass" \
+            GIT_TERMINAL_PROMPT=0 git ls-remote --exit-code github \
+            "refs/tags/${TAG}" | awk '{print $1}')"
+          REMOTE_PEELED_LINE="$(GIT_ASKPASS="$SECRET_ROOT/askpass" \
+            GIT_TERMINAL_PROMPT=0 git ls-remote github \
+            "refs/tags/${TAG}^{}")"
+          if [ -n "$REMOTE_PEELED_LINE" ]; then
+            REMOTE_SOURCE_SHA="${REMOTE_PEELED_LINE%%[[:space:]]*}"
+          else
+            REMOTE_SOURCE_SHA="$REMOTE_TAG_OBJECT"
+          fi
+          test "$REMOTE_TAG_OBJECT" = "$LOCAL_TAG_OBJECT"
+          test "$REMOTE_SOURCE_SHA" = "$SOURCE_SHA"
