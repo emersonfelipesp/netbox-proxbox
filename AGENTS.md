@@ -252,8 +252,13 @@ VM intent is stored in the plugin-owned `ProxmoxVMIntent` one-to-one model.
 Its target node and storage are desired placement, distinct from the reflected
 location in `ProxboxVirtualMachineSyncState`. Migration 0088 adds the model,
 then removes the ten superseded VM-intent custom-field definitions with the
-same lock-and-emptiness boundary as 0087. The branch flags, netbox-packer field,
-and netbox-proxy fields remain operational custom fields.
+same lock-and-emptiness boundary as 0087. `ProxboxBranchIntent` owns the two
+branch safety gates through an integer branch primary key plus schema-ID soft
+reference. Its shared resolver returns both gates as false when branching is
+unavailable, the branch or intent row is missing, or any lookup fails.
+Migrations 0090 and 0091 add the model and conservatively retire the two empty
+Branch custom fields. The netbox-packer and netbox-proxy fields remain
+operational custom fields.
 
 ## Release Procedure (summary)
 
@@ -690,7 +695,8 @@ netbox-proxbox supports **two integration directions**:
    apply CREATE / UPDATE / DELETE against Proxmox (VMs, LXC, optional
    Cloud-Init). Gated by
    `ProxboxPluginSettings.netbox_to_proxmox_enabled` (default `False`)
-   and per-branch custom field `apply_to_proxmox` (default `False`).
+   and the plugin-owned per-branch intent setting `apply_to_proxmox` (default
+   `False`).
 
 ### Decision rule for new features
 
@@ -701,7 +707,7 @@ the read side first and the write side as a separate sub-PR.
 ### Invariants for the intent side
 
 - The **single source of truth** for intent is the merged `ChangeDiff`
-  list on a branch flagged `apply_to_proxmox=True`.
+  list on a branch whose `ProxboxBranchIntent.apply_to_proxmox` gate is true.
 - The **single trigger** for Proxmox-side mutation is the `post_merge`
   signal from `netbox_branching.signals`. No other code path may mutate
   Proxmox; the operational verbs from #376 (start/stop/snapshot/migrate)

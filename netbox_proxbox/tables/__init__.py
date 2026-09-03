@@ -17,6 +17,7 @@ from netbox_proxbox.models import (
     ProxmoxEndpoint,
 )
 from netbox_proxbox.tables.backup_routine import BackupRoutineTable
+from netbox_proxbox.tables.branch_intent import ProxboxBranchIntentTable
 from netbox_proxbox.tables.firewall import (
     ProxmoxFirewallAliasTable,
     ProxmoxFirewallIPSetEntryTable,

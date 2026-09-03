@@ -767,6 +767,17 @@ in two ways:
    alongside `netbox_branching` must keep `netbox_proxbox` listed
    first.
 
+The NetBox-to-Proxmox intent path stores its branch-scoped safety gates in
+`netbox_proxbox.ProxboxBranchIntent`, not on `Branch.custom_field_data`. The
+model carries the Branch integer primary key and eight-character `schema_id` as
+a soft reference, avoiding a migration dependency on this optional plugin. A
+single resolver verifies the exact Branch row before returning either gate and
+returns both `apply_to_proxmox=False` and `apply_destroy_confirmed=False` when
+branching is disabled, the reference is stale, the intent row is absent, or a
+lookup fails. The Proxbox template extension is registered only while the
+branching Django app is enabled and adds the intent controls to Branch detail
+pages.
+
 If Proxbox ever pursues branch-staged sync, the Proxbox-side work would
 likely consist of: ensuring its singletons (`NetBoxEndpoint`,
 `FastAPIEndpoint`, `ProxboxPluginSettings`) are listed in `exempt_models`

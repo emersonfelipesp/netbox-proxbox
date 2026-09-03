@@ -237,6 +237,8 @@ Two models perform an **upsert** on POST — if a matching record already exists
 | `/api/plugins/proxbox/cloud-image-templates/{id}/` | GET PUT PATCH DELETE | CloudImageTemplate CRUD |
 | `/api/plugins/proxbox/vm-cloudinit/` | GET POST | ProxmoxVMCloudInit CRUD |
 | `/api/plugins/proxbox/vm-cloudinit/{id}/` | GET PUT PATCH DELETE | ProxmoxVMCloudInit CRUD |
+| `/api/plugins/proxbox/branch-intents/` | GET POST | ProxboxBranchIntent CRUD; soft branch reference must resolve |
+| `/api/plugins/proxbox/branch-intents/{id}/` | GET PUT PATCH DELETE | ProxboxBranchIntent CRUD; branch reference is immutable |
 | `/api/plugins/proxbox/vm-templates/` | GET POST | ProxmoxVMTemplate CRUD |
 | `/api/plugins/proxbox/vm-templates/{id}/` | GET PUT PATCH DELETE | ProxmoxVMTemplate CRUD |
 | `/api/plugins/proxbox/ssh-credentials/` | GET POST | NodeSSHCredential CRUD |

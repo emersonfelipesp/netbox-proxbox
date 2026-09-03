@@ -22,11 +22,11 @@ else:
     logger.info("netbox_branching is not enabled; post_merge receiver disabled.")
 
 
-def _custom_field_enabled(obj: Any, field_name: str) -> bool:
-    cf = getattr(obj, "custom_field_data", None) or {}
-    if not isinstance(cf, dict):
-        return False
-    return cf.get(field_name) is True
+def _branch_opted_in(branch: Any) -> bool:
+    """Read the branch opt-in through the shared fail-closed resolver."""
+    from netbox_proxbox.services.branch_intent import resolve_branch_intent_flags
+
+    return resolve_branch_intent_flags(branch).apply_to_proxmox
 
 
 def _mergeable_virtual_machines(branch: Any) -> list:
@@ -70,7 +70,7 @@ if post_merge is not None:
                 logger.debug("Intent post_merge ignored: master flag disabled.")
                 return
 
-            if not _custom_field_enabled(branch, "apply_to_proxmox"):
+            if not _branch_opted_in(branch):
                 logger.debug("Intent post_merge ignored: branch is not opted in.")
                 return
 

@@ -317,6 +317,13 @@ fake historical models for both generations.
   `select_for_update()` before reading and rewriting their JSON documents, using
   bounded iterator and bulk-update batches so a concurrent unrelated
   custom-field write cannot be overwritten. Migrations 0085-0087 are immutable.
+- Migration `0090_proxbox_branch_intent` adds the plugin-owned branch safety
+  gates with a soft branch primary-key and schema-ID reference; it deliberately
+  has no dependency on the optional `netbox_branching` app. Migration
+  `0091_remove_branch_intent_custom_fields` then retires the two superseded
+  Branch definitions using 0089's complete three-stage emptiness and locking
+  boundary. Forward and reverse are both no-ops when the Branch content type is
+  absent. Migrations 0085-0089 remain immutable.
 
 ## Links
 

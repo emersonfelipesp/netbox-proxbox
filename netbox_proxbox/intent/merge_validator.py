@@ -11,7 +11,7 @@ opt-out:
 
 * If the master flag ``netbox_to_proxmox_enabled`` is False, the merge
   is permitted unconditionally (the reflection path is unaffected).
-* If the branch does not opt in via ``cf.apply_to_proxmox=True``, the
+* If the branch intent does not set ``apply_to_proxmox=True``, the
   merge is permitted unconditionally.
 
 When the intent path is engaged, the validator:
@@ -100,19 +100,17 @@ def _warn_plaintext_password_enabled() -> bool:
 
 
 def _branch_opted_in(branch: Any) -> bool:
-    """Per-branch opt-in via the ``apply_to_proxmox`` custom field."""
-    cf = getattr(branch, "custom_field_data", None) or {}
-    if not isinstance(cf, dict):
-        return False
-    return bool(cf.get("apply_to_proxmox", False))
+    """Read the per-branch opt-in through the shared resolver."""
+    from netbox_proxbox.services.branch_intent import resolve_branch_intent_flags
+
+    return resolve_branch_intent_flags(branch).apply_to_proxmox
 
 
 def _branch_destroy_confirmed(branch: Any) -> bool:
-    """Per-branch DELETE four-eyes confirmation."""
-    cf = getattr(branch, "custom_field_data", None) or {}
-    if not isinstance(cf, dict):
-        return False
-    return bool(cf.get("apply_destroy_confirmed", False))
+    """Read the per-branch DELETE confirmation through the shared resolver."""
+    from netbox_proxbox.services.branch_intent import resolve_branch_intent_flags
+
+    return resolve_branch_intent_flags(branch).apply_destroy_confirmed
 
 
 def _classify_vm_diffs(branch: Any) -> list[dict[str, Any]]:
@@ -241,8 +239,8 @@ def validate_proxmox_intent(
             False,
             (
                 "Branch contains DELETE diffs but apply_destroy_confirmed=False. "
-                "Toggle the branch CF (and grant authorize_deletion_request to a "
-                "separate user) before merging."
+                "Enable the Proxbox branch intent setting (and grant "
+                "authorize_deletion_request to a separate user) before merging."
             ),
         )
 

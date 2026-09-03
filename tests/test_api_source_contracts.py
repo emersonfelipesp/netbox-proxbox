@@ -561,6 +561,7 @@ def test_plugin_api_routes_register_all_plugin_objects():
     assert set(root_registers) == {
         "apply-jobs",
         "backup-routines",
+        "branch-intents",
         "cloud-image-templates",
         "datacenter-cpu-models",
         "deletion-requests",

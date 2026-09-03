@@ -115,6 +115,9 @@ per node, or issuing an authenticated request for every membership entry.
 - [`resource_list_views.py`](./resource_list_views.py): list views for resource objects (nodes, VMs, LXC containers, virtual disks, clusters, interfaces, IP addresses). Every list table is paginated through the module-level `paginate_object_list()` helper, which wraps NetBox's `EnhancedPaginator` + `get_paginate_count` so the pages honour `?per_page=`, the saved per-page preference, and `PAGINATE_COUNT`/`MAX_PAGE_SIZE` — the same machinery NetBox object tables use. These views must never re-introduce a fixed `[:100]` slice; raising the visible count is done by paginating, not by capping. The two aggregate pages (interfaces, IP addresses) render two tables each and paginate them independently via the `vm_page` / `node_page` query parameters, with summary counts computed from the full querysets (`.count()`) rather than the current page.
 - [`schedule_helpers.py`](./schedule_helpers.py): utility functions for scheduling logic shared between scheduling views.
 - [`backup_routine.py`](./backup_routine.py): list/detail/edit/delete views and VM-related tab views for `BackupRoutine`.
+- [`branch_intent.py`](./branch_intent.py): CRUD views for soft-referenced branch
+  intent gates; the optional branch detail card is registered separately only
+  while `netbox_branching` is enabled.
 - [`cards.py`](./cards.py): dashboard card hydration for Proxmox cluster/version data.
 - [`cluster.py`](./cluster.py): cluster storage summary tab and Proxmox cluster summary tab.
 - [`cluster_nodes_tab.py`](./cluster_nodes_tab.py): cluster/node tab for Proxmox endpoint detail pages.

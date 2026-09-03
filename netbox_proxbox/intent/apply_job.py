@@ -85,6 +85,13 @@ def _virtualmachine_changediffs(branch: Any) -> Any:
     return virtual_machine_diff_union(branch)
 
 
+def _branch_destroy_confirmed(branch: Any) -> bool:
+    """Read DELETE confirmation through the shared fail-closed resolver."""
+    from netbox_proxbox.services.branch_intent import resolve_branch_intent_flags
+
+    return resolve_branch_intent_flags(branch).apply_destroy_confirmed
+
+
 def _diff_identifier(row: Any, fallback: int) -> str:
     for attr in ("object_repr", "object_id", "pk"):
         value = getattr(row, attr, None)
@@ -295,6 +302,7 @@ class ProxmoxApplyJob(JobRunner):
             branch = apply_job.branch
             actor = apply_job.user
             actor_username = getattr(actor, "username", None)
+            destroy_confirmed = _branch_destroy_confirmed(branch)
             logger.info(
                 "Starting Proxmox apply %s for branch %s.",
                 apply_job.run_uuid,
@@ -332,14 +340,7 @@ class ProxmoxApplyJob(JobRunner):
                         continue
 
                     if op == "delete":
-                        branch_custom_fields = (
-                            getattr(branch, "custom_field_data", None) or {}
-                        )
-                        if (
-                            not isinstance(branch_custom_fields, dict)
-                            or branch_custom_fields.get("apply_destroy_confirmed")
-                            is not True
-                        ):
+                        if not destroy_confirmed:
                             results[key] = _result_entry(
                                 vmid=vmid,
                                 op=op,

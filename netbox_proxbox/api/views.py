@@ -44,6 +44,7 @@ from .serializers import (
     PDMEndpointSerializer,
     PDMRemoteSerializer,
     ProxboxClusterGroupSyncStateSerializer,
+    ProxboxBranchIntentSerializer,
     ProxboxClusterSyncStateSerializer,
     ProxboxClusterTypeSyncStateSerializer,
     ProxboxDeviceRoleSyncStateSerializer,
@@ -446,6 +447,14 @@ class ProxmoxVMIntentViewSet(
     queryset = models.ProxmoxVMIntent.objects.select_related("virtual_machine")
     serializer_class = ProxmoxVMIntentSerializer
     filterset_class = filtersets.ProxmoxVMIntentFilterSet
+
+
+class ProxboxBranchIntentViewSet(NetBoxModelViewSet):
+    """REST API for plugin-owned branch intent safety gates."""
+
+    queryset = models.ProxboxBranchIntent.objects.all()
+    serializer_class = ProxboxBranchIntentSerializer
+    filterset_class = filtersets.ProxboxBranchIntentFilterSet
 
 
 class ProxboxVirtualMachineSyncStateViewSet(

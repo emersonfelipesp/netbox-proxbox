@@ -29,13 +29,11 @@ def _maybe_restrict(queryset: Any, user: Any) -> Any:
         return restrict(user)
 
 
-def _branch_custom_fields(branch: Any) -> dict[str, Any]:
-    data = getattr(branch, "custom_field_data", None)
-    return data if isinstance(data, dict) else {}
+def _branch_intent_flags(branch: Any) -> Any:
+    """Read both branch gates through the shared fail-closed resolver."""
+    from netbox_proxbox.services.branch_intent import resolve_branch_intent_flags
 
-
-def _branch_flag(branch: Any, field_name: str) -> bool:
-    return _branch_custom_fields(branch).get(field_name) is True
+    return resolve_branch_intent_flags(branch)
 
 
 def _intent_enabled() -> bool:
@@ -124,8 +122,9 @@ class IntentPlanSummaryView(ConditionalLoginRequiredMixin, View):
             for vm, op, row in virtual_machine_diff_union(branch)
         ]
         intent_enabled = _intent_enabled()
-        apply_to_proxmox = _branch_flag(branch, "apply_to_proxmox")
-        apply_destroy_confirmed = _branch_flag(branch, "apply_destroy_confirmed")
+        branch_intent = _branch_intent_flags(branch)
+        apply_to_proxmox = branch_intent.apply_to_proxmox
+        apply_destroy_confirmed = branch_intent.apply_destroy_confirmed
 
         context.update(
             {
@@ -161,7 +160,7 @@ class IntentPlanSummaryView(ConditionalLoginRequiredMixin, View):
                 diffs,
                 verdict="skipped",
                 reason="branch_not_opted_in",
-                message="Branch custom field apply_to_proxmox is not true.",
+                message="Branch intent setting apply_to_proxmox is not true.",
             )
             return render(request, self.template_name, context)
 
@@ -176,7 +175,8 @@ class IntentPlanSummaryView(ConditionalLoginRequiredMixin, View):
                 verdict="blocked",
                 reason="destroy_not_confirmed",
                 message=(
-                    "Branch contains DELETE diffs but apply_destroy_confirmed is not true."
+                    "Branch intent setting apply_destroy_confirmed is not true for "
+                    "a branch containing DELETE diffs."
                 ),
             )
             return render(request, self.template_name, context)

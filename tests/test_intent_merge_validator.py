@@ -6,7 +6,7 @@ operator (see the ``proxbox_install_merge_validator`` management
 command). Its contract:
 
 * If the master flag is False -> permit unconditionally.
-* If the branch's ``apply_to_proxmox`` CF is False -> permit
+* If the branch's ``apply_to_proxmox`` intent gate is False -> permit
   unconditionally.
 * If the branch has no VM ChangeDiff rows -> permit with a no-op
   message.
@@ -107,7 +107,7 @@ def test_validator_checks_master_flag_and_branch_optin():
         "validator must read the master flag from ProxboxPluginSettings"
     )
     assert "apply_to_proxmox" in text, (
-        "validator must check the branch's apply_to_proxmox custom field"
+        "validator must check the branch's apply_to_proxmox intent gate"
     )
 
 

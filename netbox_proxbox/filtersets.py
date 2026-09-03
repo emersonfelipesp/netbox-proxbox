@@ -47,6 +47,7 @@ from .models import (
     ProxmoxFirewallSecurityGroup,
     ProxmoxMetricsInfluxDB,
     ProxboxClusterGroupSyncState,
+    ProxboxBranchIntent,
     ProxboxClusterSyncState,
     ProxboxClusterTypeSyncState,
     ProxboxDeviceRoleSyncState,
@@ -658,6 +659,32 @@ class ProxmoxVMIntentFilterSet(ProxboxSyncStateFilterSet):
             | Q(target_storage__icontains=value)
             | Q(cloud_init_user__icontains=value)
         )
+
+
+@register_filterset
+class ProxboxBranchIntentFilterSet(ProxboxModelFilterSet):
+    """Filter plugin-owned branch intent rows by soft identity or gate."""
+
+    branch_id = MultiValueNumberFilter()
+
+    class Meta:
+        model = ProxboxBranchIntent
+        fields = (
+            "id",
+            "branch_id",
+            "branch_schema_id",
+            "apply_to_proxmox",
+            "apply_destroy_confirmed",
+        )
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        """Match the schema identifier or an exact numeric branch ID."""
+        if not value.strip():
+            return queryset
+        query = Q(branch_schema_id__icontains=value)
+        if value.isdigit():
+            query |= Q(branch_id=int(value))
+        return queryset.filter(query)
 
 
 @register_filterset

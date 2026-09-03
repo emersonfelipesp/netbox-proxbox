@@ -21,6 +21,7 @@ from netbox_proxbox.models.sdn_route_map import ProxmoxSdnRouteMap
 from netbox_proxbox.models.sdn_prefix_list import ProxmoxSdnPrefixList
 from netbox_proxbox.models.datacenter_cpu_model import ProxmoxDatacenterCpuModel
 from netbox_proxbox.models.backup_routine import BackupRoutine
+from netbox_proxbox.models.branch_intent import ProxboxBranchIntent
 from netbox_proxbox.models.base import PORT_VALIDATORS, CommonProperties, EndpointBase
 from netbox_proxbox.models.cloud_image_template import CloudImageTemplate
 from netbox_proxbox.models.deletion_request import DeletionRequest
@@ -78,6 +79,7 @@ from netbox_proxbox.models.vm_template import ProxmoxVMTemplate
 
 __all__ = (
     "BackupRoutine",
+    "ProxboxBranchIntent",
     "ProxmoxFirewallAlias",
     "ProxmoxFirewallIPSet",
     "ProxmoxFirewallIPSetEntry",

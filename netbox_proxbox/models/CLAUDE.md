@@ -29,6 +29,8 @@ This directory defines the plugin's persisted data model.
 - [`sync_state.py`](./sync_state.py): typed sidecar models for the legacy
   Proxbox custom-field payload, keyed one-to-one to NetBox core objects.
 - [`backup_routine.py`](./backup_routine.py): backup routine inventory model.
+- [`branch_intent.py`](./branch_intent.py): default-off intent safety gates keyed
+  by a soft `netbox_branching.Branch` primary-key and schema-ID reference.
 - [`replication.py`](./replication.py): replication inventory model.
 - [`vm_backup.py`](./vm_backup.py): `VMBackup` model.
 - [`vm_snapshot.py`](./vm_snapshot.py): `VMSnapshot` model.
@@ -118,6 +120,11 @@ This directory defines the plugin's persisted data model.
   VM for its lifetime; both the form and API serializer reject reassignment.
   Desired `target_node` must never be used as the reflected current node for
   deletion authorization.
+- `ProxboxBranchIntent`: stores the per-branch `apply_to_proxmox` and
+  `apply_destroy_confirmed` safety gates without importing or depending on the
+  optional branching model. Both default to false. Runtime readers must use the
+  shared resolver, which also returns false when the companion is disabled, the
+  branch is deleted, the intent row is absent, or a lookup fails.
 - `BackupRoutine`: stores backup routine inventory for NetBox-backed ProxBox sync.
 - `Replication`: stores replication job inventory for NetBox-backed ProxBox sync.
 - `VMBackup`: stores backup inventory for NetBox virtual machines.

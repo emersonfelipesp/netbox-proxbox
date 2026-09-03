@@ -82,17 +82,21 @@ The merge validator is the read-only preflight gate. It inspects the branch
 The validator checks:
 
 - The plugin master flag.
-- The branch `apply_to_proxmox` custom field.
+- The branch's plugin-owned `apply_to_proxmox` intent setting.
 - VirtualMachine, LXC, and `ProxmoxVMIntent` diffs on the branch.
 - Operator RBAC for create, update, and delete requests.
-- The `apply_destroy_confirmed` branch field for deletions.
+- The branch's `apply_destroy_confirmed` intent setting for deletions.
 - Backend plan verdicts from proxbox-api.
 - Cloud-init warnings when configured.
 
 The validator returns a permitted or blocked indicator to netbox-branching. If
 it blocks, the merge does not complete and Proxmox is not touched.
 
-## Branch Fields
+## Branch Intent Settings
+
+Open the branch detail page and use the **Proxbox Branch Intent** card to create
+or edit the settings. They are stored in a plugin-owned row with a soft branch
+reference, not as custom fields on `netbox_branching.Branch`.
 
 `apply_to_proxmox`
 
@@ -261,11 +265,13 @@ To stop a queued job:
 
 `Branch is not opted in`
 
-: Set `apply_to_proxmox=True` on the branch custom fields.
+: Open the branch's **Proxbox Branch Intent** card and set
+  `apply_to_proxmox=True`.
 
 `DELETE diffs require apply_destroy_confirmed=True`
 
-: Set the branch destroy confirmation field, then rerun the plan.
+: Set `apply_destroy_confirmed=True` in the branch's **Proxbox Branch Intent**
+  card, then rerun the plan.
 
 `No FastAPIEndpoint is configured`
 

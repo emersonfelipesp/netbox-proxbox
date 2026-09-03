@@ -1,0 +1,35 @@
+{% load i18n %}
+<div class="card mb-3">
+  <h5 class="card-header d-flex justify-content-between align-items-center">
+    {% trans "Proxbox Branch Intent" %}
+    {% if edit_url %}
+      <a class="btn btn-sm btn-primary" href="{{ edit_url }}">{% trans "Edit" %}</a>
+    {% elif add_url %}
+      <a class="btn btn-sm btn-primary" href="{{ add_url }}">{% trans "Set intent" %}</a>
+    {% endif %}
+  </h5>
+  <div class="card-body">
+    {% if intent %}
+      <div class="form-check form-switch mb-3">
+        <input class="form-check-input" type="checkbox" role="switch" disabled
+               id="proxbox-apply-to-proxmox" name="apply_to_proxmox"
+               {% if intent_flags.apply_to_proxmox or not intent_flags and intent.apply_to_proxmox %}checked{% endif %}>
+        <label class="form-check-label" for="proxbox-apply-to-proxmox">
+          {% trans "Apply this branch to Proxmox" %}
+        </label>
+      </div>
+      <div class="form-check form-switch">
+        <input class="form-check-input" type="checkbox" role="switch" disabled
+               id="proxbox-apply-destroy-confirmed" name="apply_destroy_confirmed"
+               {% if intent_flags.apply_destroy_confirmed or not intent_flags and intent.apply_destroy_confirmed %}checked{% endif %}>
+        <label class="form-check-label" for="proxbox-apply-destroy-confirmed">
+          {% trans "Allow DELETE diffs to create deletion requests" %}
+        </label>
+      </div>
+    {% else %}
+      <p class="text-muted mb-0">
+        {% trans "No Proxbox intent gates are configured for this branch. Both gates are false." %}
+      </p>
+    {% endif %}
+  </div>
+</div>

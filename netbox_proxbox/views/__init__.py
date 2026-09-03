@@ -113,6 +113,13 @@ from .backup_routine import (
     BackupRoutineListView,
     BackupRoutineView,
 )
+from .branch_intent import (
+    ProxboxBranchIntentBulkDeleteView,
+    ProxboxBranchIntentDeleteView,
+    ProxboxBranchIntentEditView,
+    ProxboxBranchIntentListView,
+    ProxboxBranchIntentView,
+)
 from .cards import get_proxmox_card
 from .cloud_image_templates import (
     CloudImageTemplateBulkDeleteView,

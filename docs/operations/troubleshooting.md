@@ -75,8 +75,8 @@ Symptom:
 
 Fix:
 
-1. Open the branch.
-2. Set `apply_to_proxmox=True`.
+1. Open the branch's **Proxbox Branch Intent** card.
+2. Create or edit the intent and set `apply_to_proxmox=True`.
 3. Save.
 4. Rerun the plan.
 
@@ -90,7 +90,7 @@ Symptom:
 Fix:
 
 1. Confirm this branch really should request a Proxmox deletion.
-2. Set `apply_destroy_confirmed=True`.
+2. Set `apply_destroy_confirmed=True` in the **Proxbox Branch Intent** card.
 3. Rerun the plan.
 4. Continue with separate deletion authorization after merge.
 

@@ -137,9 +137,14 @@ The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxb
   NetBox-to-Proxmox placement and cloud-init input now lives in the
   plugin-owned `ProxmoxVMIntent` one-to-one model. Its `target_node` and
   `target_storage` fields are desired placement and must never be used as the
-  VM's reflected location. Migration 0088 retires the ten superseded intent
-  custom fields behind the 0087-style emptiness gate. Branch, netbox-packer,
-  and netbox-proxy custom fields remain operational.
+  VM's reflected location. Migration 0089 retires the ten superseded intent
+  custom fields behind the 0087-style emptiness gate. `ProxboxBranchIntent`
+  owns the two branch safety gates through an integer branch primary key plus
+  schema-ID soft reference; its shared resolver returns both gates as false
+  when branching is unavailable, the branch or intent row is missing, or any
+  lookup fails. Migrations 0090 and 0091 add that model and conservatively
+  retire the two empty Branch custom fields. The netbox-packer and netbox-proxy
+  custom fields remain operational.
 - Companion endpoint models: `PBSEndpoint`, `PDMEndpoint`, `PDMRemote` for Proxmox Backup Server and Datacenter Manager inventory.
 - SSH and hardware discovery: `NodeSSHCredential` stores per-node SSH credentials for the optional hardware-discovery pass.
 - **Credential storage (OpenBao default, legacy Fernet opt-in).** Plugin Settings
@@ -1412,7 +1417,8 @@ netbox-proxbox supports **two integration directions**:
    apply CREATE / UPDATE / DELETE against Proxmox (VMs, LXC, optional
    Cloud-Init). Gated by
    `ProxboxPluginSettings.netbox_to_proxmox_enabled` (default `False`)
-   and per-branch custom field `apply_to_proxmox` (default `False`).
+   and the plugin-owned per-branch intent setting `apply_to_proxmox` (default
+   `False`).
 
 ### Decision rule for new features
 
@@ -1428,7 +1434,7 @@ the read side first and the write side as a separate sub-PR.
   Conversely, never suppress an import failure for an enabled companion: fail
   startup instead of running a partially configured integration.
 - The **single source of truth** for intent is the merged `ChangeDiff`
-  list on a branch flagged `apply_to_proxmox=True`.
+  list on a branch whose `ProxboxBranchIntent.apply_to_proxmox` gate is true.
 - The **single trigger** for Proxmox-side mutation is the `post_merge`
   signal from `netbox_branching.signals`. No other code path may mutate
   Proxmox; the operational verbs from #376 (start/stop/snapshot/migrate)

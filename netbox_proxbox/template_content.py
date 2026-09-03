@@ -37,6 +37,7 @@ from netbox_proxbox.views.proxbox_access import (
     permission_enqueue_proxbox_sync,
     permission_run_proxmox_action,
 )
+from netbox_proxbox.branch_intent_template import branch_intent_template_extensions
 
 __all__ = (
     "ProxboxJobTemplateExtension",
@@ -872,4 +873,5 @@ template_extensions = [
     VMSnapshotTemplateExtension,
     VMTaskHistoryTemplateExtension,
     ProxmoxFirewallPushTemplateExtension,
+    *branch_intent_template_extensions(),
 ]

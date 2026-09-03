@@ -52,7 +52,8 @@ Four invariants that hold at every stage of every sub-PR:
 ## 3. Trigger mechanism (Option B: `post_merge`)
 
 The intent layer hooks `netbox-branching`'s `post_merge` signal.
-When an operator merges a branch whose CF `apply_to_proxmox=True`,
+When an operator merges a branch whose `ProxboxBranchIntent` row has
+`apply_to_proxmox=True`,
 `handle_branch_merged` fires, validates pre-conditions (master flag,
 phrase, perms), and enqueues a `ProxmoxApplyJob` keyed by the merged
 branch.
@@ -106,7 +107,7 @@ deletion snapshot from its `original`/`current`, `object_repr`, and `object_id`
 values. It never treats the NetBox object ID as a Proxmox VMID; missing VMID,
 node, or name identity fails that diff instead of silently discarding it.
 
-## 6. VM intent model and branch custom fields
+## 6. VM intent and branch intent models
 
 `ProxmoxVMIntent` is a plugin-owned `NetBoxModel` with one row per
 `virtualization.VirtualMachine`. Operators edit it from the VM detail page. An
@@ -138,16 +139,20 @@ Successful applies update stamp fields only when the intent row still exists.
 An intent-only deletion deliberately becomes a VM update, and its successful
 stamp must not recreate the row the operator removed.
 
-**2 Branch CFs (attach to `netbox_branching.branch`):**
+`ProxboxBranchIntent` stores the two branch-scoped safety gates:
 
 ```
 apply_to_proxmox            boolean
 apply_destroy_confirmed     boolean
 ```
 
-The Branch CF registration is guarded by a `ContentType` lookup so
-plugin install without `netbox_branching` skips silently (matches the
-`is_branching_available()` runtime guard pattern).
+The model uses the branch integer primary key and `schema_id` as a unique soft
+reference. It has no database relation or migration dependency on the optional
+branching plugin. The shared resolver verifies that the referenced Branch still
+exists before returning either gate. A missing intent row, disabled branching
+plugin, deleted branch, missing branch, or lookup exception returns `False` for
+both gates. The branch detail extension is registered only when branching is enabled and
+links to the plugin-owned create/edit form.
 
 ## 7. RBAC permissions (Sub-PR B)
 
@@ -336,6 +341,8 @@ adds the two new kinds.
 | `0042_intent_warn_plaintext_password` | settings toggle | K |
 | `0088_proxmox_vm_intent` | Plugin-owned VM intent schema | model cutover |
 | `0089_remove_vm_intent_custom_fields` | Retire the ten empty VM definitions | model cutover |
+| `0090_proxbox_branch_intent` | Plugin-owned soft-referenced branch gates | branch intent cutover |
+| `0091_remove_branch_intent_custom_fields` | Retire the two empty Branch definitions | branch intent cutover |
 
 The historical rollout used one migration per sub-PR. The later intent-model
 cutover deliberately separates additive schema from conservative custom-field

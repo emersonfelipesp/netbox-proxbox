@@ -190,6 +190,11 @@ router.register(
 )
 router.register("vm-intents", views.ProxmoxVMIntentViewSet, basename="proxmoxvmintent")
 router.register(
+    "branch-intents",
+    views.ProxboxBranchIntentViewSet,
+    basename="proxboxbranchintent",
+)
+router.register(
     "vm-templates", views.ProxmoxVMTemplateViewSet, basename="proxmoxvmtemplate"
 )
 router.register(

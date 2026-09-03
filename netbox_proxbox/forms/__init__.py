@@ -1,6 +1,7 @@
 """Re-export the plugin's model and filter form classes."""
 
 from .backup_routine import *
+from .branch_intent import *
 from .firewall import (
     ProxmoxFirewallAliasFilterForm,
     ProxmoxFirewallAliasForm,

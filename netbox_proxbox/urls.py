@@ -314,6 +314,14 @@ urlpatterns = [
         "vm-intents/",
         include(get_model_urls("netbox_proxbox", "proxmoxvmintent", detail=False)),
     ),
+    path(
+        "branch-intents/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxboxbranchintent")),
+    ),
+    path(
+        "branch-intents/",
+        include(get_model_urls("netbox_proxbox", "proxboxbranchintent", detail=False)),
+    ),
     # Firewall models
     path(
         "firewall/security-groups/<int:pk>/",

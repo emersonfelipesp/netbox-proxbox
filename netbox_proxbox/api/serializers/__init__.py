@@ -1,5 +1,8 @@
 """Re-export plugin API serializers for `netbox_proxbox.api.serializers`."""
 
+from netbox_proxbox.api.serializers.branch_intent import (
+    ProxboxBranchIntentSerializer,
+)
 from netbox_proxbox.api.serializers.firewall import (
     NestedProxmoxFirewallIPSetSerializer,
     NestedProxmoxFirewallSecurityGroupSerializer,
