@@ -10,6 +10,12 @@ For the broader CI job map and Docker E2E matrix, see
 
 ## Release State Machine
 
+The diagram shows the target locked control-plane architecture. Until its
+isolated runner fleet and acceptance record are activated, operators use the
+manual `publish-gitea.yml` fallback described in the checklist below; that
+fallback applies equivalent source, package, destination, live-runner, and
+immutable-tool checks without claiming that the deferred control plane exists.
+
 ```mermaid
 flowchart TD
     Start([Choose target release\nX.Y.Z])
@@ -89,17 +95,36 @@ sequenceDiagram
   and requires an RC version.
 - Package uploads intentionally omit `twine --skip-existing`; a consumed version
   must move forward to the next `.postN` or `rcN`.
-- The Gitea publisher installs no executable tools. Its runner image must
-  already provide exactly Python 3.12.14 and uv 0.12.5; the build uses the
-  locked Hatchling 1.31.0 from that interpreter's synchronized environment
-  with PEP 517 build isolation disabled. An RC promotion also requires a
-  pre-provisioned, authenticated GitHub CLI. Missing or unexpected tooling
-  fails before a distribution is built or a package credential is used.
+- The active Gitea publisher accepts only the reviewed `mirror-host` runner ID,
+  name, and sole registered label returned by the live Actions jobs API for the
+  current first-attempt run and exact control SHA. It verifies root ownership,
+  mode, link count, size, and immutable SHA-256 digests for the exact Python
+  3.13.5, Bash, Dash, Git, and GitHub CLI paths recorded in
+  `.gitea/mirror-runner-acceptance.json` before any package or GitHub credential
+  is exposed. The runner has no pre-provisioned `uv`; the credential-free gate
+  downloads the official uv 0.12.5 Linux archive from its allowlisted HTTPS
+  origins, verifies the reviewed archive size and SHA-256, extracts only the
+  reviewed regular-file member, and verifies the executable size, SHA-256,
+  restrictive mode, and ownership by the current attested runner identity.
+  Because this runner intentionally has no Node.js runtime, self-hosted jobs
+  use credential-free native Git to fetch and detach the exact dispatch SHA;
+  they do not invoke a Node-based checkout action.
+  It repeats that installation after candidate processing before recreating the
+  locked Hatchling 1.31.0 and Twine 6.2.0 publisher environment in a unique
+  mode-`0700` directory owned by the attested runner identity. Each environment uses copy-only installation;
+  removes interpreter and library symlinks; rejects hard links, special files,
+  and group- or world-writable entries; and seals the complete path, mode,
+  size, and SHA-256 inventory. The canonical gate revalidates that inventory
+  immediately before executing `build` or credential-bearing `twine` through
+  the already-attested system Python executable. Any runner, executable,
+  archive, installed-package, or first-attempt identity drift fails closed.
 - The workflow is dispatched only from canonical Gitea `main`; pushing a tag
   cannot invoke the publisher, and both release workflows require the exact
-  canonical repository identity. It checks out the immutable dispatch SHA as the
-  control tree and checks out the requested tag under `candidate/` as passive
-  build input using the peeled commit exported by validation. The publisher
+  canonical repository identity. It fetches current `main` and requires it to
+  equal the immutable dispatch SHA both at checkout and again immediately
+  before the first package credential is exposed. It checks out that dispatch
+  SHA as the control tree and checks out the requested tag under `candidate/`
+  as passive build input using the peeled commit exported by validation. The publisher
   fetches the tag again and requires both its raw object and peeled commit to
   equal the validation outputs, so a tag move between jobs fails. Before
   Hatchling receives that input, the canonical helper
@@ -111,29 +136,34 @@ sequenceDiagram
   freshly recreated locked environment, never candidate Python or paths.
 - A fresh publication requires an authoritative registry absence. If a run is
   interrupted after upload begins, dispatch the same tag with
-  `resume_existing=true`; that mode rebuilds the candidate, downloads both
-  existing distributions, and compares their names, sizes, and SHA-256 digests
-  with bounded retries. It skips Twine only when every byte matches. Unknown,
-  partial, or different registry state fails closed.
+  `resume_existing=true`; that mode rebuilds the candidate and compares every
+  existing distribution's name, size, SHA-256 digest, and downloaded bytes with
+  the rebuilt manifest. It skips Twine when the set is complete and identical,
+  or uploads only the exact missing filenames when the existing inventory is a
+  byte-identical subset. Unknown, extra, or different registry state fails
+  closed.
 - The Gitea publisher promotes only RC tags to GitHub. Final and post-release
   tags remain on Gitea until production validation and
   `promote-final-tag.yml`; GitHub Release creation remains a separate,
   operator-controlled step using `--verify-tag`.
-- Before the immutable package upload, RC publication verifies that the
-  GitHub token names the authorized repository, reports push permission, and
-  can dry-run the exact tag update under the repository's current tag policy.
-  It also requires an active repository tag ruleset covering `refs/tags/v*`,
-  with no bypass actors and both deletion and non-fast-forward changes blocked.
-  It then reserves the RC tag and verifies its exact remote object before the
-  Gitea version can be consumed. If publication stops after reservation but
-  before upload, explicit resume mode may continue from authoritative package
-  absence; if the package exists, resume still requires byte identity. The
-  reservation uses a private per-run askpass and GitHub configuration directory
-  that is removed unconditionally. Checkout credentials are never persisted.
+- RC publication first uploads the wheel and sdist to Gitea, verifies every
+  registry byte against the locally built manifest, and publishes and reads
+  back that immutable manifest. Only after that canonical provenance record
+  exists does the workflow authenticate to GitHub, confirm push permission,
+  inventory every page of applicable repository and inherited tag rulesets,
+  require their combined update, deletion, and non-fast-forward protections
+  with no bypass, and reserve the exact RC tag. If publication stops after the
+  Gitea manifest is verified but before or after GitHub accepts the tag, an
+  explicit resume rebuilds and re-verifies the Gitea bytes, accepts an existing
+  GitHub tag only when its raw and peeled objects match, and otherwise performs
+  the first tag push. The reservation uses a private per-run askpass and GitHub
+  configuration directory that is removed unconditionally. Checkout
+  credentials are never persisted.
 - Workflow concurrency is global to this repository rather than per ref. A
   second RC/final/post request cannot race the sole release label while the
   validation supervisor is sequencing the active request.
-- Both release-request jobs use the repository-unique
+- The deferred replacement control plane will use two release-request jobs on
+  the repository-unique
   `ci-release-netbox-proxbox` label. The replacement registration must expose
   that label only at repository scope; the broader user-scoped
   `ci-untrusted-python312` runner is not eligible for release evidence.
@@ -254,13 +284,16 @@ sequenceDiagram
    positive policy-pinned ID plus ready protected workflows, host boundaries,
    sockets, and repository-scoped runners. If readiness is incomplete, leave
    the existing publisher active and stop.
-2. Push the reviewed tag and wait for `publish-gitea.yml` to produce the
-   `release-control-request` artifact. Record its run ID and the SHA-256 of its
-   canonical `release-request.json`.
-3. Dispatch `validate.yml` with exactly the repository name, target run ID, and
-   request SHA-256. After it succeeds, dispatch the separate irreversible
-   `publish.yml` with those same three inputs. For RCs, the control publishes
-   the Gitea package and promotes only that exact RC tag to GitHub.
+2. Create the reviewed tag on the exact current Gitea `develop` commit without
+   pushing it to trigger a workflow. Push the tag to Gitea, then manually
+   dispatch `publish-gitea.yml` from `main` with that exact tag. Use
+   `resume_existing=false` for the first attempt.
+3. If publication is interrupted, manually redispatch `publish-gitea.yml` from
+   `main` with the same tag and `resume_existing=true`. The workflow rebuilds
+   the candidate and either reuses an identical complete registry set or
+   uploads only missing files from an identical partial set. For RCs, the
+   workflow promotes only that exact RC tag to GitHub; final and post-release
+   tags remain private until the separate production-evidence promotion.
 4. Publish and validate `proxbox-api` on TestPyPI first.
 5. Publish and validate `netbox-proxbox` on TestPyPI using that TestPyPI
    `proxbox-api` version.

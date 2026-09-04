@@ -13,6 +13,7 @@ on:
         default: false
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -73,6 +74,13 @@ jobs:
           SOURCE_SHA="$(git rev-parse "refs/tags/${TAG}^{commit}")"
           echo "tag_object=${TAG_OBJECT}" >> "$GITHUB_OUTPUT"
           echo "source_sha=${SOURCE_SHA}" >> "$GITHUB_OUTPUT"
+          git fetch --force --no-tags origin \
+            "+refs/heads/develop:refs/remotes/gitea/release-develop"
+          test "${SOURCE_SHA}" = \
+            "$(git rev-parse refs/remotes/gitea/release-develop^{commit})" || {
+            echo "ERROR: tag ${TAG} is not the current reviewed develop commit"
+            exit 1
+          }
           if echo "${VERSION}" | grep -qE 'rc[0-9]+$'; then
             echo "is_rc=true" >> "$GITHUB_OUTPUT"
             echo "RC release: ${VERSION}"
@@ -99,6 +107,7 @@ jobs:
 
 
   publish-gitea:
+    name: Publish exact Gitea package and reserve RC tag
     needs: validate-version
     if: ${{ github.repository == 'emersonfelipesp/netbox-proxbox' && github.ref == 'refs/heads/main' && needs.validate-version.outputs.version != '' }}
     runs-on: mirror-host
@@ -111,59 +120,71 @@ jobs:
       RESUME_EXISTING: ${{ needs.validate-version.outputs.resume_existing }}
     steps:
       - name: Checkout canonical publisher control
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ github.sha }}
-          persist-credentials: false
+        run: |
+          set -euo pipefail
+          test ! -e .git
+          /usr/bin/git init .
+          /usr/bin/git remote add origin \
+            "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          /usr/bin/git fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
+          /usr/bin/git checkout --detach FETCH_HEAD
+          test "$(/usr/bin/git rev-parse HEAD^{commit})" = "${GITHUB_SHA}"
+          /usr/bin/git fetch --force --no-tags --depth=1 origin \
+            "+refs/heads/main:refs/remotes/origin/release-main"
+          test "$(/usr/bin/git rev-parse refs/remotes/origin/release-main^{commit})" = \
+            "${GITHUB_SHA}"
+
+      - name: Attest live runner and credential consumers
+        env:
+          GITEA_API_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "${GITHUB_RUN_ATTEMPT}" = "1"
+          /usr/bin/python3.13 scripts/gitea_mirror_runner_gate.py validate \
+            --acceptance .gitea/mirror-runner-acceptance.json \
+            --owner emersonfelipesp \
+            --repository netbox-proxbox \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --job-name "Publish exact Gitea package and reserve RC tag" \
+            --source-sha "${GITHUB_SHA}"
+
+      - name: Install checksum-pinned credential-free build runtime
+        run: |
+          set -euo pipefail
+          UV_ROOT="${RUNNER_TEMP}/netbox-proxbox-build-uv-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "${UV_ROOT}"
+          mkdir -m 0700 "${UV_ROOT}"
+          /usr/bin/python3.13 scripts/gitea_mirror_runner_gate.py install-uv \
+            --acceptance .gitea/mirror-runner-acceptance.json \
+            --output "${UV_ROOT}/uv"
+          test "$(/usr/bin/python3.13 scripts/gitea_mirror_runner_gate.py run-uv \
+            --acceptance .gitea/mirror-runner-acceptance.json \
+            --uv "${UV_ROOT}/uv" -- --version)" = \
+            "uv 0.12.5 (x86_64-unknown-linux-gnu)"
+          printf 'BUILD_UV_BIN=%s\n' "${UV_ROOT}/uv" >> "${GITHUB_ENV}"
 
       - name: Checkout candidate tag as passive build input
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ needs.validate-version.outputs.source_sha }}
-          path: candidate
-          fetch-depth: 0
-          fetch-tags: true
-          persist-credentials: false
+        run: |
+          set -euo pipefail
+          test ! -e candidate
+          /usr/bin/git clone --no-checkout \
+            "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git" candidate
+          /usr/bin/git -C candidate checkout --detach "${EXPECTED_SOURCE_SHA}"
+          test "$(/usr/bin/git -C candidate rev-parse HEAD^{commit})" = \
+            "${EXPECTED_SOURCE_SHA}"
 
       - name: Bind candidate tag to validated objects
         run: |
           set -euo pipefail
-          git -C candidate fetch --force --no-tags origin \
+          /usr/bin/git -C candidate fetch --force --no-tags origin \
             "+refs/tags/${TAG}:refs/release-policy/candidate-tag"
-          test "$(git -C candidate rev-parse refs/release-policy/candidate-tag)" = \
+          test "$(/usr/bin/git -C candidate rev-parse refs/release-policy/candidate-tag)" = \
             "${EXPECTED_TAG_OBJECT}"
-          test "$(git -C candidate rev-parse refs/release-policy/candidate-tag^{commit})" = \
+          test "$(/usr/bin/git -C candidate rev-parse refs/release-policy/candidate-tag^{commit})" = \
             "${EXPECTED_SOURCE_SHA}"
-          test "$(git -C candidate rev-parse HEAD^{commit})" = \
+          test "$(/usr/bin/git -C candidate rev-parse HEAD^{commit})" = \
             "${EXPECTED_SOURCE_SHA}"
-
-      - name: Verify pre-provisioned build tools
-        env:
-          PYTHON_VERSION: "3.12.14"
-          UV_VERSION: "0.12.5"
-        run: |
-          set -euo pipefail
-          # Release jobs install no executable tooling. The accepted runner
-          # image must already provide the exact reviewed uv version; otherwise
-          # this fails before candidate code is built or a credential is used.
-          for tool in python3 uv; do
-            command -v "${tool}" >/dev/null 2>&1 || {
-              echo "ERROR: pre-provisioned ${tool} is required"
-              exit 1
-            }
-          done
-          ACTUAL_PYTHON="$(python3 --version 2>&1)"
-          if [ "${ACTUAL_PYTHON}" != "Python ${PYTHON_VERSION}" ]; then
-            echo "ERROR: expected 'Python ${PYTHON_VERSION}', got '${ACTUAL_PYTHON}'"
-            exit 1
-          fi
-          ACTUAL_UV="$(uv --version)"
-          if [ "${ACTUAL_UV}" != "uv ${UV_VERSION}" ]; then
-            echo "ERROR: expected 'uv ${UV_VERSION}', got '${ACTUAL_UV}'"
-            exit 1
-          fi
-          printf '%s\n' "${ACTUAL_PYTHON}"
-          printf '%s\n' "${ACTUAL_UV}"
 
       - name: Build distributions
         run: |
@@ -174,20 +195,37 @@ jobs:
           # the credential-bearing uploader are the reviewed, pinned ones
           # (hatchling 1.31.0, twine 6.2.0) instead of whatever resolution
           # happens to pick on the day.
-          uv sync --python "$(command -v python3)" --no-python-downloads \
+          BUILD_ENV_ROOT="${RUNNER_TEMP}/netbox-proxbox-build-env-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "${BUILD_ENV_ROOT}"
+          mkdir -m 0700 "${BUILD_ENV_ROOT}"
+          UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT="${BUILD_ENV_ROOT}/venv" \
+            /usr/bin/python3.13 scripts/gitea_mirror_runner_gate.py run-uv \
+            --acceptance .gitea/mirror-runner-acceptance.json \
+            --uv "${BUILD_UV_BIN}" -- sync \
+            --python /usr/bin/python3.13 --no-python-downloads \
             --only-group publish --locked --no-install-project
-          ACTUAL_HATCHLING="$(.venv/bin/python -c \
-            'from importlib.metadata import version; print(version("hatchling"))')"
-          test "${ACTUAL_HATCHLING}" = "1.31.0" || {
-            echo "ERROR: expected hatchling 1.31.0, got ${ACTUAL_HATCHLING}"
-            exit 1
-          }
-          test "$(.venv/bin/python --version 2>&1)" = "Python 3.12.14"
-          python3 scripts/release_artifacts.py sanitize-build-source \
+          rm -f -- \
+            "${BUILD_ENV_ROOT}/venv/bin/python" \
+            "${BUILD_ENV_ROOT}/venv/bin/python3" \
+            "${BUILD_ENV_ROOT}/venv/bin/python3.13" \
+            "${BUILD_ENV_ROOT}/venv/lib64"
+          chmod -R go-w "${BUILD_ENV_ROOT}/venv"
+          chmod 0700 "${BUILD_ENV_ROOT}/venv"
+          /usr/bin/python3.13 scripts/gitea_mirror_runner_gate.py \
+            seal-python-environment \
+            --root "${BUILD_ENV_ROOT}/venv" \
+            --manifest "${BUILD_ENV_ROOT}/environment-manifest.json" \
+            --require build=1.5.0 \
+            --require hatchling=1.31.0 \
+            --require twine=6.2.0
+          printf 'BUILD_ENV_ROOT=%s\n' "${BUILD_ENV_ROOT}" >> "${GITHUB_ENV}"
+          /usr/bin/python3.13 scripts/release_artifacts.py sanitize-build-source \
             --source candidate --destination sanitized-candidate \
             --package netbox-proxbox --version "${VERSION}"
-          uv build --no-build-isolation --python .venv/bin/python \
-            --out-dir dist sanitized-candidate
+          /usr/bin/python3.13 scripts/gitea_mirror_runner_gate.py run-locked-python \
+            --acceptance .gitea/mirror-runner-acceptance.json \
+            --manifest "${BUILD_ENV_ROOT}/environment-manifest.json" \
+            --module build -- --no-isolation --outdir dist sanitized-candidate
           ls dist/
 
       - name: Build release manifest
@@ -201,7 +239,7 @@ jobs:
           # tag already points at the commit and is unaffected.
           SOURCE_SHA="${EXPECTED_SOURCE_SHA}"
           PKG_NAME=netbox-proxbox
-          python3 scripts/release_artifacts.py manifest \
+          /usr/bin/python3.13 scripts/release_artifacts.py manifest \
             --dist dist \
             --package "${PKG_NAME}" \
             --version "${VERSION}" \
@@ -216,17 +254,48 @@ jobs:
           # executable that will later receive a credential from canonical
           # control metadata, then prove candidate processing did not modify
           # the reviewed helper or lock inputs.
-          rm -rf -- .venv
-          uv sync --python "$(command -v python3)" --no-python-downloads \
+          PUBLISH_ROOT="${RUNNER_TEMP}/netbox-proxbox-publish-uv-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "${PUBLISH_ROOT}"
+          mkdir -m 0700 "${PUBLISH_ROOT}"
+          /usr/bin/python3.13 scripts/gitea_mirror_runner_gate.py install-uv \
+            --acceptance .gitea/mirror-runner-acceptance.json \
+            --output "${PUBLISH_ROOT}/uv"
+          UV_LINK_MODE=copy UV_PROJECT_ENVIRONMENT="${PUBLISH_ROOT}/venv" \
+            /usr/bin/python3.13 scripts/gitea_mirror_runner_gate.py run-uv \
+            --acceptance .gitea/mirror-runner-acceptance.json \
+            --uv "${PUBLISH_ROOT}/uv" -- sync \
+            --python /usr/bin/python3.13 --no-python-downloads \
             --only-group publish --locked --no-install-project
-          test "$(.venv/bin/python --version 2>&1)" = "Python 3.12.14"
-          test "$(.venv/bin/python -c \
-            'from importlib.metadata import version; print(version("hatchling"))')" = \
-            "1.31.0"
-          test "$(.venv/bin/python -c \
-            'from importlib.metadata import version; print(version("twine"))')" = \
-            "6.2.0"
-          git diff --exit-code -- scripts/release_artifacts.py pyproject.toml uv.lock
+          rm -f -- \
+            "${PUBLISH_ROOT}/venv/bin/python" \
+            "${PUBLISH_ROOT}/venv/bin/python3" \
+            "${PUBLISH_ROOT}/venv/bin/python3.13" \
+            "${PUBLISH_ROOT}/venv/lib64"
+          chmod -R go-w "${PUBLISH_ROOT}/venv"
+          chmod 0700 "${PUBLISH_ROOT}/venv"
+          /usr/bin/python3.13 scripts/gitea_mirror_runner_gate.py \
+            seal-python-environment \
+            --root "${PUBLISH_ROOT}/venv" \
+            --manifest "${PUBLISH_ROOT}/environment-manifest.json" \
+            --require build=1.5.0 \
+            --require hatchling=1.31.0 \
+            --require twine=6.2.0
+          printf 'PUBLISH_ENV_MANIFEST=%s\n' \
+            "${PUBLISH_ROOT}/environment-manifest.json" >> "${GITHUB_ENV}"
+          /usr/bin/git diff --exit-code -- \
+            .gitea/mirror-runner-acceptance.json \
+            scripts/gitea_mirror_runner_gate.py \
+            scripts/release_artifacts.py \
+            pyproject.toml uv.lock
+
+      - name: Revalidate canonical publisher control
+        run: |
+          set -euo pipefail
+          /usr/bin/git fetch --force --no-tags --depth=1 origin \
+            "+refs/heads/main:refs/remotes/origin/release-main"
+          test "$(/usr/bin/git rev-parse HEAD^{commit})" = "${GITHUB_SHA}"
+          test "$(/usr/bin/git rev-parse refs/remotes/origin/release-main^{commit})" = \
+            "${GITHUB_SHA}"
 
       - name: Preflight immutable package state
         env:
@@ -239,7 +308,7 @@ jobs:
           if [ "${RESUME_EXISTING}" = "true" ]; then
             RESUME_ARGS+=(--resume-existing --attempts 12 --delay-seconds 5)
           fi
-          ARTIFACT_ACTION="$(python3 scripts/release_artifacts.py prepare-upload \
+          ARTIFACT_ACTION="$(/usr/bin/python3.13 scripts/release_artifacts.py prepare-upload \
             --registry "${GITHUB_SERVER_URL}/api/v1/packages/" \
             --owner emersonfelipesp \
             --repository "${REPO_NAME}" \
@@ -249,99 +318,17 @@ jobs:
             "${RESUME_ARGS[@]}")"
           case "${ARTIFACT_ACTION}" in
             upload|reuse) ;;
+            upload-partial:*)
+              ARTIFACT_FILES="${ARTIFACT_ACTION#upload-partial:}"
+              test -n "${ARTIFACT_FILES}"
+              printf 'ARTIFACT_FILES=%s\n' "${ARTIFACT_FILES}" >> "${GITHUB_ENV}"
+              ;;
             *) echo "ERROR: invalid artifact action '${ARTIFACT_ACTION}'"; exit 1 ;;
           esac
           printf 'ARTIFACT_ACTION=%s\n' "${ARTIFACT_ACTION}" >> "${GITHUB_ENV}"
 
-      - name: Reserve and verify RC promotion
-        if: env.IS_RC == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
-        run: |
-          set -euo pipefail
-          REPO_NAME=netbox-proxbox
-          # Only release candidates are promoted to GitHub at this stage.
-          # Final tags stay private until production validation and the
-          # dedicated final-tag promotion workflow have succeeded.
-          command -v gh >/dev/null 2>&1 || {
-            echo "ERROR: pre-provisioned gh is required for RC promotion"
-            exit 1
-          }
-          SECRET_ROOT="${RUNNER_TEMP}/netbox-proxbox-rc-preflight-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          test ! -e "${SECRET_ROOT}"
-          umask 077
-          mkdir -m 0700 "${SECRET_ROOT}"
-          trap 'rm -rf -- "${SECRET_ROOT}"' EXIT
-          export GH_CONFIG_DIR="${SECRET_ROOT}/gh"
-          mkdir -m 0700 "${GH_CONFIG_DIR}"
-          cat > "${SECRET_ROOT}/askpass" <<'EOF'
-          #!/bin/sh
-          case "$1" in
-            *Username*) printf '%s\n' x-access-token ;;
-            *Password*) printf '%s\n' "$GH_TOKEN" ;;
-            *) exit 1 ;;
-          esac
-          EOF
-          chmod 0500 "${SECRET_ROOT}/askpass"
-          gh --version
-          gh auth status --hostname github.com
-          GH_REPO="emersonfelipesp/${REPO_NAME}"
-          test "$(gh repo view "${GH_REPO}" --json nameWithOwner --jq .nameWithOwner)" = "${GH_REPO}"
-          test "$(gh api "repos/${GH_REPO}" --jq '.permissions.push')" = "true" || {
-            echo "ERROR: GitHub token lacks push permission for ${GH_REPO}"
-            exit 1
-          }
-          RULESET_IDS="$(gh api \
-            "repos/${GH_REPO}/rulesets?targets=tag&includes_parents=true&per_page=100" \
-            --jq '.[].id')"
-          test -n "${RULESET_IDS}" || {
-            echo "ERROR: no GitHub tag ruleset protects release reservations"
-            exit 1
-          }
-          mkdir -m 0700 "${SECRET_ROOT}/rulesets"
-          while IFS= read -r RULESET_ID; do
-            case "${RULESET_ID}" in
-              ''|*[!0-9]*) echo "ERROR: invalid GitHub ruleset id"; exit 1 ;;
-            esac
-            gh api "repos/${GH_REPO}/rulesets/${RULESET_ID}?includes_parents=true" \
-              > "${SECRET_ROOT}/rulesets/${RULESET_ID}.json"
-          done <<< "${RULESET_IDS}"
-          env -u GH_TOKEN python3 scripts/release_artifacts.py \
-            validate-github-tag-rulesets \
-            --rulesets "${SECRET_ROOT}/rulesets" \
-            --repository "${GH_REPO}"
-          git -C candidate remote add github "https://github.com/${GH_REPO}.git" \
-            || git -C candidate remote set-url github "https://github.com/${GH_REPO}.git"
-          test "$(git -C candidate remote get-url github)" = \
-            "https://github.com/emersonfelipesp/netbox-proxbox.git"
-          LOCAL_TAG_OBJECT="$(git -C candidate rev-parse refs/release-policy/candidate-tag)"
-          REMOTE_TAG_LINE="$(GIT_ASKPASS="${SECRET_ROOT}/askpass" \
-            GIT_TERMINAL_PROMPT=0 git -C candidate ls-remote github "refs/tags/${TAG}")"
-          if [ -n "${REMOTE_TAG_LINE}" ]; then
-            REMOTE_TAG_OBJECT="${REMOTE_TAG_LINE%%[[:space:]]*}"
-            test "${REMOTE_TAG_OBJECT}" = "${LOCAL_TAG_OBJECT}" || {
-              echo "ERROR: GitHub tag ${TAG} points to different bytes"
-              exit 1
-            }
-            test "${RESUME_EXISTING}" = "true" || {
-              echo "ERROR: GitHub tag ${TAG} already exists; use explicit resume mode"
-              exit 1
-            }
-          else
-            GIT_ASKPASS="${SECRET_ROOT}/askpass" GIT_TERMINAL_PROMPT=0 \
-              git -C candidate push --dry-run github \
-              "refs/release-policy/candidate-tag:refs/tags/${TAG}"
-            GIT_ASKPASS="${SECRET_ROOT}/askpass" GIT_TERMINAL_PROMPT=0 \
-              git -C candidate push github \
-              "refs/release-policy/candidate-tag:refs/tags/${TAG}"
-          fi
-          VERIFIED_TAG_OBJECT="$(GIT_ASKPASS="${SECRET_ROOT}/askpass" \
-            GIT_TERMINAL_PROMPT=0 git -C candidate ls-remote --exit-code github \
-            "refs/tags/${TAG}" | awk '{print $1}')"
-          test "${VERIFIED_TAG_OBJECT}" = "${LOCAL_TAG_OBJECT}"
-
       - name: Publish to Gitea Package Registry
-        if: env.ARTIFACT_ACTION == 'upload'
+        if: env.ARTIFACT_ACTION != 'reuse'
         env:
           TWINE_USERNAME: emersonfelipesp
           TWINE_PASSWORD: ${{ secrets.PKG_TOKEN }}
@@ -351,7 +338,30 @@ jobs:
           # The pinned twine from the locked `publish` group synced above; the
           # previous `--with twine` resolved a separate ephemeral layer at run
           # time, and that layer ran with the registry credential.
-          .venv/bin/python -m twine upload --non-interactive dist/*
+          UPLOAD_PATHS=()
+          if [ "${ARTIFACT_ACTION}" = "upload" ]; then
+            UPLOAD_PATHS=(dist/*)
+          else
+            IFS=',' read -r -a ARTIFACT_NAMES <<< "${ARTIFACT_FILES}"
+            for ARTIFACT_NAME in "${ARTIFACT_NAMES[@]}"; do
+              case "${ARTIFACT_NAME}" in
+                ""|*/*|*..*|*[!A-Za-z0-9._-]*)
+                  echo "ERROR: invalid partial-upload artifact name"
+                  exit 1
+                  ;;
+                [A-Za-z0-9]*) ;;
+                *) echo "ERROR: invalid partial-upload artifact name"; exit 1 ;;
+              esac
+              test -f "dist/${ARTIFACT_NAME}"
+              test ! -L "dist/${ARTIFACT_NAME}"
+              UPLOAD_PATHS+=("dist/${ARTIFACT_NAME}")
+            done
+          fi
+          test "${#UPLOAD_PATHS[@]}" -gt 0
+          /usr/bin/python3.13 scripts/gitea_mirror_runner_gate.py run-locked-python \
+            --acceptance .gitea/mirror-runner-acceptance.json \
+            --manifest "${PUBLISH_ENV_MANIFEST}" \
+            --module twine -- upload --non-interactive "${UPLOAD_PATHS[@]}"
 
       - name: Verify package in Gitea registry
         env:
@@ -373,7 +383,7 @@ jobs:
           # down here. release_artifacts still pins the permitted origin
           # itself, so a wrong value fails closed rather than reaching an
           # unexpected host.
-          python3 scripts/release_artifacts.py verify-registry \
+          /usr/bin/python3.13 scripts/release_artifacts.py verify-registry \
             --registry "${GITHUB_SERVER_URL}/api/v1/packages/" \
             --owner emersonfelipesp \
             --repository "${REPO_NAME}" \
@@ -405,9 +415,94 @@ jobs:
           # for the same canonical bytes, so recovery cannot overwrite or
           # silently rebind an immutable release.
           REPO_NAME=netbox-proxbox
-          python3 scripts/release_artifacts.py publish-manifest \
+          /usr/bin/python3.13 scripts/release_artifacts.py publish-manifest \
             --registry "${GITHUB_SERVER_URL}/api/v1/packages/" \
             --owner emersonfelipesp \
             --repository "${REPO_NAME}" \
             --manifest release-manifest.json
           echo "Release manifest published and verified for ${VERSION}"
+
+      - name: Reserve and verify RC promotion
+        if: env.IS_RC == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}
+        run: |
+          set -euo pipefail
+          REPO_NAME=netbox-proxbox
+          # Only a verified canonical Gitea package and manifest can reach this
+          # irreversible public RC reservation. Final tags stay private until
+          # production validation and the final-tag workflow have succeeded.
+          SECRET_ROOT="${RUNNER_TEMP}/netbox-proxbox-rc-promotion-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          test ! -e "${SECRET_ROOT}"
+          umask 077
+          mkdir -m 0700 "${SECRET_ROOT}"
+          trap 'rm -rf -- "${SECRET_ROOT}"' EXIT
+          export GH_CONFIG_DIR="${SECRET_ROOT}/gh"
+          mkdir -m 0700 "${GH_CONFIG_DIR}"
+          cat > "${SECRET_ROOT}/askpass" <<'EOF'
+          #!/usr/bin/dash
+          case "$1" in
+            *Username*) printf '%s\n' x-access-token ;;
+            *Password*) printf '%s\n' "$GH_TOKEN" ;;
+            *) exit 1 ;;
+          esac
+          EOF
+          chmod 0500 "${SECRET_ROOT}/askpass"
+          /usr/bin/gh --version
+          /usr/bin/gh auth status --hostname github.com
+          GH_REPO="emersonfelipesp/${REPO_NAME}"
+          test "$(/usr/bin/gh repo view "${GH_REPO}" --json nameWithOwner --jq .nameWithOwner)" = "${GH_REPO}"
+          test "$(/usr/bin/gh api "repos/${GH_REPO}" --jq '.permissions.push')" = "true" || {
+            echo "ERROR: GitHub token lacks push permission for ${GH_REPO}"
+            exit 1
+          }
+          RULESET_IDS="$(/usr/bin/gh api \
+            --paginate \
+            "repos/${GH_REPO}/rulesets?targets=tag&includes_parents=true&per_page=100" \
+            --jq '.[].id')"
+          test -n "${RULESET_IDS}" || {
+            echo "ERROR: no GitHub tag ruleset protects release reservations"
+            exit 1
+          }
+          mkdir -m 0700 "${SECRET_ROOT}/rulesets"
+          while IFS= read -r RULESET_ID; do
+            case "${RULESET_ID}" in
+              ''|*[!0-9]*) echo "ERROR: invalid GitHub ruleset id"; exit 1 ;;
+            esac
+            /usr/bin/gh api "repos/${GH_REPO}/rulesets/${RULESET_ID}?includes_parents=true" \
+              > "${SECRET_ROOT}/rulesets/${RULESET_ID}.json"
+          done <<< "${RULESET_IDS}"
+          env -u GH_TOKEN /usr/bin/python3.13 scripts/release_artifacts.py \
+            validate-github-tag-rulesets \
+            --rulesets "${SECRET_ROOT}/rulesets" \
+            --repository "${GH_REPO}" \
+            --tag "${TAG}"
+          /usr/bin/git -C candidate remote add github "https://github.com/${GH_REPO}.git" \
+            || /usr/bin/git -C candidate remote set-url github "https://github.com/${GH_REPO}.git"
+          test "$(/usr/bin/git -C candidate remote get-url github)" = \
+            "https://github.com/emersonfelipesp/netbox-proxbox.git"
+          LOCAL_TAG_OBJECT="$(/usr/bin/git -C candidate rev-parse refs/release-policy/candidate-tag)"
+          REMOTE_TAG_LINE="$(GIT_ASKPASS="${SECRET_ROOT}/askpass" \
+            GIT_TERMINAL_PROMPT=0 /usr/bin/git -C candidate ls-remote github "refs/tags/${TAG}")"
+          if [ -n "${REMOTE_TAG_LINE}" ]; then
+            REMOTE_TAG_OBJECT="${REMOTE_TAG_LINE%%[[:space:]]*}"
+            test "${REMOTE_TAG_OBJECT}" = "${LOCAL_TAG_OBJECT}" || {
+              echo "ERROR: GitHub tag ${TAG} points to different bytes"
+              exit 1
+            }
+            test "${RESUME_EXISTING}" = "true" || {
+              echo "ERROR: GitHub tag ${TAG} already exists; use explicit resume mode"
+              exit 1
+            }
+          else
+            GIT_ASKPASS="${SECRET_ROOT}/askpass" GIT_TERMINAL_PROMPT=0 \
+              /usr/bin/git -C candidate push --dry-run github \
+              "refs/release-policy/candidate-tag:refs/tags/${TAG}"
+            GIT_ASKPASS="${SECRET_ROOT}/askpass" GIT_TERMINAL_PROMPT=0 \
+              /usr/bin/git -C candidate push github \
+              "refs/release-policy/candidate-tag:refs/tags/${TAG}"
+          fi
+          VERIFIED_TAG_OBJECT="$(GIT_ASKPASS="${SECRET_ROOT}/askpass" \
+            GIT_TERMINAL_PROMPT=0 /usr/bin/git -C candidate ls-remote --exit-code github \
+            "refs/tags/${TAG}" | awk '{print $1}')"
+          test "${VERIFIED_TAG_OBJECT}" = "${LOCAL_TAG_OBJECT}"

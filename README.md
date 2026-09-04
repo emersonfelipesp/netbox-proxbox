@@ -234,26 +234,31 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
-## What's New in v0.0.25
+## What's New in v0.0.26
 
-Current backend-runtime pairing: netbox-proxbox 0.0.25 <-> proxbox-api 0.0.20 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.26 <-> proxbox-api 0.0.20 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 Paired with backend: `proxbox-api 0.0.20`.
 
-- **NetBox 4.6.6 certification.** Real-Django and Docker matrices cover the
-  certified 4.5/4.6 range through 4.6.6.
-- **Compatibility fixes.** Settings serialization, storage capacity, detail
-  templates, InfluxDB metrics, sync-state models, and empty encryption-key
-  recovery follow current NetBox/Django behavior.
-- **Immutable staged release.** The target workflow emits exactly six
-  credential-free data files: one wheel, one sdist, `release-manifest.json`,
-  `release-request.json`, `runner-completion-attestation.json`, and
-  `runner-completion-attestation.sig`. The locked control plane verifies the
-  supervisor completion signature and publishes those exact wheel/sdist bytes
-  before they progress through TestPyPI, production, and PyPI without
-  rebuilding.
+- **Browser-console handoff.** QEMU and LXC detail pages expose a permission-
+  gated HTTPS handoff to the noVNC and xterm.js console service. The feature stays
+  disabled when `console_url` is empty and passes only the persisted guest
+  identity; console tickets and upstream credentials never enter NetBox.
+- **Safer inventory and credentials.** Migrations `0083` through `0087` make
+  OpenBao the default credential source, add the console URL, and retire stale
+  reflection custom fields only after repeated value checks. Node SSH secrets
+  may fall back to the matching credential service's DeviceService, and detail pages show
+  authoritative Proxmox and synchronization state.
+- **Auditable operations.** The release includes the read-only sync-jobs API,
+  explicit Packer template-build authorization, Proxmox tag exposure, and
+  guarded repair/status surfaces.
+- **Identity-verified publication.** Manual publication binds validation,
+  sanitized passive builds, Gitea artifacts, and protected GitHub tags to the
+  exact raw tag object and peeled source commit. Registry bytes are downloaded
+  and verified, credentials are isolated, and interrupted publication has a
+  bounded byte-identical resume path.
 
-Full notes: [Release Notes - v0.0.24](docs/release-notes/version-0.0.24.md).
+Full notes: [Release Notes - v0.0.26](docs/release-notes/version-0.0.26.md).
 
 ## What's New in v0.0.23.post1
 
@@ -358,7 +363,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
-| 4.5.8-4.6.x; exact canonical 4.7.0-beta2 | v0.0.25 | v0.0.20 | v0.0.10 | v0.0.13 |
+| 4.5.8-4.6.x; exact canonical 4.7.0-beta2 | v0.0.26 | v0.0.20 | v0.0.10 | v0.0.13 |
 | >=4.5.8 | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |

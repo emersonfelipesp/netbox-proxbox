@@ -9,6 +9,7 @@ on:
         type: string
 
 permissions:
+  actions: read
   contents: read
 
 concurrency:
@@ -22,11 +23,30 @@ jobs:
     runs-on: mirror-host
     steps:
       - name: Checkout canonical-main promotion policy
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          ref: ${{ github.sha }}
-          fetch-depth: 0
-          persist-credentials: false
+        run: |
+          set -euo pipefail
+          test ! -e .git
+          /usr/bin/git init .
+          /usr/bin/git remote add origin \
+            "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"
+          /usr/bin/git fetch --no-tags --depth=1 origin "${GITHUB_SHA}"
+          /usr/bin/git checkout --detach FETCH_HEAD
+          test "$(/usr/bin/git rev-parse HEAD^{commit})" = "${GITHUB_SHA}"
+
+      - name: Attest live runner and credential consumers
+        env:
+          GITEA_API_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          test "${GITHUB_RUN_ATTEMPT}" = "1"
+          /usr/bin/python3.13 scripts/gitea_mirror_runner_gate.py validate \
+            --acceptance .gitea/mirror-runner-acceptance.json \
+            --owner emersonfelipesp \
+            --repository netbox-proxbox \
+            --run-id "${GITHUB_RUN_ID}" \
+            --run-attempt "${GITHUB_RUN_ATTEMPT}" \
+            --job-name "Verify production evidence and promote exact tag" \
+            --source-sha "${GITHUB_SHA}"
 
       - name: Validate canonical release source and production evidence
         env:
@@ -37,17 +57,17 @@ jobs:
             v[0-9]*.[0-9]*.[0-9]* | v[0-9]*.[0-9]*.[0-9]*.post[0-9]*) ;;
             *) echo "Final promotion rejects non-final tag: $TAG"; exit 1 ;;
           esac
-          git fetch --force --no-tags origin \
+          /usr/bin/git fetch --force --no-tags origin \
             "+refs/heads/main:refs/remotes/gitea/release-main" \
             "+refs/heads/develop:refs/remotes/gitea/release-develop" \
             "+refs/tags/${TAG}:refs/release-policy/candidate"
-          SOURCE_SHA="$(git rev-parse refs/release-policy/candidate^{commit})"
-          test "$(git rev-parse HEAD^{commit})" = "${GITHUB_SHA}"
-          test "$SOURCE_SHA" = "$(git rev-parse refs/remotes/gitea/release-main^{commit})"
-          test "$SOURCE_SHA" = "$(git rev-parse refs/remotes/gitea/release-develop^{commit})"
-          test "$SOURCE_SHA" = "$(git rev-parse HEAD^{commit})"
+          SOURCE_SHA="$(/usr/bin/git rev-parse refs/release-policy/candidate^{commit})"
+          test "$(/usr/bin/git rev-parse HEAD^{commit})" = "${GITHUB_SHA}"
+          test "$SOURCE_SHA" = "$(/usr/bin/git rev-parse refs/remotes/gitea/release-main^{commit})"
+          test "$SOURCE_SHA" = "$(/usr/bin/git rev-parse refs/remotes/gitea/release-develop^{commit})"
+          test "$SOURCE_SHA" = "$(/usr/bin/git rev-parse HEAD^{commit})"
           VERSION="${TAG#v}"
-          python3 - "$VERSION" <<'PY'
+          /usr/bin/python3.13 - "$VERSION" <<'PY'
           import ast
           import pathlib
           import re
@@ -78,11 +98,11 @@ jobs:
               raise SystemExit("Runtime plugin version differs from tag")
           PY
           mkdir verified-dist
-          python3 scripts/release_artifacts.py fetch-gitea \
+          /usr/bin/python3.13 scripts/release_artifacts.py fetch-gitea \
             --owner emersonfelipesp --repository netbox-proxbox \
             --package netbox-proxbox --version "$VERSION" --source-sha "$SOURCE_SHA" \
             --dist verified-dist --manifest release-manifest.json
-          python3 scripts/release_artifacts.py fetch-attestation \
+          /usr/bin/python3.13 scripts/release_artifacts.py fetch-attestation \
             --owner emersonfelipesp --repository netbox-proxbox \
             --manifest release-manifest.json
 
@@ -93,16 +113,15 @@ jobs:
         run: |
           set -euo pipefail
           umask 077
-          SOURCE_SHA="$(git rev-parse refs/release-policy/candidate^{commit})"
-          git remote add github https://github.com/emersonfelipesp/netbox-proxbox.git
-          test "$(git remote get-url github)" = \
-            "https://github.com/emersonfelipesp/netbox-proxbox.git"
+          SOURCE_SHA="$(/usr/bin/git rev-parse refs/release-policy/candidate^{commit})"
           SECRET_ROOT="${RUNNER_TEMP}/netbox-proxbox-final-auth-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           test ! -e "$SECRET_ROOT"
           mkdir -m 0700 "$SECRET_ROOT"
           trap 'rm -rf -- "$SECRET_ROOT"' EXIT
+          export GH_CONFIG_DIR="${SECRET_ROOT}/gh"
+          mkdir -m 0700 "${GH_CONFIG_DIR}"
           cat > "$SECRET_ROOT/askpass" <<'EOF'
-          #!/bin/sh
+          #!/usr/bin/dash
           case "$1" in
             *Username*) printf '%s\n' x-access-token ;;
             *Password*) printf '%s\n' "$GH_TOKEN" ;;
@@ -110,14 +129,71 @@ jobs:
           esac
           EOF
           chmod 0500 "$SECRET_ROOT/askpass"
-          GIT_ASKPASS="$SECRET_ROOT/askpass" GIT_TERMINAL_PROMPT=0 \
-            git push github "refs/release-policy/candidate:refs/tags/${TAG}"
-          LOCAL_TAG_OBJECT="$(git rev-parse refs/release-policy/candidate)"
+          GH_REPO="emersonfelipesp/netbox-proxbox"
+          /usr/bin/gh auth status --hostname github.com
+          test "$(/usr/bin/gh repo view "${GH_REPO}" --json nameWithOwner --jq .nameWithOwner)" = \
+            "${GH_REPO}"
+          test "$(/usr/bin/gh api "repos/${GH_REPO}" --jq '.permissions.push')" = "true" || {
+            echo "ERROR: GitHub token lacks push permission for ${GH_REPO}"
+            exit 1
+          }
+          RULESET_IDS="$(/usr/bin/gh api \
+            --paginate \
+            "repos/${GH_REPO}/rulesets?targets=tag&includes_parents=true&per_page=100" \
+            --jq '.[].id')"
+          test -n "${RULESET_IDS}" || {
+            echo "ERROR: no GitHub tag ruleset protects final tags"
+            exit 1
+          }
+          mkdir -m 0700 "${SECRET_ROOT}/rulesets"
+          while IFS= read -r RULESET_ID; do
+            case "${RULESET_ID}" in
+              ''|*[!0-9]*) echo "ERROR: invalid GitHub ruleset id"; exit 1 ;;
+            esac
+            /usr/bin/gh api "repos/${GH_REPO}/rulesets/${RULESET_ID}?includes_parents=true" \
+              > "${SECRET_ROOT}/rulesets/${RULESET_ID}.json"
+          done <<< "${RULESET_IDS}"
+          env -u GH_TOKEN /usr/bin/python3.13 scripts/release_artifacts.py \
+            validate-github-tag-rulesets \
+            --rulesets "${SECRET_ROOT}/rulesets" \
+            --repository "${GH_REPO}" \
+            --tag "${TAG}"
+          /usr/bin/git remote add github https://github.com/emersonfelipesp/netbox-proxbox.git
+          test "$(/usr/bin/git remote get-url github)" = \
+            "https://github.com/emersonfelipesp/netbox-proxbox.git"
+          LOCAL_TAG_OBJECT="$(/usr/bin/git rev-parse refs/release-policy/candidate)"
+          EXISTING_TAG_LINE="$(GIT_ASKPASS="$SECRET_ROOT/askpass" \
+            GIT_TERMINAL_PROMPT=0 /usr/bin/git ls-remote github \
+            "refs/tags/${TAG}")"
+          EXISTING_PEELED_LINE="$(GIT_ASKPASS="$SECRET_ROOT/askpass" \
+            GIT_TERMINAL_PROMPT=0 /usr/bin/git ls-remote github \
+            "refs/tags/${TAG}^{}")"
+          if [ -n "$EXISTING_TAG_LINE" ]; then
+            EXISTING_TAG_OBJECT="${EXISTING_TAG_LINE%%[[:space:]]*}"
+            if [ -n "$EXISTING_PEELED_LINE" ]; then
+              EXISTING_SOURCE_SHA="${EXISTING_PEELED_LINE%%[[:space:]]*}"
+            else
+              EXISTING_SOURCE_SHA="$EXISTING_TAG_OBJECT"
+            fi
+            test "$EXISTING_TAG_OBJECT" = "$LOCAL_TAG_OBJECT" || {
+              echo "ERROR: existing GitHub tag ${TAG} points to a different object"
+              exit 1
+            }
+            test "$EXISTING_SOURCE_SHA" = "$SOURCE_SHA" || {
+              echo "ERROR: existing GitHub tag ${TAG} peels to a different source"
+              exit 1
+            }
+            echo "GitHub tag ${TAG} already matches the verified object; resuming readback"
+          else
+            GIT_ASKPASS="$SECRET_ROOT/askpass" GIT_TERMINAL_PROMPT=0 \
+              /usr/bin/git push github \
+              "refs/release-policy/candidate:refs/tags/${TAG}"
+          fi
           REMOTE_TAG_OBJECT="$(GIT_ASKPASS="$SECRET_ROOT/askpass" \
-            GIT_TERMINAL_PROMPT=0 git ls-remote --exit-code github \
+            GIT_TERMINAL_PROMPT=0 /usr/bin/git ls-remote --exit-code github \
             "refs/tags/${TAG}" | awk '{print $1}')"
           REMOTE_PEELED_LINE="$(GIT_ASKPASS="$SECRET_ROOT/askpass" \
-            GIT_TERMINAL_PROMPT=0 git ls-remote github \
+            GIT_TERMINAL_PROMPT=0 /usr/bin/git ls-remote github \
             "refs/tags/${TAG}^{}")"
           if [ -n "$REMOTE_PEELED_LINE" ]; then
             REMOTE_SOURCE_SHA="${REMOTE_PEELED_LINE%%[[:space:]]*}"

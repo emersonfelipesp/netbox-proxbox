@@ -79,7 +79,7 @@ This repository packages the `netbox_proxbox` NetBox plugin. The plugin adds end
 - **The credential encryption key belongs on the installation path.** The backend refuses to store any Proxmox credential until it has one, and reports that only when the first Proxmox endpoint is created — after the operator believes setup is finished. [`docs/installation/backend-setup.md`](./docs/installation/backend-setup.md) covers generating a Fernet key and supplying it via `PROXBOX_ENCRYPTION_KEY` (recommended), the plugin settings field, or a backend-local key, plus what happens on key change: verified all-or-nothing plugin rotation, a permission-gated destructive reset when the old key is lost, and the `GET /admin/encryption/status` attestation that blocks plugin rotation while a backend is still on the old key. The setting *semantics* stay in [`docs/configuration/plugin-settings.md`](./docs/configuration/plugin-settings.md); the install page cross-links rather than duplicating them.
 - **A backend-local encryption key is not persisted by the Docker image's volume.** The image declares `VOLUME ["/data"]` and defaults `PROXBOX_DEFAULT_DATABASE_PATH=/data/database.db`, but `credentials.py::_DEFAULT_KEY_FILE` resolves to `<package parent>/data/encryption.key` — `/app/data/encryption.key` in the container, which is **not** on that volume. Recreating the container therefore destroys the key while the database survives, stranding every encrypted credential. `PROXBOX_ENCRYPTION_KEY` avoids it entirely; otherwise set `PROXBOX_ENCRYPTION_KEY_FILE=/data/encryption.key`. Any Compose example added to the docs must also name the `/data` volume, or `docker compose down` orphans the endpoint configuration.
 
-The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.25` and sources its NetBox contract from [`netbox_proxbox/compat.py`](./netbox_proxbox/compat.py): **stable** `4.5.8` through `4.6.99` (validated at `4.5.8`-`4.5.10` and `4.6.0`-`4.6.6`) plus **experimental** evaluation of exact canonical `4.7.0-beta2`. `min_version`/`max_version` are `PLUGIN_MIN_VERSION`/`PLUGIN_MAX_VERSION`; the numeric maximum is `4.7.0`. Because NetBox passes that same bare value for beta2, later prereleases, and GA, `validate()` reads canonical `release.yaml` once and requires `version: "4.7.0"` plus `designation: "beta2"`; optional `local/release.yaml` is read once and may contain only informational `build`. It never trusts overlaying `load_release_data()`. Other 4.7 identities raise `IncompatiblePluginError`, so NetBox warns, omits the plugin from its installed registry, and continues startup. Runtime attests identity only; source SHA, Python archive, and dependency provenance remain CI/operator evidence. `compat.py` is vendored byte-identically across netbox-proxbox, netbox-ceph, netbox-packer, netbox-pbs, and netbox-pdm; change it in one repo and you must change it in all five. It must not import Django at module scope, because NetBox imports it while `netbox/settings.py` is still executing. Current backend-runtime pairing: netbox-proxbox 0.0.25 <-> proxbox-api 0.0.20 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge. The `0.0.25` release moves **Sync Jobs** to a dedicated Proxbox-only page at `/plugins/proxbox/jobs/`, anonymizes the failed-job bug-report export, and consolidates the credential-redaction vocabulary into one module shared by the job-log redactor and the public scrubber. The previous `0.0.24` release added NetBox 4.6.6 certification, settings/storage compatibility fixes, blank-key encryption recovery, and immutable Gitea-first release provenance while retaining bounded endpoint auto-configuration and the universal `guest_os_model` behavior. Existing backend rows authorize only their exact persisted target; rowless discovery is restricted to configured or same-site targets derived from NetBox's trusted public origin, and any unproved target remains pending. The previous stable `0.0.23.post2` release introduced bounded endpoint auto-configuration. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
+The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.26` and sources its NetBox contract from [`netbox_proxbox/compat.py`](./netbox_proxbox/compat.py): **stable** `4.5.8` through `4.6.99` (validated at `4.5.8`-`4.5.10` and `4.6.0`-`4.6.6`) plus **experimental** evaluation of exact canonical `4.7.0-beta2`. `min_version`/`max_version` are `PLUGIN_MIN_VERSION`/`PLUGIN_MAX_VERSION`; the numeric maximum is `4.7.0`. Because NetBox passes that same bare value for beta2, later prereleases, and GA, `validate()` reads canonical `release.yaml` once and requires `version: "4.7.0"` plus `designation: "beta2"`; optional `local/release.yaml` is read once and may contain only informational `build`. It never trusts overlaying `load_release_data()`. Other 4.7 identities raise `IncompatiblePluginError`, so NetBox warns, omits the plugin from its installed registry, and continues startup. Runtime attests identity only; source SHA, Python archive, and dependency provenance remain CI/operator evidence. `compat.py` is vendored byte-identically across netbox-proxbox, netbox-ceph, netbox-packer, netbox-pbs, and netbox-pdm; change it in one repo and you must change it in all five. It must not import Django at module scope, because NetBox imports it while `netbox/settings.py` is still executing. Current backend-runtime pairing: netbox-proxbox 0.0.26 <-> proxbox-api 0.0.20 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge. The `0.0.26` release adds permission-gated QEMU/LXC browser-console handoff, authoritative Proxmox detail and sync state, OpenBao-first and DeviceService credential sources, guarded reflection-field retirement, and resumable identity-verified publication. The previous `0.0.25` release moved **Sync Jobs** to a dedicated Proxbox-only page at `/plugins/proxbox/jobs/`, anonymized the failed-job bug-report export, consolidated credential-redaction vocabulary, certified NetBox 4.6.6, and introduced package-first release provenance. Existing backend rows authorize only their exact persisted target; rowless discovery is restricted to configured or same-site targets derived from NetBox's trusted public origin, and any unproved target remains pending. The previous stable `0.0.23.post2` release introduced bounded endpoint auto-configuration. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
 
 **Companion repos (cross-link map):**
 
@@ -925,9 +925,9 @@ that authorizes PyPI.
 > therefore publishes directly on the existing `mirror-host` runner. An
 > operator must dispatch it from canonical Gitea `main` with an existing tag;
 > tag pushes do not invoke it. It builds the wheel/sdist from a sanitized
-> passive candidate tree under immutable canonical-main control, reserves only
-> protected RC tags on GitHub before the immutable upload, uploads and
-> byte-verifies the Gitea package, and publishes its manifest. Final tags and
+> passive candidate tree under immutable canonical-main control, uploads and
+> byte-verifies the Gitea package, publishes its manifest, and only then
+> reserves protected RC tags on GitHub. Final tags and
 > GitHub Releases remain behind production validation and the separate
 > promotion procedure.
 >
@@ -1533,9 +1533,9 @@ Hatchling backend, hook-free build configuration, and fixed README/license
 paths. It rejects symlinks, hard-linked or special files, and out-of-root paths,
 then copies the bounded candidate inventory through no-follow descriptors into a
 sanitized build tree. Secret-bearing steps execute only canonical control code
-and a freshly recreated locked environment. The publisher installs
-no executable tooling. The release runner must already
-provide exactly Python 3.12.14 and uv 0.12.5. It synchronizes the locked publish
+and a freshly recreated, complete-inventory-sealed environment. The publisher
+installs no executable tooling. The release runner must already
+provide exactly Python 3.13.5 and uv 0.12.5. It synchronizes the locked publish
 group into that interpreter, verifies Hatchling 1.31.0, and disables PEP 517
 build isolation so a rebuild cannot resolve another backend. RC promotion also
 requires an authenticated GitHub CLI. Fresh publication requires authoritative
@@ -1544,14 +1544,15 @@ registry absence. An interrupted run may be dispatched with
 bound, treats malformed success responses as retryable failures, downloads both
 existing distributions, and skips Twine only when their names, sizes, and
 SHA-256 digests match exactly. Repository-wide workflow concurrency serializes
-all tag and manual publication attempts. RC preflight proves GitHub repository
-push permission, requires an active no-bypass `refs/tags/v*` ruleset that blocks
-deletion and non-fast-forward changes, and dry-runs the exact tag update. It then
-reserves and reads back the exact RC tag object before the immutable upload. Its private per-run
+all tag and manual publication attempts. After the Gitea artifacts and manifest
+are verified, RC promotion proves GitHub repository push permission, inventories
+every page of applicable repository and inherited tag rulesets, requires their
+combined update, deletion, and non-fast-forward protections with no bypass, and
+reserves and reads back the exact RC tag object. Its private per-run
 askpass/config directory is removed unconditionally and checkout credentials
-are never persisted. If the package is still authoritatively absent after a tag
-reservation, explicit resume performs the first upload; an existing package is
-reused only when every byte matches. The publisher sends only RC tags to GitHub.
+are never persisted. Explicit resume reuses the package only when every byte
+matches and reuses a GitHub tag only when its raw and peeled identities match.
+The publisher sends only RC tags to GitHub.
 Final and post-release tags remain private until production validation and
 `promote-final-tag.yml`, which checks out the immutable dispatch SHA, verifies it
 against current canonical main, and verifies both the raw tag object and its

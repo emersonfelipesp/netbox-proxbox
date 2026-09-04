@@ -204,33 +204,101 @@ def sanitize_build_source(
     validate_build_source(source=destination, package=package, version=version)
 
 
-def _is_release_tag_ruleset(value: object, repository: str) -> bool:
-    """Return whether one ruleset makes release-tag reservations immutable."""
-    if not isinstance(value, dict):
-        return False
-    if value.get("source_type") != "Repository" or value.get("source") != repository:
-        return False
-    if value.get("target") != "tag" or value.get("enforcement") != "active":
-        return False
-    if value.get("bypass_actors") != []:
-        return False
+def _ruleset_pattern_matches(pattern: object, reference: str) -> bool:
+    """Match one bounded GitHub ruleset ref pattern against an exact ref."""
+    if (
+        not isinstance(pattern, str)
+        or not pattern
+        or len(pattern) > 1024
+        or any(ord(character) < 0x20 for character in pattern)
+        or re.fullmatch(r"[A-Za-z0-9._~/*?-]+", pattern) is None
+    ):
+        raise ReleaseArtifactError("GitHub release-tag ruleset pattern is malformed")
+    if pattern == "~ALL":
+        return True
+    expression = ""
+    index = 0
+    while index < len(pattern):
+        character = pattern[index]
+        if character == "*":
+            end = index
+            while end < len(pattern) and pattern[end] == "*":
+                end += 1
+            expression += ".*" if end - index > 1 else "[^/]*"
+            index = end
+            continue
+        expression += "[^/]" if character == "?" else re.escape(character)
+        index += 1
+    return re.fullmatch(expression, reference) is not None
+
+
+def _ruleset_applies_to_tag(value: dict[str, object], tag: str) -> bool:
+    """Return whether one tag-target ruleset applies to the requested tag."""
     conditions = value.get("conditions")
+    if conditions is None:
+        return True
     if not isinstance(conditions, dict):
-        return False
+        raise ReleaseArtifactError(
+            "GitHub release-tag ruleset conditions are malformed"
+        )
     ref_name = conditions.get("ref_name")
-    if ref_name != {"exclude": [], "include": ["refs/tags/v*"]}:
+    if ref_name is None:
+        return True
+    if not isinstance(ref_name, dict) or set(ref_name) != {"exclude", "include"}:
+        raise ReleaseArtifactError(
+            "GitHub release-tag ruleset ref condition is malformed"
+        )
+    includes = ref_name.get("include")
+    excludes = ref_name.get("exclude")
+    if not isinstance(includes, list) or not isinstance(excludes, list):
+        raise ReleaseArtifactError(
+            "GitHub release-tag ruleset ref condition is malformed"
+        )
+    reference = f"refs/tags/{tag}"
+    if any(_ruleset_pattern_matches(pattern, reference) for pattern in excludes):
         return False
+    return any(_ruleset_pattern_matches(pattern, reference) for pattern in includes)
+
+
+def _release_tag_ruleset_rules(
+    value: object, repository: str, tag: str
+) -> set[str] | None:
+    """Return protections from one applicable active release-tag ruleset."""
+    if not isinstance(value, dict):
+        raise ReleaseArtifactError("GitHub ruleset response is malformed")
+    if value.get("target") != "tag" or value.get("enforcement") != "active":
+        return None
+    if not _ruleset_applies_to_tag(value, tag):
+        return None
+    source_type = value.get("source_type")
+    source = value.get("source")
+    owner = repository.split("/", 1)[0]
+    if not (
+        (source_type == "Repository" and source == repository)
+        or (source_type == "Organization" and source == owner)
+        or (source_type == "Enterprise" and isinstance(source, str) and source)
+    ):
+        raise ReleaseArtifactError("GitHub release-tag ruleset source is unexpected")
+    if (
+        value.get("bypass_actors") != []
+        or value.get("current_user_can_bypass") != "never"
+    ):
+        raise ReleaseArtifactError("GitHub release-tag ruleset permits a bypass")
     rules = value.get("rules")
     if not isinstance(rules, list):
-        return False
-    rule_types = {rule.get("type") for rule in rules if isinstance(rule, dict)}
-    return {"deletion", "non_fast_forward"}.issubset(rule_types)
+        raise ReleaseArtifactError("GitHub release-tag ruleset rules are malformed")
+    return {
+        str(rule["type"]) for rule in rules if isinstance(rule, dict) and "type" in rule
+    }
 
 
-def validate_github_tag_rulesets(*, rulesets: Path, repository: str) -> None:
-    """Require an active, no-bypass immutable release-tag ruleset."""
+def validate_github_tag_rulesets(*, rulesets: Path, repository: str, tag: str) -> None:
+    """Require complete effective no-bypass release-tag protection."""
+    if re.fullmatch(r"v[0-9][A-Za-z0-9._-]{0,127}", tag) is None:
+        raise ReleaseArtifactError("GitHub release tag is malformed")
     if not rulesets.is_dir() or rulesets.is_symlink():
         raise ReleaseArtifactError("GitHub ruleset directory is unsafe")
+    effective_rules: set[str] = set()
     for path in sorted(rulesets.iterdir()):
         metadata = path.lstat()
         if (
@@ -243,11 +311,15 @@ def validate_github_tag_rulesets(*, rulesets: Path, repository: str) -> None:
             value = json.loads(path.read_bytes())
         except json.JSONDecodeError as exc:
             raise ReleaseArtifactError("GitHub ruleset response is not JSON") from exc
-        if _is_release_tag_ruleset(value, repository):
-            return
-    raise ReleaseArtifactError(
-        "No active no-bypass ruleset protects release tags from update and deletion"
-    )
+        protections = _release_tag_ruleset_rules(value, repository, tag)
+        if protections is not None:
+            effective_rules.update(protections)
+    required = {"deletion", "update", "non_fast_forward"}
+    if not required.issubset(effective_rules):
+        raise ReleaseArtifactError(
+            "No complete active no-bypass ruleset set protects release tags "
+            "from update, non-fast-forward change, and deletion"
+        )
 
 
 def _record(path: Path) -> dict[str, object]:
@@ -675,6 +747,53 @@ def verify_gitea_package_artifacts(
     )
 
 
+def _missing_gitea_package_artifacts(
+    *,
+    registry: str,
+    owner: str,
+    repository: str,
+    package: str,
+    version: str,
+    manifest: dict[str, Any],
+    token: str,
+) -> list[str]:
+    """Return missing files only when every existing distribution is exact."""
+    base = (
+        registry
+        + f"{_quoted(owner)}/pypi/{_quoted(canonical_name(package))}/{_quoted(version)}"
+    )
+    metadata = _registry_json(
+        _request(base, token=token, maximum=MAX_RESPONSE_BYTES), "metadata"
+    )
+    files = _registry_json(
+        _request(f"{base}/files", token=token, maximum=MAX_RESPONSE_BYTES),
+        "file inventory",
+    )
+    _require_gitea_package_identity(
+        metadata=metadata,
+        owner=owner,
+        repository=repository,
+        package=package,
+        version=version,
+    )
+    expected = _manifest_artifact_inventory(manifest)
+    published = _published_artifact_inventory(files)
+    if any(expected.get(name) != identity for name, identity in published.items()):
+        raise ReleaseArtifactError(
+            "Published artifacts differ from the release manifest"
+        )
+
+    _download_and_verify_gitea_artifacts(
+        registry=registry,
+        owner=owner,
+        package=package,
+        version=version,
+        expected=published,
+        token=token,
+    )
+    return sorted(expected.keys() - published.keys())
+
+
 def verify_gitea_package_artifacts_with_retry(
     *,
     registry: str,
@@ -741,7 +860,7 @@ def prepare_gitea_package_upload(
     attempts: int,
     delay_seconds: float,
 ) -> str:
-    """Authorize either one fresh upload or reuse of one exact existing set."""
+    """Authorize a fresh upload, exact missing files, or exact-set reuse."""
     verify_gitea_token_identity(registry=registry, owner=owner, token=token)
     if resume_existing:
         try:
@@ -759,7 +878,17 @@ def prepare_gitea_package_upload(
         except ReleaseArtifactError as exc:
             if isinstance(exc.__cause__, RegistryNotFound):
                 return "upload"
-            raise
+            missing = _missing_gitea_package_artifacts(
+                registry=registry,
+                owner=owner,
+                repository=repository,
+                package=package,
+                version=version,
+                manifest=manifest,
+                token=token,
+            )
+            if missing:
+                return f"upload-partial:{','.join(missing)}"
         return "reuse"
 
     try:
@@ -1140,6 +1269,7 @@ def _run_local_command(args: argparse.Namespace) -> dict[str, Any] | None:
         validate_github_tag_rulesets(
             rulesets=args.rulesets,
             repository=args.repository,
+            tag=args.tag,
         )
     return None
 
@@ -1210,6 +1340,7 @@ def main() -> None:
     validate_rulesets = subparsers.add_parser("validate-github-tag-rulesets")
     validate_rulesets.add_argument("--rulesets", type=Path, required=True)
     validate_rulesets.add_argument("--repository", required=True)
+    validate_rulesets.add_argument("--tag", required=True)
 
     publish_manifest = subparsers.add_parser("publish-manifest")
     publish_manifest.add_argument("--registry", required=True)

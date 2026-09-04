@@ -643,8 +643,10 @@ def test_final_tag_promotion_requires_main_package_and_deploy_evidence() -> None
 
     assert "github.repository == 'emersonfelipesp/netbox-proxbox'" in workflow
     assert "github.ref == 'refs/heads/main'" in workflow
-    assert "ref: ${{ github.sha }}" in workflow
-    assert 'test "$(git rev-parse HEAD^{commit})" = "${GITHUB_SHA}"' in workflow
+    assert '/usr/bin/git fetch --no-tags --depth=1 origin "${GITHUB_SHA}"' in workflow
+    assert (
+        'test "$(/usr/bin/git rev-parse HEAD^{commit})" = "${GITHUB_SHA}"' in workflow
+    )
     assert "refs/remotes/gitea/release-main" in workflow
     assert "refs/remotes/gitea/release-develop" in workflow
     assert "scripts/release_artifacts.py fetch-gitea" in workflow
@@ -652,15 +654,28 @@ def test_final_tag_promotion_requires_main_package_and_deploy_evidence() -> None
     assert "https://github.com/emersonfelipesp/netbox-proxbox.git" in workflow
     assert "GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}" in workflow
     assert 'GIT_ASKPASS="$SECRET_ROOT/askpass"' in workflow
+    assert "rulesets?targets=tag" in workflow
+    assert "--paginate" in workflow
+    assert "validate-github-tag-rulesets" in workflow
+    assert '--tag "${TAG}"' in workflow
+    assert workflow.index("validate-github-tag-rulesets") < workflow.index(
+        "git push github"
+    )
     assert "http.https://github.com/.extraheader" not in workflow
     assert workflow.index("fetch-attestation") < workflow.index("GH_TOKEN:")
     assert '"refs/tags/${TAG}"' in workflow
     assert '"refs/tags/${TAG}^{}"' in workflow
     assert 'test "$REMOTE_TAG_OBJECT" = "$LOCAL_TAG_OBJECT"' in workflow
     assert 'test "$REMOTE_SOURCE_SHA" = "$SOURCE_SHA"' in workflow
+    assert 'if [ -n "$EXISTING_TAG_LINE" ]; then' in workflow
+    assert 'test "$EXISTING_TAG_OBJECT" = "$LOCAL_TAG_OBJECT"' in workflow
+    assert 'test "$EXISTING_SOURCE_SHA" = "$SOURCE_SHA"' in workflow
     assert "gh release create" not in workflow
     assert (
-        "rc[0-9]" not in workflow.split('python3 - "$VERSION"', 1)[1].split("PY", 1)[0]
+        "rc[0-9]"
+        not in workflow.split('/usr/bin/python3.13 - "$VERSION"', 1)[1].split("PY", 1)[
+            0
+        ]
     )
 
 
@@ -1383,38 +1398,134 @@ def test_release_tag_ruleset_must_be_active_immutable_and_no_bypass(
         "target": "tag",
         "enforcement": "active",
         "bypass_actors": [],
+        "current_user_can_bypass": "never",
         "conditions": {
             "ref_name": {"exclude": [], "include": ["refs/tags/v*"]},
         },
-        "rules": [{"type": "deletion"}, {"type": "non_fast_forward"}],
+        "rules": [
+            {"type": "deletion"},
+            {"type": "update"},
+            {"type": "non_fast_forward"},
+        ],
     }
     ruleset_path.write_text(json.dumps(ruleset), encoding="utf-8")
 
     release_artifacts.validate_github_tag_rulesets(
         rulesets=rulesets,
         repository="emersonfelipesp/netbox-proxbox",
+        tag="v0.0.26rc1",
     )
 
     for unsafe in (
         {**ruleset, "enforcement": "evaluate"},
         {**ruleset, "bypass_actors": [{"actor_type": "User", "actor_id": 1}]},
+        {**ruleset, "current_user_can_bypass": "always"},
         {
             **ruleset,
             "conditions": {
                 "ref_name": {"exclude": [], "include": ["refs/tags/release-*"]}
             },
         },
-        {**ruleset, "rules": [{"type": "deletion"}]},
+        {
+            **ruleset,
+            "rules": [{"type": "deletion"}, {"type": "non_fast_forward"}],
+        },
     ):
         ruleset_path.write_text(json.dumps(unsafe), encoding="utf-8")
         with pytest.raises(
             release_artifacts.ReleaseArtifactError,
-            match="No active no-bypass ruleset",
+            match="ruleset|No complete active no-bypass ruleset set",
         ):
             release_artifacts.validate_github_tag_rulesets(
                 rulesets=rulesets,
                 repository="emersonfelipesp/netbox-proxbox",
+                tag="v0.0.26rc1",
             )
+
+    ruleset_path.write_text(
+        json.dumps({**ruleset, "rules": [{"type": "deletion"}]}),
+        encoding="utf-8",
+    )
+    (rulesets / "43.json").write_text(
+        json.dumps(
+            {
+                **ruleset,
+                "source_type": "Organization",
+                "source": "emersonfelipesp",
+                "rules": [
+                    {"type": "update"},
+                    {"type": "non_fast_forward"},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    release_artifacts.validate_github_tag_rulesets(
+        rulesets=rulesets,
+        repository="emersonfelipesp/netbox-proxbox",
+        tag="v0.0.26rc1",
+    )
+
+    parent = json.loads((rulesets / "43.json").read_text(encoding="utf-8"))
+    parent["current_user_can_bypass"] = "pull_requests_only"
+    (rulesets / "43.json").write_text(json.dumps(parent), encoding="utf-8")
+    with pytest.raises(
+        release_artifacts.ReleaseArtifactError,
+        match="ruleset permits a bypass",
+    ):
+        release_artifacts.validate_github_tag_rulesets(
+            rulesets=rulesets,
+            repository="emersonfelipesp/netbox-proxbox",
+            tag="v0.0.26rc1",
+        )
+
+
+def test_release_tag_ruleset_checks_broad_and_unconditional_rules(
+    tmp_path: Path,
+) -> None:
+    release_artifacts = _load_release_artifacts()
+    rulesets = tmp_path / "rulesets"
+    rulesets.mkdir()
+    safe = {
+        "source_type": "Repository",
+        "source": "emersonfelipesp/netbox-proxbox",
+        "target": "tag",
+        "enforcement": "active",
+        "bypass_actors": [],
+        "current_user_can_bypass": "never",
+        "conditions": {
+            "ref_name": {"exclude": [], "include": ["refs/tags/*"]},
+        },
+        "rules": [
+            {"type": "deletion"},
+            {"type": "update"},
+            {"type": "non_fast_forward"},
+        ],
+    }
+    (rulesets / "42.json").write_text(json.dumps(safe), encoding="utf-8")
+    release_artifacts.validate_github_tag_rulesets(
+        rulesets=rulesets,
+        repository="emersonfelipesp/netbox-proxbox",
+        tag="v0.0.26rc1",
+    )
+
+    unconditional_bypass = {
+        **safe,
+        "conditions": None,
+        "bypass_actors": [{"actor_type": "User", "actor_id": 1}],
+    }
+    (rulesets / "43.json").write_text(
+        json.dumps(unconditional_bypass), encoding="utf-8"
+    )
+    with pytest.raises(
+        release_artifacts.ReleaseArtifactError,
+        match="ruleset permits a bypass",
+    ):
+        release_artifacts.validate_github_tag_rulesets(
+            rulesets=rulesets,
+            repository="emersonfelipesp/netbox-proxbox",
+            tag="v0.0.26rc1",
+        )
 
 
 def _registry_responses(manifest: dict[str, object]) -> dict[str, object]:
@@ -1576,6 +1687,41 @@ def test_registry_verification_downloads_and_hashes_every_artifact(
         )
 
 
+def test_partial_registry_inventory_allows_only_exact_missing_files(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    release_artifacts, manifest = _artifact_manifest(tmp_path)
+    responses = _registry_responses(manifest)
+    existing = responses["files"][0]
+    responses["files"] = [existing]
+    _patch_requests(monkeypatch, release_artifacts, responses)
+
+    assert release_artifacts._missing_gitea_package_artifacts(
+        registry=_TEST_REGISTRY,
+        owner="emersonfelipesp",
+        repository="netbox-proxbox",
+        package="netbox-proxbox",
+        version="0.0.26",
+        manifest=manifest,
+        token="t",
+    ) == ["netbox_proxbox-0.0.26.tar.gz"]
+
+    responses["files"] = [dict(existing, sha256="c" * 64)]
+    with pytest.raises(
+        release_artifacts.ReleaseArtifactError,
+        match="differ from the release manifest",
+    ):
+        release_artifacts._missing_gitea_package_artifacts(
+            registry=_TEST_REGISTRY,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            package="netbox-proxbox",
+            version="0.0.26",
+            manifest=manifest,
+            token="t",
+        )
+
+
 def test_registry_verification_retries_delayed_visibility(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -1673,6 +1819,36 @@ def test_upload_preflight_requires_explicit_byte_identical_resume(
         == "upload"
     )
 
+    def partial_after_reservation(**_kwargs: object) -> None:
+        raise release_artifacts.ReleaseArtifactError("partial package")
+
+    monkeypatch.setattr(
+        release_artifacts,
+        "verify_gitea_package_artifacts_with_retry",
+        partial_after_reservation,
+    )
+    missing_name = "netbox_proxbox-0.0.26.tar.gz"
+    monkeypatch.setattr(
+        release_artifacts,
+        "_missing_gitea_package_artifacts",
+        lambda **_kwargs: [missing_name],
+    )
+    assert (
+        release_artifacts.prepare_gitea_package_upload(
+            registry=_TEST_REGISTRY,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            package="netbox-proxbox",
+            version="0.0.26",
+            manifest=manifest,
+            token="t",
+            resume_existing=True,
+            attempts=12,
+            delay_seconds=5,
+        )
+        == f"upload-partial:{missing_name}"
+    )
+
     monkeypatch.setattr(
         release_artifacts, "verify_gitea_package_artifacts", lambda **_k: None
     )
@@ -1758,13 +1934,16 @@ def test_upload_preflight_requires_the_package_owner_token(
         )
 
 
-def test_gitea_publish_uses_preprovisioned_tools_and_resumable_upload() -> None:
+def test_gitea_publish_uses_attested_tools_and_resumable_upload() -> None:
     workflow_text = _read(GITEA_PUBLISH_WORKFLOW)
     workflow = yaml.safe_load(workflow_text)
     publish = workflow["jobs"]["publish-gitea"]
     steps = publish["steps"]
     names = [step["name"] for step in steps]
-    tools = _step(publish, "Verify pre-provisioned build tools")["run"]
+    runner_gate = _step(publish, "Attest live runner and credential consumers")["run"]
+    runtime_install = _step(
+        publish, "Install checksum-pinned credential-free build runtime"
+    )["run"]
     package_preflight_step = _step(publish, "Preflight immutable package state")
     preflight = package_preflight_step["run"]
     rc_preflight_step = _step(publish, "Reserve and verify RC promotion")
@@ -1781,39 +1960,63 @@ def test_gitea_publish_uses_preprovisioned_tools_and_resumable_upload() -> None:
         "type": "boolean",
         "default": False,
     }
-    assert "for tool in python3 uv" in tools
-    assert 'ACTUAL_PYTHON="$(python3 --version 2>&1)"' in tools
-    assert "Python ${PYTHON_VERSION}" in tools
-    assert 'ACTUAL_UV="$(uv --version)"' in tools
-    assert "curl" not in tools
+    assert "gitea_mirror_runner_gate.py validate" in runner_gate
+    assert '--run-id "${GITHUB_RUN_ID}"' in runner_gate
+    assert '--run-attempt "${GITHUB_RUN_ATTEMPT}"' in runner_gate
+    assert '--source-sha "${GITHUB_SHA}"' in runner_gate
+    assert "gitea_mirror_runner_gate.py install-uv" in runtime_install
+    assert "gitea_mirror_runner_gate.py run-uv" in runtime_install
+    assert "uv 0.12.5 (x86_64-unknown-linux-gnu)" in runtime_install
+    assert "curl" not in runtime_install
     assert "install.sh" not in workflow_text
     assert "apt-get" not in workflow_text
     assert "Install GitHub CLI" not in names
     assert "GH_TOKEN" not in package_preflight_step.get("env", {})
-    assert "command -v gh" in rc_preflight
-    assert "gh auth status --hostname github.com" in rc_preflight
-    assert "gh api \"repos/${GH_REPO}\" --jq '.permissions.push'" in rc_preflight
+    assert "command -v gh" not in rc_preflight
+    assert "/usr/bin/gh auth status --hostname github.com" in rc_preflight
+    assert (
+        "/usr/bin/gh api \"repos/${GH_REPO}\" --jq '.permissions.push'" in rc_preflight
+    )
     assert "rulesets?targets=tag" in rc_preflight
+    assert "--paginate" in rc_preflight
     assert "validate-github-tag-rulesets" in rc_preflight
-    assert "env -u GH_TOKEN python3" in rc_preflight
-    assert "git -C candidate push --dry-run github" in rc_preflight
-    assert "git -C candidate push github" in rc_preflight
+    assert '--tag "${TAG}"' in rc_preflight
+    assert "env -u GH_TOKEN /usr/bin/python3.13" in rc_preflight
+    assert "/usr/bin/git -C candidate push --dry-run github" in rc_preflight
+    assert "/usr/bin/git -C candidate push github" in rc_preflight
     assert "VERIFIED_TAG_OBJECT" in rc_preflight
     assert "trap 'rm -rf -- \"${SECRET_ROOT}\"' EXIT" in rc_preflight
     assert "prepare-upload" in preflight
     assert "--resume-existing --attempts 12 --delay-seconds 5" in preflight
-    assert upload["if"] == "env.ARTIFACT_ACTION == 'upload'"
+    assert "upload-partial:*" in preflight
+    assert "ARTIFACT_FILES" in preflight
+    assert upload["if"] == "env.ARTIFACT_ACTION != 'reuse'"
+    assert 'UPLOAD_PATHS+=("dist/${ARTIFACT_NAME}")' in upload["run"]
+    assert '"${UPLOAD_PATHS[@]}"' in upload["run"]
+    assert "--skip-existing" not in upload["run"]
     assert "--attempts 12" in verify and "--delay-seconds 5" in verify
     assert "sleep 5" not in verify
-    assert "uv build --no-build-isolation --python .venv/bin/python" in build
+    assert "gitea_mirror_runner_gate.py run-uv" in build
+    assert "gitea_mirror_runner_gate.py run-locked-python" in build
+    assert "seal-python-environment" in build
+    assert "--module build" in build
+    assert workflow_text.count("gitea_mirror_runner_gate.py run-uv") == 3
+    assert workflow_text.count("gitea_mirror_runner_gate.py run-locked-python") == 2
+    assert '"${UV_ROOT}/uv" --version' not in workflow_text
+    assert '"${BUILD_UV_BIN}" sync' not in workflow_text
+    assert '"${BUILD_UV_BIN}" build' not in workflow_text
+    assert '"${PUBLISH_ROOT}/uv" sync' not in workflow_text
     assert "release_artifacts.py sanitize-build-source" in build
     assert "--source candidate --destination sanitized-candidate" in build
-    assert "--out-dir dist sanitized-candidate" in build
-    assert 'version("hatchling")' in build
-    assert 'ACTUAL_HATCHLING}" = "1.31.0"' in build
-    assert "rm -rf -- .venv" in recreate
-    assert 'version("twine")' in recreate
-    assert "git diff --exit-code -- scripts/release_artifacts.py" in recreate
+    assert "--outdir dist sanitized-candidate" in build
+    assert "--require hatchling=1.31.0" in build
+    assert ".venv/bin/python" not in workflow_text
+    assert "gitea_mirror_runner_gate.py install-uv" in recreate
+    assert "--python /usr/bin/python3.13" in recreate
+    assert "seal-python-environment" in recreate
+    assert "--require twine=6.2.0" in recreate
+    assert "/usr/bin/git diff --exit-code" in recreate
+    assert "scripts/gitea_mirror_runner_gate.py" in recreate
     assert workflow["concurrency"] == {
         "group": "package-publication-${{ github.repository }}",
         "cancel-in-progress": False,
@@ -1828,8 +2031,8 @@ def test_gitea_publish_uses_preprovisioned_tools_and_resumable_upload() -> None:
     assert "gh auth setup-git" not in workflow_text
     assert "push-to-github" not in workflow["jobs"]
     names = [step["name"] for step in publish["steps"]]
-    assert names.index("Reserve and verify RC promotion") < names.index(
-        "Publish to Gitea Package Registry"
+    assert names.index("Publish release manifest") < names.index(
+        "Reserve and verify RC promotion"
     )
     assert (
         names.index("Build distributions")
@@ -1841,64 +2044,35 @@ def test_gitea_publish_uses_preprovisioned_tools_and_resumable_upload() -> None:
     control_checkout = _step(publish, "Checkout canonical publisher control")
     candidate_checkout = _step(publish, "Checkout candidate tag as passive build input")
     bind_candidate = _step(publish, "Bind candidate tag to validated objects")["run"]
-    assert control_checkout["with"] == {
-        "ref": "${{ github.sha }}",
-        "persist-credentials": False,
-    }
-    assert candidate_checkout["with"]["path"] == "candidate"
-    assert candidate_checkout["with"]["ref"] == (
-        "${{ needs.validate-version.outputs.source_sha }}"
+    extract = _step(
+        workflow["jobs"]["validate-version"], "Extract and validate version"
+    )["run"]
+    assert '"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}.git"' in control_checkout["run"]
+    assert (
+        '/usr/bin/git fetch --no-tags --depth=1 origin "${GITHUB_SHA}"'
+        in (control_checkout["run"])
+    )
+    assert "refs/remotes/origin/release-main" in control_checkout["run"]
+    control_recheck = _step(publish, "Revalidate canonical publisher control")["run"]
+    assert "refs/remotes/origin/release-main" in control_recheck
+    assert "${GITHUB_SHA}" in control_recheck
+    assert "/usr/bin/git clone --no-checkout" in candidate_checkout["run"]
+    assert (
+        'candidate checkout --detach "${EXPECTED_SOURCE_SHA}"'
+        in (candidate_checkout["run"])
     )
     assert "refs/release-policy/candidate-tag" in bind_candidate
     assert "${EXPECTED_TAG_OBJECT}" in bind_candidate
     assert "${EXPECTED_SOURCE_SHA}" in bind_candidate
+    assert "refs/remotes/gitea/release-develop" in extract
+    assert 'test "${SOURCE_SHA}" =' in extract
     assert "refs/release-policy/candidate-tag:refs/tags/${TAG}" in rc_preflight
     for step in publish["steps"]:
         if "GITEA_PACKAGE_TOKEN" in step.get("env", {}):
             assert "candidate/scripts" not in step["run"]
         if "TWINE_PASSWORD" in step.get("env", {}):
-            assert ".venv/bin/python -m twine" in step["run"]
-
-
-@pytest.mark.parametrize(
-    ("commands", "expected_success"),
-    [
-        ({"uv": "uv 0.12.5"}, False),
-        ({"python3": "Python 3.12.14"}, False),
-        ({"python3": "Python 3.11.9", "uv": "uv 0.12.5"}, False),
-        ({"python3": "Python 3.12.14", "uv": "uv 9.9.9"}, False),
-        ({"python3": "Python 3.12.14", "uv": "uv 0.12.5"}, True),
-    ],
-)
-def test_preprovisioned_tool_gate_fails_closed(
-    tmp_path: Path, commands: dict[str, str], expected_success: bool
-) -> None:
-    workflow = yaml.safe_load(_read(GITEA_PUBLISH_WORKFLOW))
-    run = _step(
-        workflow["jobs"]["publish-gitea"], "Verify pre-provisioned build tools"
-    )["run"]
-    binary_dir = tmp_path / "bin"
-    binary_dir.mkdir()
-    for command, output in commands.items():
-        executable = binary_dir / command
-        executable.write_text(
-            f"#!/bin/sh\nprintf '%s\\n' '{output}'\n", encoding="utf-8"
-        )
-        executable.chmod(0o755)
-
-    result = subprocess.run(
-        ["/bin/bash", "-c", run],
-        capture_output=True,
-        env={
-            "PATH": str(binary_dir),
-            "PYTHON_VERSION": "3.12.14",
-            "UV_VERSION": "0.12.5",
-        },
-        text=True,
-        timeout=10,
-    )
-
-    assert (result.returncode == 0) is expected_success, result.stderr
+            assert "gitea_mirror_runner_gate.py run-locked-python" in step["run"]
+            assert "--module twine" in step["run"]
 
 
 def test_manifest_publication_tolerates_only_a_byte_identical_republish(

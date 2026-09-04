@@ -64,7 +64,11 @@ def test_proxmox_endpoint_migration_adds_allowed_tenants() -> None:
 def _require_harness() -> None:
     import importlib.util
 
-    if importlib.util.find_spec("django.apps") is None:
+    try:
+        django_apps_spec = importlib.util.find_spec("django.apps")
+    except (ImportError, ValueError):
+        django_apps_spec = None
+    if django_apps_spec is None:
         pytest.skip("NetBox + Django harness not installed")
 
     django = pytest.importorskip(
@@ -79,6 +83,8 @@ def _require_harness() -> None:
 
     from django.apps import apps
 
+    if not isinstance(getattr(apps, "ready", None), bool):
+        pytest.skip("NetBox + Django harness not installed")
     if not apps.ready:
         django.setup()
 

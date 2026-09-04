@@ -373,9 +373,9 @@ The official release pipeline runs in this order:
 > therefore publishes directly on the existing `mirror-host` runner. An
 > operator must dispatch it from canonical Gitea `main` with an existing tag;
 > tag pushes do not invoke it. It builds the wheel/sdist from a sanitized
-> passive candidate tree under immutable canonical-main control, reserves only
-> protected RC tags on GitHub before the immutable upload, uploads and
-> byte-verifies the Gitea package, and publishes its manifest. Final tags and
+> passive candidate tree under immutable canonical-main control, uploads and
+> byte-verifies the Gitea package, publishes its manifest, and only then
+> reserves protected RC tags on GitHub. Final tags and
 > GitHub Releases remain behind production validation and the separate
 > promotion procedure.
 >
@@ -884,9 +884,9 @@ Hatchling backend, hook-free build configuration, and fixed README/license
 paths. It rejects symlinks, hard-linked or special files, and out-of-root paths,
 then copies the bounded candidate inventory through no-follow descriptors into a
 sanitized build tree. Secret-bearing steps execute only canonical control code
-and a freshly recreated locked environment. The publisher installs
-no executable tooling. The release runner must already
-provide exactly Python 3.12.14 and uv 0.12.5. It synchronizes the locked publish
+and a freshly recreated, complete-inventory-sealed environment. The publisher
+installs no executable tooling. The release runner must already
+provide exactly Python 3.13.5 and uv 0.12.5. It synchronizes the locked publish
 group into that interpreter, verifies Hatchling 1.31.0, and disables PEP 517
 build isolation so a rebuild cannot resolve another backend. RC promotion also
 requires an authenticated GitHub CLI. Fresh publication requires authoritative
@@ -895,14 +895,15 @@ registry absence. An interrupted run may be dispatched with
 bound, treats malformed success responses as retryable failures, downloads both
 existing distributions, and skips Twine only when their names, sizes, and
 SHA-256 digests match exactly. Repository-wide workflow concurrency serializes
-all tag and manual publication attempts. RC preflight proves GitHub repository
-push permission, requires an active no-bypass `refs/tags/v*` ruleset that blocks
-deletion and non-fast-forward changes, and dry-runs the exact tag update. It then
-reserves and reads back the exact RC tag object before the immutable upload. Its private per-run
+all tag and manual publication attempts. After the Gitea artifacts and manifest
+are verified, RC promotion proves GitHub repository push permission, inventories
+every page of applicable repository and inherited tag rulesets, requires their
+combined update, deletion, and non-fast-forward protections with no bypass, and
+reserves and reads back the exact RC tag object. Its private per-run
 askpass/config directory is removed unconditionally and checkout credentials
-are never persisted. If the package is still authoritatively absent after a tag
-reservation, explicit resume performs the first upload; an existing package is
-reused only when every byte matches. The publisher sends only RC tags to GitHub.
+are never persisted. Explicit resume reuses the package only when every byte
+matches and reuses a GitHub tag only when its raw and peeled identities match.
+The publisher sends only RC tags to GitHub.
 Final and post-release tags remain private until production validation and
 `promote-final-tag.yml`, which checks out the immutable dispatch SHA, verifies it
 against current canonical main, and verifies both the raw tag object and its

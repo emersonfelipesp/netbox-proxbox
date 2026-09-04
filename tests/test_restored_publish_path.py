@@ -58,7 +58,7 @@ def test_every_job_targets_a_runner_label_that_exists() -> None:
 def test_workflow_publishes_to_the_gitea_package_registry() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
     assert "https://git.nmulti.cloud/api/packages/emersonfelipesp/pypi" in text
-    assert "twine upload" in text
+    assert "--module twine -- upload" in text
 
 
 def test_manual_release_tags_are_validated_before_anything_is_published() -> None:
@@ -118,7 +118,10 @@ def test_final_tags_use_the_production_evidence_promotion_path() -> None:
     assert '"refs/tags/${TAG}^{}"' in text
     assert 'test "$REMOTE_TAG_OBJECT" = "$LOCAL_TAG_OBJECT"' in text
     assert 'test "$REMOTE_SOURCE_SHA" = "$SOURCE_SHA"' in text
+    assert 'if [ -n "$EXISTING_TAG_LINE" ]; then' in text
+    assert 'test "$EXISTING_TAG_OBJECT" = "$LOCAL_TAG_OBJECT"' in text
+    assert 'test "$EXISTING_SOURCE_SHA" = "$SOURCE_SHA"' in text
     assert "github.repository == 'emersonfelipesp/netbox-proxbox'" in text
-    assert "ref: ${{ github.sha }}" in text
-    assert 'test "$(git rev-parse HEAD^{commit})" = "${GITHUB_SHA}"' in text
+    assert '/usr/bin/git fetch --no-tags --depth=1 origin "${GITHUB_SHA}"' in text
+    assert 'test "$(/usr/bin/git rev-parse HEAD^{commit})" = "${GITHUB_SHA}"' in text
     assert "gh release create" not in text

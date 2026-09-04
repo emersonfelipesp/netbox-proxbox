@@ -21,7 +21,7 @@ warns, omits the plugin, and continues startup.
 
 | NetBox   | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
-| 4.5.8-4.6.x; exact canonical 4.7.0-beta2 | v0.0.25 | v0.0.20 | v0.0.10 | v0.0.13 |
+| 4.5.8-4.6.x; exact canonical 4.7.0-beta2 | v0.0.26 | v0.0.20 | v0.0.10 | v0.0.13 |
 | >=4.5.8  | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8  | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8  | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |
@@ -52,7 +52,7 @@ and WebSocket.
 The current repository code declares support for:
 
 - NetBox `4.5.8` through `4.5.10`, and `4.6.x`
-- Plugin version `0.0.25` in source
+- Plugin version `0.0.26` in source
 
 That support comes directly from the plugin config in this repository:
 
@@ -71,13 +71,13 @@ methods, tenant-scoped endpoint allowlists, bulk endpoint enablement, PDM
 endpoint sync, SDN inventory, Firecracker serializer hardening, dual VM
 interface sync, and the all-endpoint `enabled=False` no-connection guard.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.25 <-> proxbox-api 0.0.20 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.26 <-> proxbox-api 0.0.20 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
-The `0.0.25` release adds NetBox 4.6.6 certification, package-first release
-provenance, and the compatibility/reliability fixes documented in the release
-notes while retaining bounded endpoint auto-configuration and
-credential establishment while retaining the `0.0.23.post1` interface-model
-behavior. The historical rows remain documented below.
+The `0.0.26` release adds permission-gated browser-console handoff, guarded
+reflection-field retirement, authoritative Proxmox detail and sync state,
+OpenBao-first credentials, and resumable identity-verified publication while
+retaining the certified NetBox range and `0.0.23.post1` interface model. The
+historical rows remain documented below.
 
 ## Important Packaging Note
 
