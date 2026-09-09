@@ -37,6 +37,11 @@ lxc_containers_item = PluginMenuItem(
     link_text="LXC Containers",
 )
 
+soft_deleted_vms_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:soft_deleted_vms",
+    link_text="Soft-deleted VMs",
+)
+
 interfaces_item = PluginMenuItem(
     link="plugins:netbox_proxbox:interfaces",
     link_text="Interfaces",
@@ -410,6 +415,7 @@ menu = PluginMenu(
                 virtual_machines_item,
                 vm_templates_item,
                 lxc_containers_item,
+                soft_deleted_vms_item,
                 virtual_disks_item,
                 interfaces_item,
                 guest_vm_interfaces_item,

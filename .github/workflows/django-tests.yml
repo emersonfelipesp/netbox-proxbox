@@ -263,6 +263,7 @@ jobs:
             tests/test_proxbox_job_filter_django.py \
             tests/test_sync_jobs_api_django.py \
             tests/test_vm_intent_django.py \
+            tests/test_soft_deleted_vm_purge_django.py \
             --ds=netbox.settings --reuse-db --create-db -v --no-header \
             --cov=netbox_proxbox.services.endpoint_autoconfiguration \
             --cov=netbox_proxbox.api.serializers.resource_views \

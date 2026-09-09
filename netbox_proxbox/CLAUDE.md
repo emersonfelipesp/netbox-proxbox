@@ -13,6 +13,15 @@
 
 This package contains the NetBox plugin itself. It defines the plugin config, URL registration, navigation, models, forms, tables, API layer, background jobs, sync helpers, dashboard views, template hooks, and bundled static assets.
 
+## Orphan VM purge page
+
+`views/soft_deleted_vms.py` and its template provide the human-only cleanup
+surface for Proxbox orphan records. The list and bulk-delete views share a
+server-side filter requiring both the `proxbox-soft-deleted` tag and
+`decommissioning` status. The bulk-delete view therefore cannot delete an
+ordinary VM through either selected IDs or the `_all` path. Access requires
+the core VirtualMachine delete permission, and the page never calls Proxmox.
+
 ## Files And Ownership
 
 - [`__init__.py`](./__init__.py): plugin registration via `PluginConfig`, plugin metadata, and supported NetBox version range.

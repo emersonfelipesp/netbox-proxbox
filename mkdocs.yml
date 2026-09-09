@@ -127,6 +127,7 @@ nav:
     - Scheduler Container: 'scheduler/README.md'
     - Tenant Mapping: 'operations/tenant-mapping.md'
     - NetBox to Proxmox: 'operations/netbox-to-proxmox.md'
+    - Orphan VM Review and Purge: 'operations/orphan-vm-purge.md'
     - Deletion Requests: 'operations/deletion-requests.md'
     - Recovering Proxbox Data: 'operations/recovering-proxbox-data.md'
     - Troubleshooting: 'operations/troubleshooting.md'

@@ -1,0 +1,45 @@
+{% extends 'generic/_base.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block title %}Soft-deleted Virtual Machines{% endblock %}
+
+{% block content %}
+  <div class="alert alert-warning" role="alert">
+    <strong>{% trans "Human confirmation required." %}</strong>
+    {% trans "These VMs were marked by Proxbox after they disappeared from Proxmox. Deleting them here removes their NetBox records only; synchronization never performs this deletion automatically." %}
+  </div>
+
+  <form method="post" action="{% url 'plugins:netbox_proxbox:soft_deleted_vms_bulk_delete' %}">
+    {% csrf_token %}
+    <input type="hidden" name="return_url" value="{{ request.get_full_path }}" />
+
+    {% if table.page.paginator.num_pages > 1 %}
+      <div class="card mb-3">
+        <div class="card-body">
+          <div class="form-check">
+            <input type="checkbox" id="select-all" name="_all" class="form-check-input" />
+            <label for="select-all" class="form-check-label">
+              {% blocktrans trimmed with count=table.page.paginator.count %}
+                Select all {{ count }} soft-deleted virtual machines matching this query
+              {% endblocktrans %}
+            </label>
+          </div>
+        </div>
+      </div>
+    {% endif %}
+
+    <div class="card">
+      <div class="table-responsive" id="object_list">
+        {% include 'htmx/table.html' %}
+      </div>
+    </div>
+
+    <div class="card btn-list sticky-actions d-print-none mt-3" data-sticky-position="right" data-sticky-when="selection">
+      <button type="submit" class="btn btn-danger">
+        <i class="mdi mdi-delete-outline"></i>
+        {% trans "Delete selected soft-deleted VMs" %}
+      </button>
+    </div>
+  </form>
+{% endblock content %}

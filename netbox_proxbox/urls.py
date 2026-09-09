@@ -165,6 +165,16 @@ urlpatterns = [
         views.LXCContainersView.as_view(),
         name="lxc_containers",
     ),
+    path(
+        "soft-deleted-vms/",
+        views.SoftDeletedVirtualMachinesView.as_view(),
+        name="soft_deleted_vms",
+    ),
+    path(
+        "soft-deleted-vms/delete/",
+        views.SoftDeletedVirtualMachinesBulkDeleteView.as_view(),
+        name="soft_deleted_vms_bulk_delete",
+    ),
     path("interfaces/", views.InterfacesView.as_view(), name="interfaces"),
     path(
         "guest-vm-interfaces/<int:pk>/",

@@ -46,6 +46,11 @@ SYNC_MODE_HIERARCHY: dict[str, str] = {
     "sdn_bgp": "sdn",
 }
 
+# Contract shared with proxbox-api's orphan sweep. Synchronization marks these
+# records; only the dedicated NetBox page may delete them.
+SOFT_DELETE_TAG_SLUG = "proxbox-soft-deleted"
+SOFT_DELETE_VM_STATUS = "decommissioning"
+
 OVERWRITE_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
     (
         "Device",
