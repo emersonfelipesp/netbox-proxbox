@@ -13,6 +13,9 @@ For the operational guide — how to trigger cluster/node syncs, link to NetBox 
 Proxmox cluster InfluxDB metrics mappings are exposed as standard NetBox plugin
 model API objects.
 
+For the complete operator setup, trust boundary, credential lifecycle, and
+troubleshooting procedure, see the [Monitoring & Observability guide](../features/monitoring.md#influxdb-metrics-integration).
+
 ```
 GET    /api/plugins/proxbox/metrics-influxdb/
 GET    /api/plugins/proxbox/metrics-influxdb/{id}/
