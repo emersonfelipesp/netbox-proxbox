@@ -1,5 +1,10 @@
 # netbox-rpc — audited Proxmox host procedures
 
+See [Audited Proxmox writes with RPC and OpenBao](./audited-proxmox-writes.md)
+for the operation matrix, typed chaining design, migration and setup runbook.
+The universal write boundary is planned; current optional integrations below do
+not establish that every Proxbox write already passes through RPC.
+
 `netbox-rpc` is an operational companion for `netbox-proxbox`. Proxbox owns
 Proxmox inventory and endpoint configuration; RPC owns the policy and audit
 record for host operations. Installing the package does not enable it, and
@@ -39,8 +44,8 @@ procedure is enabled for that target model.
 - the dispatch handoff to `netbox-rpc-backend`.
 
 `netbox-rpc-backend` supplies the fixed-argv or typed CLI execution, SSH
-connection, bounded output, and host-side result. The plugins do not import
-each other's implementation modules.
+connection, bounded output, and host-side result. Proxbox's optional
+`integrations/rpc.py` adapter imports RPC models and jobs at call time.
 
 ## Procedure families
 
@@ -79,11 +84,17 @@ never triggers a write procedure as a side effect.
 ## Credentials
 
 Endpoint or host SSH material is resolved by the configured credential
-integration at execution time. `netbox-proxbox` does not put passwords or
-private keys in sync payloads, RPC parameters, or monitoring output. When
+integration at execution time. Guest passwords and private keys are not part of
+the inventory discovery contract or service-monitoring parameters. Endpoint
+credential registration is a separate path; the complete integration plan
+covers retiring its replicated material. When
 `netbox-openbao` is installed, assignments and reveal authorization remain in
 that plugin; an optional `netbox-openbao-broker` can hold the vault AppRole
 behind mTLS.
+
+The sequence below illustrates the intended credential-service boundary.
+Generic execution-bound OpenBao resolution in the standalone executor remains
+planned; validate the installed backend's actual credential path and capabilities.
 
 ```mermaid
 sequenceDiagram

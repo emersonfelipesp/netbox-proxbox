@@ -13,6 +13,17 @@
 
 This directory contains the plugin's pytest test suite.
 
+`test_proxmox_endpoint_allowed_tenants.py` keeps its source contracts in the
+mocked suite and runs its database filter/serializer checks in the explicitly
+enumerated real-Django matrix. Its fixture requires the active pytest-django
+plugin, not merely importable modules: other mocked tests can leave Django
+registry stubs in `sys.modules`. With `NETBOX_PROXBOX_REQUIRE_DJANGO=1`, a disabled
+plugin is a failure. In the real lane, missing dependencies and broken Django
+setup must fail rather than silently skip the database checks.
+The tenant fixture explicitly selects legacy encrypted storage with a test-only
+key in the isolated database, covering both fixture and serializer-created
+endpoints without requiring an OpenBao deployment for tenant behavior.
+
 ## Files And Ownership
 
 - `conftest.py`: shared fixtures and compatibility stubs for Django/NetBox/requests so tests can run without a full NetBox install. Includes `StreamingHttpResponse` stubs and mock request helpers.

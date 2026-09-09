@@ -1,5 +1,10 @@
 # netbox-openbao — VM and container SSH secrets
 
+The complete target architecture, migration matrix and setup runbook are in
+[Audited Proxmox writes with RPC and OpenBao](./audited-proxmox-writes.md).
+Mandatory RPC writes and generic OpenBao-backed procedure variables are planned;
+the endpoint storage integration described here already exists.
+
 `netbox-openbao` is a **separate** NetBox plugin from the Proxbox suite. It is
 not a companion plugin in the same sense as netbox-pbs or netbox-ceph — you do
 not install it through proxbox-api sync jobs — but it is the supported way to
@@ -41,7 +46,11 @@ flowchart TB
     PX --> NB
 ```
 
-### Secrets and automation stack
+### Target secrets and automation stack
+
+The RPC-to-OpenBao executor link below is the planned generic integration. Its
+presence in this diagram does not establish runtime support in an installed
+executor; verify the capability and version contract before enabling writes.
 
 ```mermaid
 flowchart TB
@@ -64,8 +73,9 @@ flowchart TB
 ```
 
 The inventory and secrets lanes meet on the same `VirtualMachine` (or `Device`)
-row. Neither plugin imports the other; coordination is entirely through NetBox
-objects, openbao assignments, and operator workflow.
+row. Guest assignment coordinates through NetBox objects and OpenBao assignments.
+Endpoint storage additionally uses Proxbox's optional `integrations/openbao.py`
+adapter, which imports OpenBao models and services at call time.
 
 ## Endpoint credentials vs guest credentials
 
@@ -93,9 +103,9 @@ credential, and quick-add on a VM does not replace endpoint API authentication.
 3. **Reveal when needed** — operators or automation with `reveal_credential`
    POST to `/api/plugins/openbao/credentials/{id}/reveal/`; material never
    appears on GET or in exports.
-4. **Optional automation** — dispatch audited **netbox-rpc** procedures for
-   fixed host operations; the executor resolves credentials through the openbao
-   reveal contract.
+4. **Optional automation** — use the installed RPC release's supported fixed
+   host procedures. Generic execution-bound OpenBao resolution is part of the
+   integration plan; do not assume every executor implements it.
 
 ## Installation
 

@@ -61,18 +61,21 @@ def test_proxmox_endpoint_migration_adds_allowed_tenants() -> None:
     assert 'to="tenancy.tenant"' in migration
 
 
-def _require_harness() -> None:
-    import importlib.util
-
-    if importlib.util.find_spec("django.apps") is None:
-        pytest.skip("NetBox + Django harness not installed")
-
-    django = pytest.importorskip(
-        "django", reason="NetBox + Django harness not installed"
+def _require_harness(pytestconfig: pytest.Config) -> None:
+    require_django = os.environ.get("NETBOX_PROXBOX_REQUIRE_DJANGO", "").lower() in (
+        "1",
+        "true",
+        "yes",
     )
-    pytest.importorskip(
-        "tenancy", reason="NetBox app modules not importable in this env"
-    )
+    if not pytestconfig.pluginmanager.hasplugin("django"):
+        if require_django:
+            pytest.fail("The required NetBox harness needs pytest-django enabled.")
+        pytest.skip("Database behavior runs in the real-Django lane.")
+
+    # Import availability alone is not a harness check: mocked tests can leave
+    # importable Django/NetBox stubs in sys.modules. Once the real lane is
+    # selected, missing dependencies or broken setup must fail rather than skip.
+    import django
 
     os.environ.setdefault("NETBOX_CONFIGURATION", "tests.netbox_test_configuration")
     os.environ.setdefault("DJANGO_SETTINGS_MODULE", "netbox.settings")
@@ -84,14 +87,27 @@ def _require_harness() -> None:
 
 
 @pytest.fixture
-def proxmox_endpoint_fixture():  # type: ignore[no-untyped-def]
-    _require_harness()
+def proxmox_endpoint_fixture(pytestconfig: pytest.Config):  # type: ignore[no-untyped-def]
+    _require_harness(pytestconfig)
 
     from ipam.models import IPAddress
     from tenancy.models import Tenant
 
-    from netbox_proxbox.choices import ProxmoxModeChoices
-    from netbox_proxbox.models import ProxmoxEndpoint
+    from netbox_proxbox.choices import (
+        CredentialStorageBackendChoices,
+        ProxmoxModeChoices,
+    )
+    from netbox_proxbox.models import ProxboxPluginSettings, ProxmoxEndpoint
+
+    # Tenant authorization is independent of OpenBao availability. Configure
+    # the local test database explicitly so fixture and serializer-created
+    # endpoints use the same test-only encrypted storage for their tokens.
+    settings_obj = ProxboxPluginSettings.get_solo()
+    settings_obj.credential_storage_backend = (
+        CredentialStorageBackendChoices.LEGACY_ENCRYPTED
+    )
+    settings_obj.encryption_key = "0123456789abcdef0123456789abcdef"
+    settings_obj.save(update_fields=("credential_storage_backend", "encryption_key"))
 
     tenant_a = Tenant.objects.create(name="Tenant A", slug="tenant-a")
     tenant_b = Tenant.objects.create(name="Tenant B", slug="tenant-b")

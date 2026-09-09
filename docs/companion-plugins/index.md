@@ -4,6 +4,10 @@ The Proxbox ecosystem is built around a central FastAPI backend (`proxbox-api`) 
 
 Each companion plugin is a fully independent NetBox plugin package. You install only the plugins that match your infrastructure.
 
+For the planned integration of secrets, procedure variables and mandatory audited
+writes, see [Audited Proxmox writes with RPC and OpenBao](./audited-proxmox-writes.md).
+It distinguishes existing behavior from the implementation required for cutover.
+
 ## Plugin Overview
 
 | Plugin | PyPI package | What it inventories |
@@ -63,7 +67,8 @@ graph TB
 
 ## How Sync Works
 
-All companion plugins follow the same pattern:
+The inventory companion plugins follow the same pattern. OpenBao credential
+management and RPC execution use separate workflows:
 
 ```mermaid
 sequenceDiagram

@@ -70,6 +70,9 @@ nav:
     - Upgrading: 'installation/upgrading.md'
   - Companion Plugins:
     - Overview: 'companion-plugins/index.md'
+    - Audited Proxmox Writes: 'companion-plugins/audited-proxmox-writes.md'
+    - netbox-rpc: 'companion-plugins/netbox-rpc.md'
+    - netbox-openbao: 'companion-plugins/netbox-openbao.md'
     - netbox-pbs: 'companion-plugins/netbox-pbs.md'
     - netbox-pdm: 'companion-plugins/netbox-pdm.md'
     - netbox-ceph: 'companion-plugins/netbox-ceph.md'

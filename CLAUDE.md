@@ -1,5 +1,13 @@
 # netbox-proxbox Codebase Guide
 
+## Audited Write Integration Plan
+
+Read `docs/companion-plugins/audited-proxmox-writes.md` before changing cross-plugin
+credential storage, procedure variables, chaining or Proxmox write dispatch.
+The document distinguishes current behavior from the planned RPC/OpenBao
+boundary. Keep its operation/secret matrices and diagrams current; do not claim
+runtime enforcement from documentation or catalog rows alone.
+
 ## Repository Destination Policy (Hard Rule)
 
 This project is owned and changed only through the Emerson repositories:

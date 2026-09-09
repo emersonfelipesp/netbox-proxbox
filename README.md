@@ -138,6 +138,12 @@ docker compose exec netbox /opt/netbox/netbox/manage.py migrate
 Full companion-plugin details live under
 [docs/companion-plugins/](./docs/companion-plugins/).
 
+The [audited Proxmox write integration plan](./docs/companion-plugins/audited-proxmox-writes.md)
+details the target Proxbox → RPC → OpenBao workflow, trust boundaries, secret and
+operation matrices, procedure output chaining, migration and installation
+runbook. It distinguishes existing integration from planned runtime enforcement;
+publishing the plan does not enable mandatory RPC writes.
+
 ### Endpoint Enablement
 
 Endpoint records are inventory/configuration objects even when disabled. For
