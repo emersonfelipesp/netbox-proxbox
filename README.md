@@ -240,26 +240,21 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
-## What's New in v0.0.26.post1
+## What's New in v0.0.26.post2
 
-Current backend-runtime pairing: netbox-proxbox 0.0.26.post1 <-> proxbox-api 0.0.20 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.26.post2 <-> proxbox-api 0.0.21.post6 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
-Paired with backend: `proxbox-api 0.0.20`.
+Paired with backend: `proxbox-api 0.0.21.post6`.
 
-- **NetBox 4.7.0 GA certification.** Real-Django and Docker matrices retain
-  the 4.5/4.6 backward-compatibility cells and add the exact v4.7.0 GA source.
-- **Compatibility fixes.** Settings serialization, storage capacity, detail
-  templates, InfluxDB metrics, sync-state models, and empty encryption-key
-  recovery follow current NetBox/Django behavior.
-- **Immutable staged release.** The target workflow emits exactly six
-  credential-free data files: one wheel, one sdist, `release-manifest.json`,
-  `release-request.json`, `runner-completion-attestation.json`, and
-  `runner-completion-attestation.sig`. The locked control plane verifies the
-  supervisor completion signature and publishes those exact wheel/sdist bytes
-  before they progress through TestPyPI, production, and PyPI without
-  rebuilding.
+- **Production browser console handoff.** NetBox virtual-machine detail pages
+  now compose the console extension through NetBox's supported `buttons()`
+  hook and open the corresponding NMS QEMU or LXC console in a new tab.
+- **Proxmox metrics.** Adds the independently configured InfluxDB metrics UI,
+  API, settings, and architecture documentation.
+- **Audited cleanup.** Adds the human-only page for reviewing and purging
+  soft-deleted Proxbox VM inventory while preserving operator controls.
 
-Full notes: [Release Notes - v0.0.26.post1](docs/release-notes/version-0.0.26.post1.md).
+Full notes: [Release Notes - v0.0.26.post2](docs/release-notes/version-0.0.26.post2.md).
 
 ## What's New in v0.0.23.post1
 
@@ -364,7 +359,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
-| 4.5.8-4.7.0 GA | v0.0.26.post1 | v0.0.20 | v0.0.10 | v0.0.13 |
+| 4.5.8-4.7.0 GA | v0.0.26.post2 | v0.0.21.post6 | v0.0.10 | v0.0.13 |
 | >=4.5.8 | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |

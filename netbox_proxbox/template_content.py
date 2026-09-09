@@ -640,6 +640,9 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
                         },
                     )
                 )
+        console_button = self.console_button()
+        if console_button:
+            parts.append(console_button)
         # Joined HTML comes from this plugin's own templates rendered above.
         return mark_safe("".join(parts)) if parts else ""  # nosec
 

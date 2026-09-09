@@ -23,7 +23,7 @@ NetBox warns, omits the plugin, and continues startup.
 
 | NetBox   | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
-| 4.5.8-4.7.0 GA | v0.0.26.post1 | v0.0.20 | v0.0.10 | v0.0.13 |
+| 4.5.8-4.7.0 GA | v0.0.26.post2 | v0.0.21.post6 | v0.0.10 | v0.0.13 |
 | >=4.5.8  | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8  | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8  | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |
@@ -54,7 +54,7 @@ and WebSocket.
 The current repository code declares support for:
 
 - NetBox `4.5.8` through `4.7.0`, including official `v4.7.0` GA
-- Plugin version `0.0.26.post1` in source
+- Plugin version `0.0.26.post2` in source
 
 That support comes directly from the plugin config in this repository:
 
@@ -72,9 +72,9 @@ methods, tenant-scoped endpoint allowlists, bulk endpoint enablement, PDM
 endpoint sync, SDN inventory, Firecracker serializer hardening, dual VM
 interface sync, and the all-endpoint `enabled=False` no-connection guard.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.26.post1 <-> proxbox-api 0.0.20 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.26.post2 <-> proxbox-api 0.0.21.post6 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
-The `0.0.26.post1` release carries the official NetBox 4.7.0 GA compatibility
+The `0.0.26.post2` release carries the production console handoff while retaining the official NetBox 4.7.0 GA compatibility
 contract while
 retaining the backward-compatible 4.5/4.6 cells, package-first release
 provenance, and the compatibility/reliability fixes documented in the release

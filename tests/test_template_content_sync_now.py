@@ -374,6 +374,35 @@ def test_console_button_hands_off_to_management_console(
     assert context["console_url"] == f"https://{host}/virtualization/{resource}/73"
 
 
+def test_console_button_is_composed_into_netbox_buttons_hook(
+    template_content_module,
+):
+    """The supported NetBox ``buttons`` hook must render the console handoff."""
+    harness = template_content_module
+    vm = harness.virtual_machine()
+    vm.pk = 73
+    _set_console_url(harness, "https://console.example.invalid")
+    vm.proxbox_sync_state = SimpleNamespace(
+        endpoint=SimpleNamespace(pk=1, enabled=True),
+        proxmox_vm_id=100,
+        proxmox_vm_type="qemu",
+    )
+    extension = harness.module.ProxboxVirtualMachineTemplateExtension(
+        _context(vm, SYNC_PERMISSION)
+    )
+
+    extension.buttons()
+
+    assert extension.render_calls[-1] == (
+        "netbox_proxbox/inc/vm_console_button.html",
+        {
+            "console_url": (
+                "https://console.example.invalid/virtualization/virtual-machines/73"
+            )
+        },
+    )
+
+
 def test_console_button_hides_when_management_console_url_is_unsafe(
     template_content_module,
 ):

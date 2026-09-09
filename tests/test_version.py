@@ -57,6 +57,9 @@ RELEASE_NOTES_025_POST1_PATH = (
 RELEASE_NOTES_026_POST1_PATH = (
     REPO_ROOT / "docs" / "release-notes" / "version-0.0.26.post1.md"
 )
+RELEASE_NOTES_026_POST2_PATH = (
+    REPO_ROOT / "docs" / "release-notes" / "version-0.0.26.post2.md"
+)
 E2E_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "e2e-docker.yml"
 PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "publish-testpypi.yml"
 NIGHTLY_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "nightly-contracts.yml"
@@ -69,13 +72,13 @@ CERTIFICATION_PATH = REPO_ROOT / "CERTIFICATION.md"
 DOCS_CERTIFICATION_PATH = REPO_ROOT / "docs" / "certification.md"
 APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
-CURRENT_PLUGIN_VERSION = "0.0.26.post1"
-CURRENT_RELEASE_VERSION = "0.0.26.post1"
-CURRENT_PACKAGE_VERSION = "0.0.26.post1"
-CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.20"
+CURRENT_PLUGIN_VERSION = "0.0.26.post2"
+CURRENT_RELEASE_VERSION = "0.0.26.post2"
+CURRENT_PACKAGE_VERSION = "0.0.26.post2"
+CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.21.post6"
 CURRENT_PAIRING_LINE = (
-    "Current backend-runtime pairing: netbox-proxbox 0.0.26.post1 <-> proxbox-api "
-    "0.0.20 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST "
+    "Current backend-runtime pairing: netbox-proxbox 0.0.26.post2 <-> proxbox-api "
+    "0.0.21.post6 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST "
     "dependency only and does not provide the semantic MCP bridge."
 )
 PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.20"
@@ -191,7 +194,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
 )
 PREVIOUS_PLUGIN_VERSION = "0.0.22"
 PREVIOUS_PROXBOX_API_VERSION = "0.0.19.post5"
-CURRENT_RELEASE_NOTES_PATH = RELEASE_NOTES_026_POST1_PATH
+CURRENT_RELEASE_NOTES_PATH = RELEASE_NOTES_026_POST2_PATH
 
 
 def _class_constants(class_name: str) -> dict[str, str]:
@@ -666,6 +669,7 @@ def test_release_notes_files_are_present():
         RELEASE_NOTES_025_PATH,
         RELEASE_NOTES_025_POST1_PATH,
         RELEASE_NOTES_026_POST1_PATH,
+        RELEASE_NOTES_026_POST2_PATH,
     ):
         assert path.is_file(), f"{path} is missing"
 
