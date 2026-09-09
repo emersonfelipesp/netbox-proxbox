@@ -140,6 +140,7 @@ from .proxmox_metrics import (
     ProxmoxMetricsInfluxDBDeleteView,
     ProxmoxMetricsInfluxDBEditView,
     ProxmoxMetricsInfluxDBListView,
+    ProxmoxMetricsInfluxDBDataView,
     ProxmoxMetricsInfluxDBView,
 )
 from .proxmox_templates_tab import ProxmoxEndpointTemplatesTabView

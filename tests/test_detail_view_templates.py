@@ -128,8 +128,9 @@ def test_metrics_detail_template_uses_only_fail_closed_displays() -> None:
     object_attributes = set(re.findall(r"\bobject\.([A-Za-z_]\w*)", template))
 
     assert "influx_url_display" in object_attributes
-    assert "query_token_secret_ref_display" in object_attributes
-    assert "writer_token_secret_ref_display" in object_attributes
+    assert "has_query_token" in object_attributes
+    assert "has_writer_token" not in object_attributes
+    assert "credential_encryption_state" in object_attributes
     assert "influx_url" not in object_attributes
     assert "query_token_secret_ref" not in object_attributes
     assert "writer_token_secret_ref" not in object_attributes

@@ -184,6 +184,13 @@ ENCRYPTED_FIELD_FAMILIES: Final = (
         encrypted_fields=("agent_token_enc",),
         operational_reset_values=(("status", "offline"),),
     ),
+    EncryptedFieldFamily(
+        key="influxdb_metrics",
+        label="Proxmox InfluxDB metrics tokens",
+        model_label="netbox_proxbox.ProxmoxMetricsInfluxDB",
+        encrypted_fields=("query_token_enc",),
+        operational_reset_values=(("enabled", False),),
+    ),
 )
 
 _FAMILY_BY_KEY: Final = {family.key: family for family in ENCRYPTED_FIELD_FAMILIES}

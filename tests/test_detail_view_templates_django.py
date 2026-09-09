@@ -104,7 +104,7 @@ from netbox_proxbox.models import (  # noqa: E402
 from netbox_proxbox.models.ssh_credential import (  # noqa: E402
     AUTH_METHOD_PASSWORD,
 )
-from netbox_proxbox.models.proxmox_metrics import MASKED_SECRET_REF  # noqa: E402
+from netbox_proxbox.models.proxmox_metrics import MASKED_SECRET  # noqa: E402
 
 
 _PLUGIN_VIEW_MODULE_PREFIX = "netbox_proxbox.views"
@@ -168,7 +168,6 @@ _REQUIRED_OBJECT_VIEW_REGISTRY = {
 _SSH_PASSWORD_MARKER = "detail-view-password-must-not-render"
 _SSH_PRIVATE_KEY_MARKER = "detail-view-private-key-must-not-render"
 _METRICS_QUERY_TOKEN_MARKER = "detail-view-query-token-must-not-render"
-_METRICS_WRITER_TOKEN_MARKER = "detail-view-writer-token-must-not-render"
 
 
 def _registered_plugin_object_views() -> tuple[tuple[str, type[ObjectView]], ...]:
@@ -385,7 +384,7 @@ class MissingDetailTemplateRenderTest(TestCase):
             endpoint=cls.endpoint,
             proxmox_cluster=cls.cluster,
             influx_url="https://influx.example.test:8086",
-            query_token_secret_ref="nms-secret:00000000-0000-4000-8000-000000000195",
+            query_token_enc="stored-query-ciphertext",
         )
         cls.sdn_fabric = ProxmoxSdnFabric.objects.create(
             endpoint=cls.endpoint,
@@ -480,8 +479,7 @@ class MissingDetailTemplateRenderTest(TestCase):
 
     def test_metrics_render_uses_fail_closed_display_properties(self) -> None:
         self.metrics.influx_url = _METRICS_INFLUX_URL_MARKER
-        self.metrics.query_token_secret_ref = _METRICS_QUERY_TOKEN_MARKER
-        self.metrics.writer_token_secret_ref = _METRICS_WRITER_TOKEN_MARKER
+        self.metrics.query_token_enc = _METRICS_QUERY_TOKEN_MARKER
         url = reverse(
             "plugins:netbox_proxbox:proxmoxmetricsinfluxdb",
             args=[self.metrics.pk],
@@ -496,13 +494,7 @@ class MissingDetailTemplateRenderTest(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         self.assertNotContains(response, _METRICS_INFLUX_URL_MARKER)
         self.assertNotContains(response, _METRICS_QUERY_TOKEN_MARKER)
-        self.assertNotContains(response, _METRICS_WRITER_TOKEN_MARKER)
-        self.assertContains(response, MASKED_SECRET_REF, count=3)
+        self.assertContains(response, MASKED_SECRET, count=1)
         rendered_object = response.context["object"]
-        self.assertEqual(rendered_object.influx_url_display, MASKED_SECRET_REF)
-        self.assertEqual(
-            rendered_object.query_token_secret_ref_display, MASKED_SECRET_REF
-        )
-        self.assertEqual(
-            rendered_object.writer_token_secret_ref_display, MASKED_SECRET_REF
-        )
+        self.assertEqual(rendered_object.influx_url_display, MASKED_SECRET)
+        self.assertEqual(rendered_object.has_query_token, True)

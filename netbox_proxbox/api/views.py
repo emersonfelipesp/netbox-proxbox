@@ -70,6 +70,7 @@ from .serializers import (
     ProxmoxFirewallSecurityGroupSerializer,
     ProxmoxDatacenterCpuModelSerializer,
     ProxmoxMetricsInfluxDBSerializer,
+    ProxmoxMetricsInfluxDBQuerySerializer,
     ProxmoxNodeSerializer,
     ProxmoxServiceCollectionSerializer,
     ProxmoxServiceSampleSerializer,
@@ -109,6 +110,7 @@ from netbox_proxbox.api.mcp_bridge import (
     mcp_bridge_activation_record,
     mcp_bridge_is_active,
 )
+from netbox_proxbox.services.metrics_influx import MetricsProxyError, query_metrics
 
 
 class ProxBoxRootView(APIRootView):
@@ -362,6 +364,26 @@ class ProxmoxMetricsInfluxDBViewSet(NetBoxModelViewSet):
     ).prefetch_related("tags")
     serializer_class = ProxmoxMetricsInfluxDBSerializer
     filterset_class = filtersets.ProxmoxMetricsInfluxDBFilterSet
+
+    @action(detail=True, methods=["get"], url_path="data")
+    def data(self, request: Request, pk: int | None = None) -> Response:
+        """Return live metrics through proxbox-api without exposing InfluxDB access."""
+        instance = self.get_object()
+        query_serializer = ProxmoxMetricsInfluxDBQuerySerializer(
+            data=request.query_params
+        )
+        if not query_serializer.is_valid():
+            return Response(
+                query_serializer.errors, status=drf_status.HTTP_400_BAD_REQUEST
+            )
+        try:
+            payload = query_metrics(instance, query_serializer.validated_data)
+        except MetricsProxyError as exc:
+            return Response(
+                {"detail": str(exc)},
+                status=getattr(exc, "status_code", drf_status.HTTP_502_BAD_GATEWAY),
+            )
+        return Response(payload)
 
 
 class ProxmoxStorageViewSet(NetBoxModelViewSet):

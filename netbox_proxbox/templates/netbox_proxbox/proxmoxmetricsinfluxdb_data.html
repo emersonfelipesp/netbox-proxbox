@@ -1,0 +1,60 @@
+{% extends 'generic/object.html' %}
+{% load i18n %}
+
+{% block content %}
+<div class="card mb-3">
+  <h5 class="card-header">{% trans "Proxmox Metrics" %}: {{ object.name }}</h5>
+  <div class="card-body">
+    <p class="text-muted">
+      {% trans "Queries are sent by NetBox to proxbox-api. The browser never connects to InfluxDB and never receives the query token." %}
+    </p>
+    <form method="get" class="row gy-2 gx-3 align-items-end">
+      <div class="col-md-3">{{ form.time_start.as_field_group }}</div>
+      <div class="col-md-3">{{ form.time_stop.as_field_group }}</div>
+      <div class="col-md-2">{{ form.measurement.as_field_group }}</div>
+      <div class="col-md-2">{{ form.field.as_field_group }}</div>
+      <div class="col-md-2">{{ form.node.as_field_group }}</div>
+      <div class="col-md-1">{{ form.vmid.as_field_group }}</div>
+      <div class="col-md-1">{{ form.limit.as_field_group }}</div>
+      <div class="col-md-2">{{ form.tag_key.as_field_group }}</div>
+      <div class="col-md-2">{{ form.tag_value.as_field_group }}</div>
+      <div class="col-md-2">{{ form.aggregation_every.as_field_group }}</div>
+      <div class="col-md-2">{{ form.aggregation_function.as_field_group }}</div>
+      <div class="col-12">
+        <button class="btn btn-primary" type="submit">{% trans "Query metrics" %}</button>
+        <a class="btn btn-secondary" href="{{ object.get_absolute_url }}">{% trans "Back" %}</a>
+      </div>
+    </form>
+  </div>
+</div>
+
+{% if detail %}
+<div class="alert alert-warning" role="alert">{{ detail }}</div>
+{% endif %}
+
+{% if metrics %}
+<div class="card">
+  <h5 class="card-header">{% trans "Query result" %}</h5>
+  <div class="card-body">
+    {% if metrics.rows %}
+    <div class="table-responsive">
+      <table class="table table-sm table-hover">
+        <thead>
+          <tr>
+            {% for column in metrics.columns %}<th scope="col">{{ column }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in metrics.display_rows %}
+          <tr>{% for value in row %}<td>{{ value|default_if_none:"" }}</td>{% endfor %}</tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <p class="text-muted">{% trans "No metrics matched the query." %}</p>
+    {% endif %}
+  </div>
+</div>
+{% endif %}
+{% endblock %}

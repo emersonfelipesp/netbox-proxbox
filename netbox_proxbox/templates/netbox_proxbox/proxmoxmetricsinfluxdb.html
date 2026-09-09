@@ -8,6 +8,11 @@
     <div class="card mb-3">
       <h5 class="card-header">{% trans "InfluxDB Metrics Endpoint" %}</h5>
       <div class="card-body">
+        <p>
+          <a class="btn btn-primary" href="{% url 'plugins:netbox_proxbox:proxmoxmetricsinfluxdb_data' pk=object.pk %}">
+            {% trans "View metrics" %}
+          </a>
+        </p>
         <table class="table table-hover attr-table">
           <tr>
             <th scope="row">{% trans "Name" %}</th>
@@ -52,16 +57,16 @@
 
   <div class="col col-md-6">
     <div class="card mb-3">
-      <h5 class="card-header">{% trans "Secret References" %}</h5>
+      <h5 class="card-header">{% trans "Encrypted Credentials" %}</h5>
       <div class="card-body">
         <table class="table table-hover attr-table">
           <tr>
-            <th scope="row">{% trans "Query Token Reference" %}</th>
-            <td>{{ object.query_token_secret_ref_display }}</td>
+            <th scope="row">{% trans "Query Token" %}</th>
+            <td>{{ object.has_query_token|yesno:"Configured,Not configured" }}</td>
           </tr>
           <tr>
-            <th scope="row">{% trans "Writer Token Reference" %}</th>
-            <td>{{ object.writer_token_secret_ref_display|placeholder }}</td>
+            <th scope="row">{% trans "Encryption state" %}</th>
+            <td>{{ object.credential_encryption_state }}</td>
           </tr>
         </table>
       </div>

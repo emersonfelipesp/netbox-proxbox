@@ -48,6 +48,7 @@ from .proxmox import *
 from .proxmox_metrics import (
     ProxmoxMetricsInfluxDBFilterForm,
     ProxmoxMetricsInfluxDBForm,
+    ProxmoxMetricsInfluxDBQueryForm,
 )
 from .replication import *
 from .schedule_sync import *

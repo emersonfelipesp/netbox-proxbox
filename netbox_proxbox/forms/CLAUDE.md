@@ -77,9 +77,11 @@ Each endpoint type has an `ImportForm` (e.g. `ProxmoxEndpointImportForm`, `NetBo
   changing an existing intent's parent VM because one intent row belongs to one
   guest for its whole lifetime.
 - `ProxmoxMetricsInfluxDBForm` clears the edit-page initial value whenever a
-  persisted InfluxDB URL fails the model's credential-free HTTP(S) display check.
+  persisted InfluxDB URL fails the model's credential-free HTTPS display check.
   Its warning asks the operator to replace the hidden value or delete the mapping;
-  never repopulate the input from the raw stored value.
+  never repopulate the input from the raw stored value. The query token is a
+  write-only input encrypted with the plugin key; blank edit inputs preserve
+  existing ciphertext.
 - Password and token_value fields on `ProxmoxEndpointForm` use `PasswordInput(render_value=False)` and are preserved from the stored instance when the user submits a blank value (edit-without-change UX).
 - `ProxmoxEndpointForm` exposes the broad `allow_writes` gate and the separate
   default-off `allow_packer_template_builds` capability in its **Access control**

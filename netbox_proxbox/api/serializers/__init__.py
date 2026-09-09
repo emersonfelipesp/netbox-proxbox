@@ -46,6 +46,7 @@ from netbox_proxbox.api.serializers.pve_template import (
 )
 from netbox_proxbox.api.serializers.proxmox_metrics import (
     ProxmoxMetricsInfluxDBSerializer,
+    ProxmoxMetricsInfluxDBQuerySerializer,
 )
 from netbox_proxbox.api.serializers.endpoints import (
     FastAPIEndpointSerializer,

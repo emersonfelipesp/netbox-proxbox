@@ -175,9 +175,11 @@ contract and issue #454 for the bug history.
   metadata, disables rows missing a safe URL or required query-token reference,
   appends a persistent remediation marker to comments, and masks matching fields
   in historical `core.ObjectChange` snapshots before installing database checks.
-  Those checks durably require every enabled row to retain a credential-free
-  HTTP(S) URL and nonempty exact query-token reference while leaving the writer
-  reference optional. The destructive scrub, quarantine, marker, and audit
+  Those historical checks durably require every enabled row to retain a
+  credential-free HTTP(S) URL and nonempty exact query-token reference while
+  leaving the writer reference optional. The new 0092 migration replaces that
+  external-reference contract with plugin-owned HTTPS/query-token storage. Its
+  destructive scrub, quarantine, marker, and audit
   masking are intentionally not reversed; rollback removes only the checks. Its
   real-Django test discovers the plugin leaf and its sole in-app parent from the
   migration graph, so a merge-time renumber changes only the migration file.
@@ -188,6 +190,12 @@ contract and issue #454 for the bug history.
   the #295/#297 branches as a colliding 0079 and renumbered to 0081 (dependency
   `0080_metrics_influxdb_secret_ref_constraints`) at merge time. Tests find
   this migration by operation content rather than its number.
+- **0092_proxmox_metrics_plugin_credentials** replaces the external metrics
+  token-reference columns with plugin-owned Fernet ciphertext. It clears legacy
+  references, disables affected mappings, masks historical ObjectChange values,
+  preserves only safe endpoint metadata, and requires operators to enter new
+  credentials. The forward scrub is intentionally irreversible; rollback can
+  restore schema state but cannot recreate discarded references.
 - **0082_proxmoxendpoint_allow_packer_template_builds**: adds the idempotent,
   default-off `ProxmoxEndpoint.allow_packer_template_builds` capability and the
   default-false, non-editable

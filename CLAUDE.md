@@ -236,9 +236,10 @@ material through the credential accessors, still subject to the endpoint `access
 - VM interface modeling uses a dual representation under `ProxboxPluginSettings.vm_interface_sync_strategy="guest_os_model"` (the default): Proxmox config NICs stay as core `virtualization.VMInterface` rows with canonical names such as `net0`; guest-agent OS names such as `ens18` are stored in plugin `GuestVMInterface` rows. `GuestVMInterface.vm_interface` is nullable for agent-only interfaces, and `GuestVMInterfaceAddress` links guest interfaces to the same core `ipam.IPAddress` objects used by the core VM interface assignment. The old `use_guest_agent_interface_name` toggle is deprecated and applies only when the strategy is `legacy_rename`.
 - Datacenter config: `ProxmoxDatacenterCpuModel` (custom CPU models synced from PVE).
 - Metrics metadata: `ProxmoxMetricsInfluxDB` maps a Proxmox endpoint and cluster
-  to an InfluxDB URL, organization, and bucket for observability consumers. It
-  stores only `nms-secret:<uuid>` references for query/writer tokens and never
-  persists plaintext InfluxDB credentials.
+  to an InfluxDB URL, organization, and bucket for the independent Proxmox
+  metrics query path. It stores only plugin-owned encrypted query ciphertext;
+  write-only inputs never persist plaintext credentials, and the removed writer
+  state is retained only as historical migration input.
 - Firewall inventory (6 models, read-only): `ProxmoxFirewallSecurityGroup`, `ProxmoxFirewallRule`, `ProxmoxFirewallIPSet`, `ProxmoxFirewallIPSetEntry`, `ProxmoxFirewallAlias`, `ProxmoxFirewallOptions`.
 - SDN inventory (PVE 9.2+): controllers, zones, VNets, subnets, bindings, fabrics, route maps, and prefix lists.
 - Firecracker Cloud uses separate `FirecrackerHostPool`, `FirecrackerHost`, `FirecrackerImageTemplate`, and `FirecrackerMicroVM` models. A micro-VM is not a NetBox core `VirtualMachine`; API clients identify it with `kind="firecracker"` and `instance_ref="firecracker:<id>"`.

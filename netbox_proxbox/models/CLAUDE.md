@@ -22,7 +22,7 @@ This directory defines the plugin's persisted data model.
 - [`fastapi_endpoint.py`](./fastapi_endpoint.py): ProxBox backend endpoint model.
 - [`proxmox_cluster.py`](./proxmox_cluster.py): discovered Proxmox cluster model linked to endpoint and NetBox cluster data.
 - [`proxmox_node.py`](./proxmox_node.py): discovered Proxmox node model linked to endpoint and NetBox device data.
-- [`proxmox_metrics.py`](./proxmox_metrics.py): Proxmox cluster InfluxDB metrics endpoint metadata with `nms-secret:<uuid>` token references.
+- [`proxmox_metrics.py`](./proxmox_metrics.py): Proxmox cluster InfluxDB metrics endpoint metadata with a plugin-owned Fernet-encrypted query token.
 - [`plugin_settings.py`](./plugin_settings.py): singleton plugin settings model.
 - [`storage.py`](./storage.py): `ProxmoxStorage` model and `ProxmoxStorageVirtualDisk` relation model.
 - [`guest_vm_interface.py`](./guest_vm_interface.py): guest-agent OS interfaces and address links for dual VM interface sync.
@@ -62,17 +62,14 @@ This directory defines the plugin's persisted data model.
 - `ProxmoxCluster`: stores synchronized cluster metadata and relationships to the source endpoint and NetBox cluster.
 - `ProxmoxNode`: stores synchronized hypervisor nodes and their relationships to the source endpoint and NetBox device.
 - `ProxmoxMetricsInfluxDB`: stores the InfluxDB URL, organization, bucket, TLS
-  flag, enabled state, and query/writer token secret references for a Proxmox
-  cluster. Token fields are `nms-secret:<uuid>` references to netbox-nms
-  `ObservabilitySecret` objects, never plaintext credentials or encrypted token
-  blobs in this plugin. Its UI/API display properties return only exact secret
-  references and credential-free HTTP(S) URLs; malformed legacy values are
-  masked instead of rendered. Its `serialize_object()` override applies those
-  same rules before NetBox stores pre/post `ObjectChange` snapshots; never remove
-  that hook or expose the raw fields through a parallel audit/event serializer.
-  Database checks require every enabled row to retain both a credential-free
-  HTTP(S) URL and a nonempty exact query-token reference across validation-bypass
-  writes; the writer reference remains optional.
+  flag, enabled state, and plugin-owned Fernet ciphertext for a Proxmox cluster.
+  `query_token_enc` is an internal field; the write-only UI/API input encrypts
+  through `ProxboxPluginSettings.encryption_key`, while display
+  and `serialize_object()` expose only configured/state flags. The backend query
+  proxy decrypts only for an authenticated `proxbox-api` request. Database
+  checks require every enabled row to retain a nonempty query ciphertext and a
+  credential-free HTTPS URL. Migration 0092 clears legacy external references,
+  disables affected mappings, and requires credential re-entry.
 - `ProxmoxStorage`: stores Proxmox storage inventory synchronized from the
   backend. Its comma-separated `nodes` membership is a `TextField`; Proxmox
   estates with many or long node names must never be truncated to 255

@@ -58,15 +58,17 @@ without updating the last-success heartbeat.
 `ProxmoxMetricsInfluxDB` records describe the InfluxDB endpoint associated with a
 Proxmox cluster: source `ProxmoxEndpoint`, `ProxmoxCluster`, InfluxDB URL,
 organization, bucket, optional measurement prefix, TLS verification, and enabled
-state. The model stores secret references only. Query and writer tokens are kept
-as `nms-secret:<uuid>` references to netbox-nms `ObservabilitySecret` records, so
-the plugin never persists plaintext InfluxDB tokens.
+state. Query tokens are encrypted by the plugin and are never
+returned to the UI or API.
 
-During upgrade, mappings with an unsafe or missing InfluxDB URL or required query
-token reference are quarantined: the unsafe value is cleared, the mapping is
-disabled, and a security-remediation marker is appended to its comments. Existing
-change-log snapshots for these fields are masked as part of the same upgrade. To
-remediate a quarantined mapping, enter a credential-free HTTP(S) base URL and an
-exact `nms-secret:<uuid>` query-token reference, review the optional writer-token
-reference, and then explicitly re-enable the mapping. The migration warning log
-lists affected mapping primary keys but never logs the discarded values.
+The detail page's **View metrics** action and the API `data` action retrieve
+normalized data through `proxbox-api`. The browser has no InfluxDB credentials,
+Flux authoring, or direct InfluxDB access. See
+[Proxmox Metrics Architecture](../developer/proxmox-metrics-architecture.md).
+
+During upgrade, legacy external token references are cleared, affected mappings
+are disabled, and a remediation marker is appended to their comments. Existing
+change-log snapshots are masked as part of the same upgrade. To remediate a
+quarantined mapping, enter a credential-free HTTPS base URL and a new query
+token, then explicitly re-enable the mapping. The migration warning log never
+records discarded values; its reverse operation is intentionally irreversible.

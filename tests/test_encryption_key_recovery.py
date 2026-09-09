@@ -110,6 +110,7 @@ def test_registry_exhaustively_owns_every_plugin_encrypted_model_field() -> None
         "node_ssh",
         "cloud_init_ssh_keys",
         "firecracker_agent",
+        "influxdb_metrics",
     }
     assert optional_apps == {
         "proxmox_api": None,
@@ -121,6 +122,7 @@ def test_registry_exhaustively_owns_every_plugin_encrypted_model_field() -> None
         "node_ssh": None,
         "cloud_init_ssh_keys": None,
         "firecracker_agent": None,
+        "influxdb_metrics": None,
     }
 
 
@@ -139,6 +141,7 @@ def test_reset_registry_clears_each_family_trust_receipt() -> None:
         "node_ssh": ("known_host_fingerprint",),
         "cloud_init_ssh_keys": (),
         "firecracker_agent": (),
+        "influxdb_metrics": (),
     }
 
 

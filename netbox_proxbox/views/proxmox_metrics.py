@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from django.http import HttpRequest
 from netbox.object_actions import AddObject, BulkExport, BulkDelete
 from netbox.views import generic
 from utilities.views import register_model_view
@@ -10,8 +11,10 @@ from netbox_proxbox.filtersets import ProxmoxMetricsInfluxDBFilterSet
 from netbox_proxbox.forms import (
     ProxmoxMetricsInfluxDBFilterForm,
     ProxmoxMetricsInfluxDBForm,
+    ProxmoxMetricsInfluxDBQueryForm,
 )
 from netbox_proxbox.models import ProxmoxMetricsInfluxDB
+from netbox_proxbox.services.metrics_influx import MetricsProxyError, query_metrics
 from netbox_proxbox.tables import ProxmoxMetricsInfluxDBTable
 
 
@@ -21,6 +24,7 @@ __all__ = (
     "ProxmoxMetricsInfluxDBEditView",
     "ProxmoxMetricsInfluxDBDeleteView",
     "ProxmoxMetricsInfluxDBBulkDeleteView",
+    "ProxmoxMetricsInfluxDBDataView",
 )
 
 
@@ -46,6 +50,34 @@ class ProxmoxMetricsInfluxDBView(generic.ObjectView):
     """Detail view for one Proxmox cluster InfluxDB metrics endpoint mapping."""
 
     queryset = _METRICS_INFLUXDB_QUERYSET
+
+
+@register_model_view(ProxmoxMetricsInfluxDB, "data", path="data")
+class ProxmoxMetricsInfluxDBDataView(generic.ObjectView):
+    """Retrieve live metrics through proxbox-api for one mapping."""
+
+    queryset = _METRICS_INFLUXDB_QUERYSET
+    template_name = "netbox_proxbox/proxmoxmetricsinfluxdb_data.html"
+
+    def get_extra_context(
+        self, request: HttpRequest, instance: ProxmoxMetricsInfluxDB
+    ) -> dict[str, object]:
+        form = ProxmoxMetricsInfluxDBQueryForm(request.GET or None)
+        context: dict[str, object] = {
+            "form": form,
+            "metrics": None,
+            "detail": None,
+        }
+        if not request.GET:
+            return context
+        if not form.is_valid():
+            context["detail"] = "Correct the metric query filters and try again."
+            return context
+        try:
+            context["metrics"] = query_metrics(instance, form.cleaned_data)
+        except MetricsProxyError as exc:
+            context["detail"] = str(exc)
+        return context
 
 
 @register_model_view(ProxmoxMetricsInfluxDB, "add", detail=False)

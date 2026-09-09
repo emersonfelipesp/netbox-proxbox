@@ -32,9 +32,10 @@ This is the main Django template namespace for the plugin.
   `proxmoxfirewallipsetentry.html`, `proxmoxfirewallalias.html`, and
   `proxmoxfirewalloptions.html`.
 - Supporting detail pages: `proxmoxdatacentercpumodel.html`,
-  `proxmoxmetricsinfluxdb.html`, and `nodesshcredential.html`. The metrics page
-  renders its URL and token references only through fail-closed model display
-  properties so malformed stored values never reach HTML.
+  `proxmoxmetricsinfluxdb.html`, `proxmoxmetricsinfluxdb_data.html`, and
+  `nodesshcredential.html`. The metrics pages render only fail-closed URL and
+  encrypted-credential state, and the data page calls proxbox-api server-side;
+  browsers never receive a token or connect directly to InfluxDB.
 - `proxmoxstorage.html` renders the escaped live-content partial-result warning
   before the mutually exclusive usage-data branches, so a missing or failed
   usage summary cannot hide that only some per-node content calls completed.

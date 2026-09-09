@@ -16,20 +16,28 @@ model API objects.
 ```
 GET    /api/plugins/proxbox/metrics-influxdb/
 GET    /api/plugins/proxbox/metrics-influxdb/{id}/
+GET    /api/plugins/proxbox/metrics-influxdb/{id}/data/
 POST   /api/plugins/proxbox/metrics-influxdb/
 PUT    /api/plugins/proxbox/metrics-influxdb/{id}/
 PATCH  /api/plugins/proxbox/metrics-influxdb/{id}/
 DELETE /api/plugins/proxbox/metrics-influxdb/{id}/
 ```
 
-The token fields are secret references, not token material:
-`query_token_secret_ref` and `writer_token_secret_ref` accept
-`nms-secret:<uuid>` values that point to netbox-nms `ObservabilitySecret`
-records. Database check constraints pin both columns to an empty string or
-an exact reference, and the detail page renders through a fail-closed mask,
-so a value that is not a reference is never stored by unvalidated writes nor
-displayed if it predates the constraints. Use filters `endpoint`, `proxmox_cluster`, `enabled`, and `name` to
-select mappings for a cluster or endpoint.
+`query_token` is a write-only input. The plugin encrypts it with its own Fernet
+key and returns only `query_token_configured` and
+`credential_encryption_state`. Legacy external references are cleared during
+migration and must be entered again.
+
+The `data` action accepts bounded `time_start`, `time_stop`, `measurement`,
+`field`, `node`, `vmid`, `tag_key`, `tag_value`, `aggregation_every`,
+`aggregation_function`, and `limit` filters. It sends the query through `proxbox-api`;
+callers never connect to InfluxDB and cannot submit arbitrary Flux. The response
+contains normalized `columns` and `rows`. The backend accepts HTTPS targets,
+validates resolved destinations against the shared SSRF policy, and keeps TLS
+verification enabled unless its operator-controlled insecure-TLS override is
+enabled. Use filters `endpoint`,
+`proxmox_cluster`, `enabled`, and `name` to select mappings for a cluster or
+endpoint. See [Proxmox Metrics Architecture](../developer/proxmox-metrics-architecture.md).
 
 ---
 

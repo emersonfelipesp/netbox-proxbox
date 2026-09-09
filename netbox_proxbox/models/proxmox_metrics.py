@@ -1,4 +1,4 @@
-"""Proxmox metrics integration metadata."""
+"""Plugin-owned Proxmox InfluxDB metrics configuration."""
 
 from __future__ import annotations
 
@@ -6,67 +6,20 @@ import re
 from urllib.parse import urlsplit
 
 from django.core.exceptions import ValidationError
-from django.core.validators import RegexValidator, URLValidator
+from django.core.validators import URLValidator
 from django.db import models
 from django.urls import NoReverseMatch, reverse
 from django.utils.translation import gettext_lazy as _
 from netbox.models import NetBoxModel
 
-
-NMS_SECRET_REF_RE = (
-    r"^nms-secret:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
-    r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
-)
-
-# Database-enforceable subset of URLValidator plus the credential boundary in
-# ``clean()``: an HTTP(S) authority is required, while userinfo, query strings,
-# fragments, and whitespace are forbidden. The path remains optional.
-CREDENTIAL_FREE_HTTP_URL_RE = r"^[Hh][Tt][Tt][Pp][Ss]?://[^/?#@\s]+(?:/[^?#\s]*)?$"
-
-#: Rendered in place of a token field whose stored value is not an exact
-#: ``nms-secret:<uuid>`` reference.  Deliberately not the empty string: a blank
-#: renders as NetBox's "not set" placeholder, which would read as *no token
-#: configured* rather than *a value is stored and is being withheld*.
-MASKED_SECRET_REF = "********"
-
-#: Rendered in place of an InfluxDB URL that is not a valid HTTP(S) base URL.
-#: Reuse the secret-reference placeholder because a malformed legacy URL may
-#: contain a credential in userinfo, a query string, or a fragment.
-MASKED_INFLUX_URL = MASKED_SECRET_REF
-
-_INFLUX_URL_VALIDATOR = URLValidator(schemes=("http", "https"))
-
-
-def masked_secret_ref(value: str | None) -> str:
-    """Return ``value`` only when it is an exact ``nms-secret:<uuid>`` reference.
-
-    This is the fail-closed rendering path for the token columns. Anything the
-    reference grammar does not match -- a plaintext InfluxDB token, a partially
-    typed reference, a value carrying stray whitespace -- is replaced with
-    :data:`MASKED_SECRET_REF` rather than reaching a template.
-
-    ``clean()`` and the ``CheckConstraint``\\ s on
-    :class:`ProxmoxMetricsInfluxDB` already reject those values on every
-    validated write and at the database, so this only matters for a row written
-    past both: a raw SQL insert, a loaded fixture, an unvalidated
-    ``objects.create()``, or a row that predates the constraints. Masking is
-    what keeps such a row from turning the detail page into a credential
-    viewer; it is the last barrier, not the only one.
-    """
-    if value is None or value == "":
-        return ""
-    if re.fullmatch(NMS_SECRET_REF_RE, value):
-        return value
-    return MASKED_SECRET_REF
+CREDENTIAL_FREE_HTTP_URL_RE = r"^[Hh][Tt][Tt][Pp][Ss]://[^/?#@\s]+(?:/[^?#\s]*)?$"
+MASKED_SECRET = "********"
+MASKED_INFLUX_URL = MASKED_SECRET
+_INFLUX_URL_VALIDATOR = URLValidator(schemes=("https",))
 
 
 def masked_influx_url(value: str | None) -> str:
-    """Return only a valid credential-free HTTP(S) InfluxDB base URL.
-
-    Invalid, blank, or otherwise non-conforming stored values are masked so a
-    row written around model validation cannot disclose embedded credentials
-    through a UI or API representation.
-    """
+    """Return only a valid credential-free HTTPS InfluxDB base URL."""
     if (
         not isinstance(value, str)
         or not value
@@ -84,14 +37,14 @@ def masked_influx_url(value: str | None) -> str:
 
 
 class ProxmoxMetricsInfluxDB(NetBoxModel):
-    """InfluxDB query endpoint metadata for a Proxmox cluster."""
+    """InfluxDB query endpoint metadata for a Proxmox cluster.
 
-    name = models.CharField(
-        max_length=100,
-        default="default",
-        verbose_name=_("Name"),
-        help_text=_("Operator label for this InfluxDB metrics endpoint."),
-    )
+    Tokens are encrypted with the plugin's Fernet key. Ciphertext fields are
+    internal and never appear in API or audit representations; callers use
+    write-only inputs and the server decrypts only for the backend query proxy.
+    """
+
+    name = models.CharField(max_length=100, default="default", verbose_name=_("Name"))
     endpoint = models.ForeignKey(
         to="netbox_proxbox.ProxmoxEndpoint",
         on_delete=models.CASCADE,
@@ -110,18 +63,14 @@ class ProxmoxMetricsInfluxDB(NetBoxModel):
         max_length=255,
         verbose_name=_("InfluxDB URL"),
         help_text=_(
-            "Base URL for InfluxDB, for example https://influxdb.example:8086."
+            "Credential-free InfluxDB base URL, for example https://influxdb.example:8086."
         ),
     )
     org = models.CharField(
-        max_length=128,
-        default="nmulticloud",
-        verbose_name=_("InfluxDB organization"),
+        max_length=128, default="nmulticloud", verbose_name=_("InfluxDB organization")
     )
     bucket = models.CharField(
-        max_length=128,
-        default="proxmox",
-        verbose_name=_("InfluxDB bucket"),
+        max_length=128, default="proxmox", verbose_name=_("InfluxDB bucket")
     )
     measurement_prefix = models.CharField(
         max_length=64,
@@ -131,24 +80,13 @@ class ProxmoxMetricsInfluxDB(NetBoxModel):
             "Optional Flux measurement prefix used by the Proxmox metrics writer."
         ),
     )
-    query_token_secret_ref = models.CharField(
-        max_length=80,
-        validators=[RegexValidator(regex=NMS_SECRET_REF_RE)],
-        verbose_name=_("Query token secret reference"),
-        help_text=_("netbox-nms ObservabilitySecret reference, not plaintext."),
-    )
-    writer_token_secret_ref = models.CharField(
-        max_length=80,
+    query_token_enc = models.TextField(
         blank=True,
-        validators=[RegexValidator(regex=NMS_SECRET_REF_RE)],
-        verbose_name=_("Writer token secret reference"),
-        help_text=_("Optional PVE writer token reference for configuring Proxmox."),
+        default="",
+        verbose_name=_("Encrypted query token"),
+        help_text=_("Fernet-encrypted InfluxDB query token. Internal."),
     )
-    verify_tls = models.BooleanField(
-        default=True,
-        verbose_name=_("Verify TLS"),
-        help_text=_("Verify the InfluxDB server certificate when querying metrics."),
-    )
+    verify_tls = models.BooleanField(default=True, verbose_name=_("Verify TLS"))
     enabled = models.BooleanField(
         default=True,
         verbose_name=_("Enabled"),
@@ -165,20 +103,9 @@ class ProxmoxMetricsInfluxDB(NetBoxModel):
                 fields=["proxmox_cluster", "name"],
                 name="netbox_proxbox_metrics_influxdb_unique_cluster_name",
             ),
-            # Enabled mappings must remain queryable after every write bypass:
-            # the URL is a credential-free HTTP(S) URL and the required query
-            # token is an exact secret reference. Disabled inventory rows may
-            # retain blanks for operator remediation. The optional writer token
-            # remains either blank or an exact reference in every state.
             models.CheckConstraint(
-                condition=models.Q(query_token_secret_ref__regex=NMS_SECRET_REF_RE)
-                | models.Q(enabled=False, query_token_secret_ref=""),
-                name="netbox_proxbox_metrics_influxdb_query_token_is_ref",
-            ),
-            models.CheckConstraint(
-                condition=models.Q(writer_token_secret_ref__regex=NMS_SECRET_REF_RE)
-                | models.Q(writer_token_secret_ref=""),
-                name="netbox_proxbox_metrics_influxdb_writer_token_is_ref",
+                condition=models.Q(query_token_enc__gt="") | models.Q(enabled=False),
+                name="netbox_proxbox_metrics_influxdb_query_token_configured",
             ),
             models.CheckConstraint(
                 condition=models.Q(enabled=False)
@@ -190,41 +117,54 @@ class ProxmoxMetricsInfluxDB(NetBoxModel):
     def __str__(self) -> str:
         return f"{self.name} -> {self.proxmox_cluster}"
 
-    def serialize_object(self, exclude=None):
-        """Mask non-conforming metadata in NetBox change-log snapshots.
+    @property
+    def has_query_token(self) -> bool:
+        """Return whether an encrypted query token is stored."""
+        from netbox_proxbox.services.encryption_recovery import ciphertext_state
 
-        NetBox's change logger, event queue, ObjectChange REST serializer, and
-        GraphQL changelog field all ultimately consume this model hook. Keep it
-        aligned with the fail-closed UI/API display properties so a legacy or
-        bypass-written credential can never be copied into a new audit snapshot.
-        """
+        return ciphertext_state(self.query_token_enc) == "configured"
+
+    @property
+    def credential_encryption_state(self) -> str:
+        """Return a secret-free state for list and edit recovery UX."""
+        from netbox_proxbox.services.encryption_recovery import ciphertext_state
+
+        states = (ciphertext_state(self.query_token_enc),)
+        if "recovery_required" in states:
+            return "Recovery required"
+        if "configured" in states:
+            return "Configured"
+        return "Not configured"
+
+    def set_query_token(self, plaintext: str, *, key: str) -> None:
+        """Encrypt and store the query token with the supplied Fernet key."""
+        from netbox_proxbox.utils import encryption as enc_helpers
+        from netbox_proxbox.services.encryption_recovery import (
+            mark_encrypted_fields_for_write,
+        )
+
+        mark_encrypted_fields_for_write(self, "query_token_enc")
+        self.query_token_enc = enc_helpers.encrypt(plaintext, key=key)
+
+    def get_query_token(self, *, key: str) -> str:
+        """Decrypt and return the stored query token."""
+        from netbox_proxbox.utils import encryption as enc_helpers
+
+        return enc_helpers.decrypt(self.query_token_enc, key=key)
+
+    def serialize_object(self, exclude=None):
+        """Mask URL and ciphertext in NetBox change-log snapshots."""
         data = super().serialize_object(exclude=exclude)
         if "influx_url" in data:
             data["influx_url"] = masked_influx_url(data["influx_url"])
-        if "query_token_secret_ref" in data:
-            data["query_token_secret_ref"] = masked_secret_ref(
-                data["query_token_secret_ref"]
-            )
-        if "writer_token_secret_ref" in data:
-            data["writer_token_secret_ref"] = masked_secret_ref(
-                data["writer_token_secret_ref"]
-            )
+        if "query_token_enc" in data:
+            data["query_token_enc"] = MASKED_SECRET if data["query_token_enc"] else ""
         return data
 
     @property
     def influx_url_display(self) -> str:
         """Fail-closed rendering value for :attr:`influx_url`."""
         return masked_influx_url(self.influx_url)
-
-    @property
-    def query_token_secret_ref_display(self) -> str:
-        """Fail-closed rendering value for :attr:`query_token_secret_ref`."""
-        return masked_secret_ref(self.query_token_secret_ref)
-
-    @property
-    def writer_token_secret_ref_display(self) -> str:
-        """Fail-closed rendering value for :attr:`writer_token_secret_ref`."""
-        return masked_secret_ref(self.writer_token_secret_ref)
 
     def get_absolute_url(self) -> str:
         try:
@@ -255,7 +195,16 @@ class ProxmoxMetricsInfluxDB(NetBoxModel):
                         )
                     }
                 )
+        from netbox_proxbox.services.encryption_recovery import ciphertext_state
 
+        if self.enabled and ciphertext_state(self.query_token_enc) != "configured":
+            raise ValidationError(
+                {
+                    "query_token_enc": _(
+                        "An encrypted query token is required when metrics are enabled."
+                    )
+                }
+            )
         if self.proxmox_cluster_id and self.endpoint_id:
             cluster_endpoint_id = getattr(self.proxmox_cluster, "endpoint_id", None)
             if cluster_endpoint_id and cluster_endpoint_id != self.endpoint_id:
@@ -265,11 +214,4 @@ class ProxmoxMetricsInfluxDB(NetBoxModel):
                             "The selected Proxmox cluster must belong to the selected endpoint."
                         )
                     }
-                )
-
-        for field_name in ("query_token_secret_ref", "writer_token_secret_ref"):
-            value = getattr(self, field_name, "") or ""
-            if value and not re.fullmatch(NMS_SECRET_REF_RE, value):
-                raise ValidationError(
-                    {field_name: _("Use a netbox-nms nms-secret:<uuid> reference.")}
                 )
