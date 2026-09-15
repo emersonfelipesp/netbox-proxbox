@@ -102,7 +102,7 @@ def test_unavailable_when_the_package_is_absent() -> None:
 
 
 def test_a_registry_failure_is_reported_as_unavailable() -> None:
-    """Callers treat False as "stay on main"; detection must not raise."""
+    """The boolean probe stays non-raising; the typed resolver fails closed."""
     assert (
         _load_branch_lifecycle(
             _apps(RuntimeError("apps not ready")), branching_importable=True

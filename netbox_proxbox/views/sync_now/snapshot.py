@@ -13,11 +13,13 @@ from utilities.views import (
 )
 
 from netbox_proxbox.models import VMSnapshot
-from netbox_proxbox.services.branch_lifecycle import get_active_branch_schema_id
 from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
 from netbox_proxbox.sync_params import _resolve_vm_snapshot_batch_params
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
-from netbox_proxbox.views.sync_now import _handle_sync_response
+from netbox_proxbox.views.sync_now import (
+    _branch_isolation_precondition,
+    _handle_sync_response,
+)
 from netbox_proxbox.views.sync_now.endpoint_scope import (
     resolve_target_proxmox_endpoint_scope,
 )
@@ -42,7 +44,6 @@ class VMSnapshotSyncNowView(
         snapshot = get_object_or_404(
             VMSnapshot.objects.restrict(request.user, "view"), pk=pk
         )
-
         params = _resolve_vm_snapshot_batch_params(snapshot)
         if "error" in params:
             messages.error(
@@ -50,6 +51,11 @@ class VMSnapshotSyncNowView(
                 _("Snapshot is missing the Proxmox context required for sync."),
             )
             return HttpResponseRedirect(snapshot.get_absolute_url())
+        branch_schema_id, isolation_error = _branch_isolation_precondition(
+            request, f"Snapshot '{snapshot.name}'", snapshot.get_absolute_url()
+        )
+        if isolation_error is not None:
+            return isolation_error
 
         scope_kwargs, owner_cluster_name, scope_error = (
             resolve_target_proxmox_endpoint_scope(snapshot)
@@ -67,7 +73,7 @@ class VMSnapshotSyncNowView(
         response, status, dependencies = sync_individual_with_dependencies(
             params["path"],
             query_params,
-            netbox_branch_schema_id=get_active_branch_schema_id(),
+            netbox_branch_schema_id=branch_schema_id,
             **scope_kwargs,
         )
 

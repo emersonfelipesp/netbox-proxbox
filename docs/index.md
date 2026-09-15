@@ -23,7 +23,7 @@ NetBox warns, omits the plugin, and continues startup.
 
 | NetBox   | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
-| 4.5.8-4.7.0 GA | v0.0.26.post7 | v0.0.21.post7 | v0.0.10 | v0.0.13 |
+| 4.5.8-4.7.0 GA | v0.0.26.post7 | v0.0.22 | v0.0.13 | v0.0.13 |
 | >=4.5.8  | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8  | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8  | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |
@@ -72,7 +72,7 @@ methods, tenant-scoped endpoint allowlists, bulk endpoint enablement, PDM
 endpoint sync, SDN inventory, Firecracker serializer hardening, dual VM
 interface sync, and the all-endpoint `enabled=False` no-connection guard.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.26.post7 <-> proxbox-api 0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.26.post7 <-> proxbox-api 0.0.22 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The `0.0.26.post7` release adds NetBox-native search and filtering to the Proxbox virtual machines list while retaining the production console handoff, Proxmox metrics, soft-deleted VM purge surface, and the official NetBox 4.7.0 GA compatibility contract. The historical rows remain documented below.
 

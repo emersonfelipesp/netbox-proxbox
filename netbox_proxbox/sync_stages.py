@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from collections.abc import Callable, Iterator
+from collections.abc import Sequence, Callable, Iterator
 from typing import TYPE_CHECKING
 
 try:
@@ -45,9 +45,12 @@ except ImportError:  # pragma: no cover - compatibility for focused import stubs
         "sdn_bgp": "sdn",
     }
 from netbox_proxbox.sync_types import (
-    _format_seconds,
+    _StageFailureAttempt,
+    _StageFailureClassification,
+    _compose_stage_failure_message,
     _extract_backend_error_text,
-    _format_stage_sync_error,
+    _format_seconds,
+    _primary_stage_failure_attempt,
     _sync_stream_paths_for_stage,
     expanded_sync_stages,
     normalize_sync_types,
@@ -789,6 +792,72 @@ def _is_retryable_stage_failure(status: int, payload: object) -> bool:
     return _names_transport_failure(payload)
 
 
+# Causes that identify a transport failure for *attribution* only. They are
+# deliberately kept apart from ``_TRANSPORT_FAILURE_MARKERS`` so that adding a
+# phrase here never widens which failures are retried.
+_TRANSPORT_ATTRIBUTION_MARKERS: tuple[str, ...] = (
+    "tls error",
+    "tls stream open failure",
+    "ssl error",
+    "sslerror",
+    "certificate verify failed",
+    "eof occurred in violation of protocol",
+    "ended without a complete event",
+)
+
+
+def _classify_stage_failure(
+    status: int, payload: object
+) -> _StageFailureClassification:
+    """Classify a failed attempt without changing retry eligibility.
+
+    ``run_sync_stream`` stamps every failed payload with ``failure_kind`` — the
+    producer is the only code that knows whether a backend-authored body was
+    received — and that verdict is final: a completed stream whose ``complete``
+    event said ``ok=false`` is an application failure even though the proxy
+    returns it as HTTP 503, and a TLS or connection failure is transport even
+    when a validation ``input`` value happens to contain a marker phrase.
+    Payloads without provenance (other producers, hand-built responses) fall
+    back to the cause text, then to the gateway status codes.
+    """
+    if isinstance(payload, dict):
+        kind = payload.get("failure_kind")
+        if kind in ("transport", "application"):
+            return kind
+        if "response" in payload:
+            return "application"
+    if _names_transport_failure(payload) or _names_transport_attribution(payload):
+        return "transport"
+    if status in {502, 503, 504}:
+        return "transport"
+    return "application"
+
+
+def _backend_not_ready_attempt(
+    attempts: Sequence[_StageFailureAttempt],
+) -> _StageFailureAttempt | None:
+    """Return the first attempt that reported a not-yet-bootstrapped backend.
+
+    The readiness advisory is independent of primary-cause selection: a backend
+    that was still initialising on *any* attempt is worth telling the operator
+    about, even when an earlier attempt already carried the application cause.
+    """
+    for attempt in attempts:
+        if attempt.status in (503, 404) and "init_ok" in attempt.detail:
+            return attempt
+    return None
+
+
+def _names_transport_attribution(payload: object) -> bool:
+    """Return ``True`` when the payload's cause names a TLS or stream-open failure."""
+    if isinstance(payload, dict):
+        haystack = _extract_backend_error_text(payload) or ""
+    else:
+        haystack = str(payload)
+    lowered = haystack.lower()
+    return any(marker in lowered for marker in _TRANSPORT_ATTRIBUTION_MARKERS)
+
+
 def _execute_stage_sync(
     job: "ProxboxSyncJob",
     sync_type: str,
@@ -829,35 +898,41 @@ def _execute_stage_sync(
         forward(event, data)
         _heartbeat()
 
-    last_payload: dict[str, object] = {}
-    last_status: int = 0
+    attempts: list[_StageFailureAttempt] = []
     for _attempt in range(_STAGE_RETRY_MAX + 1):
         job.logger.info(f"Checking backend readiness for stage '{sync_type}'...")
-        last_payload, last_status = run_sync_stream(
+        attempt_started = time.monotonic()
+        payload, status = run_sync_stream(
             stream_path,
             query_params=query_params,
             on_frame=lambda e, d: _on_frame_with_heartbeat(e, d, on_frame),
             endpoint_id=endpoint_id,
         )
+        if status >= 400:
+            attempts.append(
+                _StageFailureAttempt(
+                    attempt_index=_attempt + 1,
+                    status=status,
+                    detail=_extract_backend_error_text(payload) or str(payload),
+                    classification=_classify_stage_failure(status, payload),
+                    elapsed=round(time.monotonic() - attempt_started, 3),
+                    payload=payload,
+                )
+            )
         elapsed = _format_seconds(time.monotonic() - stage_started)
         job.job.save(update_fields=["log_entries"])
 
-        if last_status < 400:
+        if status < 400:
             stage_runtime = round(time.monotonic() - stage_started, 3)
             job.logger.info(
-                f"Stage completed: {sync_type} ({stream_path}) HTTP {last_status} in {elapsed}"
+                f"Stage completed: {sync_type} ({stream_path}) HTTP {status} in {elapsed}"
             )
-            return last_payload, stage_runtime
+            return payload, stage_runtime
 
-        if (
-            _is_retryable_stage_failure(last_status, last_payload)
-            and _attempt < _STAGE_RETRY_MAX
-        ):
-            retry_detail = _extract_backend_error_text(last_payload) or str(
-                last_payload
-            )
+        if _is_retryable_stage_failure(status, payload) and _attempt < _STAGE_RETRY_MAX:
+            retry_detail = attempts[-1].detail
             job.logger.warning(
-                f"Stage {sync_type} failed (HTTP {last_status}): {retry_detail} "
+                f"Stage {sync_type} failed (HTTP {status}): {retry_detail} "
                 f"-- retrying in {_STAGE_RETRY_DELAY:.0f}s "
                 f"(attempt {_attempt + 1}/{_STAGE_RETRY_MAX})"
             )
@@ -868,19 +943,13 @@ def _execute_stage_sync(
         # 4xx (not retryable) or all retries exhausted
         break
 
-    detail = _extract_backend_error_text(last_payload) or str(last_payload)
-    user_detail = _format_stage_sync_error(
-        sync_type=sync_type,
-        status=last_status,
-        payload=last_payload,
-    )
-    if last_status in (503, 404) and "init_ok" in detail:
+    user_detail = _compose_stage_failure_message(sync_type, attempts)
+    readiness_attempt = _backend_not_ready_attempt(attempts)
+    if readiness_attempt is not None:
         job.logger.error(
-            f"Backend not ready for stage '{sync_type}': {detail}. "
+            f"Backend not ready for stage '{sync_type}': {readiness_attempt.detail}. "
             "Check proxbox-api bootstrap logs and verify NetBox connectivity."
         )
-    else:
-        job.logger.error(f"Stage {sync_type} failed (HTTP {last_status}): {detail}")
     if preflight_hint:
         # The backend often reports a generic downstream symptom (a failed tag,
         # a missing object) when the real cause was an earlier preflight problem.
@@ -890,6 +959,7 @@ def _execute_stage_sync(
             f"problem. {preflight_hint}"
         )
         user_detail = f"{user_detail} {preflight_hint}"
+    job.logger.error(user_detail)
     raise RuntimeError(user_detail)
 
 

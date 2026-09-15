@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Sequence
+from dataclasses import dataclass
+from typing import Literal
 
 from netbox_proxbox.choices import SyncTypeChoices
 
@@ -73,6 +76,20 @@ _TARGETED_VM_SYNC_TYPES: tuple[str, ...] = (
     SyncTypeChoices.VIRTUAL_MACHINES_SNAPSHOTS,
 )
 
+_StageFailureClassification = Literal["transport", "application"]
+
+
+@dataclass(frozen=True, slots=True)
+class _StageFailureAttempt:
+    """One failed stage attempt and the detail used for operator diagnosis."""
+
+    attempt_index: int
+    status: int
+    detail: str
+    classification: _StageFailureClassification
+    elapsed: float
+    payload: dict[str, object]
+
 
 def _coerce_backend_error_payload(value: object) -> dict[str, object] | None:
     """Return a backend error payload dict when ``value`` is a JSON-encoded object."""
@@ -137,6 +154,55 @@ def _format_stage_sync_error(
         raw_text = f"{raw_text} ({exception_name.strip()})"
 
     return f"Stage '{sync_type}' failed (HTTP {status}): {raw_text}"
+
+
+def _primary_stage_failure_attempt(
+    attempts: Sequence[_StageFailureAttempt],
+) -> _StageFailureAttempt:
+    """Return the deterministic application cause, or the final transport cause."""
+    if not attempts:
+        raise ValueError("At least one failed stage attempt is required")
+    return next(
+        (attempt for attempt in attempts if attempt.classification == "application"),
+        attempts[-1],
+    )
+
+
+def _truncate_stage_attempt_detail(detail: str, limit: int = 200) -> str:
+    """Bound an attempt summary while making truncation visible."""
+    if len(detail) <= limit:
+        return detail
+    return f"{detail[: limit - 3]}..."
+
+
+def _compose_stage_failure_message(
+    sync_type: str,
+    attempts: Sequence[_StageFailureAttempt],
+) -> str:
+    """Compose a stable primary stage error with divergent attempt context."""
+    primary = _primary_stage_failure_attempt(attempts)
+    message = _format_stage_sync_error(
+        sync_type=sync_type,
+        status=primary.status,
+        payload=primary.payload,
+    )
+    signatures = {
+        (attempt.status, attempt.detail, attempt.classification) for attempt in attempts
+    }
+    if len(signatures) == 1:
+        return message
+
+    other_attempts = (
+        attempt
+        for attempt in attempts
+        if attempt.attempt_index != primary.attempt_index
+    )
+    summaries = [
+        f"Attempt {attempt.attempt_index}: HTTP {attempt.status} — "
+        f"{_truncate_stage_attempt_detail(attempt.detail)}"
+        for attempt in other_attempts
+    ]
+    return "\n".join((message, *summaries))
 
 
 def expanded_sync_stages(types: list[str]) -> list[str]:

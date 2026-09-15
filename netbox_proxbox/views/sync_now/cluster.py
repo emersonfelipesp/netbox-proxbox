@@ -13,10 +13,12 @@ from utilities.views import (
 )
 
 from netbox_proxbox.models import ProxmoxCluster
-from netbox_proxbox.services.branch_lifecycle import get_active_branch_schema_id
 from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
-from netbox_proxbox.views.sync_now import _handle_sync_response
+from netbox_proxbox.views.sync_now import (
+    _branch_isolation_precondition,
+    _handle_sync_response,
+)
 from netbox_proxbox.views.sync_now.endpoint_scope import (
     resolve_target_proxmox_endpoint_scope,
 )
@@ -42,6 +44,11 @@ class ProxmoxClusterSyncNowView(
             ProxmoxCluster.objects.restrict(request.user, "view"), pk=pk
         )
         cluster_name = cluster.name
+        branch_schema_id, isolation_error = _branch_isolation_precondition(
+            request, f"Cluster '{cluster_name}'", cluster.get_absolute_url()
+        )
+        if isolation_error is not None:
+            return isolation_error
 
         scope_kwargs, owner_cluster_name, scope_error = (
             resolve_target_proxmox_endpoint_scope(cluster)
@@ -58,7 +65,7 @@ class ProxmoxClusterSyncNowView(
         response, status, dependencies = sync_individual_with_dependencies(
             "sync/individual/cluster",
             {"cluster_name": cluster_name},
-            netbox_branch_schema_id=get_active_branch_schema_id(),
+            netbox_branch_schema_id=branch_schema_id,
             **scope_kwargs,
         )
 

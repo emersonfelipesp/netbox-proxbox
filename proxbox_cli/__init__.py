@@ -17,6 +17,7 @@ except ModuleNotFoundError as exc:
     raise
 
 from rich.console import Console
+from pydantic import ValidationError
 
 from proxbox_cli.commands.dcim import dcim_app
 from proxbox_cli.commands.extras import extras_app
@@ -25,7 +26,15 @@ from proxbox_cli.commands.proxmox import proxmox_app
 from proxbox_cli.commands.proxbox import proxbox_app
 from proxbox_cli.commands.sync import sync_app
 from proxbox_cli.commands.virtualization import virtualization_app
-from proxbox_cli.config import Config, load_config, normalize_base_url, save_config
+from proxbox_cli.config import (
+    Config,
+    config_validation_message,
+    load_file_config,
+    normalize_base_url,
+    same_origin,
+    save_config,
+)
+from proxbox_cli.errors import CliError
 from proxbox_cli.runtime import _cache_config, _ensure_config, _get_client
 from proxbox_cli.support import (
     console,
@@ -57,24 +66,60 @@ app.add_typer(docs_app, name="docs")
 
 
 @app.command()
-def init() -> None:
+def init(
+    keep_api_key: Annotated[
+        bool,
+        typer.Option(
+            "--keep-api-key",
+            help="Keep the stored API key when changing the backend origin.",
+        ),
+    ] = False,
+) -> None:
     """Interactively configure the proxbox-api base URL."""
-    existing = load_config()
+    existing = load_file_config()
+    cfg = _prompt_for_config(existing, keep_api_key)
+    save_config(cfg)
+    _cache_config(cfg)
+    console.print(f"[green]Config saved.[/green] Base URL: {cfg.base_url}")
+
+
+def _prompt_for_config(existing: Config, keep_api_key: bool) -> Config:
+    """Prompt for editable values while retaining persisted-only settings."""
     console.print(f"Current base URL: [bold]{existing.base_url}[/bold]")
     raw = typer.prompt("proxbox-api base URL", default=existing.base_url)
     timeout_str = typer.prompt(
         "Request timeout (seconds)", default=str(existing.timeout)
     )
-
     try:
         timeout = float(timeout_str)
     except ValueError:
-        emit_cli_error(f"Invalid timeout value: {timeout_str!r}")
+        emit_cli_error(f"Invalid timeout value: {timeout_str!r}", exit_code=2)
+    return _build_init_config(existing, raw, timeout, keep_api_key)
 
-    cfg = Config(base_url=normalize_base_url(raw), timeout=timeout)
-    save_config(cfg)
-    _cache_config(cfg)
-    console.print(f"[green]Config saved.[/green] Base URL: {cfg.base_url}")
+
+def _build_init_config(
+    existing: Config, raw: str, timeout: float, keep_api_key: bool
+) -> Config:
+    """Validate prompted values while preserving persisted-only settings."""
+    try:
+        base_url = Config(base_url=normalize_base_url(raw)).base_url
+        return _new_init_config(existing, base_url, timeout, keep_api_key)
+    except ValidationError as exc:
+        emit_cli_error(config_validation_message(exc), exit_code=2)
+
+
+def _new_init_config(
+    existing: Config, base_url: str, timeout: float, keep_api_key: bool
+) -> Config:
+    """Build prompted config with an origin-bound persisted API key."""
+    retain_key = keep_api_key or same_origin(existing.base_url, base_url)
+    return Config(
+        base_url=base_url,
+        api_key=existing.api_key if retain_key else None,
+        timeout=timeout,
+        max_response_bytes=existing.max_response_bytes,
+        netbox_manage_py=existing.netbox_manage_py,
+    )
 
 
 @app.command("config")
@@ -83,6 +128,8 @@ def show_config() -> None:
     cfg = _ensure_config()
     console.print(f"Base URL : [bold]{cfg.base_url}[/bold]")
     console.print(f"Timeout  : {cfg.timeout}s")
+    console.print(f"Body cap : {cfg.max_response_bytes} bytes")
+    console.print(f"API key  : {'configured' if cfg.api_key else 'not configured'}")
 
 
 @app.command()
@@ -186,14 +233,21 @@ def main(argv: list[str] | None = None) -> int:
     """Run the command entrypoint."""
     command = typer.main.get_command(app)
     try:
-        command.main(argv, standalone_mode=False)
-        return 0
+        result = command.main(argv, standalone_mode=False)
+        return result if isinstance(result, int) else 0
     except KeyboardInterrupt:
         Console(stderr=True).print("\n[yellow]Aborted.[/yellow]")
         return 130
     except click.Abort:
         Console(stderr=True).print("\n[yellow]Aborted.[/yellow]")
         return 1
+    except CliError as exc:
+        Console(stderr=True).print(f"[red]Error:[/red] {exc}")
+        return exc.exit_code
+    except ValidationError as exc:
+        message = config_validation_message(exc)
+        Console(stderr=True).print(f"[red]Error:[/red] {message}")
+        return 2
     except click.ClickException as exc:
         Console(stderr=True).print(f"[red]Error:[/red] {exc.format_message()}")
         return exc.exit_code

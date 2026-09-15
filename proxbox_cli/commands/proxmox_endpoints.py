@@ -8,7 +8,12 @@ from typing import Annotated
 import typer
 
 from proxbox_cli.runtime import _get_client
-from proxbox_cli.support import load_json_payload, print_response, run_with_spinner
+from proxbox_cli.support import (
+    load_json_payload,
+    print_response,
+    print_text_response,
+    run_with_spinner,
+)
 
 endpoints_app = typer.Typer(
     no_args_is_help=True, help="Proxmox endpoint CRUD (local DB)."
@@ -151,8 +156,5 @@ def viewer_contracts(
 @viewer_app.command("pydantic")
 def viewer_pydantic() -> None:
     """Print the generated Pydantic v2 model source code."""
-    from proxbox_cli.support import console
-
     resp = run_with_spinner(_get_client().get("/proxmox/viewer/pydantic"))
-    console.print(f"Status: {resp.status}")
-    console.print(resp.text)
+    print_text_response(resp)

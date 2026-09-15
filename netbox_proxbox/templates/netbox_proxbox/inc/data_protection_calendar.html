@@ -1,0 +1,89 @@
+{% load i18n static %}
+<link rel="stylesheet" href="{% static 'netbox_proxbox/css/data_protection_calendar.css' %}">
+
+<section class="card mb-3 data-protection-calendar" aria-labelledby="data-protection-calendar-title">
+  <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div class="btn-group" role="group" aria-label="{% trans 'Calendar navigation' %}">
+      <a class="btn btn-sm btn-outline-secondary" href="?{{ calendar.prev_query }}" aria-label="{% trans 'Previous period' %}">
+        <i class="mdi mdi-chevron-left" aria-hidden="true"></i>
+      </a>
+      <a class="btn btn-sm btn-outline-secondary" href="?{{ calendar.today_query }}">{% trans "Today" %}</a>
+      <a class="btn btn-sm btn-outline-secondary" href="?{{ calendar.next_query }}" aria-label="{% trans 'Next period' %}">
+        <i class="mdi mdi-chevron-right" aria-hidden="true"></i>
+      </a>
+    </div>
+    <h2 id="data-protection-calendar-title" class="h5 mb-0">{{ calendar.title }}</h2>
+    <div class="btn-group" role="group" aria-label="{% trans 'Calendar view' %}">
+      <a class="btn btn-sm {% if calendar.view == 'month' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?{{ calendar.month_query }}">{% trans "Month" %}</a>
+      <a class="btn btn-sm {% if calendar.view == 'week' %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="?{{ calendar.week_query }}">{% trans "Week" %}</a>
+    </div>
+  </div>
+  <div class="card-body p-0">
+    {% if calendar.undated_count %}
+      <div class="alert alert-info rounded-0 border-start-0 border-end-0 mb-0" role="status">
+        {% blocktrans count count=calendar.undated_count %}{{ count }} visible record has no date and cannot be placed on the calendar.{% plural %}{{ count }} visible records have no date and cannot be placed on the calendar.{% endblocktrans %}
+      </div>
+    {% endif %}
+    {% if calendar.truncation %}
+      <div class="alert alert-warning rounded-0 border-start-0 border-end-0 mb-0" role="status">
+        <strong>{% trans "Rendering limit reached." %}</strong>
+        {% if calendar.truncation.omitted_events %}
+          {% blocktrans with count=calendar.truncation.omitted_events %}{{ count }} projected schedule occurrences are not shown.{% endblocktrans %}
+        {% endif %}
+        {% if calendar.truncation.unprojected_objects %}
+          {% blocktrans with count=calendar.truncation.unprojected_objects %}{{ count }} scheduled objects were not projected onto the calendar.{% endblocktrans %}
+        {% endif %}
+        {% if calendar.truncation.more_rows %}
+          {% blocktrans with limit=calendar.source_limit %}Further records exist beyond the first {{ limit }} loaded per source.{% endblocktrans %}
+        {% endif %}
+        {% trans "Narrow the filters or use the week view to see the rest." %}
+      </div>
+    {% endif %}
+    <div class="table-responsive">
+      <table class="table data-protection-calendar-grid mb-0">
+        <caption class="visually-hidden">{% blocktrans with period=calendar.title %}Data Protection calendar for {{ period }}{% endblocktrans %}</caption>
+        <thead>
+          <tr>
+            {% for weekday in calendar.weekday_names %}<th scope="col">{{ weekday }}</th>{% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for week in calendar.rows %}
+            <tr>
+              {% for cell in week %}
+                <td class="calendar-day{% if not cell.in_month %} calendar-day-outside{% endif %}{% if cell.is_today %} calendar-day-today{% endif %}"{% if cell.is_today %} aria-current="date"{% endif %}>
+                  <time datetime="{{ cell.date|date:'Y-m-d' }}" class="calendar-day-number" title="{{ cell.date|date:'l, j F Y' }}" aria-label="{{ cell.date|date:'l, j F Y' }}">{{ cell.date.day }}</time>
+                  <div class="calendar-day-events">
+                    {% for event in cell.events %}
+                      {% include "netbox_proxbox/inc/data_protection_calendar_event.html" %}
+                    {% endfor %}
+                    {% if cell.additional_count %}
+                      <details class="calendar-overflow">
+                        <summary>+{{ cell.additional_count }} {% trans "more" %}</summary>
+                        {% for event in cell.overflow %}
+                          {% include "netbox_proxbox/inc/data_protection_calendar_event.html" %}
+                        {% endfor %}
+                        {% if cell.hidden_count %}
+                          <span class="calendar-overflow-hidden text-muted">{% blocktrans with count=cell.hidden_count %}{{ count }} further events not shown{% endblocktrans %}</span>
+                        {% endif %}
+                      </details>
+                    {% endif %}
+                  </div>
+                </td>
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+  <div class="card-footer d-flex flex-wrap gap-2 align-items-center calendar-legend">
+    <span>{% trans "Legend:" %}</span>
+    <span class="badge text-bg-blue">{% trans "Backup" %}</span>
+    <span class="badge text-bg-purple">{% trans "Snapshot" %}</span>
+    <span class="badge text-bg-orange">{% trans "Replication" %}</span>
+    <span class="badge text-bg-teal">{% trans "Routine" %}</span>
+    <span class="badge text-bg-secondary opacity-75">{% trans "Disabled or stale" %}</span>
+    <span class="calendar-schedule-time-note">{% trans "Scheduled times are shown in the Proxmox node's local time." %}</span>
+  </div>
+</section>

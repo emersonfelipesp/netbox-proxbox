@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from enum import StrEnum
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, NoReturn
 
 import yaml
 
@@ -40,7 +40,7 @@ def resolve_output_format(*, as_json: bool, as_yaml: bool) -> OutputFormat:
     return OutputFormat.HUMAN
 
 
-def emit_cli_error(message: str, *, exit_code: int = 1) -> None:
+def emit_cli_error(message: str, *, exit_code: int = 1) -> NoReturn:
     """Handle emit cli error."""
     stderr.print(f"[red]Error:[/red] {message}")
     raise SystemExit(exit_code)
@@ -76,16 +76,29 @@ def print_response(
     fmt = resolve_output_format(as_json=as_json, as_yaml=as_yaml)
     color = "green" if resp.is_ok() else "red"
     console.print(f"[{color}]Status: {resp.status}[/{color}]")
+    _render_response_body(resp, fmt)
+    if not resp.is_ok():
+        raise SystemExit(1)
 
+
+def print_text_response(resp: ApiResponse) -> None:
+    """Print a redacted plain-text response and preserve HTTP failure status."""
+    console.print(f"Status: {resp.status}", markup=False)
+    console.print(resp.text_for_output(), markup=False)
+    if not resp.is_ok():
+        raise SystemExit(1)
+
+
+def _render_response_body(resp: ApiResponse, fmt: OutputFormat) -> None:
+    """Render a response only after applying its configured-secret redaction."""
     try:
         parsed = resp.json_data()
     except (json.JSONDecodeError, ValueError):
-        console.print(resp.text)
+        console.print(resp.text_for_output(), markup=False)
         return
-
     if fmt == OutputFormat.JSON:
-        console.print(json.dumps(parsed, indent=2, sort_keys=True))
+        console.print(json.dumps(parsed, indent=2, sort_keys=True), markup=False)
     elif fmt == OutputFormat.YAML:
-        console.print(yaml.dump(parsed, allow_unicode=True), end="")
+        console.print(yaml.dump(parsed, allow_unicode=True), end="", markup=False)
     else:
         render_table(parsed)

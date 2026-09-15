@@ -87,7 +87,7 @@ This repository packages the `netbox_proxbox` NetBox plugin. The plugin adds end
 - **The credential encryption key belongs on the installation path.** The backend refuses to store any Proxmox credential until it has one, and reports that only when the first Proxmox endpoint is created — after the operator believes setup is finished. [`docs/installation/backend-setup.md`](./docs/installation/backend-setup.md) covers generating a Fernet key and supplying it via `PROXBOX_ENCRYPTION_KEY` (recommended), the plugin settings field, or a backend-local key, plus what happens on key change: verified all-or-nothing plugin rotation, a permission-gated destructive reset when the old key is lost, and the `GET /admin/encryption/status` attestation that blocks plugin rotation while a backend is still on the old key. The setting *semantics* stay in [`docs/configuration/plugin-settings.md`](./docs/configuration/plugin-settings.md); the install page cross-links rather than duplicating them.
 - **A backend-local encryption key is not persisted by the Docker image's volume.** The image declares `VOLUME ["/data"]` and defaults `PROXBOX_DEFAULT_DATABASE_PATH=/data/database.db`, but `credentials.py::_DEFAULT_KEY_FILE` resolves to `<package parent>/data/encryption.key` — `/app/data/encryption.key` in the container, which is **not** on that volume. Recreating the container therefore destroys the key while the database survives, stranding every encrypted credential. `PROXBOX_ENCRYPTION_KEY` avoids it entirely; otherwise set `PROXBOX_ENCRYPTION_KEY_FILE=/data/encryption.key`. Any Compose example added to the docs must also name the `/data` volume, or `docker compose down` orphans the endpoint configuration.
 
-The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.26.post7` and sources its backward-compatible NetBox contract from [`netbox_proxbox/compat.py`](./netbox_proxbox/compat.py): **stable** `4.5.8` through `4.7.0`, validated across the established 4.5/4.6 cells and official v4.7.0 GA. `min_version`/`max_version` are `PLUGIN_MIN_VERSION`/`PLUGIN_MAX_VERSION`. Pre-release builds remain advisory-only and do not change the GA support promise. `compat.py` is vendored byte-identically across netbox-proxbox, netbox-ceph, netbox-packer, netbox-pbs, and netbox-pdm; change it in one repo and you must change it in all five. It must not import Django at module scope, because NetBox imports it while `netbox/settings.py` is still executing. Current backend-runtime pairing: netbox-proxbox 0.0.26.post7 <-> proxbox-api 0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge. The `0.0.26.post7` maintenance release aligns the migration helper with the currently deployed production digest while retaining the browser-console handoff, Proxmox metrics, and human-only soft-deleted VM purge surface from `0.0.26.post2`. The previous `0.0.26.post1` release introduced the NetBox 4.7.0 GA release identity. The previous `0.0.25` release moved **Sync Jobs** to a dedicated Proxbox-only page at `/plugins/proxbox/jobs/`, anonymized the failed-job bug-report export, and consolidated the credential-redaction vocabulary into one module shared by the job-log redactor and the public scrubber. The previous `0.0.24` release added NetBox 4.6.6 certification, settings/storage compatibility fixes, blank-key encryption recovery, and immutable Gitea-first release provenance while retaining bounded endpoint auto-configuration and the universal `guest_os_model` behavior. Existing backend rows authorize only their exact persisted target; rowless discovery is restricted to configured or same-site targets derived from NetBox's trusted public origin, and any unproved target remains pending. The previous stable `0.0.23.post2` release introduced bounded endpoint auto-configuration. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
+The current plugin config lives in [`netbox_proxbox/__init__.py`](./netbox_proxbox/__init__.py). It declares plugin version `0.0.26.post7` and sources its backward-compatible NetBox contract from [`netbox_proxbox/compat.py`](./netbox_proxbox/compat.py): **stable** `4.5.8` through `4.7.0`, validated across the established 4.5/4.6 cells and official v4.7.0 GA. `min_version`/`max_version` are `PLUGIN_MIN_VERSION`/`PLUGIN_MAX_VERSION`. Pre-release builds remain advisory-only and do not change the GA support promise. `compat.py` is vendored byte-identically across netbox-proxbox, netbox-ceph, netbox-packer, netbox-pbs, and netbox-pdm; change it in one repo and you must change it in all five. It must not import Django at module scope, because NetBox imports it while `netbox/settings.py` is still executing. Current backend-runtime pairing: netbox-proxbox 0.0.26.post7 <-> proxbox-api 0.0.22 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge. The `0.0.26.post7` maintenance release aligns the migration helper with the currently deployed production digest while retaining the browser-console handoff, Proxmox metrics, and human-only soft-deleted VM purge surface from `0.0.26.post2`. The previous `0.0.26.post1` release introduced the NetBox 4.7.0 GA release identity. The previous `0.0.25` release moved **Sync Jobs** to a dedicated Proxbox-only page at `/plugins/proxbox/jobs/`, anonymized the failed-job bug-report export, and consolidated the credential-redaction vocabulary into one module shared by the job-log redactor and the public scrubber. The previous `0.0.24` release added NetBox 4.6.6 certification, settings/storage compatibility fixes, blank-key encryption recovery, and immutable Gitea-first release provenance while retaining bounded endpoint auto-configuration and the universal `guest_os_model` behavior. Existing backend rows authorize only their exact persisted target; rowless discovery is restricted to configured or same-site targets derived from NetBox's trusted public origin, and any unproved target remains pending. The previous stable `0.0.23.post2` release introduced bounded endpoint auto-configuration. `proxbox-api` is not a Python dependency of this plugin; the services communicate over HTTP.
 
 ## Browser Console Handoff
 
@@ -400,7 +400,7 @@ material through the credential accessors, still subject to the endpoint `access
 - All three endpoint types support **CSV/JSON/YAML export** (safe and sensitive modes) and **bulk import** with IP auto-creation and id-stripping. See [`netbox_proxbox/views/endpoints/CLAUDE.md`](./netbox_proxbox/views/endpoints/CLAUDE.md).
 - The Proxmox endpoint list at `/plugins/proxbox/endpoints/proxmox/` shows `Enabled` by default and exposes **Enable Selected** / **Disable Selected** list actions. These actions bulk-update only `ProxmoxEndpoint.enabled` via `queryset.update()` so they do not fire the ProxmoxEndpoint `post_save` backend-registration/sync signal. Endpoints carrying `allow_packer_template_builds=True` are excluded from bulk toggle and delete paths; revoke the narrow capability through a normal save first so the backend policy row is disabled before local deletion.
 - The Proxmox endpoint detail page carries a **Templates** tab (`.../endpoints/proxmox/<pk>/templates/`, `views/proxmox_templates_tab.py`) that reads templates **live** from proxbox-api for that endpoint (`GET /cloud/vm/templates?cloud_init_only=false` + `GET /cloud/lxc/templates`, via `get_fastapi_request_context()` + `resolve_backend_endpoint_id()`), grouped into three client-side filters: **Cloud-Init**, **plain QEMU/KVM (no cloud-init)**, and **LXC**. Cloud-init classification derives from `cloud_init_drives`/`cicustom`, not the always-`True` `cloud_init` field. The tab also offers a "Create Cloud-Init template image" action linked to the optional **netbox-packer** plugin (soft-detected by `integrations/packer.py::is_netbox_packer_installed()`, mirroring `integrations/rpc.py`). It is enabled only when the plugin route exists and the endpoint is enabled with both `allow_writes` and `allow_packer_template_builds` true; every refusal keeps a disabled button with a stable explanatory tooltip.
-- The Templates tab also exposes a per-row **Create new instance** wizard for QEMU and LXC templates. The action posts directly to proxbox-api (`/cloud/vm/provision` or `/cloud/lxc/provision`) through `views/proxmox_create_instance.py`, defaults QEMU to linked clone (`full_clone=false`), uses a 90-second request timeout, retries QEMU VMID collisions from the datacenter `next_id` hint, and runs `sync_individual("sync/individual/vm", ...)` afterward so the new VM/container appears in NetBox. Writes are gated in four layers: UI disables the button when `ProxmoxEndpoint.allow_writes=False`, the plugin view pre-checks the same flag before backend calls, proxbox-api 403 `reason`/`detail` is surfaced unchanged, and the view requires `core.run_proxmox_action` via `permission_run_proxmox_action()`.
+- The Templates tab also exposes a per-row **Create new instance** wizard for QEMU and LXC templates. The action posts directly to proxbox-api (`/cloud/vm/provision` or `/cloud/lxc/provision`) through `views/proxmox_create_instance.py`, defaults QEMU to linked clone (`full_clone=false`), uses a 90-second request timeout, retries QEMU VMID collisions from the datacenter `next_id` hint, and runs `sync_individual("sync/individual/vm", ...)` afterward so the new VM/container appears in NetBox. The sync-back calls `require_branch_isolation_or_raise()` first and carries the active `netbox_branch_schema_id`, the selected `fastapi_endpoint_id`, and the exact backend `proxmox_endpoint_ids`; an unavailable isolation boundary or an unidentifiable backend leaves the sync pending without issuing an unscoped NetBox mutation. Writes are gated in four layers: UI disables the button when `ProxmoxEndpoint.allow_writes=False`, the plugin view pre-checks the same flag before backend calls, proxbox-api 403 `reason`/`detail` is surfaced unchanged, and the view requires `core.run_proxmox_action` via `permission_run_proxmox_action()`.
 
 ## Bug-report anonymization
 
@@ -556,6 +556,25 @@ produce these logs.
 
 ## Backend integration notes
 
+### Standalone `pxb` CLI transport contract
+
+The optional `proxbox_cli` package authenticates directly to protected
+`proxbox-api` routes with `X-Proxbox-API-Key`. The key may come only from
+`PROXBOX_API_KEY` or the CLI config file's `api_key`; never add a command-line
+secret flag or print the value. Environment values override config-file values.
+`PROXBOX_CLI_TIMEOUT`/`timeout` is finite, greater than zero, and at most 600
+seconds. `PROXBOX_CLI_MAX_RESPONSE_BYTES`/`max_response_bytes` defaults to 8
+MiB and is enforced incrementally while the decoded response body is read.
+Every request disables redirects, and redirect errors expose only the
+configured host rather than the `Location` target.
+
+Backend HTTP commands exit `0` on success, `1` after rendering a backend
+`4xx`/`5xx` detail or a transport-policy failure, `2` for invalid
+configuration or a protected backend that requires a missing key, and `130`
+for keyboard interruption. JSON mode must retain non-success response bodies.
+The local `pxb sync run` wrapper continues to forward its management-command
+process status.
+
 - **Single enabled FastAPI row:** HTTP and WebSocket helpers such as `get_fastapi_request_context()` in [`netbox_proxbox/services/backend_proxy.py`](./netbox_proxbox/services/backend_proxy.py), `websocket_client`, and several dashboard views resolve the backend via the first `FastAPIEndpoint` with `enabled=True` (or the first enabled row from a restricted queryset). If multiple enabled FastAPI endpoints exist, whichever row sorts first is used; plan automation and operator docs accordingly.
 - **Backend-key preflight is a job-wide gate:** a manual or scheduled sync must
   authenticate the selected FastAPI endpoint before batch creation or SSE. The
@@ -564,6 +583,45 @@ produce these logs.
   enabled backend. Authentication failure aborts the entire job before any
   partial sync can start.
 - **Background Proxbox sync jobs (RQ):** `ProxboxSyncJob` enqueues on NetBox’s **`default`** RQ queue (`RQ_QUEUE_DEFAULT`) so a stock **`manage.py rqworker`** (no queue arguments) picks them up. NetBox’s default worker only listens to **`high`**, **`default`**, and **`low`**; the extra django-rq queue **`netbox_proxbox.sync`** is legacy only. Older Job rows may still show **`netbox_proxbox.sync`** in **Queue**; cancel/RQ lookup uses the stored name. Jobs call proxbox-api **SSE** via [`run_sync_stream`](./netbox_proxbox/services/backend_proxy.py) until a terminal `complete` event.
+- **Branch isolation is fail-closed on the netbox-proxbox sync surfaces:**
+  `ProxboxSyncJob.run()`, every individual `views/sync_now/` action, and the
+  `proxbox_sync` management command used by `pxb sync run` call the shared
+  `require_branch_isolation_or_raise()` guard before any backend transport. When
+  `branching_enabled` is explicitly `False`, these paths retain their normal
+  `main`-schema behavior. When it is `True` but `netbox_branching` is not a
+  loaded Django app, cannot import, or the settings row cannot be read safely,
+  they stop with an actionable error; the job also records a
+  `branch-isolation` failure. When isolation is enabled, every Sync Now and
+  create-instance request also requires an active branch that is freshly
+  `READY` with a usable schema ID. A missing active branch returns HTTP 409 with
+  instructions to activate a branch or disable branch isolation; request
+  handlers never auto-create branches. The RQ ownership claim occurs before the
+  settings read or audit write; the owner resolves one branching configuration
+  snapshot, and changes made during the run apply only to the next owner. A
+  provisioned job branch must reach `READY` with a usable `schema_id`; its ID,
+  name, and schema ID are persisted before backend authentication. Every
+  activation refreshes the branch and rechecks `READY`, and merge performs the
+  same fresh check. The cluster/node, firewall, datacenter, and VM-template ORM
+  reconciliation phases execute inside netbox-branching's programmatic
+  branch-activation context, while the backend stages receive the same schema
+  ID explicitly. Each completed local phase is checkpointed under
+  `response.local_phases` before the next phase or SSE begins. If SSE raises,
+  the accumulated local evidence and left-open disposition are persisted again
+  before re-raising. Any failed selected local phase fails the job before merge
+  and records the branch as `left_open` for operator inspection. After
+  `Branch.merge()`, the wrapper verifies the returned status. Because
+  `netbox-branching` `1.2.0-beta1` leaves a no-change merge in `READY`, the
+  wrapper confirms through `get_unmerged_changes()` that the branch is empty,
+  leaves it open, and records `no_changes_left_open` with the branch ID and
+  name. Operators archive empty branches through the netbox-branching UI.
+  `branching_enabled_settings()` remains a raising compatibility wrapper and is
+  the safe default for future callers. The companion plugins do not yet share
+  this complete boundary: their fail-closed adoption is tracked separately in
+  each companion repository. Releases of `netboxlabs-netbox-branching` through
+  `1.0.3` declare
+  `max_version = "4.6.99"`; production uses `1.2.0-beta1`, which loads on
+  NetBox `4.7.0`. Upstream labels `1.2.0-beta1` as testing-only and promises no
+  upgrade path; the real integration cell is tracked with issue #328.
 - **Disabled endpoint rows are a hard no-connection gate:** any endpoint-like row with `enabled=False` (`ProxmoxEndpoint`, `NetBoxEndpoint`, `FastAPIEndpoint`, `PBSEndpoint`, `PDMEndpoint`, or companion plugin endpoint objects such as `PBSServer`) remains visible through the API/UI for inventory, but operational paths must return before proxbox-api or remote-service network calls. This includes startup/signal pushes, OpenAPI fetches, keepalive/status probes, backend-id resolution, dashboard/API live reads, and scheduled/manual sync scopes. The sole control-plane exception is a normal `ProxmoxEndpoint.save()` while disabled: its post-save signal may authenticate to an already configured proxbox-api and update only an already existing backend row to `enabled=False, allow_packer_template_builds=False`. That policy revocation never contacts Proxmox, creates a backend row, or sends endpoint credentials. Bulk enable/disable deliberately remains local-only because it uses `queryset.update()` and fires no signal; endpoints carrying the narrow capability are excluded from bulk toggle/delete paths until a normal save revokes it.
   **The gate is decided from NetBox's own rows, never from what proxbox-api still
   holds.** The backend's stored endpoint state is not evidence that a disabled row
@@ -688,6 +746,43 @@ also `True`. This separate opt-in prevents an upgrade from creating native
 `dcim.MACAddress` rows for operators who previously enabled discovery only for
 chassis and NIC link facts.
 
+## Data Protection Calendar
+
+The four Data Protection list views build their calendar from the filtered and
+permission-restricted `self.queryset` supplied by NetBox's `ObjectListView`.
+Timestamp sources must query only the displayed window and convert aware
+timestamps with `timezone.localtime()` before choosing their calendar day;
+null timestamps remain represented by the undated notice. Each source loads at
+most 1,000 rows (fetched as ``limit + 1`` so truncation is known without a full
+``COUNT``); scheduled sources are ordered active/enabled first and stop
+projecting at 1,000 events. Truncation is reported through
+``SourceTruncation`` in its own units (omitted occurrences, unprojected
+objects, more rows) — never as a single misleading "events" number.
+Multi-node filters keep each node's name paired with that node's own
+cluster/endpoint (``_node_fallback_query``), and every anchor passes through
+``_safe_anchor`` so year 1 and year 9999 inputs cannot raise.
+Each day renders four primary badges, at most 40 overflow badges, and a count of
+further hidden events.
+
+Scheduled replications and backup routines use the fail-open parser in
+`services/pve_calendar_event.py`: unsupported input is projected onto every
+visible day with its raw text and an unparsed marker. Their displayed time is
+the Proxmox node's local wall-clock time. The plugin does not persist endpoint
+time zones; per-endpoint time-zone resolution remains a follow-up.
+
+Keep calendar state in `cal_view` and `cal_date`, preserve all other query
+parameters, and keep the calendar outside `#object_list` so HTMX table
+replacement does not remove it. Applying the combined filter form omits
+`cal_date` and anchors to `date_from`; a stale navigation anchor outside a
+complete valid date range also re-anchors to `date_from`.
+
+The combined page must apply `.restrict(request.user, "view")` independently to
+all four source querysets and must not infer a backup-routine VM association
+from an unverified numeric VMID. Snapshot node-name fallback matching must also
+match the selected node's linked NetBox cluster, replication target-name
+fallback matching must also match its endpoint, and all-node routines must
+match selected nodes through their endpoint.
+
 ## Sync Mode Controls
 
 Per-resource sync modes let operators control how each Proxmox resource type is
@@ -769,9 +864,19 @@ The `bootstrap-only` tag (slug `bootstrap-only`) is auto-created by `netbox_prox
 ## CI/CD Workflows
 
 Gitea pull-request CI serializes `docs-and-package` after `quality` on the
-capacity-bounded `ci-untrusted-python312` host. One fixed concurrency group
-covers every ref without auto-cancellation, so feature churn cannot preempt
-protected-branch or immutable-tag evidence. Both jobs must require 384 MiB free
+capacity-bounded `ci-untrusted-python312` host. The concurrency group is
+scoped per ref (`netbox-proxbox-ci-${{ github.ref }}`) without
+auto-cancellation: Gitea 1.26 keeps at most one pending run per group — a
+new pending run replaces the older pending one (and in the 2026-09-14
+incident, with the older run stuck in an inconsistent queued state, it was
+the arriving runs 24018/24022/24043/24050 that ended up cancelled) — so a
+repository-wide group made one pull request's pending run and another's
+mutually destructive and silently removed the gate. Per ref, the same rule
+means same-ref pushes do not pile up; protected-branch and immutable-tag evidence is never
+cancelled by feature churn. Runs from different refs can overlap up to the
+runner's capacity (the shared untrusted lane is capacity 2), so the durable
+serialisation is a capacity-1 lane — a runner-host change, not a workflow
+one. Never reintroduce a repository-wide group to obtain queueing. Both jobs must require 384 MiB free
 and log measured/required KiB before environment creation. This floor preserves
 more than 150 MiB above the measured 195,498 KiB quality environment and 42,021
 KiB source tree. Keep `UV_NO_CACHE=1`, and always clean environments, tool

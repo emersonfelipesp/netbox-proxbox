@@ -15,8 +15,8 @@ NetBox model row while the netbox-branching plugin is active and a branch is
    request — proxbox-api consumes it via the ``netbox_branch_schema_id``
    query parameter pinned on the cluster route.
 
-When no branch is active, the helper returns ``None`` and nothing changes
-on the wire — preserves today's main-only behavior.
+When branch isolation is enabled, callers reject a missing active READY branch
+before issuing transport. Explicitly disabled isolation preserves main behavior.
 """
 
 from __future__ import annotations
@@ -71,6 +71,9 @@ def _install_branching_stubs(
         nb_ctx.active_branch = ContextVar("active_branch", default=None)
         nb_ctx.active_branch.set(branch)
         monkeypatch.setitem(sys.modules, "netbox_branching.contextvars", nb_ctx)
+        nb_choices = types.ModuleType("netbox_branching.choices")
+        nb_choices.BranchStatusChoices = SimpleNamespace(READY="ready")
+        monkeypatch.setitem(sys.modules, "netbox_branching.choices", nb_choices)
     else:
         sys.modules.pop("netbox_branching", None)
         sys.modules.pop("netbox_branching.contextvars", None)
@@ -104,14 +107,35 @@ def test_get_active_branch_schema_id_returns_none_when_no_branch_active(monkeypa
 
 def test_get_active_branch_schema_id_returns_schema_id_when_branch_active(monkeypatch):
     """A real Branch in the ContextVar ⇒ string ``schema_id``."""
-    branch = SimpleNamespace(name="b-1", schema_id="abcd1234")
+    branch = SimpleNamespace(
+        name="b-1",
+        schema_id="abcd1234",
+        status="ready",
+        refresh_from_db=lambda: None,
+    )
     mod = _install_branching_stubs(monkeypatch, available=True, branch=branch)
     assert mod.get_active_branch_schema_id() == "abcd1234"
 
 
 def test_get_active_branch_schema_id_treats_missing_schema_id_as_unset(monkeypatch):
     """A Branch-like object without ``.schema_id`` is treated as no branch."""
-    branch = SimpleNamespace(name="b-broken")
+    branch = SimpleNamespace(
+        name="b-broken",
+        status="ready",
+        refresh_from_db=lambda: None,
+    )
+    mod = _install_branching_stubs(monkeypatch, available=True, branch=branch)
+    assert mod.get_active_branch_schema_id() is None
+
+
+def test_get_active_branch_schema_id_treats_non_ready_branch_as_unset(monkeypatch):
+    """An active branch must still be freshly READY before request sync."""
+    branch = SimpleNamespace(
+        name="b-merging",
+        schema_id="abcd1234",
+        status="merging",
+        refresh_from_db=lambda: None,
+    )
     mod = _install_branching_stubs(monkeypatch, available=True, branch=branch)
     assert mod.get_active_branch_schema_id() is None
 

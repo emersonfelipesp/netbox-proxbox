@@ -13,10 +13,12 @@ from utilities.views import (
 )
 
 from netbox_proxbox.models import ProxmoxStorage
-from netbox_proxbox.services.branch_lifecycle import get_active_branch_schema_id
 from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
-from netbox_proxbox.views.sync_now import _handle_sync_response
+from netbox_proxbox.views.sync_now import (
+    _branch_isolation_precondition,
+    _handle_sync_response,
+)
 from netbox_proxbox.views.sync_now.endpoint_scope import (
     resolve_target_proxmox_endpoint_scope,
 )
@@ -43,10 +45,14 @@ class ProxmoxStorageSyncNowView(
         )
         storage_name = storage.name
         cluster_name = storage.cluster.name if storage.cluster else ""
-
         if not cluster_name:
             messages.error(request, _("Storage is not linked to a Proxmox cluster."))
             return HttpResponseRedirect(storage.get_absolute_url())
+        branch_schema_id, isolation_error = _branch_isolation_precondition(
+            request, f"Storage '{storage_name}'", storage.get_absolute_url()
+        )
+        if isolation_error is not None:
+            return isolation_error
 
         scope_kwargs, owner_cluster_name, scope_error = (
             resolve_target_proxmox_endpoint_scope(storage)
@@ -63,7 +69,7 @@ class ProxmoxStorageSyncNowView(
         response, status, dependencies = sync_individual_with_dependencies(
             "sync/individual/storage",
             {"cluster_name": cluster_name, "storage_name": storage_name},
-            netbox_branch_schema_id=get_active_branch_schema_id(),
+            netbox_branch_schema_id=branch_schema_id,
             **scope_kwargs,
         )
 

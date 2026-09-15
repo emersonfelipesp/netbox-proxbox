@@ -89,6 +89,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip build twine
           python -m build
+          python scripts/check_dist_inventory.py dist/*.whl dist/*.tar.gz
           python -m twine check dist/*
 
   test:
@@ -101,6 +102,10 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          # The public-disclosure guard in tests/test_release_workflows.py
+          # diffs this branch against its base; a shallow clone has no base.
+          fetch-depth: 0
 
       - name: Set up Python ${{ matrix.python-version }}
         uses: actions/setup-python@v6

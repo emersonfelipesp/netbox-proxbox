@@ -17,6 +17,8 @@ This directory holds the actual static assets referenced by plugin templates.
 
 - Image and branding assets such as Proxmox, FastAPI, GitHub, LinkedIn, and NetBox logos/banners.
 - [`css/`](./css/): compiled page-specific CSS used by plugin templates.
+  `data_protection_calendar.css` defines the responsive, theme-aware calendar
+  grid and badge layout without JavaScript.
 - [`js/`](./js/): browser-side interaction code for plugin pages.
 - [`styles/`](./styles/): SCSS sources and compiled CSS/JS theme assets.
 

@@ -1,0 +1,7 @@
+{% load i18n %}
+<a href="{{ event.url }}" class="badge calendar-event text-decoration-none {% if event.muted %}text-bg-secondary opacity-75{% elif event.kind == 'backup' %}text-bg-blue{% elif event.kind == 'snapshot' %}text-bg-purple{% elif event.kind == 'replication' %}text-bg-orange{% else %}text-bg-teal{% endif %}" title="{{ event.label }} — {{ event.time_text|default:'—' }}{% if event.kind == 'replication' or event.kind == 'routine' %} (node local time){% endif %}{% if event.approximate %} — unparsed schedule: {{ event.time_text }}{% endif %}">
+  <span class="visually-hidden">{% if event.kind == 'backup' %}{% trans "Backup" %}{% elif event.kind == 'snapshot' %}{% trans "Snapshot" %}{% elif event.kind == 'replication' %}{% trans "Replication" %}{% else %}{% trans "Routine" %}{% endif %}: </span>
+  <span class="calendar-event-time">{{ event.time_text|default:"—" }}</span>
+  <span class="calendar-event-label">{{ event.label }}</span>
+  {% if event.approximate %}<span class="calendar-event-approximate">{% trans "unparsed schedule" %}</span>{% endif %}
+</a>

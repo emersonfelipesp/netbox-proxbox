@@ -450,6 +450,23 @@ flowchart TD
     sorts first. The batch response carries `endpoint_runtimes` built from the preflight
     phases, same as a staged run.
 
+!!! danger "Local reconciliation failures cannot be merged"
+    Cluster/node, firewall, datacenter, and VM-template services run before the SSE
+    stages. Every selected result is classified in `response.local_phases`. If any
+    classification is not successful, the completed stage evidence is persisted and
+    the job raises before `_merge_sync_branch()`. For an isolated run,
+    `response.branch_disposition` records `left_open` with the branch name so the
+    partial inventory remains available for operator inspection but never reaches
+    `main`.
+
+    Every local activation and the final merge refresh the branch row and require
+    `READY`; a stale in-memory status is not authorization. After `Branch.merge()` the
+    wrapper refreshes again and accepts only `MERGED`. The v1.2.0-beta1 no-change path
+    returns normally in `READY`, so Proxbox confirms that
+    `get_unmerged_changes()` is empty, calls `Branch.archive(user=...)`, verifies
+    `ARCHIVED`, and logs `no changes; branch archived`. A `READY` result with
+    unmerged changes fails and remains open.
+
     `netbox_branch_schema_id` is threaded the same way, and for a sharper reason: it must
     travel as an **argument**, not only as a query param on the first call.
     `_sync_dependency()` rebuilds each dependent call's params from scratch out of
@@ -686,6 +703,37 @@ Key matching alone is not enough, so two more passes run alongside it:
 Keys are normalized (case, `-`, `_`, spaces) before matching so the HTTP-header spellings
 (`X-Proxbox-API-Key`, `Private-Key`) match the same markers as `api_key`. Nesting deeper than
 the recursion limit yields `[redacted: nesting depth limit]` — never the raw object.
+
+### Stage retry failure attribution
+
+Each failed SSE stage attempt records its attempt number, HTTP status, redacted backend
+detail, transport/application classification, and elapsed time. Retry eligibility remains
+independent of that classification: `_is_retryable_stage_failure()` still controls whether
+another request is made. Classification comes from the producer: `run_sync_stream()` stamps
+every failed payload with `failure_kind` — `application` when proxbox-api authored the answer
+(a completed stream whose `complete` event reported `ok=false`, or any JSON error body, even a
+5xx the backend wrote), `transport` when no backend-authored body arrived (connection, TLS,
+timeout, refused redirect, a stream that ended without `complete`, a non-JSON gateway error
+page, or a backend that has not finished bootstrapping). A `complete` frame the plugin cannot
+parse and a missing FastAPI URL are application failures too: both are deterministic and must
+not be hidden by a later transport error. When the hostname and IP-address candidates are both
+tried, `run_sync_stream()` reports the first backend-authored failure across the candidates and
+falls back to the last transport failure only when no candidate reached the backend. A JSON body
+of any shape (mapping, list, or scalar) counts as backend-authored. A successful authentication
+rebind after a 401 starts a new selection epoch: the 401 it resolved is not reported, only what
+the authenticated context then returns. The stage
+runner trusts the stamp over any phrase in the detail text, so a validation `input` that happens
+to say "bad gateway" cannot demote a rejection to transport. Only payloads produced elsewhere
+(without provenance) fall back to the cause text and then to the gateway statuses (502, 503, 504).
+The backend-readiness advisory (`init_ok`) is evaluated against every attempt, independently of
+which one became the primary cause.
+
+After retries finish, the first application-level failure is the primary operator-facing
+cause. If every failure is transport-level, the final attempt is primary instead. The primary
+line retains `_format_stage_sync_error()` exactly, while divergent attempt details append one
+bounded line for each other attempt. Identical failures remain a single line. The final job-log
+error and raised `RuntimeError` carry the same composed message, so a later transient transport
+failure cannot replace an earlier deterministic backend rejection in the job's Error field.
 
 ### Full Sync Job Sequence
 
@@ -952,7 +1000,7 @@ key as their backend encryption source.
 | `netbox_proxbox/signals.py` | Read-only FastAPI stored-key checks plus best-effort NetBox/Proxmox endpoint-delivery handlers |
 | `netbox_proxbox/views/backend_sync.py` | Shared `sync_netbox_endpoint_to_backend()` and `sync_proxmox_endpoint_to_backend()`; `list_backend_netbox_endpoints()` (verification read); `backend_holds_netbox_endpoint()` + `_netbox_row_is_current()` (identity **and** currency) / `backend_holds_proxmox_endpoint()` (held **and** current); `netbox_credential_fingerprint()` / `netbox_push_credentials_unchanged()` / `_record_pushed_credential_fingerprint()` (local secret-rotation check, migration `0073`); `resolve_backend_endpoint_id()` / `resolve_backend_endpoint_ids()` (wire-id resolution, target-confirmed) |
 | `netbox_proxbox/jobs.py` | `_ensure_backend_endpoints()` preflight; `PreflightResult`; `ProxboxPreflightError`; `ProxboxSyncJob.run()` (staged **and** selected-object batch branches) |
-| `netbox_proxbox/sync_stages.py` | `_is_retryable_stage_failure()`; `preflight_hint` attribution on stage errors; `_no_endpoint_scope_reason()` / `_batch_wire_endpoint_scope()` (shared fail-loud endpoint-scope resolution, plus the plugin-pk → wire-id map); `_batch_object_core_cluster_id()` / `_batch_object_owner_endpoint_pks()` / `_owner_endpoint_pks_by_cluster_id()` (per-object owner resolution, tri-state: unknown / pinned / ambiguous); `_run_batch_selected_sync()` backend **and** per-object Proxmox-endpoint pinning |
+| `netbox_proxbox/sync_stages.py` / `netbox_proxbox/sync_types.py` | `_is_retryable_stage_failure()`; typed per-attempt stage failure records and deterministic primary-cause composition; `preflight_hint` attribution on stage errors; `_no_endpoint_scope_reason()` / `_batch_wire_endpoint_scope()` (shared fail-loud endpoint-scope resolution, plus the plugin-pk → wire-id map); `_batch_object_core_cluster_id()` / `_batch_object_owner_endpoint_pks()` / `_owner_endpoint_pks_by_cluster_id()` (per-object owner resolution, tri-state: unknown / pinned / ambiguous); `_run_batch_selected_sync()` backend **and** per-object Proxmox-endpoint pinning |
 | `netbox_proxbox/services/individual_sync.py` | `sync_individual()` / `sync_individual_with_dependencies()` — `fastapi_endpoint_id` and `proxmox_endpoint_ids` pinned through recursive dependency syncs |
 | `netbox_proxbox/services/backend_auth.py` | Read-only stored-key verification, `wait_for_backend_ready()`, and cold-start timeout budgets |
 | `netbox_proxbox/services/backend_proxy.py` | `run_sync_stream()`, `_try_sync_stream_url()` (HTTP status propagation) |

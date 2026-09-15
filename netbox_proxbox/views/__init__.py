@@ -93,6 +93,7 @@ from .datacenter import (
     ProxmoxDatacenterCpuModelListView,
     ProxmoxDatacenterCpuModelView,
 )
+from .data_protection import DataProtectionCalendarMixin, DataProtectionView
 from .ha_actions import HaArmView, HaDisarmView
 from .guest_vm_interface import (
     GuestVMInterfaceAddressBulkDeleteView,

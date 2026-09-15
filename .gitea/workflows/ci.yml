@@ -13,9 +13,20 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # One active CI run per repository: all refs share this capacity-bounded host.
-  group: netbox-proxbox-ci
-  # Never let feature-branch churn cancel protected-branch or immutable-tag evidence.
+  # One group per ref. Gitea (1.26) does not queue a second pending run behind
+  # the first in a group: at most one run per group may be pending, and the
+  # documented rule is that a new pending run replaces the older one (in the
+  # 2026-09-14 incident, with the older run stuck in an inconsistent queued
+  # state, it was the arriving runs that ended up cancelled). Either way, a
+  # group shared across refs makes one pull request's pending run and
+  # another's mutually destructive. Runs from different refs may now overlap
+  # up to the runner's capacity; a capacity-1 lane is the durable
+  # serialisation and is a runner-host setting, not something this file can
+  # provide.
+  group: netbox-proxbox-ci-${{ github.ref }}
+  # Never let a newer push cancel in-progress protected-branch or
+  # immutable-tag evidence; a newer pending run on the same ref replaces the
+  # older pending one anyway.
   cancel-in-progress: false
 
 permissions:
@@ -30,11 +41,23 @@ jobs:
       HOME: ${{ github.workspace }}
       UV_NO_CACHE: "1"
       UV_PYTHON_DOWNLOADS: never
+      # The untrusted runner exports none of the usual CI markers, so the
+      # public-disclosure guard in tests/test_release_workflows.py is told
+      # explicitly that it runs in CI, which event it is reviewing, and — for
+      # a branch push, whose base is the branch's previous tip — that tip.
+      CI: "true"
+      GITHUB_EVENT_NAME: ${{ github.event_name }}
+      GITHUB_BASE_REF: ${{ github.base_ref }}
+      GITHUB_REF: ${{ github.ref }}
+      PROXBOX_REVIEW_BASE: ${{ github.event_name == 'push' && github.event.before || '' }}
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
+          # The public-disclosure guard in tests/test_release_workflows.py
+          # diffs this branch against its base; a shallow clone has no base.
+          fetch-depth: 0
 
       - name: Reset generated workspace state
         shell: bash
@@ -45,6 +68,10 @@ jobs:
         run: |
           set -euo pipefail
           command -v uv
+          # The disclosure guard in tests/test_release_workflows.py keys its
+          # fail-closed path on these markers; print them so a run's log shows
+          # which ones this runner exports.
+          env | grep -E '^(CI|GITHUB_ACTIONS|GITEA_ACTIONS|GITHUB_EVENT_NAME)=' || true
           required_kib=393216
           available_kib="$(df -Pk . | awk 'NR == 2 {print $4}')"
           [[ "$available_kib" =~ ^[0-9]+$ ]]
@@ -132,6 +159,7 @@ jobs:
         run: |
           set -euo pipefail
           .venv/bin/python -m build --no-isolation
+          .venv/bin/python scripts/check_dist_inventory.py dist/*.whl dist/*.tar.gz
           .venv/bin/twine check dist/*
 
       - name: Clean docs and package environment

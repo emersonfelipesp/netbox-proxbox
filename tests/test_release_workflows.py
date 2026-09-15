@@ -1267,17 +1267,118 @@ def _disclosures(text: str) -> list[str]:
     return found
 
 
-def _review_base() -> str:
-    result = subprocess.run(
-        ["git", "merge-base", "HEAD", "gitea/develop"],
+def _git(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        ["git", *args],
         cwd=REPO_ROOT,
         capture_output=True,
         text=True,
         timeout=60,
     )
-    if result.returncode != 0 or not result.stdout.strip():
-        pytest.skip(f"cannot resolve the review base: {result.stderr.strip()}")
-    return result.stdout.strip()
+
+
+def _review_base_candidates() -> list[str]:
+    """Branch refs that may name the review base, most trustworthy first.
+
+    ``PROXBOX_REVIEW_BASE`` is an explicit operator choice. In a pull-request
+    run the platform names the base branch in ``GITHUB_BASE_REF`` (Gitea
+    Actions sets the same variable); otherwise the integration branch is the
+    base. The ``gitea`` remote is the canonical implementation remote, and
+    ``origin`` is what a CI checkout or a fresh clone calls it.
+    """
+    explicit = os.environ.get("PROXBOX_REVIEW_BASE", "").strip()
+    branch = os.environ.get("GITHUB_BASE_REF", "").strip() or "develop"
+    candidates = [explicit] if explicit else []
+    candidates.extend((f"gitea/{branch}", f"origin/{branch}"))
+    return candidates
+
+
+def _github_event() -> dict:
+    """The Actions event payload, or ``{}`` outside a workflow run."""
+    event_path = os.environ.get("GITHUB_EVENT_PATH", "")
+    if not event_path or not Path(event_path).is_file():
+        return {}
+    try:
+        payload = json.loads(Path(event_path).read_text())
+    except (OSError, ValueError):
+        return {}
+    return payload if isinstance(payload, dict) else {}
+
+
+_NO_COMMIT = "0" * 40
+
+
+def _push_review_base() -> str:
+    """The commit a branch push is reviewed against: what the branch was before.
+
+    A push to a protected branch is the merge landing, and after a full
+    checkout the branch ref *is* ``HEAD``, so the merge base against the
+    branch would be empty. ``before`` from the event payload is the last
+    commit already on the branch; it must exist and be an ancestor of
+    ``HEAD``, otherwise the run is not reviewing what it thinks it is.
+    """
+    before = str(_github_event().get("before", "")).strip()
+    if not before or before == _NO_COMMIT:
+        pytest.fail(
+            "push event has no usable before-commit; refusing to skip the guard"
+        )
+    if _git("rev-parse", "--verify", "--quiet", f"{before}^{{commit}}").returncode:
+        pytest.fail(f"push before-commit {before[:12]} is not in this checkout")
+    if _git("merge-base", "--is-ancestor", before, "HEAD").returncode:
+        pytest.fail(f"push before-commit {before[:12]} is not an ancestor of HEAD")
+    return before
+
+
+def _branch_review_base(candidates: list[str]) -> str | None:
+    for ref in candidates:
+        if _git("rev-parse", "--verify", "--quiet", f"{ref}^{{commit}}").returncode:
+            continue
+        result = _git("merge-base", "HEAD", ref)
+        if result.returncode != 0 or not result.stdout.strip():
+            pytest.fail(
+                f"cannot compute the merge base against {ref}: "
+                f"{result.stderr.strip() or 'no output'}"
+            )
+        return result.stdout.strip()
+    return None
+
+
+def _review_base() -> str:
+    """Resolve the commit this checkout is reviewed against.
+
+    A guard that cannot find its base must not certify anything. The base is
+    chosen by event: a pull request diffs against its base branch; a branch
+    push diffs against the branch's previous tip; a tag, release, dispatch,
+    or scheduled run has no branch base and says so — the change it validates
+    was scanned on its pull request and again on the push that landed it. In
+    CI a missing pull-request base is a workflow defect (the checkout did not
+    fetch the base branch), so the test fails; only a local checkout without
+    any remote may skip.
+    """
+    explicit = os.environ.get("PROXBOX_REVIEW_BASE", "").strip()
+    event = os.environ.get("GITHUB_EVENT_NAME", "").strip()
+    in_ci = any(
+        os.environ.get(name) for name in ("CI", "GITHUB_ACTIONS", "GITEA_ACTIONS")
+    )
+    if not explicit and in_ci and event == "push":
+        if os.environ.get("GITHUB_REF", "").startswith("refs/tags/"):
+            pytest.skip(
+                "tag push has no branch review base; scanned on its pull request"
+            )
+        return _push_review_base()
+    if not explicit and in_ci and event not in ("pull_request", ""):
+        pytest.skip(
+            f"{event} event has no branch review base; the change was scanned "
+            "on its pull request and on the push that landed it"
+        )
+    candidates = _review_base_candidates()
+    base = _branch_review_base(candidates)
+    if base is not None:
+        return base
+    message = f"no review base ref is available (tried {', '.join(candidates)})"
+    if in_ci:
+        pytest.fail(f"{message}; the workflow checkout must fetch the base branch")
+    pytest.skip(message)
 
 
 def _changed_public_files() -> "list[Path]":
@@ -1286,59 +1387,330 @@ def _changed_public_files() -> "list[Path]":
     A hand-maintained list is a guard that silently stops covering the thing it
     was added for.
     """
-    result = subprocess.run(
-        ["git", "diff", "--name-only", "--diff-filter=d", _review_base()],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
+    result = _git("diff", "--name-only", "--diff-filter=d", _review_base())
     if result.returncode != 0:
-        pytest.skip(f"cannot resolve the changed file set: {result.stderr.strip()}")
+        pytest.fail(f"cannot resolve the changed file set: {result.stderr.strip()}")
     paths = [REPO_ROOT / line for line in result.stdout.split() if line]
     existing = [path for path in paths if path.is_file()]
     assert existing, "the branch must change at least one file"
     return existing
 
 
-def _iter_branch_added_lines() -> "list[tuple[Path, int, str]]":
-    """Yield ``(path, new_line_number, text)`` for each line added on this branch."""
-    result = subprocess.run(
-        ["git", "diff", "-U0", "--diff-filter=d", _review_base()],
-        cwd=REPO_ROOT,
-        capture_output=True,
-        text=True,
-        timeout=60,
-    )
-    if result.returncode != 0:
-        pytest.skip(f"cannot resolve branch additions: {result.stderr.strip()}")
+def _changed_paths(base: str) -> tuple[list[str], list[str]]:
+    """``(text_paths, binary_paths)`` changed between ``base`` and ``HEAD``.
 
-    current_path: Path | None = None
+    Read from ``git diff --numstat -z``, whose NUL-delimited output carries
+    every pathname verbatim — a tab or newline in a filename, or a rename
+    rendered as ``old => new`` in the human form, cannot hide a file from the
+    scanner. A rename contributes its *destination* path.
+    """
+    result = _git("diff", "--numstat", "-z", "--diff-filter=d", base, "HEAD")
+    if result.returncode != 0:
+        pytest.fail(f"cannot list changed files: {result.stderr.strip()}")
+    tokens = result.stdout.split("\0")
+    text: list[str] = []
+    binary: list[str] = []
+    index = 0
+    while index < len(tokens):
+        token = tokens[index]
+        index += 1
+        if not token:
+            continue
+        added, _deleted, path = token.split("\t", 2)
+        if path == "":
+            # Rename or copy: the two paths follow as separate records.
+            path = tokens[index + 1]
+            index += 2
+        (binary if added == "-" else text).append(path)
+    return text, binary
+
+
+def _iter_branch_added_lines() -> "list[tuple[Path, int, str]]":
+    """Yield ``(path, new_line_number, text)`` for each line added on this branch.
+
+    Binary files are refused outright: the line scanner cannot read them, and
+    a directory name proves nothing about where a file came from — a pull
+    request can put any bytes under any path. Regenerated screenshots reach
+    ``develop`` through the screenshots workflow's own push, which carries no
+    pull request and is not this guard's concern.
+    """
+    base = _review_base()
+    text_paths, binary_paths = _changed_paths(base)
+    assert not binary_paths, (
+        "binary public files cannot be scanned for private infrastructure "
+        f"names and are not accepted on a reviewed branch: {binary_paths}"
+    )
+
+    additions: list[tuple[Path, int, str]] = []
+    for relative in text_paths:
+        result = _git("diff", "-U0", "--diff-filter=d", base, "HEAD", "--", relative)
+        if result.returncode != 0:
+            pytest.fail(f"cannot resolve branch additions: {result.stderr.strip()}")
+        additions.extend(_parse_added_lines(REPO_ROOT / relative, result.stdout))
+    if not additions:
+        # Nothing was added, so nothing can disclose; say which case this is
+        # so a skip in the log is explainable rather than suspicious.
+        reason = (
+            "HEAD and the review base have identical trees"
+            if not text_paths
+            else "the branch only removes lines"
+        )
+        pytest.skip(f"no added lines between base and HEAD: {reason}")
+    return additions
+
+
+def _parse_added_lines(path: Path, diff: str) -> "list[tuple[Path, int, str]]":
+    """Added lines of one file's ``-U0`` patch, with their new line numbers.
+
+    The path is known from the NUL-delimited listing, so the quoted ``+++``
+    header is ignored rather than parsed.
+    """
     next_line = 0
     additions: list[tuple[Path, int, str]] = []
-    for raw in result.stdout.splitlines():
-        if raw.startswith("+++ b/"):
-            relative = raw.removeprefix("+++ b/")
-            current_path = REPO_ROOT / relative
-            continue
-        if current_path is None:
-            continue
+    for raw in diff.splitlines():
         if raw.startswith("@@"):
             match = re.match(r"@@ -\d+(?:,\d+)? \+(\d+)(?:,\d+)? @@", raw)
-            if match is None:
-                continue
-            next_line = int(match.group(1))
+            if match is not None:
+                next_line = int(match.group(1))
             continue
-        if raw.startswith("+") and not raw.startswith("+++"):
-            additions.append((current_path, next_line, raw[1:]))
+        if raw.startswith("+++") or raw.startswith("---"):
+            continue
+        if raw.startswith("+"):
+            additions.append((path, next_line, raw[1:]))
             next_line += 1
-            continue
-        if raw.startswith("-") and not raw.startswith("---"):
-            continue
-        if raw.startswith(" "):
+        elif raw.startswith(" "):
             next_line += 1
-    assert additions, "the branch must add at least one line"
     return additions
+
+
+def _set_branch_diff(
+    monkeypatch: pytest.MonkeyPatch,
+    diff: str,
+    *,
+    returncode: int = 0,
+    paths: tuple[str, ...] = ("README.md",),
+) -> None:
+    """Replace the review base and branch diff for disclosure-guard tests."""
+    monkeypatch.setattr(sys.modules[__name__], "_review_base", lambda: "base")
+    numstat = "".join(f"1\t0\t{path}\0" for path in paths) if diff else ""
+
+    def run(args, **kwargs):
+        stdout = numstat if "--numstat" in args else diff
+        return subprocess.CompletedProcess(
+            args=list(args), returncode=returncode, stdout=stdout, stderr="boom"
+        )
+
+    monkeypatch.setattr(subprocess, "run", run)
+
+
+def _fake_git(
+    monkeypatch: pytest.MonkeyPatch,
+    responses: dict[str, tuple[int, str]],
+) -> list[list[str]]:
+    """Answer ``git`` invocations from a table keyed by their first argument."""
+    calls: list[list[str]] = []
+
+    def run(args, **kwargs):
+        calls.append(list(args))
+        key = " ".join(args[1:3]) if args[1] == "diff" else args[1]
+        code, out = responses.get(key, responses.get(args[1], (1, "")))
+        return subprocess.CompletedProcess(
+            args=args, returncode=code, stdout=out, stderr="fatal: bad revision"
+        )
+
+    monkeypatch.setattr(subprocess, "run", run)
+    return calls
+
+
+def test_gitea_quality_job_tells_the_guard_it_runs_in_ci() -> None:
+    """The untrusted runner exports no CI markers; the workflow must supply them."""
+    workflow = yaml.safe_load(
+        (REPO_ROOT / ".gitea" / "workflows" / "ci.yml").read_text()
+    )
+    env = workflow["jobs"]["quality"]["env"]
+    assert env["CI"] == "true"
+    assert env["GITHUB_EVENT_NAME"] == "${{ github.event_name }}"
+    assert env["GITHUB_BASE_REF"] == "${{ github.base_ref }}"
+    assert env["GITHUB_REF"] == "${{ github.ref }}"
+    assert "github.event.before" in env["PROXBOX_REVIEW_BASE"]
+    assert "github.event_name == 'push'" in env["PROXBOX_REVIEW_BASE"]
+
+    """The disclosure guard fails without a base, so CI must fetch full history."""
+    gitea_ci = REPO_ROOT / ".gitea" / "workflows" / "ci.yml"
+    github_ci = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+    for path, job in ((gitea_ci, "quality"), (github_ci, "test")):
+        workflow = yaml.safe_load(path.read_text())
+        steps = workflow["jobs"][job]["steps"]
+        checkout = next(
+            step
+            for step in steps
+            if str(step.get("uses", "")).startswith("actions/checkout@")
+        )
+        assert checkout.get("with", {}).get("fetch-depth") == 0, (
+            f"{path.name}:{job} checkout must use fetch-depth: 0"
+        )
+
+
+def test_iter_branch_added_lines_skips_zero_diff(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _set_branch_diff(monkeypatch, "")
+
+    with pytest.raises(
+        pytest.skip.Exception, match="no added lines between base and HEAD"
+    ):
+        _iter_branch_added_lines()
+
+
+def test_iter_branch_added_lines_fails_when_diff_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A diff error is not a clean branch; the guard must not certify it."""
+    _set_branch_diff(monkeypatch, "", returncode=128)
+
+    with pytest.raises(
+        pytest.fail.Exception,
+        match="cannot (list changed files|resolve branch additions)",
+    ):
+        _iter_branch_added_lines()
+
+
+def _set_event(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, name: str, **payload
+) -> None:
+    event_file = tmp_path / "event.json"
+    event_file.write_text(json.dumps(payload))
+    monkeypatch.setenv("CI", "true")
+    monkeypatch.setenv("GITHUB_EVENT_NAME", name)
+    monkeypatch.setenv("GITHUB_EVENT_PATH", str(event_file))
+    monkeypatch.delenv("PROXBOX_REVIEW_BASE", raising=False)
+    monkeypatch.delenv("GITHUB_BASE_REF", raising=False)
+
+
+def test_push_event_reviews_against_the_previous_branch_tip(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """On a protected-branch push the branch ref is HEAD; ``before`` is the base."""
+    _set_event(monkeypatch, tmp_path, "push", before="a" * 40)
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/develop")
+    calls = _fake_git(monkeypatch, {"rev-parse": (0, "aaa\n"), "merge-base": (0, "")})
+
+    assert _review_base() == "a" * 40
+    assert ["git", "merge-base", "--is-ancestor", "a" * 40, "HEAD"] in calls
+
+
+@pytest.mark.parametrize("before", ["", "0" * 40])
+def test_push_event_without_a_before_commit_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, before: str
+) -> None:
+    _set_event(monkeypatch, tmp_path, "push", before=before)
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/develop")
+    _fake_git(monkeypatch, {})
+
+    with pytest.raises(pytest.fail.Exception, match="no usable before-commit"):
+        _review_base()
+
+
+def test_push_event_with_a_foreign_before_commit_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    """A ``before`` that is not an ancestor means the run reviews the wrong range."""
+    _set_event(monkeypatch, tmp_path, "push", before="b" * 40)
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/main")
+    _fake_git(monkeypatch, {"rev-parse": (0, "bbb\n"), "merge-base": (1, "")})
+
+    with pytest.raises(pytest.fail.Exception, match="not an ancestor of HEAD"):
+        _review_base()
+
+
+def test_tag_push_and_release_events_skip_with_a_reason(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _set_event(monkeypatch, tmp_path, "push", before="c" * 40)
+    monkeypatch.setenv("GITHUB_REF", "refs/tags/v0.0.27")
+    _fake_git(monkeypatch, {})
+    with pytest.raises(
+        pytest.skip.Exception, match="tag push has no branch review base"
+    ):
+        _review_base()
+
+    _set_event(monkeypatch, tmp_path, "release")
+    with pytest.raises(
+        pytest.skip.Exception, match="release event has no branch review base"
+    ):
+        _review_base()
+
+
+def test_pull_request_event_still_uses_the_base_branch(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    _set_event(monkeypatch, tmp_path, "pull_request")
+    monkeypatch.setenv("GITHUB_BASE_REF", "develop")
+    calls = _fake_git(
+        monkeypatch, {"rev-parse": (0, "abc\n"), "merge-base": (0, "feedbeef\n")}
+    )
+
+    assert _review_base() == "feedbeef"
+    assert ["git", "merge-base", "HEAD", "gitea/develop"] in calls
+
+
+def test_binary_public_file_changes_are_refused(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """The line scanner cannot read a PNG; an unreviewed one must not pass as clean."""
+    monkeypatch.setattr(sys.modules[__name__], "_review_base", lambda: "base")
+    _fake_git(monkeypatch, {"diff --numstat": (0, "-\t-\tdocs/topology.png\0")})
+
+    with pytest.raises(AssertionError, match="docs/topology.png"):
+        _iter_branch_added_lines()
+
+
+def test_screenshot_binaries_are_refused_on_a_reviewed_branch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A directory name is not provenance: any bytes can be put under it."""
+    monkeypatch.setattr(sys.modules[__name__], "_review_base", lambda: "base")
+    _fake_git(
+        monkeypatch,
+        {"diff --numstat": (0, "-\t-\tdocs/assets/screenshots/home.png\0")},
+    )
+
+    with pytest.raises(AssertionError, match="docs/assets/screenshots/home.png"):
+        _iter_branch_added_lines()
+
+
+def test_renamed_binary_is_refused_by_its_destination_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """``--numstat -z`` renders a rename as two records; the destination counts."""
+    monkeypatch.setattr(sys.modules[__name__], "_review_base", lambda: "base")
+    numstat = "-\t-\t\0docs/assets/screenshots/old.png\0docs/topology.png\0"
+    _fake_git(monkeypatch, {"diff --numstat": (0, numstat)})
+
+    with pytest.raises(AssertionError, match=re.escape("['docs/topology.png']")):
+        _iter_branch_added_lines()
+
+
+def test_text_filename_with_a_tab_is_still_scanned(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Git C-quotes such names in patch headers; the NUL listing carries them verbatim."""
+    monkeypatch.setattr(sys.modules[__name__], "_review_base", lambda: "base")
+    odd_name = "docs/odd\tname.md"
+    diff = f'+++ "b/docs/odd\\tname.md"\n@@ -0,0 +1 @@\n+{_PRIVATE_STACK_TOKEN}\n'
+    calls = _fake_git(
+        monkeypatch,
+        {"diff --numstat": (0, f"1\t0\t{odd_name}\0"), "diff -U0": (0, diff)},
+    )
+
+    additions = _iter_branch_added_lines()
+
+    assert [str(path.relative_to(REPO_ROOT)) for path, _n, _t in additions] == [
+        odd_name
+    ]
+    assert any(call[-2:] == ["--", odd_name] for call in calls)
+    with pytest.raises(AssertionError, match=re.escape(_PRIVATE_STACK_TOKEN)):
+        test_public_files_name_no_private_infrastructure()
 
 
 def test_the_disclosure_guard_catches_what_it_is_for() -> None:

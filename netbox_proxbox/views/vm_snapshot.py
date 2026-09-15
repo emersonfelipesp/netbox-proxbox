@@ -22,6 +22,11 @@ from netbox_proxbox.forms import (
 from netbox_proxbox.models import VMSnapshot
 from netbox_proxbox.tables import VMSnapshotTable
 from netbox_proxbox.views.mixins import TableConfigOverrideMixin
+from netbox_proxbox.views.data_protection import (
+    DataProtectionCalendarMixin,
+    _snapshot_details,
+    _snapshot_label,
+)
 
 
 __all__ = (
@@ -37,7 +42,7 @@ __all__ = (
 
 
 @register_model_view(VMSnapshot, "list", path="", detail=False)
-class VMSnapshotListView(generic.ObjectListView):
+class VMSnapshotListView(DataProtectionCalendarMixin, generic.ObjectListView):
     """Global list of VM snapshots with export and bulk delete actions."""
 
     queryset = VMSnapshot.objects.all()
@@ -46,6 +51,12 @@ class VMSnapshotListView(generic.ObjectListView):
     filterset_form = VMSnapshotFilterForm
     template_name = "netbox_proxbox/vmsnapshot_list.html"
     actions = (AddObject, BulkImport, BulkExport, BulkEdit, BulkDelete)
+    calendar_kind = "snapshot"
+    calendar_timestamp_field = "snaptime"
+    calendar_value_fields = ("virtual_machine__name", "name", "node")
+    calendar_label_builder = staticmethod(_snapshot_label)
+    calendar_detail_builder = staticmethod(_snapshot_details)
+    calendar_url_name = "plugins:netbox_proxbox:vmsnapshot"
 
 
 @register_model_view(VMSnapshot)

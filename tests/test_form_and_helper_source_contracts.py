@@ -33,7 +33,7 @@ def test_netbox_endpoint_form_reads_from_self_cleaned_data():
 def test_endpoint_forms_resolve_loopback_ip_initial_values():
     netbox_contents = _read("netbox_proxbox/forms/netbox.py")
     fastapi_contents = _read("netbox_proxbox/forms/fastapi.py")
-    utils_contents = _read("netbox_proxbox/utils.py")
+    utils_contents = _read("netbox_proxbox/utils/__init__.py")
 
     assert 'self.initial["ip_address"]' in netbox_contents
     assert "resolve_ip_address_initial" in netbox_contents

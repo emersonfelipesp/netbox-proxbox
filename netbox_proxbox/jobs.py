@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from collections.abc import Coroutine
 from datetime import datetime, timedelta
 import time
 import uuid
@@ -273,6 +274,21 @@ def _phases_from_service_result(
                 summary=summary,
             )
         )
+    aggregate_failed = getattr(result, "success", False) is not True
+    if not phases or (
+        aggregate_failed and all(phase.get("status") == "success" for phase in phases)
+    ):
+        phases.append(
+            _endpoint_runtime_phase(
+                endpoint_id=getattr(result, "endpoint_id", None),
+                endpoint_name=getattr(result, "endpoint_name", ""),
+                kind=kind,
+                label=label,
+                runtime_seconds=getattr(result, "runtime_seconds", None),
+                status="warning" if aggregate_failed else "success",
+                summary=str(getattr(result, "error", None) or f"{label} completed"),
+            )
+        )
     return phases
 
 
@@ -464,55 +480,77 @@ def _preflight_hint(notes: list[str]) -> str | None:
     return "Preflight reported: " + "; ".join(notes) + "."
 
 
-def _ensure_backend_endpoints(
-    job: "ProxboxSyncJob",
-    proxmox_endpoint_ids: list[str] | None = None,
-    fastapi_endpoint_id: int | None = None,
+class _BackendPreflightState:
+    """Connection data and warnings shared by endpoint-preflight helpers."""
+
+    __slots__ = ("auth_headers", "base_url", "context", "job", "notes", "verify_ssl")
+
+    def __init__(self, job: "ProxboxSyncJob", context: object) -> None:
+        self.job = job
+        self.context = context
+        self.base_url = context.http_url.rstrip("/")
+        self.auth_headers = dict(context.headers or {})
+        self.verify_ssl = bool(context.verify_ssl)
+        self.notes: list[str] = []
+
+
+class _NetBoxEndpointPush:
+    """Outcomes from pushing this NetBox's enabled endpoint rows."""
+
+    __slots__ = ("endpoints", "failures", "succeeded")
+
+    def __init__(self) -> None:
+        self.endpoints: list[object] = []
+        self.failures: list[str] = []
+        self.succeeded = False
+
+
+def _blocking_preflight(
+    state: _BackendPreflightState,
+    message: str,
 ) -> PreflightResult:
-    """Push NetBox and Proxmox endpoint data to the proxbox-api backend before sync.
+    """Log and return a blocking endpoint-preflight result."""
+    state.job.logger.error(message)
+    return PreflightResult(blocking_error=message, hint=_preflight_hint(state.notes))
 
-    Mostly best-effort: a Proxmox endpoint push failure is recorded as a warning
-    phase and the run continues, because the backend may already hold that row
-    from an earlier push or from manual creation in the Next.js UI.
 
-    Two cases are fatal. Without *any* FastAPI backend there is nothing to sync
-    through at all. And proxbox-api writes NetBox objects with the credentials
-    the NetBox-endpoint push installs, so when that push fails **and** the
-    backend confirms it holds no NetBox endpoint, no stage can succeed either.
-    Continuing anyway is what turned a cold-start timeout into an unrelated
-    "Error ensuring Proxbox tag" several minutes and several wasted stages later,
-    so both are reported as blocking errors instead.
+def _missing_backend_preflight(
+    job: "ProxboxSyncJob", fastapi_endpoint_id: int | None
+) -> PreflightResult:
+    """Return the fatal result for a missing selected backend."""
+    selected = (
+        f" (selected endpoint id {fastapi_endpoint_id})"
+        if fastapi_endpoint_id is not None
+        else ""
+    )
+    message = (
+        "Proxbox preflight failed: no usable proxbox-api backend is "
+        f"configured in NetBox{selected}. Every sync stage runs through that "
+        "backend, so none of them can run. Add an enabled FastAPI endpoint "
+        "under Proxbox → Endpoints → FastAPI, then run the sync again."
+    )
+    job.logger.error(message)
+    hint = _preflight_hint(["no enabled FastAPI endpoint is configured in NetBox"])
+    return PreflightResult(blocking_error=message, hint=hint)
 
-    ``fastapi_endpoint_id`` selects *which* backend to check. It must be the one
-    the stages will run against: checking a different enabled backend can both
-    block a run that would have worked and pass a run that cannot.
-    """
+
+def _resolve_backend_preflight_state(
+    job: "ProxboxSyncJob", fastapi_endpoint_id: int | None
+) -> tuple[_BackendPreflightState | None, PreflightResult | None]:
+    """Resolve the selected backend without importing transport helpers early."""
     from netbox_proxbox.services.backend_context import get_fastapi_request_context  # noqa: PLC0415
 
     context = get_fastapi_request_context(endpoint_id=fastapi_endpoint_id)
     if context is None or not context.http_url:
-        selected = (
-            f" (selected endpoint id {fastapi_endpoint_id})"
-            if fastapi_endpoint_id is not None
-            else ""
-        )
-        blocking_error = (
-            "Proxbox preflight failed: no usable proxbox-api backend is "
-            f"configured in NetBox{selected}. Every sync stage runs through that "
-            "backend, so none of them can run. Add an enabled FastAPI endpoint "
-            "under Proxbox → Endpoints → FastAPI, then run the sync again."
-        )
-        job.logger.error(blocking_error)
-        return PreflightResult(
-            blocking_error=blocking_error,
-            hint=_preflight_hint(
-                ["no enabled FastAPI endpoint is configured in NetBox"]
-            ),
-        )
+        return None, _missing_backend_preflight(job, fastapi_endpoint_id)
+    return _BackendPreflightState(job, context), None
 
-    # Imported after the guard above: with no backend configured there is nothing
-    # for these to talk to, and the early return must not depend on them.
-    from netbox_proxbox.models import NetBoxEndpoint  # noqa: PLC0415
+
+def _probe_backend_preflight(
+    state: _BackendPreflightState,
+    fastapi_endpoint_id: int | None,
+) -> None:
+    """Record bounded reachability and API-key checks as preflight hints."""
     from netbox_proxbox.services.backend_auth import (  # noqa: PLC0415
         PREFLIGHT_READY_INITIAL_DELAY,
         PREFLIGHT_READY_MAX_DELAY,
@@ -520,388 +558,495 @@ def _ensure_backend_endpoints(
         ensure_backend_key_registered,
         wait_for_backend_ready,
     )
-    from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
-        PREFLIGHT_ENDPOINT_PUSH_BUDGET,
-        PREFLIGHT_ENDPOINT_PUSH_HARD_CEILING,
-        backend_holds_netbox_endpoint,
-        backend_holds_proxmox_endpoint,
-        list_backend_netbox_endpoints,
-        list_backend_proxmox_endpoints,
-        netbox_push_credentials_unchanged,
-        proxmox_endpoint_credentials_rotated_since_last_push,
-        sync_netbox_endpoint_to_backend,
-        sync_proxmox_endpoint_to_backend,
-    )
 
-    notes: list[str] = []
-
-    # Give a cold backend a bounded chance to answer before the first
-    # authenticated call.  A freshly started proxbox-api spends its first seconds
-    # opening SQLite and resolving the NetBox OpenAPI schema, and without this the
-    # preflight raced that start-up and failed on timeouts alone.
     ready, ready_msg = wait_for_backend_ready(
-        context,
+        state.context,
         max_retries=PREFLIGHT_READY_MAX_RETRIES,
         initial_delay=PREFLIGHT_READY_INITIAL_DELAY,
         max_delay=PREFLIGHT_READY_MAX_DELAY,
     )
-    if ready:
-        job.logger.info(f"Preflight: backend reachable — {ready_msg}")
-    else:
-        job.logger.warning(f"Preflight: backend not reachable — {ready_msg}")
-        notes.append(f"the proxbox-api backend failed its health check ({ready_msg})")
-
-    # Ensure the API key is registered before making authenticated requests.
+    _record_backend_reachability(state, ready, ready_msg)
     key_ok, key_msg = ensure_backend_key_registered(endpoint_id=fastapi_endpoint_id)
+    _record_backend_key_check(state, key_ok, key_msg)
+
+
+def _record_backend_reachability(
+    state: _BackendPreflightState, ready: bool, message: str
+) -> None:
+    """Record one proxbox-api health-check outcome."""
+    if ready:
+        state.job.logger.info(f"Preflight: backend reachable — {message}")
+        return
+    state.job.logger.warning(f"Preflight: backend not reachable — {message}")
+    state.notes.append(f"the proxbox-api backend failed its health check ({message})")
+
+
+def _record_backend_key_check(
+    state: _BackendPreflightState, key_ok: bool, message: str
+) -> None:
+    """Record one proxbox-api key-registration outcome."""
     if key_ok:
-        job.logger.info(f"Preflight: API key verified — {key_msg}")
-    else:
-        job.logger.warning(f"Preflight: API key registration failed — {key_msg}")
-        notes.append(f"the proxbox-api API key was not registered ({key_msg})")
+        state.job.logger.info(f"Preflight: API key verified — {message}")
+        return
+    state.job.logger.warning(f"Preflight: API key registration failed — {message}")
+    state.notes.append(f"the proxbox-api API key was not registered ({message})")
 
-    base_url = context.http_url.rstrip("/")
-    auth_headers = dict(context.headers or {})
-    backend_verify_ssl = bool(context.verify_ssl)
 
-    # Push all enabled NetBox endpoints (singleton in practice).
-    netbox_push_failures: list[str] = []
-    netbox_push_succeeded = False
-    netbox_endpoint_count = 0
-    enabled_netbox_endpoints: list[object] = []
-    for nb_ep in NetBoxEndpoint.objects.filter(enabled=True):
-        netbox_endpoint_count += 1
-        enabled_netbox_endpoints.append(nb_ep)
-        ok, err, _ = sync_netbox_endpoint_to_backend(
-            nb_ep,
-            base_url=base_url,
-            auth_headers=auth_headers,
-            backend_verify_ssl=backend_verify_ssl,
-        )
-        nb_label = getattr(nb_ep, "name", nb_ep.pk)
-        if ok:
-            netbox_push_succeeded = True
-            job.logger.info(
-                f"Preflight: synced NetBox endpoint '{nb_label}' to proxbox-api backend"
-            )
-        else:
-            job.logger.warning(
-                f"Preflight: could not sync NetBox endpoint "
-                f"'{nb_label}' to proxbox-api: {err}"
-            )
-            netbox_push_failures.append(f"'{nb_label}': {err}")
-
-    if netbox_endpoint_count == 0:
-        # Zero enabled rows is not a failed push — it is this NetBox declining to
-        # be written to at all. A disabled (or absent) NetBoxEndpoint is the
-        # documented hard no-connection gate, so it blocks unconditionally and
-        # the backend's stored rows are deliberately *not* consulted: proxbox-api
-        # may still hold credentials from before the row was disabled, or for an
-        # entirely different NetBox instance, and honouring those would let the
-        # sync keep writing with exactly the authorization the operator revoked.
-        blocking_error = (
-            "Proxbox preflight failed: this NetBox has no enabled NetBox endpoint, "
-            "so proxbox-api is not authorized to write to it. A disabled or missing "
-            "NetBox endpoint is a hard stop, not a warning — any credentials the "
-            "backend still holds are stale or belong to another NetBox instance, and "
-            "syncing with them would write outside this instance's control. Enable "
-            "(or create) the NetBox endpoint under Proxbox → Endpoints, then run the "
-            "sync again."
-        )
-        job.logger.error(blocking_error)
-        notes.append("no enabled NetBox endpoint exists in this NetBox instance")
-        return PreflightResult(
-            blocking_error=blocking_error,
-            hint=_preflight_hint(notes),
-        )
-
-    # Only reachable with at least one enabled local row, so the backend's stored
-    # configuration is a legitimate fallback for a *transient* push failure here.
-    if netbox_push_failures:
-        failure_text = "; ".join(netbox_push_failures)
-        notes.append(
-            f"the NetBox endpoint was not pushed to proxbox-api ({failure_text})"
-        )
-        # Distinguish "the backend has no NetBox credentials at all" (fatal) from
-        # "the push failed but the backend still holds a usable record" (not).
-        backend_rows, list_err = list_backend_netbox_endpoints(
-            base_url=base_url,
-            auth_headers=auth_headers,
-            backend_verify_ssl=backend_verify_ssl,
-        )
-        if backend_rows is None and netbox_push_succeeded:
-            # Another enabled row *did* reach proxbox-api, so the backend
-            # provably holds this NetBox's credentials whatever the listing
-            # call could not tell us. Nothing to verify.
-            job.logger.warning(
-                "Preflight: could not verify which NetBox endpoint proxbox-api "
-                f"holds — {list_err}. Another enabled NetBox endpoint was pushed "
-                "successfully, so continuing."
-            )
-        elif backend_rows is None:
-            # Nothing was pushed and nothing can be read back, so there is no
-            # evidence at all that proxbox-api holds *this* NetBox's
-            # credentials — only that it may hold somebody's. Continuing here
-            # would reintroduce exactly the cross-instance write this preflight
-            # exists to block, just through an ambiguous read instead of a
-            # mismatched row. "Unknown" is not "ours": fail closed.
-            blocking_error = (
-                "Proxbox preflight failed: this run could not push its NetBox "
-                f"endpoint ({failure_text}), and could not read back which NetBox "
-                f"endpoint proxbox-api holds either ({list_err}). Without one of "
-                "those two the backend's credentials cannot be shown to belong to "
-                "this NetBox, and syncing with somebody else's would write this "
-                "estate's Proxmox inventory into their instance. Check that "
-                f"proxbox-api is running and reachable at {base_url} and that the "
-                "FastAPI endpoint token in NetBox matches the one it expects, then "
-                "run the sync again."
-            )
-            job.logger.error(blocking_error)
-            return PreflightResult(
-                blocking_error=blocking_error,
-                hint=_preflight_hint(notes),
-            )
-        elif not backend_rows:
-            blocking_error = (
-                "Proxbox preflight failed: proxbox-api holds no NetBox endpoint and "
-                f"this run could not push one ({failure_text}). Without it the "
-                "backend has no credentials to write to NetBox, so every sync stage "
-                "would fail with an unrelated-looking error. Check that proxbox-api "
-                f"is running and reachable at {base_url}, that the FastAPI endpoint "
-                "token in NetBox matches the one it expects, then run the sync again."
-            )
-            job.logger.error(blocking_error)
-            return PreflightResult(
-                blocking_error=blocking_error,
-                hint=_preflight_hint(notes),
-            )
-        else:
-            # Three-way, because "a stored row points at this NetBox" and "that
-            # row carries the credentials NetBox currently holds" are different
-            # questions with different answers after an in-place token rotation.
-            # `backend_holds_netbox_endpoint()` can only compare what
-            # `NetBoxEndpointResponse` gives back, and it withholds
-            # `token`/`token_key` — so the *secret* is checked here instead,
-            # against the fingerprint the last successful push recorded locally.
-            held = [
-                nb_ep
-                for nb_ep in enabled_netbox_endpoints
-                if backend_holds_netbox_endpoint(nb_ep, backend_rows)
-            ]
-            vouched = [
-                nb_ep for nb_ep in held if netbox_push_credentials_unchanged(nb_ep)
-            ]
-            if vouched:
-                job.logger.warning(
-                    "Preflight: the NetBox endpoint push failed, but proxbox-api "
-                    f"already holds {len(backend_rows)} NetBox endpoint record(s) "
-                    "pointing at this NetBox; continuing with the backend's stored "
-                    "configuration, which may be stale."
-                )
-            elif held:
-                # A row names this NetBox and reports the posture we push, but
-                # the credential itself has moved on since the last successful
-                # push — a rotated v1 token, or a re-issued v2 secret under the
-                # same scheme. proxbox-api would keep writing with the token the
-                # operator has already revoked, which is a write this NetBox no
-                # longer authorizes; the whole point of rotating is that the old
-                # value stops working. An *empty* stored fingerprint lands here
-                # too (never pushed, or first run after upgrading into this
-                # check), and blocking is the fail-closed reading: one successful
-                # push clears it permanently.
-                blocking_error = (
-                    "Proxbox preflight failed: this run could not push its NetBox "
-                    f"endpoint ({failure_text}), and the NetBox endpoint record "
-                    "proxbox-api holds was written with different credentials than "
-                    "this NetBox endpoint now carries (its API token was rotated, "
-                    "or has never been pushed successfully). Continuing would let "
-                    "the backend keep writing with a credential this NetBox has "
-                    "replaced. Check that proxbox-api is running and reachable at "
-                    f"{base_url} and that the FastAPI endpoint token in NetBox "
-                    "matches the one it expects, then run the sync again so the "
-                    "current token is pushed."
-                )
-                job.logger.error(blocking_error)
-                return PreflightResult(
-                    blocking_error=blocking_error,
-                    hint=_preflight_hint(notes),
-                )
-            else:
-                # Rows exist but none of them points at this NetBox. That is
-                # worse than an empty backend, not better: proxbox-api would keep
-                # writing with credentials for *somewhere else*, so the run would
-                # look healthy while reconciling another instance's objects.
-                # Presence is not identity — the backend's NetBox endpoint is a
-                # singleton that every push overwrites, so a row can easily
-                # belong to a previous deployment or to a different NetBox
-                # sharing this backend.
-                blocking_error = (
-                    "Proxbox preflight failed: this run could not push its NetBox "
-                    f"endpoint ({failure_text}), and the "
-                    f"{len(backend_rows)} NetBox endpoint record(s) proxbox-api "
-                    "already holds do not point at this NetBox. Continuing would "
-                    "let the backend write to whichever NetBox those stored "
-                    "credentials belong to instead of this one. Check that "
-                    f"proxbox-api is reachable at {base_url} and that its NetBox "
-                    "endpoint matches this instance's domain/IP and port, then run "
-                    "the sync again."
-                )
-                job.logger.error(blocking_error)
-                return PreflightResult(
-                    blocking_error=blocking_error,
-                    hint=_preflight_hint(notes),
-                )
-
-    # Push Proxmox endpoints — filter by IDs if the job was scoped to specific ones.
-    if proxmox_endpoint_ids:
-        valid_endpoint_ids = _coerce_endpoint_ids(
-            proxmox_endpoint_ids,
-            logger=job.logger,
-            context="preflight endpoint push",
-        )
-        proxmox_qs = ProxmoxEndpoint.objects.filter(
-            pk__in=valid_endpoint_ids, enabled=True
-        )
-    else:
-        proxmox_qs = ProxmoxEndpoint.objects.filter(enabled=True)
-
-    # Fetch the backend's Proxmox rows once and reuse them for every push. Each
-    # push would otherwise re-list them, which on a slow or hanging backend costs
-    # a full timeout per endpoint on top of the write itself.
-    existing_proxmox, existing_err = list_backend_proxmox_endpoints(
-        base_url=base_url,
-        auth_headers=auth_headers,
-        backend_verify_ssl=backend_verify_ssl,
+def _push_one_netbox_endpoint(
+    state: _BackendPreflightState,
+    push: _NetBoxEndpointPush,
+    endpoint: object,
+    push_endpoint: object,
+) -> None:
+    """Push one local NetBox endpoint and record its exact outcome."""
+    push.endpoints.append(endpoint)
+    ok, error, _ = push_endpoint(
+        endpoint,
+        base_url=state.base_url,
+        auth_headers=state.auth_headers,
+        backend_verify_ssl=state.verify_ssl,
     )
-    if existing_proxmox is None:
-        job.logger.warning(
-            "Preflight: could not list the Proxmox endpoints proxbox-api holds "
-            f"— {existing_err}. Each endpoint push will list them itself."
+    label = getattr(endpoint, "name", endpoint.pk)
+    if ok:
+        push.succeeded = True
+        state.job.logger.info(
+            f"Preflight: synced NetBox endpoint '{label}' to proxbox-api backend"
         )
+        return
+    state.job.logger.warning(
+        f"Preflight: could not sync NetBox endpoint '{label}' to proxbox-api: {error}"
+    )
+    push.failures.append(f"'{label}': {error}")
 
+
+def _push_enabled_netbox_endpoints(
+    state: _BackendPreflightState,
+) -> _NetBoxEndpointPush:
+    """Push all enabled local NetBox endpoints to the selected backend."""
+    from netbox_proxbox.models import NetBoxEndpoint  # noqa: PLC0415
+    from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
+        sync_netbox_endpoint_to_backend,
+    )
+
+    push = _NetBoxEndpointPush()
+    for endpoint in NetBoxEndpoint.objects.filter(enabled=True):
+        _push_one_netbox_endpoint(
+            state, push, endpoint, sync_netbox_endpoint_to_backend
+        )
+    return push
+
+
+def _no_enabled_netbox_endpoint(
+    state: _BackendPreflightState,
+) -> PreflightResult:
+    """Block when this NetBox has revoked every writable endpoint row."""
+    message = (
+        "Proxbox preflight failed: this NetBox has no enabled NetBox endpoint, "
+        "so proxbox-api is not authorized to write to it. A disabled or missing "
+        "NetBox endpoint is a hard stop, not a warning — any credentials the "
+        "backend still holds are stale or belong to another NetBox instance, and "
+        "syncing with them would write outside this instance's control. Enable "
+        "(or create) the NetBox endpoint under Proxbox → Endpoints, then run the "
+        "sync again."
+    )
+    state.notes.append("no enabled NetBox endpoint exists in this NetBox instance")
+    return _blocking_preflight(state, message)
+
+
+def _unverifiable_netbox_endpoint(
+    state: _BackendPreflightState,
+    failure_text: str,
+    list_error: object,
+) -> PreflightResult:
+    """Block when neither a push nor an identity read can prove ownership."""
+    message = (
+        "Proxbox preflight failed: this run could not push its NetBox "
+        f"endpoint ({failure_text}), and could not read back which NetBox "
+        f"endpoint proxbox-api holds either ({list_error}). Without one of "
+        "those two the backend's credentials cannot be shown to belong to "
+        "this NetBox, and syncing with somebody else's would write this "
+        "estate's Proxmox inventory into their instance. Check that "
+        f"proxbox-api is running and reachable at {state.base_url} and that the "
+        "FastAPI endpoint token in NetBox matches the one it expects, then "
+        "run the sync again."
+    )
+    return _blocking_preflight(state, message)
+
+
+def _empty_backend_netbox_endpoints(
+    state: _BackendPreflightState,
+    failure_text: str,
+) -> PreflightResult:
+    """Block when a failed push leaves proxbox-api without a NetBox row."""
+    message = (
+        "Proxbox preflight failed: proxbox-api holds no NetBox endpoint and "
+        f"this run could not push one ({failure_text}). Without it the "
+        "backend has no credentials to write to NetBox, so every sync stage "
+        "would fail with an unrelated-looking error. Check that proxbox-api "
+        f"is running and reachable at {state.base_url}, that the FastAPI endpoint "
+        "token in NetBox matches the one it expects, then run the sync again."
+    )
+    return _blocking_preflight(state, message)
+
+
+def _rotated_backend_netbox_endpoint(
+    state: _BackendPreflightState,
+    failure_text: str,
+) -> PreflightResult:
+    """Block a stored NetBox row whose locally attested credential changed."""
+    message = (
+        "Proxbox preflight failed: this run could not push its NetBox "
+        f"endpoint ({failure_text}), and the NetBox endpoint record "
+        "proxbox-api holds was written with different credentials than "
+        "this NetBox endpoint now carries (its API token was rotated, "
+        "or has never been pushed successfully). Continuing would let "
+        "the backend keep writing with a credential this NetBox has "
+        "replaced. Check that proxbox-api is running and reachable at "
+        f"{state.base_url} and that the FastAPI endpoint token in NetBox "
+        "matches the one it expects, then run the sync again so the "
+        "current token is pushed."
+    )
+    return _blocking_preflight(state, message)
+
+
+def _foreign_backend_netbox_endpoint(
+    state: _BackendPreflightState,
+    failure_text: str,
+    backend_rows: list[object],
+) -> PreflightResult:
+    """Block stored backend credentials that do not identify this NetBox."""
+    message = (
+        "Proxbox preflight failed: this run could not push its NetBox "
+        f"endpoint ({failure_text}), and the "
+        f"{len(backend_rows)} NetBox endpoint record(s) proxbox-api "
+        "already holds do not point at this NetBox. Continuing would "
+        "let the backend write to whichever NetBox those stored "
+        "credentials belong to instead of this one. Check that "
+        f"proxbox-api is reachable at {state.base_url} and that its NetBox "
+        "endpoint matches this instance's domain/IP and port, then run "
+        "the sync again."
+    )
+    return _blocking_preflight(state, message)
+
+
+def _verify_stored_netbox_endpoints(
+    state: _BackendPreflightState,
+    push: _NetBoxEndpointPush,
+    failure_text: str,
+    backend_rows: list[object],
+) -> PreflightResult | None:
+    """Classify stored proxbox-api NetBox rows after a failed local push."""
+    from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
+        backend_holds_netbox_endpoint,
+        netbox_push_credentials_unchanged,
+    )
+
+    held = [
+        endpoint
+        for endpoint in push.endpoints
+        if backend_holds_netbox_endpoint(endpoint, backend_rows)
+    ]
+    vouched = [
+        endpoint for endpoint in held if netbox_push_credentials_unchanged(endpoint)
+    ]
+    if vouched:
+        state.job.logger.warning(
+            "Preflight: the NetBox endpoint push failed, but proxbox-api "
+            f"already holds {len(backend_rows)} NetBox endpoint record(s) "
+            "pointing at this NetBox; continuing with the backend's stored "
+            "configuration, which may be stale."
+        )
+        return None
+    if held:
+        return _rotated_backend_netbox_endpoint(state, failure_text)
+    return _foreign_backend_netbox_endpoint(state, failure_text, backend_rows)
+
+
+def _classify_failed_netbox_push(
+    state: _BackendPreflightState,
+    push: _NetBoxEndpointPush,
+) -> PreflightResult | None:
+    """Require positive ownership evidence after any NetBox endpoint push fails."""
+    from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
+        list_backend_netbox_endpoints,
+    )
+
+    failure_text = "; ".join(push.failures)
+    state.notes.append(
+        f"the NetBox endpoint was not pushed to proxbox-api ({failure_text})"
+    )
+    backend_rows, list_error = list_backend_netbox_endpoints(
+        base_url=state.base_url,
+        auth_headers=state.auth_headers,
+        backend_verify_ssl=state.verify_ssl,
+    )
+    if backend_rows is None and push.succeeded:
+        state.job.logger.warning(
+            "Preflight: could not verify which NetBox endpoint proxbox-api "
+            f"holds — {list_error}. Another enabled NetBox endpoint was pushed "
+            "successfully, so continuing."
+        )
+        return None
+    if backend_rows is None:
+        return _unverifiable_netbox_endpoint(state, failure_text, list_error)
+    if not backend_rows:
+        return _empty_backend_netbox_endpoints(state, failure_text)
+    return _verify_stored_netbox_endpoints(state, push, failure_text, backend_rows)
+
+
+def _verify_netbox_endpoint_push(
+    state: _BackendPreflightState,
+    push: _NetBoxEndpointPush,
+) -> PreflightResult | None:
+    """Return a blocking result unless this NetBox's write identity is proven."""
+    if not push.endpoints:
+        return _no_enabled_netbox_endpoint(state)
+    if push.failures:
+        return _classify_failed_netbox_push(state, push)
+    return None
+
+
+def _selected_proxmox_endpoints(
+    state: _BackendPreflightState,
+    proxmox_endpoint_ids: list[str] | None,
+):
+    """Return enabled Proxmox endpoints within the requested local scope."""
+    if not proxmox_endpoint_ids:
+        return ProxmoxEndpoint.objects.filter(enabled=True)
+    endpoint_ids = _coerce_endpoint_ids(
+        proxmox_endpoint_ids,
+        logger=state.job.logger,
+        context="preflight endpoint push",
+    )
+    return ProxmoxEndpoint.objects.filter(pk__in=endpoint_ids, enabled=True)
+
+
+def _proxmox_skip_summary(
+    elapsed: float,
+    already_registered: bool,
+    budget: float,
+    hard_ceiling: float,
+) -> str | None:
+    """Return why one endpoint push must be skipped, or ``None`` to push."""
+    if elapsed >= hard_ceiling:
+        return (
+            "Skipped: the preflight endpoint-push hard ceiling of "
+            f"{hard_ceiling:.0f}s was reached"
+        )
+    if elapsed >= budget and already_registered:
+        return (
+            "Skipped: the preflight endpoint-push budget of "
+            f"{budget:.0f}s was exhausted and proxbox-api already holds this endpoint"
+        )
+    return None
+
+
+def _skipped_proxmox_phase(endpoint: object, summary: str) -> dict[str, object]:
+    """Build a zero-runtime warning phase for a budget-skipped endpoint."""
+    return _endpoint_runtime_phase(
+        endpoint_id=getattr(endpoint, "pk", None),
+        endpoint_name=getattr(endpoint, "name", None) or str(endpoint),
+        kind="preflight",
+        label="Backend endpoint push",
+        runtime_seconds=0.0,
+        status="warning",
+        summary=summary,
+    )
+
+
+def _proxmox_rotation_note(
+    state: _BackendPreflightState,
+    endpoint: object,
+    label: object,
+) -> str:
+    """Attribute a failed push to credential rotation without exposing secrets."""
+    from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
+        proxmox_endpoint_credentials_rotated_since_last_push,
+    )
+
+    try:
+        rotated = proxmox_endpoint_credentials_rotated_since_last_push(endpoint)
+    except Exception as exc:  # noqa: BLE001
+        state.job.logger.warning(
+            f"Could not evaluate credential rotation for Proxmox endpoint "
+            f"{getattr(endpoint, 'pk', None)}: {type(exc).__name__}"
+        )
+        return ""
+    if not rotated:
+        return ""
+    state.notes.append(
+        f"Proxmox endpoint '{label}' push failed after an in-place credential "
+        "change; proxbox-api may still hold the previous secret."
+    )
+    return (
+        " This endpoint's credentials changed since the last confirmed push, "
+        "so proxbox-api may still be holding the previous secret — if so, "
+        "Proxmox reads for this endpoint will fail to authenticate until a push "
+        "succeeds."
+    )
+
+
+def _push_one_proxmox_endpoint(
+    state: _BackendPreflightState,
+    endpoint: object,
+    existing_endpoints: list[object] | None,
+) -> dict[str, object]:
+    """Push one Proxmox endpoint and return its runtime phase."""
+    from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
+        sync_proxmox_endpoint_to_backend,
+    )
+
+    label = getattr(endpoint, "name", endpoint.pk)
+    started = time.monotonic()
+    ok, error, _ = sync_proxmox_endpoint_to_backend(
+        endpoint,
+        base_url=state.base_url,
+        auth_headers=state.auth_headers,
+        backend_verify_ssl=state.verify_ssl,
+        existing_endpoints=existing_endpoints,
+    )
+    if ok:
+        state.job.logger.info(
+            f"Preflight: synced Proxmox endpoint '{label}' to proxbox-api backend"
+        )
+    else:
+        rotation_note = _proxmox_rotation_note(state, endpoint, label)
+        state.job.logger.warning(
+            f"Preflight: could not sync Proxmox endpoint "
+            f"'{label}' to proxbox-api: {error}{rotation_note}"
+        )
+    return _proxmox_push_phase(endpoint, started, ok, error)
+
+
+def _proxmox_push_phase(
+    endpoint: object,
+    started: float,
+    ok: bool,
+    error: object,
+) -> dict[str, object]:
+    """Build one completed Proxmox endpoint-push runtime phase."""
+    summary = (
+        "Proxmox endpoint pushed to proxbox-api"
+        if ok
+        else f"Proxmox endpoint push failed: {error}"
+    )
+    return _endpoint_runtime_phase(
+        endpoint_id=getattr(endpoint, "pk", None),
+        endpoint_name=getattr(endpoint, "name", None) or str(endpoint),
+        kind="preflight",
+        label="Backend endpoint push",
+        runtime_seconds=_runtime_seconds_since(started),
+        status="success" if ok else "warning",
+        summary=summary,
+    )
+
+
+def _record_skipped_proxmox_pushes(
+    state: _BackendPreflightState,
+    skipped: list[str],
+    budget: float,
+    hard_ceiling: float,
+) -> None:
+    """Carry endpoint-push budget exhaustion into logs and later stage hints."""
+    if not skipped:
+        return
+    skipped_text = ", ".join(skipped)
+    state.job.logger.warning(
+        f"Preflight: the {budget:.0f}s endpoint-push budget was exhausted; "
+        f"skipped pushing {len(skipped)} Proxmox endpoint(s) to proxbox-api "
+        f"({skipped_text}). Continuing — each skipped endpoint was either already "
+        f"held by the backend or skipped past the {hard_ceiling:.0f}s hard ceiling."
+    )
+    state.notes.append(
+        f"{len(skipped)} Proxmox endpoint(s) were not pushed to proxbox-api "
+        f"because the preflight push budget was exhausted ({skipped_text})"
+    )
+
+
+def _push_proxmox_endpoints(
+    state: _BackendPreflightState,
+    proxmox_endpoint_ids: list[str] | None,
+) -> PreflightResult:
+    """Push selected Proxmox endpoints within the bounded preflight budget."""
+    from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
+        PREFLIGHT_ENDPOINT_PUSH_BUDGET,
+        PREFLIGHT_ENDPOINT_PUSH_HARD_CEILING,
+        backend_holds_proxmox_endpoint,
+        list_backend_proxmox_endpoints,
+    )
+
+    endpoints = _selected_proxmox_endpoints(state, proxmox_endpoint_ids)
+    existing, error = list_backend_proxmox_endpoints(
+        base_url=state.base_url,
+        auth_headers=state.auth_headers,
+        backend_verify_ssl=state.verify_ssl,
+    )
+    if existing is None:
+        state.job.logger.warning(
+            "Preflight: could not list the Proxmox endpoints proxbox-api holds "
+            f"— {error}. Each endpoint push will list them itself."
+        )
     phases: list[dict[str, object]] = []
-    push_started = time.monotonic()
-    skipped_for_budget: list[str] = []
-    for px_ep in proxmox_qs:
-        px_label = getattr(px_ep, "name", px_ep.pk)
-        elapsed = time.monotonic() - push_started
-        # Preflight must not be able to consume the whole job timeout. But the
-        # budget is only allowed to skip a push that is a *refresh* — skipping an
-        # endpoint proxbox-api has never seen leaves it with no backend id, and
-        # the run then fails on exactly the endpoint the budget "saved" time on.
-        # Past the hard ceiling everything is skipped, because at that point the
-        # backend is not slow, it is hung, and no amount of waiting resolves it.
-        over_ceiling = elapsed >= PREFLIGHT_ENDPOINT_PUSH_HARD_CEILING
-        already_registered = backend_holds_proxmox_endpoint(px_ep, existing_proxmox)
-        if over_ceiling or (
-            elapsed >= PREFLIGHT_ENDPOINT_PUSH_BUDGET and already_registered
-        ):
-            skipped_for_budget.append(str(px_label))
-            skip_summary = (
-                "Skipped: the preflight endpoint-push hard ceiling of "
-                f"{PREFLIGHT_ENDPOINT_PUSH_HARD_CEILING:.0f}s was reached"
-                if over_ceiling
-                else (
-                    "Skipped: the preflight endpoint-push budget of "
-                    f"{PREFLIGHT_ENDPOINT_PUSH_BUDGET:.0f}s was exhausted and "
-                    "proxbox-api already holds this endpoint"
-                )
-            )
-            phases.append(
-                _endpoint_runtime_phase(
-                    endpoint_id=getattr(px_ep, "pk", None),
-                    endpoint_name=getattr(px_ep, "name", None) or str(px_ep),
-                    kind="preflight",
-                    label="Backend endpoint push",
-                    runtime_seconds=0.0,
-                    status="warning",
-                    summary=skip_summary,
-                )
-            )
+    skipped: list[str] = []
+    started = time.monotonic()
+    for endpoint in endpoints:
+        elapsed = time.monotonic() - started
+        registered = backend_holds_proxmox_endpoint(endpoint, existing)
+        summary = _proxmox_skip_summary(
+            elapsed,
+            registered,
+            PREFLIGHT_ENDPOINT_PUSH_BUDGET,
+            PREFLIGHT_ENDPOINT_PUSH_HARD_CEILING,
+        )
+        if summary is not None:
+            skipped.append(str(getattr(endpoint, "name", endpoint.pk)))
+            phases.append(_skipped_proxmox_phase(endpoint, summary))
             continue
-        if elapsed >= PREFLIGHT_ENDPOINT_PUSH_BUDGET:
-            job.logger.info(
-                f"Preflight: past the {PREFLIGHT_ENDPOINT_PUSH_BUDGET:.0f}s push "
-                f"budget, but proxbox-api does not yet hold '{px_label}' — pushing "
-                "anyway so the endpoint can resolve to a backend id"
-            )
-        endpoint_started = time.monotonic()
-        ok, err, _ = sync_proxmox_endpoint_to_backend(
-            px_ep,
-            base_url=base_url,
-            auth_headers=auth_headers,
-            backend_verify_ssl=backend_verify_ssl,
-            existing_endpoints=existing_proxmox,
+        _log_over_budget_unregistered(
+            state, endpoint, elapsed, PREFLIGHT_ENDPOINT_PUSH_BUDGET
         )
-        if ok:
-            job.logger.info(
-                f"Preflight: synced Proxmox endpoint '{px_label}' to proxbox-api backend"
-            )
-        else:
-            rotated_note = ""
-            try:
-                if proxmox_endpoint_credentials_rotated_since_last_push(px_ep):
-                    # "May" is deliberate: a failed push does not prove the
-                    # backend kept the old secret — proxbox-api can commit the
-                    # update and the client still time out reading the
-                    # response. What the fingerprint does prove is that no
-                    # *confirmed* push has delivered the current secret.
-                    rotated_note = (
-                        " This endpoint's credentials changed since the last "
-                        "confirmed push, so proxbox-api may still be holding "
-                        "the previous secret — if so, Proxmox reads for this "
-                        "endpoint will fail to authenticate until a push "
-                        "succeeds."
-                    )
-                    notes.append(
-                        f"Proxmox endpoint '{px_label}' push failed after an "
-                        "in-place credential change; proxbox-api may still "
-                        "hold the previous secret."
-                    )
-            except Exception as attribution_exc:  # noqa: BLE001
-                # Attribution must never fail the push loop, but a swallowed
-                # decryption or DB error would silently delete the hint on the
-                # runs that most need it — so the suppression is logged,
-                # type-only (the exception could render decrypted material).
-                rotated_note = ""
-                job.logger.warning(
-                    f"Could not evaluate credential rotation for Proxmox endpoint "
-                    f"{getattr(px_ep, 'pk', None)}: {type(attribution_exc).__name__}"
-                )
-            job.logger.warning(
-                f"Preflight: could not sync Proxmox endpoint "
-                f"'{px_label}' to proxbox-api: {err}{rotated_note}"
-            )
-        phases.append(
-            _endpoint_runtime_phase(
-                endpoint_id=getattr(px_ep, "pk", None),
-                endpoint_name=getattr(px_ep, "name", None) or str(px_ep),
-                kind="preflight",
-                label="Backend endpoint push",
-                runtime_seconds=_runtime_seconds_since(endpoint_started),
-                status="success" if ok else "warning",
-                summary=(
-                    "Proxmox endpoint pushed to proxbox-api"
-                    if ok
-                    else f"Proxmox endpoint push failed: {err}"
-                ),
-            )
-        )
-    if skipped_for_budget:
-        skipped_text = ", ".join(skipped_for_budget)
-        job.logger.warning(
-            f"Preflight: the {PREFLIGHT_ENDPOINT_PUSH_BUDGET:.0f}s endpoint-push "
-            f"budget was exhausted; skipped pushing {len(skipped_for_budget)} "
-            f"Proxmox endpoint(s) to proxbox-api ({skipped_text}). Continuing — "
-            "each skipped endpoint was either already held by the backend or "
-            f"skipped past the {PREFLIGHT_ENDPOINT_PUSH_HARD_CEILING:.0f}s hard "
-            "ceiling."
-        )
-        notes.append(
-            f"{len(skipped_for_budget)} Proxmox endpoint(s) were not pushed to "
-            "proxbox-api because the preflight push budget was exhausted "
-            f"({skipped_text})"
-        )
-    return PreflightResult(phases=phases, hint=_preflight_hint(notes))
+        phases.append(_push_one_proxmox_endpoint(state, endpoint, existing))
+    _record_skipped_proxmox_pushes(
+        state,
+        skipped,
+        PREFLIGHT_ENDPOINT_PUSH_BUDGET,
+        PREFLIGHT_ENDPOINT_PUSH_HARD_CEILING,
+    )
+    return PreflightResult(phases=phases, hint=_preflight_hint(state.notes))
+
+
+def _log_over_budget_unregistered(
+    state: _BackendPreflightState,
+    endpoint: object,
+    elapsed: float,
+    budget: float,
+) -> None:
+    """Explain why an unregistered endpoint still pushes after budget expiry."""
+    if elapsed < budget:
+        return
+    label = getattr(endpoint, "name", endpoint.pk)
+    state.job.logger.info(
+        f"Preflight: past the {budget:.0f}s push budget, but proxbox-api does not "
+        f"yet hold '{label}' — pushing anyway so the endpoint can resolve to a "
+        "backend id"
+    )
+
+
+def _ensure_backend_endpoints(
+    job: "ProxboxSyncJob",
+    proxmox_endpoint_ids: list[str] | None = None,
+    fastapi_endpoint_id: int | None = None,
+) -> PreflightResult:
+    """Validate backend identity and push endpoint data before reconciliation."""
+    state, blocking = _resolve_backend_preflight_state(job, fastapi_endpoint_id)
+    if blocking is not None or state is None:
+        return blocking or _missing_backend_preflight(job, fastapi_endpoint_id)
+    _probe_backend_preflight(state, fastapi_endpoint_id)
+    netbox_push = _push_enabled_netbox_endpoints(state)
+    blocking = _verify_netbox_endpoint_push(state, netbox_push)
+    if blocking is not None:
+        return blocking
+    return _push_proxmox_endpoints(state, proxmox_endpoint_ids)
 
 
 class BackendKeyPreflightError(RuntimeError):
@@ -1117,6 +1262,1013 @@ class ProxmoxServiceMonitoringJob(JobRunner):
                 _record_service_monitoring_tick_error(endpoint, str(exc))
 
 
+class _SyncRunContext:
+    """Normalized inputs and mutable state for one Proxbox sync run."""
+
+    __slots__ = (
+        "batch_object_ids",
+        "batch_object_type",
+        "branch",
+        "branch_config",
+        "fastapi_endpoint_id",
+        "job",
+        "netbox_endpoint_ids",
+        "netbox_vm_ids",
+        "params",
+        "proxmox_endpoint_ids",
+        "run_started",
+        "stages",
+        "types",
+    )
+
+    def __init__(
+        self,
+        *,
+        job: "ProxboxSyncJob",
+        branch_config: dict[str, str] | None,
+        types: list[str],
+        proxmox_endpoint_ids: list[str] | None,
+        netbox_endpoint_ids: list[str] | None,
+        netbox_vm_ids: list[str] | None,
+        batch_object_type: str | None,
+        batch_object_ids: list[str],
+        fastapi_endpoint_id: int | None,
+    ) -> None:
+        self.job = job
+        self.branch_config = branch_config
+        self.types = types
+        self.proxmox_endpoint_ids = proxmox_endpoint_ids
+        self.netbox_endpoint_ids = netbox_endpoint_ids
+        self.netbox_vm_ids = netbox_vm_ids
+        self.batch_object_type = batch_object_type
+        self.batch_object_ids = batch_object_ids
+        self.fastapi_endpoint_id = fastapi_endpoint_id
+        self.run_started = time.monotonic()
+        self.stages = expanded_sync_stages(types)
+        self.branch: object | None = None
+        self.params = _build_sync_run_params(self)
+
+
+class _StagedSyncState:
+    """Preflight state accumulated before the estate-wide service phases."""
+
+    __slots__ = ("endpoint_ids", "phases", "preflight")
+
+    def __init__(
+        self,
+        *,
+        endpoint_ids: list[int],
+        phases: list[dict[str, object]],
+        preflight: PreflightResult,
+    ) -> None:
+        self.endpoint_ids = endpoint_ids
+        self.phases = phases
+        self.preflight = preflight
+
+
+def _branching_failure_stage(message: str) -> dict[str, object]:
+    """Build the stable persisted record for one isolation failure."""
+    return {
+        "sync_type": "branch-isolation",
+        "endpoint_id": None,
+        "stream_path": None,
+        "runtime_seconds": 0.0,
+        "result_summary": {"ok": False, "error": message},
+    }
+
+
+def _branching_failure_response(
+    sync_data: dict[str, object], message: str
+) -> dict[str, object]:
+    """Append an isolation failure without discarding earlier run evidence."""
+    raw_response = sync_data.get("response")
+    response = dict(raw_response) if isinstance(raw_response, dict) else {}
+    raw_stages = response.get("stages")
+    stages = list(raw_stages) if isinstance(raw_stages, list) else []
+    stages = [stage for stage in stages if stage.get("sync_type") != "branch-isolation"]
+    stages.append(_branching_failure_stage(message))
+    response["stages"] = stages
+    response.setdefault("endpoint_runtimes", [])
+    response.setdefault(
+        "runtime_summary",
+        _runtime_summary(runtime_seconds=0.0, endpoint_runtimes=[]),
+    )
+    return response
+
+
+def _record_branching_failure(job: "ProxboxSyncJob", message: str) -> None:
+    """Persist an unavailable-branching failure in the normal stage result shape."""
+    raw_data = getattr(job.job, "data", None)
+    data = dict(raw_data) if isinstance(raw_data, dict) else {}
+    raw_sync = data.get("proxbox_sync")
+    sync_data = dict(raw_sync) if isinstance(raw_sync, dict) else {}
+    sync_data.setdefault("runtime_seconds", 0.0)
+    sync_data["response"] = _branching_failure_response(sync_data, message)
+    data["proxbox_sync"] = sync_data
+    job.job.data = data
+    job.job.save(update_fields=["data"])
+
+
+def _resolve_branching_config(job: "ProxboxSyncJob") -> dict[str, str] | None:
+    """Resolve the owned run's immutable branch-isolation settings snapshot."""
+    from netbox_proxbox.services.branch_lifecycle import (  # noqa: PLC0415
+        BranchingDecisionState,
+        require_branch_isolation_or_raise,
+    )
+
+    decision = require_branch_isolation_or_raise()
+    if decision.state is BranchingDecisionState.DISABLED:
+        return None
+    return decision.settings
+
+
+def _normalize_run_types(
+    sync_types: list[str] | None,
+    sync_type: str | None,
+) -> list[str]:
+    """Normalize legacy and multi-stage job inputs into one ordered type list."""
+    if sync_types:
+        return normalize_sync_types([str(value) for value in sync_types])
+    if sync_type is not None:
+        return normalize_sync_types([str(sync_type)])
+    return [SyncTypeChoices.ALL]
+
+
+def _prepare_sync_run(
+    job: "ProxboxSyncJob",
+    *,
+    branch_config: dict[str, str] | None,
+    sync_types: list[str] | None,
+    sync_type: str | None,
+    proxmox_endpoint_ids: list[str] | None,
+    netbox_endpoint_ids: list[str] | None,
+    netbox_vm_ids: list[str] | None,
+    batch_object_type: str | None,
+    batch_object_ids: list[str] | None,
+    fastapi_endpoint_id: int | None,
+) -> _SyncRunContext:
+    """Normalize job inputs and create the run context after ownership is claimed."""
+    normalized_batch_type = (
+        str(batch_object_type).strip() if batch_object_type else None
+    )
+    return _SyncRunContext(
+        job=job,
+        branch_config=branch_config,
+        types=_normalize_run_types(sync_types, sync_type),
+        proxmox_endpoint_ids=proxmox_endpoint_ids,
+        netbox_endpoint_ids=netbox_endpoint_ids,
+        netbox_vm_ids=netbox_vm_ids,
+        batch_object_type=normalized_batch_type,
+        batch_object_ids=_normalize_batch_object_ids(batch_object_ids),
+        fastapi_endpoint_id=fastapi_endpoint_id,
+    )
+
+
+def _build_sync_run_params(context: _SyncRunContext) -> dict[str, object]:
+    """Build persisted and backend parameters shared by batch and staged runs."""
+    return {
+        "sync_types": context.types,
+        "proxmox_endpoint_ids": [
+            str(value)
+            for value in list(context.proxmox_endpoint_ids or [])
+            if str(value)
+        ],
+        "netbox_endpoint_ids": [
+            str(value)
+            for value in list(context.netbox_endpoint_ids or [])
+            if str(value)
+        ],
+        "netbox_vm_ids": [
+            str(value) for value in list(context.netbox_vm_ids or []) if str(value)
+        ],
+        "batch_object_type": context.batch_object_type,
+        "batch_object_ids": context.batch_object_ids,
+        "fastapi_endpoint_id": context.fastapi_endpoint_id,
+        "run_id": str(uuid.uuid4()),
+    }
+
+
+def _create_sync_branch(context: _SyncRunContext) -> object | None:
+    """Create and provision the configured isolation branch for this run."""
+    if context.branch_config is None:
+        return None
+    from netbox_proxbox.services.branch_lifecycle import (  # noqa: PLC0415
+        BranchingUnavailableError,
+        create_and_provision_branch,
+    )
+
+    branch_name = (
+        f"{context.branch_config['prefix']}-{context.job.job.pk}-"
+        f"{int(context.run_started)}"
+    )
+    context.job.logger.info(
+        f"NetBox branching enabled — creating branch {branch_name!r}"
+    )
+    try:
+        branch = create_and_provision_branch(
+            name=branch_name,
+            user=getattr(context.job.job, "user", None),
+        )
+    except BranchingUnavailableError:
+        raise
+    except Exception as exc:
+        message = (
+            f"Proxbox sync refused: failed to create/provision NetBox branch "
+            f"{branch_name}: {exc}"
+        )
+        context.job.logger.error(message)
+        _record_branching_failure(context.job, message)
+        raise
+    context.job.logger.info(
+        f"Branch {branch.name} ready (schema_id={branch.schema_id})"
+    )
+    return branch
+
+
+def _merge_sync_branch(context: _SyncRunContext) -> None:
+    """Merge a successful isolation branch using the configured conflict policy."""
+    if context.branch is None or context.branch_config is None:
+        return
+    from netbox_proxbox.services.branch_lifecycle import merge_branch  # noqa: PLC0415
+
+    merged, message, disposition = merge_branch(
+        branch=context.branch,
+        user=getattr(context.job.job, "user", None),
+        on_conflict=context.branch_config["on_conflict"],
+    )
+    if merged:
+        if disposition is not None:
+            _persist_branch_disposition(context, disposition)
+        context.job.logger.info(message)
+        return
+    context.job.logger.error(message)
+    _record_branching_failure(context.job, message)
+    raise RuntimeError(message)
+
+
+def _branch_identity(branch: object | None) -> dict[str, object] | None:
+    """Return the durable identity of a provisioned isolation branch."""
+    if branch is None:
+        return None
+    return {
+        "id": getattr(branch, "pk", getattr(branch, "id", None)),
+        "name": str(getattr(branch, "name", "<unknown>")),
+        "schema_id": str(getattr(branch, "schema_id", "")),
+    }
+
+
+def _sync_data_with_branch(context: _SyncRunContext) -> dict[str, object]:
+    """Build sync data that always retains the provisioned branch identity."""
+    sync_data: dict[str, object] = {"params": context.params}
+    identity = _branch_identity(context.branch)
+    if identity is not None:
+        sync_data["branch"] = identity
+    return sync_data
+
+
+def _persist_initial_sync_data(context: _SyncRunContext) -> None:
+    """Persist normalized parameters before any backend reconciliation starts."""
+    sync_data = _sync_data_with_branch(context)
+    sync_data["params"] = _serialize_sync_params(**context.params)
+    context.job.job.data = {"proxbox_sync": sync_data}
+    context.job.job.save(update_fields=["data"])
+
+
+def _persist_branch_disposition(context: _SyncRunContext, status: str) -> None:
+    """Add a final left-open branch disposition without losing run evidence."""
+    data = dict(context.job.job.data or {})
+    sync_data = dict(data.get("proxbox_sync") or {})
+    response = dict(sync_data.get("response") or {})
+    identity = _branch_identity(context.branch) or {}
+    response["branch_disposition"] = {
+        "status": status,
+        "branch_id": identity.get("id"),
+        "branch_name": identity.get("name"),
+    }
+    sync_data["response"] = response
+    data["proxbox_sync"] = sync_data
+    context.job.job.data = data
+    context.job.job.save(update_fields=["data"])
+
+
+def _bootstrap_backend_endpoints(context: _SyncRunContext) -> PreflightResult:
+    """Push endpoint configuration and stop when the backend cannot write safely."""
+    preflight = _ensure_backend_endpoints(
+        context.job,
+        context.proxmox_endpoint_ids or [],
+        fastapi_endpoint_id=context.fastapi_endpoint_id,
+    )
+    if preflight.blocking_error:
+        raise ProxboxPreflightError(preflight.blocking_error)
+    return preflight
+
+
+def _resolve_batch_endpoint_scope(
+    context: _SyncRunContext,
+) -> tuple[str, dict[str, str]]:
+    """Resolve the selected-object run's bounded Proxmox backend scope."""
+    wire_scope, skipped_pks, scope_error, wire_by_pk = _batch_wire_endpoint_scope(
+        context.params["proxmox_endpoint_ids"],
+        fastapi_endpoint_id=context.fastapi_endpoint_id,
+    )
+    if scope_error:
+        context.job.logger.error(f"Skipping selected-object sync: {scope_error}")
+        raise ProxboxPreflightError(f"Selected-object sync did not run: {scope_error}")
+    if skipped_pks:
+        context.job.logger.warning(
+            "Selected-object sync is scoped to "
+            f"{len(skipped_pks)} fewer Proxmox endpoint(s) than are enabled; "
+            f"unresolved endpoint id(s): {', '.join(skipped_pks)}"
+        )
+    return wire_scope, wire_by_pk
+
+
+def _run_batch_coroutine(
+    coroutine: Coroutine[object, object, dict[str, object]],
+) -> dict[str, object]:
+    """Run the batch coroutine from ordinary or already-async worker contexts."""
+    try:
+        loop = asyncio.get_running_loop()
+    except RuntimeError:
+        loop = None
+    if loop is None or not loop.is_running():
+        return asyncio.run(coroutine)
+    import concurrent.futures  # noqa: PLC0415
+
+    with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+        return executor.submit(asyncio.run, coroutine).result()
+
+
+def _execute_batch_sync(
+    context: _SyncRunContext,
+    wire_scope: str,
+    wire_by_pk: dict[str, str],
+) -> dict[str, object]:
+    """Execute one selected-object batch with branch and endpoint scopes."""
+    return _run_batch_coroutine(
+        _run_batch_selected_sync(
+            context.job,
+            batch_object_type=context.batch_object_type,
+            batch_object_ids=context.batch_object_ids,
+            netbox_branch_schema_id=context.params["netbox_branch_schema_id"],
+            fastapi_endpoint_id=context.fastapi_endpoint_id,
+            proxmox_wire_endpoint_ids=wire_scope,
+            proxmox_wire_endpoint_by_pk=wire_by_pk,
+        )
+    )
+
+
+def _batch_result_summary(batch_result: dict[str, object]) -> str:
+    """Return the stable human-readable selected-object result summary."""
+    return (
+        f"{batch_result['batch_object_label']} "
+        f"({batch_result['total']} total, "
+        f"{batch_result['succeeded']} succeeded, "
+        f"{batch_result['failed']} failed)"
+    )
+
+
+def _persist_batch_result(
+    context: _SyncRunContext,
+    batch_result: dict[str, object],
+    preflight: PreflightResult,
+) -> None:
+    """Persist selected-object output before classifying any object failures."""
+    sync_data = _sync_data_with_branch(context)
+    sync_data.update(
+        {
+            "runtime_seconds": _runtime_seconds_since(context.run_started),
+            "response": {
+                "batch": batch_result,
+                "endpoint_runtimes": _build_endpoint_runtimes(preflight.phases),
+            },
+        }
+    )
+    context.job.job.data = {
+        "proxbox_sync": sync_data,
+    }
+    context.job.job.save(update_fields=["data"])
+
+
+def _raise_for_batch_failures(
+    job: "ProxboxSyncJob",
+    batch_result: dict[str, object],
+    summary: str,
+) -> None:
+    """Fail a selected-object run after its per-object details are persisted."""
+    if int(batch_result.get("failed") or 0) <= 0:
+        return
+    message = (
+        f"Batch sync failed for {summary} — {_failed_batch_object_detail(batch_result)}"
+    )
+    job.logger.error(message)
+    raise RuntimeError(message)
+
+
+def _run_batch_phase(context: _SyncRunContext) -> bool:
+    """Run and finalize selected-object work, returning whether it applied."""
+    if not context.batch_object_type or not context.batch_object_ids:
+        return False
+    context.job.logger.info(
+        f"Starting batch sync for {len(context.batch_object_ids)} selected "
+        f"{context.batch_object_type} records"
+    )
+    preflight = _bootstrap_backend_endpoints(context)
+    wire_scope, wire_by_pk = _resolve_batch_endpoint_scope(context)
+    batch_result = _execute_batch_sync(context, wire_scope, wire_by_pk)
+    _persist_batch_result(context, batch_result, preflight)
+    summary = _batch_result_summary(batch_result)
+    _raise_for_batch_failures(context.job, batch_result, summary)
+    context.job.logger.info(f"Batch sync completed for {summary}")
+    _merge_sync_branch(context)
+    return True
+
+
+def _log_staged_sync_start(context: _SyncRunContext) -> None:
+    """Log the selected stages and optional object scopes."""
+    context.job.logger.info(
+        f"Starting Proxbox sync stages: {', '.join(context.stages)}"
+    )
+    if context.proxmox_endpoint_ids:
+        context.job.logger.info(f"Proxmox endpoints: {context.proxmox_endpoint_ids}")
+    if context.netbox_endpoint_ids:
+        context.job.logger.info(f"NetBox endpoints: {context.netbox_endpoint_ids}")
+    if context.netbox_vm_ids:
+        context.job.logger.info(f"NetBox virtual machines: {context.netbox_vm_ids}")
+
+
+def _staged_endpoint_ids(context: _SyncRunContext) -> list[int]:
+    """Resolve enabled plugin endpoint IDs for pre-SSE service passes."""
+    return _enabled_endpoint_ids(
+        context.proxmox_endpoint_ids or None,
+        logger=context.job.logger,
+        context="cluster/node sync",
+    )
+
+
+def _sync_cluster_phase(
+    context: _SyncRunContext,
+    endpoint_ids: list[int],
+    branch: object | None,
+) -> list[dict[str, object]]:
+    """Synchronize cluster/node inventory and record per-endpoint runtimes."""
+    from netbox_proxbox.services.branch_lifecycle import (  # noqa: PLC0415
+        activate_sync_branch,
+    )
+    from netbox_proxbox.services.sync_cluster import sync_cluster_and_nodes  # noqa: PLC0415
+
+    with activate_sync_branch(branch):
+        return _sync_cluster_endpoints(context, endpoint_ids, sync_cluster_and_nodes)
+
+
+def _sync_cluster_endpoints(
+    context: _SyncRunContext,
+    endpoint_ids: list[int],
+    sync_cluster_and_nodes: object,
+) -> list[dict[str, object]]:
+    """Run cluster/node reconciliation while its caller holds branch activation."""
+    phases: list[dict[str, object]] = []
+    for endpoint_id in endpoint_ids:
+        context.job.logger.info(f"Syncing cluster/nodes for endpoint {endpoint_id}")
+        started = time.monotonic()
+        result = sync_cluster_and_nodes(
+            endpoint_id=endpoint_id,
+            fastapi_endpoint_id=context.fastapi_endpoint_id,
+        )
+        summary = _cluster_result_summary(context.job, endpoint_id, result)
+        phases.append(
+            _endpoint_runtime_phase(
+                endpoint_id=getattr(result, "endpoint_id", None) or endpoint_id,
+                endpoint_name=getattr(result, "endpoint_name", ""),
+                kind="cluster",
+                label="Cluster/node sync",
+                runtime_seconds=_runtime_seconds_since(started),
+                status="success" if result.success else "warning",
+                summary=summary,
+            )
+        )
+    return phases
+
+
+def _cluster_result_summary(
+    job: "ProxboxSyncJob",
+    endpoint_id: int,
+    result: object,
+) -> str:
+    """Log and return one cluster/node service result summary."""
+    if result.success:
+        summary = (
+            f"{result.clusters_created} cluster(s) created, "
+            f"{result.clusters_updated} updated, "
+            f"{result.nodes_created} node(s) created, "
+            f"{result.nodes_updated} updated"
+        )
+        job.logger.info(f"Cluster/node sync for endpoint {endpoint_id}: {summary}")
+        return summary
+    summary = str(result.error or "cluster/node sync failed")
+    job.logger.warning(
+        f"Cluster/node sync for endpoint {endpoint_id} failed: {result.error}"
+    )
+    return summary
+
+
+def sync_firewall(
+    context: _SyncRunContext,
+    endpoint_ids: list[int],
+    branch: object | None,
+) -> list[dict[str, object]]:
+    """Synchronize datacenter firewall inventory for a non-targeted run."""
+    from netbox_proxbox.services.branch_lifecycle import (  # noqa: PLC0415
+        activate_sync_branch,
+    )
+    from netbox_proxbox.services.sync_firewall import (  # noqa: PLC0415
+        sync_firewall as run_firewall_sync,
+    )
+
+    context.job.logger.info("Syncing firewall objects from proxbox-api")
+    with activate_sync_branch(branch):
+        result = run_firewall_sync(
+            fastapi_endpoint_id=context.fastapi_endpoint_id,
+            endpoint_ids=endpoint_ids,
+        )
+    _log_firewall_result(context.job, result)
+    return _phases_from_service_result(result, kind="firewall", label="Firewall sync")
+
+
+def _log_firewall_result(job: "ProxboxSyncJob", result: object) -> None:
+    """Log the aggregate firewall service result."""
+    if result.success:
+        job.logger.info(
+            f"Firewall sync complete: {result.endpoints_processed} endpoint(s), "
+            f"{result.security_groups_created} sg created, "
+            f"{result.rules_created} rules created, "
+            f"{result.ipsets_created} ipsets created, "
+            f"{result.aliases_created} aliases created"
+        )
+        return
+    job.logger.warning(
+        "Firewall sync failed or partially failed: "
+        f"{result.error or 'see per_endpoint log'}"
+    )
+
+
+def sync_datacenter(
+    context: _SyncRunContext,
+    endpoint_ids: list[int],
+    branch: object | None,
+) -> list[dict[str, object]]:
+    """Synchronize datacenter CPU models for a non-targeted run."""
+    from netbox_proxbox.services.branch_lifecycle import (  # noqa: PLC0415
+        activate_sync_branch,
+    )
+    from netbox_proxbox.services.sync_datacenter import (  # noqa: PLC0415
+        sync_datacenter as run_datacenter_sync,
+    )
+
+    context.job.logger.info("Syncing datacenter CPU models from proxbox-api")
+    with activate_sync_branch(branch):
+        result = run_datacenter_sync(
+            fastapi_endpoint_id=context.fastapi_endpoint_id,
+            endpoint_ids=endpoint_ids,
+        )
+    _log_datacenter_result(context.job, result)
+    return _phases_from_service_result(
+        result,
+        kind="datacenter",
+        label="Datacenter sync",
+    )
+
+
+def _log_datacenter_result(job: "ProxboxSyncJob", result: object) -> None:
+    """Log the aggregate datacenter service result."""
+    if result.success:
+        job.logger.info(
+            f"Datacenter CPU model sync complete: {result.endpoints_processed} "
+            f"endpoint(s), created={result.cpu_models_created}, "
+            f"updated={result.cpu_models_updated}, stale={result.cpu_models_stale}"
+        )
+        return
+    job.logger.warning(
+        f"Datacenter CPU model sync failed: {result.error or 'unknown error'}"
+    )
+
+
+def _vm_template_sync_disabled() -> bool:
+    """Return whether the effective global VM-template mode disables the phase."""
+    modes = sync_stages.effective_sync_modes_for_endpoint(None)
+    return modes.get("sync_mode_vm_template", SyncModeChoices.ALWAYS) == (
+        SyncModeChoices.DISABLED
+    )
+
+
+def sync_vm_templates(
+    context: _SyncRunContext,
+    endpoint_ids: list[int],
+    branch: object | None,
+) -> list[dict[str, object]]:
+    """Synchronize dedicated VM-template inventory when its mode allows it."""
+    if _vm_template_sync_disabled():
+        context.job.logger.info(
+            "Skipping VM template sync: sync_mode_vm_template=disabled"
+        )
+        return []
+    from netbox_proxbox.services.branch_lifecycle import (  # noqa: PLC0415
+        activate_sync_branch,
+    )
+
+    with activate_sync_branch(branch):
+        return _sync_vm_templates_for_endpoints(context, endpoint_ids)
+
+
+def _sync_vm_templates_for_endpoints(
+    context: _SyncRunContext,
+    endpoint_ids: list[int],
+) -> list[dict[str, object]]:
+    """Run the VM-template service once for each selected endpoint."""
+    from netbox_proxbox.services.sync_vm_template import sync_vm_templates  # noqa: PLC0415
+
+    phases: list[dict[str, object]] = []
+    for endpoint_id in endpoint_ids:
+        context.job.logger.info(f"Syncing VM templates for endpoint {endpoint_id}")
+        started = time.monotonic()
+        result = sync_vm_templates(
+            endpoint_id=endpoint_id,
+            fastapi_endpoint_id=context.fastapi_endpoint_id,
+        )
+        summary = _vm_template_result_summary(context.job, endpoint_id, result)
+        phases.append(
+            _endpoint_runtime_phase(
+                endpoint_id=getattr(result, "endpoint_id", None) or endpoint_id,
+                endpoint_name=getattr(result, "endpoint_name", ""),
+                kind="vm_template",
+                label="VM template sync",
+                runtime_seconds=_runtime_seconds_since(started),
+                status="success" if result.success is True else "warning",
+                summary=summary,
+            )
+        )
+    return phases
+
+
+def _vm_template_result_summary(
+    job: "ProxboxSyncJob",
+    endpoint_id: int,
+    result: object,
+) -> str:
+    """Log and return one VM-template service result summary."""
+    if result.success:
+        summary = (
+            f"{result.templates_created} template(s) created, "
+            f"{result.templates_updated} updated, "
+            f"{result.templates_skipped} skipped, "
+            f"{result.templates_deleted} deleted"
+        )
+        job.logger.info(f"VM template sync for endpoint {endpoint_id}: {summary}")
+        return summary
+    summary = str(result.error or "VM template sync failed")
+    job.logger.warning(
+        f"VM template sync for endpoint {endpoint_id} failed: {result.error}"
+    )
+    return summary
+
+
+def _warn_for_missing_stage_runtimes(
+    job: "ProxboxSyncJob",
+    stages: list[dict[str, object]],
+) -> None:
+    """Log any in-memory stage result missing its runtime."""
+    for stage in stages:
+        if stage.get("runtime_seconds") is None:
+            job.logger.warning(
+                f"Stage '{stage.get('sync_type')}' has runtime_seconds=None before save"
+            )
+
+
+_LOCAL_PHASE_KINDS = frozenset({"cluster", "firewall", "datacenter", "vm_template"})
+
+
+def _local_phases(phases: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Return persisted classifications for every selected local service pass."""
+    return [phase for phase in phases if phase.get("kind") in _LOCAL_PHASE_KINDS]
+
+
+def _failed_local_phases(
+    phases: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """Return local service passes that did not report success."""
+    return [
+        phase for phase in _local_phases(phases) if phase.get("status") != "success"
+    ]
+
+
+def _local_failure_detail(phases: list[dict[str, object]]) -> str:
+    """Render local service failures with endpoint context when available."""
+    details: list[str] = []
+    for phase in phases:
+        label = str(phase.get("label") or phase.get("kind") or "Local sync")
+        endpoint_id = phase.get("endpoint_id")
+        scope = f" for endpoint {endpoint_id}" if endpoint_id is not None else ""
+        summary = str(phase.get("summary") or "unknown error")
+        details.append(f"{label}{scope}: {summary}")
+    return "; ".join(details)
+
+
+def _local_failure_disposition(
+    context: _SyncRunContext,
+    phases: list[dict[str, object]],
+) -> dict[str, object] | None:
+    """Describe the unmerged branch retained after local reconciliation fails."""
+    if context.branch is None or not _failed_local_phases(phases):
+        return None
+    return {
+        "status": "left_open",
+        "branch_name": str(getattr(context.branch, "name", "<unknown>")),
+        "reason": "local_reconciliation_failed",
+    }
+
+
+def _sse_failure_disposition(
+    context: _SyncRunContext,
+    phases: list[dict[str, object]],
+) -> dict[str, object] | None:
+    """Describe the open isolation branch retained after an SSE exception."""
+    disposition = _local_failure_disposition(context, phases)
+    if disposition is not None or context.branch is None:
+        return disposition
+    return {
+        "status": "left_open",
+        "branch_name": str(getattr(context.branch, "name", "<unknown>")),
+        "reason": "sse_failed",
+    }
+
+
+def _persist_staged_result(
+    context: _SyncRunContext,
+    stages: list[dict[str, object]],
+    phases: list[dict[str, object]],
+    branch_disposition: dict[str, object] | None = None,
+) -> float:
+    """Persist staged output and return the rounded whole-run duration."""
+    runtime_seconds = _runtime_seconds_since(context.run_started)
+    endpoint_runtimes = _build_endpoint_runtimes(phases)
+    response: dict[str, object] = {
+        "stages": stages,
+        "local_phases": _local_phases(phases),
+        "endpoint_runtimes": endpoint_runtimes,
+        "runtime_summary": _runtime_summary(
+            runtime_seconds=runtime_seconds,
+            endpoint_runtimes=endpoint_runtimes,
+        ),
+    }
+    disposition = branch_disposition or _local_failure_disposition(context, phases)
+    if disposition is not None:
+        response["branch_disposition"] = disposition
+    sync_data = _sync_data_with_branch(context)
+    sync_data.update({"runtime_seconds": runtime_seconds, "response": response})
+    context.job.job.data = {"proxbox_sync": sync_data}
+    context.job.job.save(update_fields=["data"])
+    return runtime_seconds
+
+
+def _stored_stages(job: "ProxboxSyncJob") -> list[dict[str, object]]:
+    """Refresh and return the stages persisted by the just-finished run."""
+    job.job.refresh_from_db(fields=["data"])
+    raw_stages = (
+        (job.job.data or {})
+        .get("proxbox_sync", {})
+        .get("response", {})
+        .get("stages", [])
+    )
+    return raw_stages if isinstance(raw_stages, list) else []
+
+
+def _check_stored_stage_runtimes(
+    job: "ProxboxSyncJob",
+    stages: list[dict[str, object]],
+) -> None:
+    """Report runtimes lost during the job-data database round trip."""
+    missing = [
+        stage.get("sync_type")
+        for stage in stages
+        if stage.get("runtime_seconds") is None
+    ]
+    if missing:
+        job.logger.error(
+            f"runtime_seconds lost after DB round-trip for stages: {missing}"
+        )
+
+
+def _failed_endpoint_scopes(
+    stages: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """Return endpoint-scope records that prevented selected work from running."""
+    return [
+        stage
+        for stage in stages
+        if stage.get("sync_type") == "endpoint-scope"
+        and not (stage.get("result_summary") or {}).get("ok", True)
+    ]
+
+
+def _failed_scope_detail(stages: list[dict[str, object]]) -> str:
+    """Join endpoint-scope errors without labeling whole-run failures as None."""
+    details: list[str] = []
+    for stage in stages:
+        result = stage.get("result_summary") or {}
+        error = result.get("error") or "unknown error"
+        if stage.get("endpoint_id") is None:
+            details.append(str(error))
+        else:
+            details.append(f"endpoint {stage.get('endpoint_id')}: {error}")
+    return "; ".join(details)
+
+
+def _any_sync_stage_ran(stages: list[dict[str, object]]) -> bool:
+    """Return whether any non-scope, non-skipped stage actually executed."""
+    return any(
+        stage.get("sync_type") != "endpoint-scope"
+        and not (stage.get("result_summary") or {}).get("skipped")
+        for stage in stages
+    )
+
+
+def _raise_for_failed_endpoint_scopes(
+    job: "ProxboxSyncJob",
+    stages: list[dict[str, object]],
+) -> None:
+    """Fail after persisting any endpoint scopes that could not be resolved."""
+    failed = _failed_endpoint_scopes(stages)
+    if not failed:
+        return
+    detail = _failed_scope_detail(failed)
+    if _any_sync_stage_ran(stages):
+        message = (
+            f"{len(failed)} Proxmox endpoint(s) were skipped and did not sync — "
+            f"{detail}"
+        )
+    else:
+        message = (
+            f"No sync stage ran: every selected Proxmox endpoint was skipped — {detail}"
+        )
+    job.logger.error(message)
+    raise RuntimeError(message)
+
+
+def _raise_for_failed_local_phases(
+    context: _SyncRunContext,
+    phases: list[dict[str, object]],
+) -> None:
+    """Fail after persisting any unsuccessful local reconciliation phase."""
+    failed = _failed_local_phases(phases)
+    if not failed:
+        return
+    message = f"Local reconciliation failed: {_local_failure_detail(failed)}"
+    if context.branch is not None:
+        name = getattr(context.branch, "name", "<unknown>")
+        message = f"{message}. Branch {name} was left open for operator inspection."
+    context.job.logger.error(message)
+    raise RuntimeError(message)
+
+
+def _begin_sync_run(context: _SyncRunContext) -> None:
+    """Create and record the optional branch before backend authentication."""
+    _sync_stage_settings()
+    context.branch = _create_sync_branch(context)
+    _persist_initial_sync_data(context)
+    context.params["netbox_branch_schema_id"] = getattr(
+        context.branch,
+        "schema_id",
+        None,
+    )
+    _require_backend_key(context.job, context.fastapi_endpoint_id)
+
+
+def _extend_and_checkpoint_local_phases(
+    context: _SyncRunContext,
+    state: _StagedSyncState,
+    phases: list[dict[str, object]],
+) -> None:
+    """Persist each completed local phase before another phase can start."""
+    state.phases.extend(phases)
+    _persist_staged_result(context, [], state.phases)
+
+
+def _start_staged_sync(context: _SyncRunContext) -> _StagedSyncState:
+    """Run endpoint bootstrap and the always-applicable cluster/node phase."""
+    _log_staged_sync_start(context)
+    preflight = _bootstrap_backend_endpoints(context)
+    endpoint_ids = _staged_endpoint_ids(context)
+    state = _StagedSyncState(
+        endpoint_ids=endpoint_ids,
+        phases=list(preflight.phases),
+        preflight=preflight,
+    )
+    phases = _sync_cluster_phase(context, endpoint_ids, context.branch)
+    _extend_and_checkpoint_local_phases(context, state, phases)
+    return state
+
+
+def _run_sse_stages(
+    context: _SyncRunContext,
+    state: _StagedSyncState,
+) -> list[dict[str, object]]:
+    """Checkpoint accumulated local evidence if the SSE run does not return."""
+    try:
+        return _run_all_stages_sync(
+            context.job,
+            context.stages,
+            context.params,
+            context.run_started,
+            preflight_hint=state.preflight.hint,
+        )
+    except BaseException:
+        disposition = _sse_failure_disposition(context, state.phases)
+        _persist_staged_result(
+            context,
+            [],
+            state.phases,
+            branch_disposition=disposition,
+        )
+        raise
+
+
+def _finish_staged_sync(
+    context: _SyncRunContext,
+    state: _StagedSyncState,
+) -> None:
+    """Run SSE stages, persist their results, classify errors, and merge."""
+    stages = _run_sse_stages(context, state)
+    state.phases.extend(_phases_from_stage_results(stages))
+    _warn_for_missing_stage_runtimes(context.job, stages)
+    runtime_seconds = _persist_staged_result(context, stages, state.phases)
+    _check_stored_stage_runtimes(context.job, _stored_stages(context.job))
+    _raise_for_failed_endpoint_scopes(context.job, stages)
+    _raise_for_failed_local_phases(context, state.phases)
+    context.job.logger.info(
+        f"All sync stages completed ({len(stages)}), runtime {runtime_seconds:.3f}s"
+    )
+    _merge_sync_branch(context)
+
+
+def _pop_enqueued_sync_types(kwargs: dict[str, object]) -> list[str]:
+    """Remove legacy sync-type inputs and return their normalized replacement."""
+    sync_types = kwargs.pop("sync_types", None)
+    sync_type = kwargs.pop("sync_type", None)
+    if sync_types is not None:
+        return normalize_sync_types(list(sync_types))
+    if sync_type is not None:
+        return normalize_sync_types([str(sync_type)])
+    return [SyncTypeChoices.ALL]
+
+
+def _normalize_enqueued_batch(kwargs: dict[str, object]) -> None:
+    """Normalize selected-object inputs in the queued RQ payload."""
+    batch_object_type = kwargs.pop("batch_object_type", None)
+    batch_object_ids = _normalize_batch_object_ids(kwargs.pop("batch_object_ids", None))
+    if batch_object_type is not None:
+        kwargs["batch_object_type"] = str(batch_object_type)
+    if batch_object_ids:
+        kwargs["batch_object_ids"] = batch_object_ids
+
+
+def _normalize_enqueued_backend_pin(kwargs: dict[str, object]) -> int | None:
+    """Keep the RQ payload and persisted backend pin identical."""
+    if "fastapi_endpoint_id" not in kwargs:
+        return None
+    backend_pin = _coerce_fastapi_endpoint_id(kwargs.pop("fastapi_endpoint_id"))
+    if backend_pin is not None:
+        kwargs["fastapi_endpoint_id"] = backend_pin
+    return backend_pin
+
+
+def _stringified_values(values: object) -> list[str]:
+    """Return non-empty queued identifier values as strings."""
+    return [str(value) for value in list(values or []) if str(value)]
+
+
+def _enqueued_sync_params(
+    kwargs: dict[str, object],
+    sync_types: list[str],
+    backend_pin: int | None,
+) -> dict[str, object]:
+    """Build the canonical persisted parameter record for an enqueued job."""
+    return {
+        "sync_types": sync_types,
+        "proxmox_endpoint_ids": _stringified_values(kwargs.get("proxmox_endpoint_ids")),
+        "netbox_endpoint_ids": _stringified_values(kwargs.get("netbox_endpoint_ids")),
+        "netbox_vm_ids": _stringified_values(kwargs.get("netbox_vm_ids")),
+        "batch_object_type": kwargs.get("batch_object_type"),
+        "batch_object_ids": _stringified_values(kwargs.get("batch_object_ids")),
+        "fastapi_endpoint_id": backend_pin,
+    }
+
+
+def _persist_enqueued_sync_params(job: Job, params: dict[str, object]) -> None:
+    """Store replay-safe sync parameters on the NetBox Job row."""
+    job.data = {"proxbox_sync": {"params": _serialize_sync_params(**params)}}
+    job.save(update_fields=["data"])
+
+
 class ProxboxSyncJob(JobRunner):
     """Trigger a ProxBox sync operation against the FastAPI backend."""
 
@@ -1127,70 +2279,13 @@ class ProxboxSyncJob(JobRunner):
     def enqueue(cls, *args: object, **kwargs: object) -> Job:
         """Enqueue like other ``JobRunner`` jobs, but with a long RQ ``job_timeout`` by default."""
         kwargs.setdefault("job_timeout", PROXBOX_SYNC_JOB_TIMEOUT)
-        sync_types_kw = kwargs.pop("sync_types", None)
-        sync_type_kw = kwargs.pop("sync_type", None)
-        batch_object_type_kw = kwargs.pop("batch_object_type", None)
-        batch_object_ids_kw = kwargs.pop("batch_object_ids", None)
-        if sync_types_kw is not None:
-            normalized = normalize_sync_types(list(sync_types_kw))
-        elif sync_type_kw is not None:
-            normalized = normalize_sync_types([str(sync_type_kw)])
-        else:
-            normalized = [SyncTypeChoices.ALL]
+        normalized = _pop_enqueued_sync_types(kwargs)
         kwargs["sync_types"] = normalized
-
-        batch_object_ids = _normalize_batch_object_ids(batch_object_ids_kw)
-        if batch_object_type_kw is not None:
-            kwargs["batch_object_type"] = str(batch_object_type_kw)
-        if batch_object_ids:
-            kwargs["batch_object_ids"] = batch_object_ids
-
-        # Coerce the backend pin **before** the job is queued. The raw kwarg is
-        # what RQ carries into ``run()``, so normalising it only on the way into
-        # ``job.data`` left the two disagreeing: ``True`` is an ``int`` in
-        # Python, so it survives to ``run()`` and Django matches ``pk=True``
-        # against primary key 1, while the stored record says "unpinned". An
-        # unusable value is dropped entirely rather than half-parsed, so
-        # ``run()`` falls back to its own default — which is exactly what the
-        # queued record now claims happened.
-        if "fastapi_endpoint_id" in kwargs:
-            backend_pin = _coerce_fastapi_endpoint_id(kwargs.pop("fastapi_endpoint_id"))
-            if backend_pin is not None:
-                kwargs["fastapi_endpoint_id"] = backend_pin
-        else:
-            backend_pin = None
-
+        _normalize_enqueued_batch(kwargs)
+        backend_pin = _normalize_enqueued_backend_pin(kwargs)
         job = super().enqueue(*args, **kwargs)
-
-        params = {
-            "sync_types": normalized,
-            "proxmox_endpoint_ids": [
-                str(x) for x in list(kwargs.get("proxmox_endpoint_ids") or []) if str(x)
-            ],
-            "netbox_endpoint_ids": [
-                str(x) for x in list(kwargs.get("netbox_endpoint_ids") or []) if str(x)
-            ],
-            "netbox_vm_ids": [
-                str(x) for x in list(kwargs.get("netbox_vm_ids") or []) if str(x)
-            ],
-            "batch_object_type": kwargs.get("batch_object_type"),
-            "batch_object_ids": [
-                str(x) for x in list(kwargs.get("batch_object_ids") or []) if str(x)
-            ],
-            # Persisted so a replay (Run now, or a recurring schedule re-enqueueing
-            # itself) targets the same proxbox-api the original run was pinned to.
-            # ``run()`` accepts the kwarg and it reaches RQ either way; it is
-            # ``job.data`` that outlives the RQ payload and is what
-            # ``proxbox_sync_params_from_job()`` reads back. Same coerced value
-            # the queued kwargs carry — see above.
-            "fastapi_endpoint_id": backend_pin,
-        }
-        job.data = {
-            "proxbox_sync": {
-                "params": _serialize_sync_params(**params),
-            }
-        }
-        job.save(update_fields=["data"])
+        params = _enqueued_sync_params(kwargs, normalized, backend_pin)
+        _persist_enqueued_sync_params(job, params)
         return job
 
     def run(
@@ -1205,582 +2300,81 @@ class ProxboxSyncJob(JobRunner):
         fastapi_endpoint_id: int | None = None,
         **kwargs: object,
     ) -> None:
-        """Run one or more proxbox-api SSE streams in dependency order."""
-        # Coerced again here, not only in ``enqueue()``: direct callers, and RQ
-        # payloads queued by a release that predates that normalisation, can
-        # still hand this a bool or an unparseable string. Every backend lookup
-        # below is a ``pk=`` filter, and ``pk=True`` silently resolves to the
-        # first backend rather than failing.
-        fastapi_endpoint_id = _coerce_fastapi_endpoint_id(fastapi_endpoint_id)
+        """Run one owned sync against one immutable settings snapshot.
 
+        Ownership is claimed before branch settings are read or audit data is
+        written. The owned run then resolves branching once and retains that
+        branch configuration through finalization; settings changed during the
+        run apply only to the next owner.
+        """
+        del kwargs
+        fastapi_endpoint_id = _coerce_fastapi_endpoint_id(fastapi_endpoint_id)
         if not _claim_rq_sync_ownership(self.job):
             self.logger.info(
                 "Sync ownership already claimed by SSE stream, RQ job skipping sync execution"
             )
             return
+        from netbox_proxbox.services.branch_lifecycle import (  # noqa: PLC0415
+            BranchingUnavailableError,
+        )
 
         try:
-            if sync_types:
-                types = normalize_sync_types([str(x) for x in sync_types])
-            elif sync_type is not None:
-                types = normalize_sync_types([str(sync_type)])
-            else:
-                types = [SyncTypeChoices.ALL]
-
-            batch_object_type = (
-                str(batch_object_type).strip() if batch_object_type else None
-            )
-            batch_object_ids = _normalize_batch_object_ids(batch_object_ids)
-            run_started = time.monotonic()
-            sync_run_id = str(uuid.uuid4())
-            _sync_stage_settings()
-
-            # Authenticate before branch creation, batch execution, endpoint
-            # pushes, cluster sync, and every SSE stage. Rejection aborts the
-            # whole job instead of creating repeated authentication failures.
-            _require_backend_key(self, fastapi_endpoint_id)
-
-            try:
-                from netbox_proxbox.services.branch_lifecycle import (  # noqa: PLC0415
-                    branching_enabled_settings,
-                    create_and_provision_branch,
-                    merge_branch,
-                )
-            except ModuleNotFoundError:
-                branching_enabled_settings = lambda: None  # noqa: E731
-                create_and_provision_branch = None  # type: ignore[assignment]
-                merge_branch = None  # type: ignore[assignment]
-
-            branch = None
-            branch_config = branching_enabled_settings()
-            if branch_config is not None:
-                branch_name = (
-                    f"{branch_config['prefix']}-{self.job.pk}-{int(run_started)}"
-                )
-                self.logger.info(
-                    f"NetBox branching enabled — creating branch {branch_name!r}"
-                )
-                try:
-                    branch = create_and_provision_branch(
-                        name=branch_name,
-                        user=getattr(self.job, "user", None),
-                    )
-                    self.logger.info(
-                        f"Branch {branch.name} ready (schema_id={branch.schema_id})"
-                    )
-                except Exception as exc:
-                    self.logger.error(
-                        f"Failed to create/provision NetBox branch {branch_name}: {exc}"
-                    )
-                    raise
-
-            stages = expanded_sync_stages(types)
-
-            netbox_branch_schema_id = branch.schema_id if branch is not None else None
-            params: dict[str, object] = {
-                "sync_types": types,
-                "proxmox_endpoint_ids": [
-                    str(x) for x in list(proxmox_endpoint_ids or []) if str(x)
-                ],
-                "netbox_endpoint_ids": [
-                    str(x) for x in list(netbox_endpoint_ids or []) if str(x)
-                ],
-                "netbox_vm_ids": [str(x) for x in list(netbox_vm_ids or []) if str(x)],
-                "batch_object_type": batch_object_type,
-                "batch_object_ids": batch_object_ids,
-                "fastapi_endpoint_id": fastapi_endpoint_id,
-                "run_id": sync_run_id,
-            }
-            self.job.data = {
-                "proxbox_sync": {
-                    "params": _serialize_sync_params(**params),
-                }
-            }
-            self.job.save(update_fields=["data"])
-
-            params["netbox_branch_schema_id"] = netbox_branch_schema_id
-
-            if batch_object_type and batch_object_ids:
-                self.logger.info(
-                    f"Starting batch sync for {len(batch_object_ids)} selected {batch_object_type} records"
-                )
-                # The batch path writes NetBox objects through proxbox-api just
-                # like the SSE stages do, so it needs the same preflight. It ran
-                # without one until now, which meant selected-object runs skipped
-                # every hard gate below — including the "no enabled NetBox
-                # endpoint" stop — and could sync using whatever credentials the
-                # backend happened to still hold.
-                batch_preflight = _ensure_backend_endpoints(
-                    self,
-                    proxmox_endpoint_ids=proxmox_endpoint_ids,
-                    fastapi_endpoint_id=fastapi_endpoint_id,
-                )
-                if batch_preflight.blocking_error:
-                    # Same exception type as the stage path, so a blocked batch
-                    # run is classified and reported identically.
-                    raise ProxboxPreflightError(batch_preflight.blocking_error)
-
-                # The preflight validates the *NetBox* side; it does not decide
-                # which Proxmox endpoints this run may touch. The staged path
-                # settles that separately, and the batch path has to as well:
-                # every individual-sync route resolves its Proxmox sessions
-                # through the same dependency the stage routes use, and that
-                # dependency reads a *missing* `proxmox_endpoint_ids` as "use
-                # every endpoint I hold". So an unscoped selected-object sync is
-                # not a narrower request than a staged one — it is the widest
-                # request the backend accepts, reaching endpoints this NetBox has
-                # disabled. Resolve the scope here and refuse the run outright if
-                # there is none, exactly as `_run_all_stages_sync()` does.
-                batch_wire_scope, skipped_scope_pks, scope_error, batch_wire_by_pk = (
-                    _batch_wire_endpoint_scope(
-                        params["proxmox_endpoint_ids"],
-                        fastapi_endpoint_id=fastapi_endpoint_id,
-                    )
-                )
-                if scope_error:
-                    self.logger.error(f"Skipping selected-object sync: {scope_error}")
-                    raise ProxboxPreflightError(
-                        f"Selected-object sync did not run: {scope_error}"
-                    )
-                if skipped_scope_pks:
-                    # Visible rather than silent: the run is scoped to fewer
-                    # endpoints than the operator has enabled. A selected object
-                    # that belongs to one of the skipped ones is refused by name
-                    # in `_run_batch_selected_sync()` rather than asked of the
-                    # remaining endpoints, and this line is what explains why.
-                    self.logger.warning(
-                        "Selected-object sync is scoped to "
-                        f"{len(skipped_scope_pks)} fewer Proxmox endpoint(s) than "
-                        "are enabled; unresolved endpoint id(s): "
-                        f"{', '.join(skipped_scope_pks)}"
-                    )
-
-                try:
-                    loop = asyncio.get_running_loop()
-                except RuntimeError:
-                    loop = None
-
-                if loop and loop.is_running():
-                    import concurrent.futures
-
-                    with concurrent.futures.ThreadPoolExecutor(
-                        max_workers=1
-                    ) as executor:
-                        future = executor.submit(
-                            asyncio.run,
-                            _run_batch_selected_sync(
-                                self,
-                                batch_object_type=batch_object_type,
-                                batch_object_ids=batch_object_ids,
-                                netbox_branch_schema_id=netbox_branch_schema_id,
-                                fastapi_endpoint_id=fastapi_endpoint_id,
-                                proxmox_wire_endpoint_ids=batch_wire_scope,
-                                proxmox_wire_endpoint_by_pk=batch_wire_by_pk,
-                            ),
-                        )
-                        batch_result = future.result()
-                else:
-                    batch_result = asyncio.run(
-                        _run_batch_selected_sync(
-                            self,
-                            batch_object_type=batch_object_type,
-                            batch_object_ids=batch_object_ids,
-                            netbox_branch_schema_id=netbox_branch_schema_id,
-                            fastapi_endpoint_id=fastapi_endpoint_id,
-                            proxmox_wire_endpoint_ids=batch_wire_scope,
-                            proxmox_wire_endpoint_by_pk=batch_wire_by_pk,
-                        )
-                    )
-                runtime_seconds = round(time.monotonic() - run_started, 3)
-                self.job.data = {
-                    "proxbox_sync": {
-                        "params": params,
-                        "runtime_seconds": runtime_seconds,
-                        "response": {
-                            "batch": batch_result,
-                            # Same key and builder as the stage path, so the
-                            # per-endpoint breakdown renders identically.
-                            "endpoint_runtimes": _build_endpoint_runtimes(
-                                batch_preflight.phases
-                            ),
-                        },
-                    }
-                }
-                self.job.save(update_fields=["data"])
-                batch_summary = (
-                    f"{batch_result['batch_object_label']} "
-                    f"({batch_result['total']} total, "
-                    f"{batch_result['succeeded']} succeeded, "
-                    f"{batch_result['failed']} failed)"
-                )
-                # A selected-object run is hand-picked: every object in it was
-                # named by an operator, so an object that did not sync is a
-                # failed run, not a partial success. Persisting `job.data`
-                # first keeps the per-object statuses and errors readable on
-                # the failed row; raising *before* the branch merge keeps a
-                # partial result from being promoted into main.
-                if int(batch_result.get("failed") or 0) > 0:
-                    batch_error = (
-                        f"Batch sync failed for {batch_summary} — "
-                        f"{_failed_batch_object_detail(batch_result)}"
-                    )
-                    self.logger.error(batch_error)
-                    raise RuntimeError(batch_error)
-                self.logger.info(f"Batch sync completed for {batch_summary}")
-                if branch is not None and branch_config is not None:
-                    merged, message = merge_branch(
-                        branch=branch,
-                        user=getattr(self.job, "user", None),
-                        on_conflict=branch_config["on_conflict"],
-                    )
-                    if merged:
-                        self.logger.info(message)
-                    else:
-                        self.logger.error(message)
-                        raise RuntimeError(message)
-                return
-
-            self.logger.info(f"Starting Proxbox sync stages: {', '.join(stages)}")
-            if proxmox_endpoint_ids:
-                self.logger.info(f"Proxmox endpoints: {proxmox_endpoint_ids}")
-            if netbox_endpoint_ids:
-                self.logger.info(f"NetBox endpoints: {netbox_endpoint_ids}")
-            if netbox_vm_ids:
-                self.logger.info(f"NetBox virtual machines: {netbox_vm_ids}")
-
-            endpoint_runtime_phases: list[dict[str, object]] = []
-
-            # A targeted run syncs specific VirtualMachine rows (the per-VM
-            # "Sync now" button). The estate-wide datacenter passes below —
-            # firewall objects, datacenter CPU models, VM template inventory —
-            # are irrelevant to reconciling one VM, take no scoping argument at
-            # all, and were the bulk of the wall-clock in targeted runs:
-            # operators syncing a single VM saw all endpoints' clusters,
-            # firewalls, SDN, CPU models, and templates sync first. Skip them
-            # here; a full/scheduled sync still runs them.
-            targeted_vm_run = bool(netbox_vm_ids)
-
-            # Push NetBox and Proxmox endpoint configuration to the proxbox-api
-            # backend before any SSE stage runs.  The backend needs its own copy
-            # of these records to open NetBox and Proxmox sessions; the post_save
-            # signals are best-effort and may have missed a push if the backend
-            # was offline when the endpoints were first saved.
-            preflight = _ensure_backend_endpoints(
+            branch_config = _resolve_branching_config(self)
+            context = _prepare_sync_run(
                 self,
-                proxmox_endpoint_ids or [],
+                branch_config=branch_config,
+                sync_types=sync_types,
+                sync_type=sync_type,
+                proxmox_endpoint_ids=proxmox_endpoint_ids,
+                netbox_endpoint_ids=netbox_endpoint_ids,
+                netbox_vm_ids=netbox_vm_ids,
+                batch_object_type=batch_object_type,
+                batch_object_ids=batch_object_ids,
                 fastapi_endpoint_id=fastapi_endpoint_id,
             )
-            endpoint_runtime_phases.extend(preflight.phases)
-            if preflight.blocking_error:
-                # Fail here rather than burning several minutes of doomed stages
-                # and reporting whichever backend error happens to surface first.
-                raise ProxboxPreflightError(preflight.blocking_error)
-
-            # Sync cluster and node data before SSE stages so cluster/node records
-            # are populated regardless of which stages are selected.
-            # Lazy import to avoid a circular import through services → views → jobs.
-            from netbox_proxbox.services.sync_cluster import sync_cluster_and_nodes  # noqa: PLC0415
-
-            endpoint_ids_to_sync = (
-                _enabled_endpoint_ids(
-                    proxmox_endpoint_ids,
-                    logger=self.logger,
-                    context="cluster/node sync",
-                )
-                if proxmox_endpoint_ids
-                else _enabled_endpoint_ids(
-                    logger=self.logger,
-                    context="cluster/node sync",
-                )
-            )
-            for eid in endpoint_ids_to_sync:
-                self.logger.info(f"Syncing cluster/nodes for endpoint {eid}")
-                cluster_started = time.monotonic()
-                cluster_result = sync_cluster_and_nodes(
-                    endpoint_id=eid,
-                    fastapi_endpoint_id=fastapi_endpoint_id,
-                )
-                cluster_runtime = _runtime_seconds_since(cluster_started)
-                if cluster_result.success:
-                    cluster_summary = (
-                        f"{cluster_result.clusters_created} cluster(s) created, "
-                        f"{cluster_result.clusters_updated} updated, "
-                        f"{cluster_result.nodes_created} node(s) created, "
-                        f"{cluster_result.nodes_updated} updated"
-                    )
-                    self.logger.info(
-                        f"Cluster/node sync for endpoint {eid}: {cluster_summary}"
-                    )
-                else:
-                    cluster_summary = str(
-                        cluster_result.error or "cluster/node sync failed"
-                    )
-                    self.logger.warning(
-                        f"Cluster/node sync for endpoint {eid} failed: {cluster_result.error}"
-                    )
-                endpoint_runtime_phases.append(
-                    _endpoint_runtime_phase(
-                        endpoint_id=getattr(cluster_result, "endpoint_id", None) or eid,
-                        endpoint_name=getattr(cluster_result, "endpoint_name", ""),
-                        kind="cluster",
-                        label="Cluster/node sync",
-                        runtime_seconds=cluster_runtime,
-                        status="success" if cluster_result.success else "warning",
-                        summary=cluster_summary,
-                    )
-                )
-
-            # Sync datacenter-level firewall objects (security groups, rules,
-            # IP sets, aliases, options) after cluster/node records exist so
-            # the endpoint lookup via ProxmoxCluster.name can resolve.
-            # A failure here is logged as a warning and does not abort the run.
+            _begin_sync_run(context)
+            if _run_batch_phase(context):
+                return
+            staged_state = _start_staged_sync(context)
+            targeted_vm_run = bool(netbox_vm_ids)
             if targeted_vm_run:
+                target_ids = ", ".join(netbox_vm_ids or [])
                 self.logger.info(
                     "Skipping firewall sync: targeted virtual-machine run "
-                    f"({', '.join(netbox_vm_ids)})"
+                    f"({target_ids})"
                 )
-            else:
-                from netbox_proxbox.services.sync_firewall import sync_firewall  # noqa: PLC0415
-
-                self.logger.info("Syncing firewall objects from proxbox-api")
-                # Scoped to this run's endpoints for the same reason the stage
-                # loop is: an *absent* endpoint filter is the widest request
-                # proxbox-api accepts, not a narrower one.
-                fw_result = sync_firewall(
-                    fastapi_endpoint_id=fastapi_endpoint_id,
-                    endpoint_ids=endpoint_ids_to_sync,
-                )
-                if fw_result.success:
-                    self.logger.info(
-                        f"Firewall sync complete: {fw_result.endpoints_processed} endpoint(s), "
-                        f"{fw_result.security_groups_created} sg created, "
-                        f"{fw_result.rules_created} rules created, "
-                        f"{fw_result.ipsets_created} ipsets created, "
-                        f"{fw_result.aliases_created} aliases created"
-                    )
-                else:
-                    self.logger.warning(
-                        f"Firewall sync failed or partially failed: {fw_result.error or 'see per_endpoint log'}"
-                    )
-                endpoint_runtime_phases.extend(
-                    _phases_from_service_result(
-                        fw_result,
-                        kind="firewall",
-                        label="Firewall sync",
-                    )
-                )
-
-            # Sync datacenter CPU models.
-            if targeted_vm_run:
                 self.logger.info(
-                    "Skipping datacenter CPU model sync: targeted virtual-machine run "
-                    f"({', '.join(netbox_vm_ids)})"
+                    "Skipping datacenter CPU model sync: targeted virtual-machine "
+                    f"run ({target_ids})"
                 )
-            else:
-                from netbox_proxbox.services.sync_datacenter import sync_datacenter  # noqa: PLC0415
-
-                self.logger.info("Syncing datacenter CPU models from proxbox-api")
-                dc_result = sync_datacenter(
-                    fastapi_endpoint_id=fastapi_endpoint_id,
-                    endpoint_ids=endpoint_ids_to_sync,
-                )
-                if dc_result.success:
-                    self.logger.info(
-                        f"Datacenter CPU model sync complete: {dc_result.endpoints_processed} endpoint(s), "
-                        f"created={dc_result.cpu_models_created}, updated={dc_result.cpu_models_updated}, "
-                        f"stale={dc_result.cpu_models_stale}"
-                    )
-                else:
-                    self.logger.warning(
-                        f"Datacenter CPU model sync failed: {dc_result.error or 'unknown error'}"
-                    )
-                endpoint_runtime_phases.extend(
-                    _phases_from_service_result(
-                        dc_result,
-                        kind="datacenter",
-                        label="Datacenter sync",
-                    )
-                )
-
-            # Sync dedicated Proxmox VM template inventory after datacenter-level
-            # service syncs and before VM SSE stages consume backend VM data.
-            if targeted_vm_run:
                 self.logger.info(
                     "Skipping VM template sync: targeted virtual-machine run "
-                    f"({', '.join(netbox_vm_ids)})"
-                )
-            elif (
-                sync_stages.effective_sync_modes_for_endpoint(None).get(
-                    "sync_mode_vm_template", SyncModeChoices.ALWAYS
-                )
-                == SyncModeChoices.DISABLED
-            ):
-                self.logger.info(
-                    "Skipping VM template sync: sync_mode_vm_template=disabled"
+                    f"({target_ids})"
                 )
             else:
-                from netbox_proxbox.services.sync_vm_template import (  # noqa: PLC0415
-                    sync_vm_templates,
+                _extend_and_checkpoint_local_phases(
+                    context,
+                    staged_state,
+                    sync_firewall(context, staged_state.endpoint_ids, context.branch),
                 )
-
-                for eid in endpoint_ids_to_sync:
-                    self.logger.info(f"Syncing VM templates for endpoint {eid}")
-                    template_started = time.monotonic()
-                    template_result = sync_vm_templates(
-                        endpoint_id=eid,
-                        fastapi_endpoint_id=fastapi_endpoint_id,
-                    )
-                    template_runtime = _runtime_seconds_since(template_started)
-                    if template_result.success:
-                        template_summary = (
-                            f"{template_result.templates_created} template(s) created, "
-                            f"{template_result.templates_updated} updated, "
-                            f"{template_result.templates_skipped} skipped, "
-                            f"{template_result.templates_deleted} deleted"
-                        )
-                        self.logger.info(
-                            f"VM template sync for endpoint {eid}: {template_summary}"
-                        )
-                    else:
-                        template_summary = str(
-                            template_result.error or "VM template sync failed"
-                        )
-                        self.logger.warning(
-                            f"VM template sync for endpoint {eid} failed: {template_result.error}"
-                        )
-                    endpoint_runtime_phases.append(
-                        _endpoint_runtime_phase(
-                            endpoint_id=getattr(template_result, "endpoint_id", None)
-                            or eid,
-                            endpoint_name=getattr(template_result, "endpoint_name", ""),
-                            kind="vm_template",
-                            label="VM template sync",
-                            runtime_seconds=template_runtime,
-                            status=(
-                                "success"
-                                if template_result.success is True
-                                else "warning"
-                            ),
-                            summary=template_summary,
-                        )
-                    )
-
-            stages_out = _run_all_stages_sync(
-                self,
-                stages,
-                params,
-                run_started,
-                preflight_hint=preflight.hint,
-            )
-            endpoint_runtime_phases.extend(_phases_from_stage_results(stages_out))
-
-            for stage in stages_out:
-                if stage.get("runtime_seconds") is None:
-                    self.logger.warning(
-                        f"Stage '{stage.get('sync_type')}' has runtime_seconds=None before save"
-                    )
-
-            runtime_seconds = round(time.monotonic() - run_started, 3)
-            endpoint_runtimes = _build_endpoint_runtimes(endpoint_runtime_phases)
-            self.job.data = {
-                "proxbox_sync": {
-                    "params": params,
-                    "runtime_seconds": runtime_seconds,
-                    "response": {
-                        "stages": stages_out,
-                        "endpoint_runtimes": endpoint_runtimes,
-                        "runtime_summary": _runtime_summary(
-                            runtime_seconds=runtime_seconds,
-                            endpoint_runtimes=endpoint_runtimes,
-                        ),
-                    },
-                }
-            }
-            self.job.save(update_fields=["data"])
-            self.job.refresh_from_db(fields=["data"])
-            stored_stages = (
-                (self.job.data or {})
-                .get("proxbox_sync", {})
-                .get("response", {})
-                .get("stages", [])
-            )
-            missing_rt = [
-                s.get("sync_type")
-                for s in stored_stages
-                if s.get("runtime_seconds") is None
-            ]
-            if missing_rt:
-                self.logger.error(
-                    f"runtime_seconds lost after DB round-trip for stages: {missing_rt}"
+                _extend_and_checkpoint_local_phases(
+                    context,
+                    staged_state,
+                    sync_datacenter(context, staged_state.endpoint_ids, context.branch),
                 )
-
-            # An endpoint whose backend id could not be resolved never reached a
-            # stage at all: ``_run_all_stages_sync()`` records the reason and moves
-            # on so the *other* endpoints still sync. Nothing downstream read those
-            # records, though, so a run in which every selected endpoint was skipped
-            # finished as **completed** having synced nothing — the exact silent
-            # no-op this preflight work exists to eliminate. Raise here, after
-            # ``job.data`` is saved, so the per-endpoint reasons survive on the job
-            # and the JobRunner still marks the run errored.
-            failed_scopes = [
-                stage
-                for stage in stages_out
-                if stage.get("sync_type") == "endpoint-scope"
-                and not (stage.get("result_summary") or {}).get("ok", True)
-            ]
-            if failed_scopes:
-                # A record with no endpoint_id is the whole-run scope failure
-                # (nothing enabled to sync at all), not a per-endpoint skip —
-                # prefixing it with "endpoint None:" would read as a bug.
-                skipped_detail = "; ".join(
-                    (
-                        f"endpoint {stage.get('endpoint_id')}: {stage_error}"
-                        if stage.get("endpoint_id") is not None
-                        else stage_error
-                    )
-                    for stage in failed_scopes
-                    for stage_error in [
-                        (stage.get("result_summary") or {}).get("error")
-                        or "unknown error"
-                    ]
+                _extend_and_checkpoint_local_phases(
+                    context,
+                    staged_state,
+                    sync_vm_templates(
+                        context, staged_state.endpoint_ids, context.branch
+                    ),
                 )
-                # "A stage ran" means one actually executed — a stage recorded as
-                # skipped by its sync mode did not, and counting it would make the
-                # "No sync stage ran" message unreachable whenever any endpoint
-                # contributed sync-mode skips.
-                ran_any_stage = any(
-                    stage.get("sync_type") != "endpoint-scope"
-                    and not (stage.get("result_summary") or {}).get("skipped")
-                    for stage in stages_out
-                )
-                if ran_any_stage:
-                    scope_error = (
-                        f"{len(failed_scopes)} Proxmox endpoint(s) were skipped and "
-                        f"did not sync — {skipped_detail}"
-                    )
-                else:
-                    scope_error = (
-                        "No sync stage ran: every selected Proxmox endpoint was "
-                        f"skipped — {skipped_detail}"
-                    )
-                self.logger.error(scope_error)
-                raise RuntimeError(scope_error)
-
-            self.logger.info(
-                f"All sync stages completed ({len(stages_out)}), runtime {runtime_seconds:.3f}s"
-            )
-
-            if branch is not None and branch_config is not None:
-                merged, message = merge_branch(
-                    branch=branch,
-                    user=getattr(self.job, "user", None),
-                    on_conflict=branch_config["on_conflict"],
-                )
-                if merged:
-                    self.logger.info(message)
-                else:
-                    self.logger.error(message)
-                    raise RuntimeError(message)
+            _finish_staged_sync(context, staged_state)
+        except BranchingUnavailableError as exc:
+            message = str(exc)
+            self.logger.error(message)
+            _record_branching_failure(self, message)
+            raise
         finally:
             _release_rq_sync_ownership(self.job)
 

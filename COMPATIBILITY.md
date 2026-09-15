@@ -52,21 +52,50 @@ python manage.py shell -c "from django.apps import apps; print([p for p in ('net
 
 Older NetBox 4.5/4.6 installations remain supported by the same package.
 
-### netbox-branching does not support NetBox 4.7 yet
+### netbox-branching compatibility and branch-isolation safety
 
 `netboxlabs-netbox-branching` declares `max_version = "4.6.99"` (checked
-through 1.0.3), so on NetBox 4.7 **NetBox skips it** — the package stays
+through `1.0.3`), so on NetBox 4.7 **NetBox skips those releases** — the package stays
 importable, but its Django app is absent from `INSTALLED_APPS` and its models
-and schemas do not exist.
+and schemas do not exist. Production uses `1.2.0-beta1`, which loads on NetBox
+`4.7.0`. Upstream labels `1.2.0-beta1` as testing-only and promises no upgrade
+path; the real integration cell is tracked with issue #328.
 
-If you use branch-isolated sync (`branching_enabled = True`), **do not move to
-NetBox 4.7 until a 4.7-capable netbox-branching release exists.** The
-availability detector here now requires the loaded app rather than an
-importable package, so a skipped branching app is correctly reported as
-unavailable; but a sync configured for branch isolation that finds branching
-unavailable currently proceeds against `main` rather than refusing, which
-silently drops the isolation boundary you configured. Tightening that to
-fail closed is tracked separately.
+If you use branch-isolated sync (`branching_enabled = True`), install a
+`netbox-branching` release compatible with the active NetBox version and verify
+that `apps.is_installed("netbox_branching")` is true. The availability detector
+requires the loaded app rather than an importable package. A sync configured for
+isolation now fails closed on netbox-proxbox's `ProxboxSyncJob.run()`, individual
+Sync Now actions, the create-instance request, and the `pxb sync run`
+management-command path when the app was skipped, is missing, cannot import, or
+the setting cannot be read safely. These paths stop before backend transport
+instead of silently reconciling against `main`. When isolation is enabled,
+request handlers also require an active branch that is freshly `READY` and has
+a usable `schema_id`; otherwise they return HTTP 409 and direct the operator to
+activate a branch or disable branch isolation. They never auto-create branches.
+A job also refuses a provisioned `READY` branch without a usable `schema_id`,
+and its local ORM reconciliation phases run with that branch activated before
+the schema-scoped backend stages. Ownership is claimed before the branching
+settings snapshot or audit write. The provisioned branch ID, name, and schema ID
+are persisted before backend authentication. Branch status is refreshed and
+required to remain `READY` immediately before every activation and before
+merge. Each completed cluster/node, firewall, datacenter, or VM-template phase
+is checkpointed before the next phase or SSE starts. An SSE exception
+checkpoints the accumulated local evidence again before it is re-raised. A
+failed local phase fails the job before merge, leaving the branch open with a
+recorded disposition. After merge, the wrapper verifies the returned status. On
+`1.2.0-beta1`, a no-change `Branch.merge()` returns while the branch remains
+`READY`; Proxbox confirms that `get_unmerged_changes()` is empty, leaves the
+branch open, and records `no_changes_left_open` with its branch ID and name.
+Operators archive empty branches through the netbox-branching UI. A `READY`
+branch that still has changes is also left open. The job data and log name
+isolation failures and direct the operator to install a compatible release or
+set `branching_enabled=False` explicitly.
+
+`branching_enabled_settings()` continues to raise on an unavailable configured
+boundary so future callers default to the safe behavior. The companion plugins
+do not all call this wrapper or enforce the same entry-point ordering today;
+their adoption is tracked separately in each companion repository.
 
 Installations that do not use branching are unaffected.
 
@@ -77,11 +106,11 @@ commit, final `release.yaml` metadata, and upstream requirements checksum before
 installing a reviewed Python 3.12/Linux lock with artifact hashes and an
 explicit PyPI first-index policy.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.26.post7 <-> proxbox-api 0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.26.post7 <-> proxbox-api 0.0.22 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 | netbox-proxbox | NetBox | Python | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |---|---|---|---|---|---|
-| v0.0.26.post7 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.21.post7 | v0.0.10 | v0.0.13 |
+| v0.0.26.post7 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.22 | v0.0.13 | v0.0.13 |
 | v0.0.26.post1 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.20 | v0.0.10 | v0.0.13 |
 | v0.0.23.post2 | >=4.5.8 | >=3.12 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | v0.0.23.post1 | >=4.5.8 | >=3.12 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |

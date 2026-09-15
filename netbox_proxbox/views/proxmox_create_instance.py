@@ -293,6 +293,9 @@ class ProxmoxEndpointCreateInstanceView(
                 "Enable write access on this endpoint to create instances.",
                 status=403,
             )
+        isolation_error = _create_instance_branch_precondition()
+        if isolation_error is not None:
+            return isolation_error
 
         try:
             kind, normalized = validate_create_instance_payload(_request_json(request))
@@ -333,6 +336,7 @@ class ProxmoxEndpointCreateInstanceView(
                 endpoint=endpoint,
                 normalized=normalized,
                 backend_endpoint_id=backend_endpoint_id,
+                fastapi_endpoint_id=ctx.endpoint_id,
                 base_url=base_url,
                 headers=headers,
                 verify_ssl=verify_ssl,
@@ -342,10 +346,30 @@ class ProxmoxEndpointCreateInstanceView(
             endpoint=endpoint,
             normalized=normalized,
             backend_endpoint_id=backend_endpoint_id,
+            fastapi_endpoint_id=ctx.endpoint_id,
             base_url=base_url,
             headers=headers,
             verify_ssl=verify_ssl,
         )
+
+
+def _create_instance_branch_precondition() -> JsonResponse | None:
+    """Reject an unsafe request before any provisioning transport starts."""
+    from netbox_proxbox.services.branch_lifecycle import (  # noqa: PLC0415
+        ActiveBranchRequiredError,
+        BranchingUnavailableError,
+        require_active_branch_schema_id,
+        require_branch_isolation_or_raise,
+    )
+
+    try:
+        decision = require_branch_isolation_or_raise()
+        require_active_branch_schema_id(decision)
+    except ActiveBranchRequiredError as exc:
+        return _json_error("active_branch_required", str(exc), status=409)
+    except BranchingUnavailableError as exc:
+        return _json_error("branch_isolation_unavailable", str(exc), status=503)
+    return None
 
 
 def _provision_qemu(
@@ -354,6 +378,7 @@ def _provision_qemu(
     endpoint: ProxmoxEndpoint,
     normalized: dict[str, object],
     backend_endpoint_id: int,
+    fastapi_endpoint_id: int | None,
     base_url: str,
     headers: dict[str, str],
     verify_ssl: bool,
@@ -422,6 +447,8 @@ def _provision_qemu(
         vm_type="qemu",
         new_vmid=new_vmid,
         body=body,
+        fastapi_endpoint_id=fastapi_endpoint_id,
+        backend_endpoint_id=backend_endpoint_id,
     )
 
 
@@ -431,6 +458,7 @@ def _provision_lxc(
     endpoint: ProxmoxEndpoint,
     normalized: dict[str, object],
     backend_endpoint_id: int,
+    fastapi_endpoint_id: int | None,
     base_url: str,
     headers: dict[str, str],
     verify_ssl: bool,
@@ -493,6 +521,8 @@ def _provision_lxc(
         vm_type="lxc",
         new_vmid=new_vmid,
         body=body,
+        fastapi_endpoint_id=fastapi_endpoint_id,
+        backend_endpoint_id=backend_endpoint_id,
     )
 
 
@@ -553,6 +583,8 @@ def _success_response_after_sync(
     vm_type: str,
     new_vmid: int,
     body: dict[str, object],
+    fastapi_endpoint_id: int | None,
+    backend_endpoint_id: int,
 ) -> JsonResponse:
     detail = body.get("detail")
     detail_text = str(detail) if detail not in (None, "") else ""
@@ -563,6 +595,8 @@ def _success_response_after_sync(
         target_node=target_node,
         vm_type=vm_type,
         new_vmid=new_vmid,
+        fastapi_endpoint_id=fastapi_endpoint_id,
+        backend_endpoint_id=backend_endpoint_id,
     )
     netbox_url = _find_created_vm_url(request, new_vmid, endpoint)
     if sync_note:
@@ -593,6 +627,8 @@ def _sync_created_instance(
     target_node: str,
     vm_type: str,
     new_vmid: int,
+    fastapi_endpoint_id: int | None,
+    backend_endpoint_id: int,
 ) -> str | None:
     if not cluster_name:
         return (
@@ -600,6 +636,10 @@ def _sync_created_instance(
             "to a Proxmox cluster in NetBox."
         )
     try:
+        sync_scope = _created_instance_sync_scope(
+            fastapi_endpoint_id=fastapi_endpoint_id,
+            backend_endpoint_id=backend_endpoint_id,
+        )
         response, status = sync_individual(
             "sync/individual/vm",
             {
@@ -608,6 +648,7 @@ def _sync_created_instance(
                 "type": vm_type,
                 "vmid": new_vmid,
             },
+            **sync_scope,
         )
     except Exception as exc:  # pragma: no cover - defensive around external sync
         logger.exception(
@@ -625,6 +666,31 @@ def _sync_created_instance(
     return "Created instance sync is pending" + (
         f": {detail}" if detail else f" (sync returned HTTP {status})."
     )
+
+
+def _created_instance_sync_scope(
+    *,
+    fastapi_endpoint_id: int | None,
+    backend_endpoint_id: int,
+) -> dict[str, object]:
+    """Resolve the guarded branch and endpoint scope for post-create sync."""
+    from netbox_proxbox.services.branch_lifecycle import (  # noqa: PLC0415
+        require_active_branch_schema_id,
+        require_branch_isolation_or_raise,
+    )
+
+    decision = require_branch_isolation_or_raise()
+    branch_schema_id = require_active_branch_schema_id(decision)
+    if fastapi_endpoint_id is None:
+        raise RuntimeError(
+            "Selected ProxBox backend has no endpoint id; created instance sync "
+            "cannot be scoped safely."
+        )
+    return {
+        "netbox_branch_schema_id": branch_schema_id,
+        "fastapi_endpoint_id": fastapi_endpoint_id,
+        "proxmox_endpoint_ids": str(backend_endpoint_id),
+    }
 
 
 def _find_created_vm_url(

@@ -234,6 +234,37 @@ records, so it can be run repeatedly during rollout automation.
 
 These fields configure the optional **branching-enabled sync** mode where every Proxbox job runs against a fresh `netbox-branching` branch and merges on success. Requires the `netbox_branching` plugin installed and listed **last** in `PLUGINS`.
 
+Branch isolation fails closed. If `branching_enabled=True` but NetBox does not
+load `netbox_branching`—for example, because the installed release declares an
+incompatible NetBox version range—the sync job records the reason and stops
+before contacting proxbox-api or writing inventory. Install and enable a
+compatible `netbox-branching` release, or explicitly set
+`branching_enabled=False` to allow synchronization on `main`. Releases through
+`1.0.3` declare `max_version = "4.6.99"`; the production deployment uses
+`1.2.0-beta1`, which loads on NetBox `4.7.0`. Upstream labels `1.2.0-beta1` as
+testing-only and promises no upgrade path; the real integration cell is tracked
+with issue #328.
+
+When branch isolation is enabled, every Sync Now and create-instance request
+requires an active branch that is freshly `READY` and has a usable schema ID.
+A request without one returns HTTP 409 with instructions to activate a branch
+or disable branch isolation. Request handlers never create a branch
+automatically.
+
+Each job refreshes the branch and requires `READY` before every local activation
+and before merge. It persists the provisioned branch ID, name, and schema ID
+before backend authentication, then checkpoints each completed cluster/node,
+firewall, datacenter, or VM-template phase before starting the next phase or
+SSE. If SSE raises, the accumulated local evidence and left-open disposition
+are saved again before the exception is re-raised. A failed local phase prevents
+merge, and the branch remains open for inspection. After `Branch.merge()`,
+Proxbox verifies the returned state. The
+`netbox-branching` `1.2.0-beta1` no-change path remains `READY`, so Proxbox
+confirms that it has no unmerged changes, leaves it open, and records a
+`no_changes_left_open` disposition with the branch ID and name. Operators
+archive empty branches through the netbox-branching UI. A branch that remains
+`READY` with changes is left open instead.
+
 | Field | Default | Env override | Description |
 |---|---|---|---|
 | **Branching-enabled sync (Proxmox → NetBox)** | `false` | _(plugin only)_ | Master toggle. When enabled, every Proxbox sync job creates a branch, runs the sync on it, and merges it back into `main` on success. |

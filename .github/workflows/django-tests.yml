@@ -255,6 +255,7 @@ jobs:
             tests/test_encryption_key_recovery_django.py \
             tests/test_job_stream_django.py \
             tests/test_ceph_runtime_settings_django.py \
+            tests/test_data_protection_views_django.py \
             tests/test_influxdb_metrics_django.py \
             tests/test_node_ssh_credential_form_django.py \
             tests/test_detail_view_templates_django.py \

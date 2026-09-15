@@ -20,7 +20,6 @@ from netbox_proxbox.vm_identity import (
     resolve_vm_type,
     resolve_vm_vmid,
 )
-from netbox_proxbox.services.branch_lifecycle import get_active_branch_schema_id
 from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
 from netbox_proxbox.services.tenant_assignment import (
     maybe_assign_tenant_from_cluster,
@@ -28,7 +27,10 @@ from netbox_proxbox.services.tenant_assignment import (
     maybe_assign_tenant_from_tags,
 )
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
-from netbox_proxbox.views.sync_now import _handle_sync_response
+from netbox_proxbox.views.sync_now import (
+    _branch_isolation_precondition,
+    _handle_sync_response,
+)
 
 
 @register_model_view(VirtualMachine, "proxbox_sync_now", path="proxbox-sync-now")
@@ -50,7 +52,6 @@ class VirtualMachineSyncNowView(
         vm = get_object_or_404(
             VirtualMachine.objects.restrict(request.user, "view"), pk=pk
         )
-
         vmid = resolve_vm_vmid(vm)
         vm_type = resolve_vm_type(vm)
         proxmox_cluster = ProxmoxCluster.objects.filter(
@@ -75,6 +76,11 @@ class VirtualMachineSyncNowView(
                 _("Virtual machine is not linked to a Proxmox cluster."),
             )
             return HttpResponseRedirect(vm.get_absolute_url())
+        branch_schema_id, isolation_error = _branch_isolation_precondition(
+            request, f"Virtual machine '{vm.name}'", vm.get_absolute_url()
+        )
+        if isolation_error is not None:
+            return isolation_error
 
         response, status, dependencies = sync_individual_with_dependencies(
             "sync/individual/vm",
@@ -84,7 +90,7 @@ class VirtualMachineSyncNowView(
                 "type": vm_type,
                 "vmid": vmid,
             },
-            netbox_branch_schema_id=get_active_branch_schema_id(),
+            netbox_branch_schema_id=branch_schema_id,
         )
 
         if 200 <= status < 300:

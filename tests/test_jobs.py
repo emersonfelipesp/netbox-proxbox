@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from tests.choices_stubs import attach_credential_storage_backend_choices
 import asyncio
+from contextlib import contextmanager, nullcontext
 import json
 import importlib.util
 import logging
@@ -22,6 +23,59 @@ from tests.django_stubs import DatabaseError, django_stub_modules
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 _REAL_BACKEND_SYNC: types.ModuleType | None = None
+
+
+def _branch_lifecycle_stub(
+    state_name: str,
+    *,
+    settings: dict[str, str] | None = None,
+    reason: str | None = None,
+    create: object | None = None,
+    merge: object | None = None,
+    activate: object | None = None,
+) -> types.ModuleType:
+    """Build the typed branch-lifecycle surface imported lazily by ``run()``."""
+
+    class _DecisionState:
+        ENABLED = object()
+        DISABLED = object()
+        CONFIGURED_BUT_UNAVAILABLE = object()
+
+    module = types.ModuleType("netbox_proxbox.services.branch_lifecycle")
+    module.BranchingDecisionState = _DecisionState
+    module.BranchingUnavailableError = type(
+        "BranchingUnavailableError",
+        (RuntimeError,),
+        {},
+    )
+    state = getattr(_DecisionState, state_name)
+    decision = SimpleNamespace(
+        state=state,
+        settings=settings,
+        reason=reason,
+        configured=state_name != "DISABLED",
+    )
+    module.resolve_branching_decision = lambda: decision
+
+    def require_branch_isolation_or_raise():
+        if state_name == "CONFIGURED_BUT_UNAVAILABLE":
+            detail = reason or "branching unavailable"
+            raise module.BranchingUnavailableError(
+                "Proxbox sync refused: branch isolation is configured with "
+                "branching_enabled=True, but netbox-branching is unavailable "
+                f"({detail}). Install and enable a netbox-branching release "
+                "compatible with this NetBox version, or set "
+                "branching_enabled=False to explicitly allow sync on main."
+            )
+        return decision
+
+    module.require_branch_isolation_or_raise = require_branch_isolation_or_raise
+    module.activate_sync_branch = activate or (lambda branch: nullcontext())
+    if create is not None:
+        module.create_and_provision_branch = create
+    if merge is not None:
+        module.merge_branch = merge
+    return module
 
 
 def load_real_backend_sync() -> types.ModuleType:
@@ -388,25 +442,6 @@ def proxbox_sync_job_module(monkeypatch):
         sys.modules, "netbox_proxbox.services.sync_firewall", sync_firewall_mod
     )
 
-    # Stub sync_sdn so the deferred import in jobs.py resolves.
-    sync_sdn_mod = types.ModuleType("netbox_proxbox.services.sync_sdn")
-    sync_sdn_mod.sync_sdn = lambda *a, **kw: SimpleNamespace(
-        success=True,
-        error=None,
-        endpoints_processed=0,
-        fabrics_created=0,
-        fabrics_updated=0,
-        fabrics_stale=0,
-        route_maps_created=0,
-        route_maps_updated=0,
-        route_maps_stale=0,
-        prefix_lists_created=0,
-        prefix_lists_updated=0,
-        prefix_lists_stale=0,
-        per_endpoint=[],
-    )
-    monkeypatch.setitem(sys.modules, "netbox_proxbox.services.sync_sdn", sync_sdn_mod)
-
     # Stub sync_datacenter so the deferred import in jobs.py resolves.
     sync_datacenter_mod = types.ModuleType("netbox_proxbox.services.sync_datacenter")
     sync_datacenter_mod.sync_datacenter = lambda *a, **kw: SimpleNamespace(
@@ -462,6 +497,11 @@ def proxbox_sync_job_module(monkeypatch):
             {scope[0]: scope[0] for scope in scopes if scope},
             None,
         ),
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        _branch_lifecycle_stub("DISABLED"),
     )
     return module
 
@@ -529,6 +569,709 @@ def test_proxbox_sync_job_run_imports_from_services_not_views(
     assert captured["path"] == (
         "virtualization/virtual-machines/interfaces/ip-address/create/stream"
     )
+
+
+def test_run_fails_closed_before_backend_or_inventory_work_when_branching_unavailable(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """Configured isolation must never degrade to a destructive sync on main."""
+    module = proxbox_sync_job_module
+    create = MagicMock(side_effect=AssertionError("branch creation was attempted"))
+    merge = MagicMock(side_effect=AssertionError("branch merge was attempted"))
+    branch_module = _branch_lifecycle_stub(
+        "CONFIGURED_BUT_UNAVAILABLE",
+        reason="the app was skipped as incompatible with NetBox 4.7.0",
+        create=create,
+        merge=merge,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        branch_module,
+    )
+    backend_key = MagicMock(side_effect=AssertionError("backend authentication ran"))
+    backend_bootstrap = MagicMock(side_effect=AssertionError("backend preflight ran"))
+    stage_runner = MagicMock(side_effect=AssertionError("a sync stage ran"))
+    ownership = MagicMock(return_value=True)
+    cluster_phase = MagicMock(
+        side_effect=AssertionError("cluster inventory was written")
+    )
+    firewall_phase = MagicMock(
+        side_effect=AssertionError("firewall inventory was written")
+    )
+    datacenter_phase = MagicMock(
+        side_effect=AssertionError("datacenter inventory was written")
+    )
+    template_phase = MagicMock(
+        side_effect=AssertionError("template inventory was written")
+    )
+    monkeypatch.setattr(module, "_require_backend_key", backend_key)
+    monkeypatch.setattr(module, "_ensure_backend_endpoints", backend_bootstrap)
+    monkeypatch.setattr(module, "_run_all_stages_sync", stage_runner)
+    monkeypatch.setattr(module, "_claim_rq_sync_ownership", ownership)
+    monkeypatch.setattr(module, "_sync_cluster_phase", cluster_phase)
+    monkeypatch.setattr(module, "sync_firewall", firewall_phase)
+    monkeypatch.setattr(module, "sync_datacenter", datacenter_phase)
+    monkeypatch.setattr(module, "sync_vm_templates", template_phase)
+
+    job = module.ProxboxSyncJob()
+    job.logger = MagicMock()
+    job.job = MagicMock()
+    job.job.data = None
+
+    with pytest.raises(branch_module.BranchingUnavailableError) as exc_info:
+        module.ProxboxSyncJob.run(job, sync_type=module.SyncTypeChoices.DEVICES)
+
+    message = str(exc_info.value)
+    assert "branching_enabled=True" in message
+    assert "skipped as incompatible with NetBox 4.7.0" in message
+    assert "Install and enable a netbox-branching release compatible" in message
+    assert "set branching_enabled=False" in message
+    backend_key.assert_not_called()
+    backend_bootstrap.assert_not_called()
+    stage_runner.assert_not_called()
+    ownership.assert_called_once_with(job.job)
+    cluster_phase.assert_not_called()
+    firewall_phase.assert_not_called()
+    datacenter_phase.assert_not_called()
+    template_phase.assert_not_called()
+    create.assert_not_called()
+    merge.assert_not_called()
+    # Ownership is the only write allowed before the settings snapshot and audit.
+    job.job.save.assert_called_once_with(update_fields=["data"])
+    stage = job.job.data["proxbox_sync"]["response"]["stages"][0]
+    assert stage["sync_type"] == "branch-isolation"
+    assert stage["result_summary"] == {"ok": False, "error": message}
+    job.logger.error.assert_called_once_with(message)
+
+
+def test_non_owner_reads_no_settings_and_writes_no_audit_or_transport(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """Only the owner may resolve the run's branch settings snapshot."""
+    module = proxbox_sync_job_module
+    settings_read = MagicMock(side_effect=AssertionError("branch settings were read"))
+    audit_write = MagicMock(side_effect=AssertionError("audit data was written"))
+    backend = MagicMock(side_effect=AssertionError("backend transport ran"))
+    release = MagicMock(side_effect=AssertionError("unowned lock was released"))
+    ownership = MagicMock(return_value=False)
+    monkeypatch.setattr(module, "_claim_rq_sync_ownership", ownership)
+    monkeypatch.setattr(module, "_resolve_branching_config", settings_read)
+    monkeypatch.setattr(module, "_record_branching_failure", audit_write)
+    monkeypatch.setattr(module, "_require_backend_key", backend)
+    monkeypatch.setattr(module, "_ensure_backend_endpoints", backend)
+    monkeypatch.setattr(module, "_release_rq_sync_ownership", release)
+    job = module.ProxboxSyncJob()
+    job.logger = MagicMock()
+    job.job = MagicMock(data=None)
+
+    module.ProxboxSyncJob.run(job, sync_type=module.SyncTypeChoices.DEVICES)
+
+    ownership.assert_called_once_with(job.job)
+    settings_read.assert_not_called()
+    audit_write.assert_not_called()
+    backend.assert_not_called()
+    release.assert_not_called()
+    job.job.save.assert_not_called()
+
+
+def test_branch_activation_failure_is_audited_and_never_merged(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """Activation failures name the open branch in persisted job evidence."""
+    module = proxbox_sync_job_module
+    branch = SimpleNamespace(name="isolated-325", schema_id="schema-325")
+    merge = MagicMock(side_effect=AssertionError("unsafe merge was attempted"))
+    branch_module = _branch_lifecycle_stub(
+        "ENABLED",
+        settings={"prefix": "isolated", "on_conflict": "fail"},
+        create=MagicMock(return_value=branch),
+        merge=merge,
+    )
+
+    @contextmanager
+    def fail_activation(candidate):
+        raise branch_module.BranchingUnavailableError(
+            f"Branch {candidate.name} activation failed; branch left open."
+        )
+        yield  # pragma: no cover
+
+    branch_module.activate_sync_branch = fail_activation
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        branch_module,
+    )
+    job = module.ProxboxSyncJob()
+    job.logger = MagicMock()
+    job.job = MagicMock(pk=325, user=None, data=None)
+
+    with pytest.raises(branch_module.BranchingUnavailableError, match="left open"):
+        module.ProxboxSyncJob.run(job, sync_type=module.SyncTypeChoices.DEVICES)
+
+    stage = job.job.data["proxbox_sync"]["response"]["stages"][-1]
+    assert stage["sync_type"] == "branch-isolation"
+    assert "isolated-325" in stage["result_summary"]["error"]
+    assert "left open" in stage["result_summary"]["error"]
+    merge.assert_not_called()
+
+
+def test_run_with_branching_disabled_still_syncs_on_main(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    module = proxbox_sync_job_module
+    create = MagicMock()
+    merge = MagicMock()
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        _branch_lifecycle_stub("DISABLED", create=create, merge=merge),
+    )
+    queries: list[dict[str, object]] = []
+    services_module = types.ModuleType("netbox_proxbox.services")
+    services_module.run_sync_stream = lambda path, query_params=None, **kwargs: (
+        queries.append(dict(query_params or {}))
+        or ({"stream": True, "response": {"ok": True}}, 200)
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_module)
+    job = module.ProxboxSyncJob()
+    job.logger = logging.getLogger("test_branching_disabled_main_sync")
+    job.job = MagicMock(pk=41, user=None)
+    job.job.data = None
+
+    module.ProxboxSyncJob.run(job, sync_type=module.SyncTypeChoices.DEVICES)
+
+    assert queries
+    assert all("netbox_branch_schema_id" not in query for query in queries)
+    assert job.job.data["proxbox_sync"]["params"]["netbox_branch_schema_id"] is None
+    create.assert_not_called()
+    merge.assert_not_called()
+
+
+def test_run_with_branching_enabled_creates_syncs_and_merges_the_branch(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    module = proxbox_sync_job_module
+    branch = SimpleNamespace(
+        pk=902,
+        name="proxbox-sync-branch",
+        schema_id="schema-325",
+    )
+    create = MagicMock(return_value=branch)
+    merge = MagicMock(return_value=(True, "Branch merged.", None))
+    branch_module = _branch_lifecycle_stub(
+        "ENABLED",
+        settings={"prefix": "isolated", "on_conflict": "fail"},
+        create=create,
+        merge=merge,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        branch_module,
+    )
+    queries: list[dict[str, object]] = []
+    services_module = types.ModuleType("netbox_proxbox.services")
+    services_module.run_sync_stream = lambda path, query_params=None, **kwargs: (
+        queries.append(dict(query_params or {}))
+        or ({"stream": True, "response": {"ok": True}}, 200)
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_module)
+    user = SimpleNamespace(username="operator")
+    job = module.ProxboxSyncJob()
+    job.logger = logging.getLogger("test_branching_enabled_isolated_sync")
+    job.job = MagicMock(pk=325, user=user)
+    job.job.data = None
+
+    def require_backend_key(job_runner, endpoint_id):
+        del endpoint_id
+        assert job_runner.job.data["proxbox_sync"]["branch"] == {
+            "id": 902,
+            "name": "proxbox-sync-branch",
+            "schema_id": "schema-325",
+        }
+
+    monkeypatch.setattr(module, "_require_backend_key", require_backend_key)
+
+    module.ProxboxSyncJob.run(job, sync_type=module.SyncTypeChoices.DEVICES)
+
+    create.assert_called_once()
+    assert create.call_args.kwargs["name"].startswith("isolated-325-")
+    assert create.call_args.kwargs["user"] is user
+    assert queries
+    assert all(query["netbox_branch_schema_id"] == "schema-325" for query in queries)
+    assert job.job.data["proxbox_sync"]["branch"]["id"] == 902
+    merge.assert_called_once_with(branch=branch, user=user, on_conflict="fail")
+
+
+def test_no_change_merge_records_left_open_branch_disposition(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """A converged branch remains open and is identified for operator archival."""
+    module = proxbox_sync_job_module
+    branch = SimpleNamespace(pk=903, name="isolated-converged", schema_id="schema-903")
+    message = (
+        "Branch isolated-converged (id=903) had no changes; branch left open. "
+        "Archive it through the netbox-branching UI."
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        _branch_lifecycle_stub(
+            "ENABLED",
+            settings={"prefix": "isolated", "on_conflict": "fail"},
+            create=MagicMock(return_value=branch),
+            merge=MagicMock(return_value=(True, message, "no_changes_left_open")),
+        ),
+    )
+    services_module = types.ModuleType("netbox_proxbox.services")
+    services_module.run_sync_stream = lambda *args, **kwargs: (
+        {"stream": True, "response": {"ok": True}},
+        200,
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_module)
+    job = module.ProxboxSyncJob()
+    job.logger = MagicMock()
+    job.job = MagicMock(pk=903, user=None, data=None)
+
+    module.ProxboxSyncJob.run(job, sync_type=module.SyncTypeChoices.DEVICES)
+
+    response = job.job.data["proxbox_sync"]["response"]
+    assert response["branch_disposition"] == {
+        "status": "no_changes_left_open",
+        "branch_id": 903,
+        "branch_name": "isolated-converged",
+    }
+    job.logger.info.assert_any_call(message)
+
+
+def test_interruption_after_cluster_phase_keeps_cluster_checkpoint(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """A later local interruption cannot erase the completed first phase."""
+    module = proxbox_sync_job_module
+
+    def interrupt_firewall(*args, **kwargs):
+        raise RuntimeError("interrupted after cluster phase")
+
+    monkeypatch.setattr(module, "sync_firewall", interrupt_firewall)
+    job = module.ProxboxSyncJob()
+    job.logger = logging.getLogger("test_local_phase_checkpoint_interruption")
+    job.job = MagicMock(pk=904, user=None, data=None)
+
+    with pytest.raises(RuntimeError, match="interrupted after cluster phase"):
+        module.ProxboxSyncJob.run(job, sync_type=module.SyncTypeChoices.DEVICES)
+
+    local_phases = job.job.data["proxbox_sync"]["response"]["local_phases"]
+    assert [phase["kind"] for phase in local_phases] == ["cluster"]
+
+
+def test_sse_failure_keeps_local_failure_evidence_and_disposition(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """An SSE exception preserves every prior local checkpoint before re-raising."""
+    module = proxbox_sync_job_module
+    branch = SimpleNamespace(
+        pk=905, name="isolated-sse-failure", schema_id="schema-905"
+    )
+    merge = MagicMock(side_effect=AssertionError("failed local work was merged"))
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        _branch_lifecycle_stub(
+            "ENABLED",
+            settings={"prefix": "isolated", "on_conflict": "fail"},
+            create=MagicMock(return_value=branch),
+            merge=merge,
+        ),
+    )
+    failed_phase = {
+        "endpoint_id": 1,
+        "endpoint_name": "pve-1",
+        "kind": "firewall",
+        "label": "Firewall sync",
+        "runtime_seconds": 0.1,
+        "status": "warning",
+        "summary": "firewall injected failure",
+    }
+    monkeypatch.setattr(module, "sync_firewall", lambda *args, **kwargs: [failed_phase])
+    monkeypatch.setattr(module, "sync_datacenter", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "sync_vm_templates", lambda *args, **kwargs: [])
+    services_module = types.ModuleType("netbox_proxbox.services")
+
+    def fail_sse(*args, **kwargs):
+        raise RuntimeError("SSE injected failure")
+
+    services_module.run_sync_stream = fail_sse
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_module)
+    job = module.ProxboxSyncJob()
+    job.logger = logging.getLogger("test_sse_failure_local_checkpoint")
+    job.job = MagicMock(pk=905, user=None, data=None)
+
+    with pytest.raises(RuntimeError, match="SSE injected failure"):
+        module.ProxboxSyncJob.run(job, sync_type=module.SyncTypeChoices.DEVICES)
+
+    response = job.job.data["proxbox_sync"]["response"]
+    assert failed_phase in response["local_phases"]
+    assert response["branch_disposition"] == {
+        "status": "left_open",
+        "branch_name": "isolated-sse-failure",
+        "reason": "local_reconciliation_failed",
+    }
+    merge.assert_not_called()
+
+
+def test_sse_failure_after_successful_local_phases_records_left_open_branch(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """An isolated SSE failure records why its otherwise clean branch stayed open."""
+    module = proxbox_sync_job_module
+    branch = SimpleNamespace(pk=906, name="isolated-sse-only", schema_id="schema-906")
+    merge = MagicMock(side_effect=AssertionError("failed SSE work was merged"))
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        _branch_lifecycle_stub(
+            "ENABLED",
+            settings={"prefix": "isolated", "on_conflict": "fail"},
+            create=MagicMock(return_value=branch),
+            merge=merge,
+        ),
+    )
+    services_module = types.ModuleType("netbox_proxbox.services")
+
+    def fail_sse(*args, **kwargs):
+        raise RuntimeError("SSE-only injected failure")
+
+    services_module.run_sync_stream = fail_sse
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_module)
+    job = module.ProxboxSyncJob()
+    job.logger = logging.getLogger("test_sse_only_failure_checkpoint")
+    job.job = MagicMock(pk=906, user=None, data=None)
+
+    with pytest.raises(RuntimeError, match="SSE-only injected failure"):
+        module.ProxboxSyncJob.run(job, sync_type=module.SyncTypeChoices.DEVICES)
+
+    response = job.job.data["proxbox_sync"]["response"]
+    assert response["local_phases"]
+    assert all(phase["status"] == "success" for phase in response["local_phases"])
+    assert response["branch_disposition"] == {
+        "status": "left_open",
+        "branch_name": "isolated-sse-only",
+        "reason": "sse_failed",
+    }
+    merge.assert_not_called()
+
+
+def test_merge_readiness_failure_records_left_open_branch_isolation(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """A final status refusal must remain visible beside the sync evidence."""
+    module = proxbox_sync_job_module
+    branch = SimpleNamespace(name="isolated-merge-refused", schema_id="schema-325")
+    message = (
+        "Branch isolated-merge-refused is not READY before merge (status=failed); "
+        "branch left open for operator inspection."
+    )
+    merge = MagicMock(return_value=(False, message, None))
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        _branch_lifecycle_stub(
+            "ENABLED",
+            settings={"prefix": "isolated", "on_conflict": "fail"},
+            create=MagicMock(return_value=branch),
+            merge=merge,
+        ),
+    )
+    services_module = types.ModuleType("netbox_proxbox.services")
+    services_module.run_sync_stream = lambda *args, **kwargs: (
+        {"stream": True, "response": {"ok": True}},
+        200,
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_module)
+    job = module.ProxboxSyncJob()
+    job.logger = MagicMock()
+    job.job = MagicMock(pk=325, user=None, data=None)
+
+    with pytest.raises(RuntimeError, match="left open"):
+        module.ProxboxSyncJob.run(job, sync_type=module.SyncTypeChoices.DEVICES)
+
+    response = job.job.data["proxbox_sync"]["response"]
+    isolation = response["stages"][-1]
+    assert isolation["sync_type"] == "branch-isolation"
+    assert isolation["result_summary"] == {"ok": False, "error": message}
+    assert response["local_phases"], "merge audit must preserve prior local evidence"
+
+
+def test_ready_branch_without_schema_stops_before_backend_or_reconciliation(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """A malformed READY branch must not allow any backend or inventory work."""
+    module = proxbox_sync_job_module
+    branch_error = type("BranchingUnavailableError", (RuntimeError,), {})
+    create = MagicMock(
+        side_effect=branch_error(
+            "Branch isolated-325 reached READY without a usable schema_id"
+        )
+    )
+    branch_module = _branch_lifecycle_stub(
+        "ENABLED",
+        settings={"prefix": "isolated", "on_conflict": "fail"},
+        create=create,
+    )
+    branch_module.BranchingUnavailableError = branch_error
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        branch_module,
+    )
+    backend_key = MagicMock(side_effect=AssertionError("backend authentication ran"))
+    preflight = MagicMock(side_effect=AssertionError("backend preflight ran"))
+    cluster = MagicMock(side_effect=AssertionError("cluster inventory was written"))
+    firewall = MagicMock(side_effect=AssertionError("firewall inventory was written"))
+    datacenter = MagicMock(
+        side_effect=AssertionError("datacenter inventory was written")
+    )
+    templates = MagicMock(side_effect=AssertionError("template inventory was written"))
+    monkeypatch.setattr(module, "_require_backend_key", backend_key)
+    monkeypatch.setattr(module, "_ensure_backend_endpoints", preflight)
+    monkeypatch.setattr(module, "_sync_cluster_phase", cluster)
+    monkeypatch.setattr(module, "sync_firewall", firewall)
+    monkeypatch.setattr(module, "sync_datacenter", datacenter)
+    monkeypatch.setattr(module, "sync_vm_templates", templates)
+    job = module.ProxboxSyncJob()
+    job.logger = MagicMock()
+    job.job = MagicMock(pk=325, user=None, data=None)
+
+    with pytest.raises(branch_error, match="READY without a usable schema_id"):
+        module.ProxboxSyncJob.run(job, sync_type=module.SyncTypeChoices.DEVICES)
+
+    create.assert_called_once()
+    backend_key.assert_not_called()
+    preflight.assert_not_called()
+    cluster.assert_not_called()
+    firewall.assert_not_called()
+    datacenter.assert_not_called()
+    templates.assert_not_called()
+    stage = job.job.data["proxbox_sync"]["response"]["stages"][0]
+    assert stage["sync_type"] == "branch-isolation"
+
+
+def test_every_local_orm_phase_runs_with_the_sync_branch_active(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """The pre-SSE writers must never observe main during an isolated run."""
+    module = proxbox_sync_job_module
+    branch = SimpleNamespace(name="proxbox-sync-branch", schema_id="abcd1234")
+    active: list[object] = []
+    phase_calls: list[str] = []
+
+    @contextmanager
+    def activate(candidate):
+        active.append(candidate)
+        try:
+            yield
+        finally:
+            assert active.pop() is candidate
+
+    def record_phase(name):
+        assert active == [branch], f"{name} would have written on main"
+        phase_calls.append(name)
+
+    branch_module = _branch_lifecycle_stub(
+        "ENABLED",
+        settings={"prefix": "isolated", "on_conflict": "fail"},
+        create=MagicMock(return_value=branch),
+        merge=MagicMock(return_value=(True, "Branch merged.", None)),
+        activate=activate,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        branch_module,
+    )
+    cluster_result = SimpleNamespace(
+        success=True,
+        clusters_created=0,
+        clusters_updated=0,
+        nodes_created=0,
+        nodes_updated=0,
+        endpoint_id=1,
+        endpoint_name="pve-1",
+        error=None,
+    )
+    firewall_result = SimpleNamespace(
+        success=True,
+        endpoints_processed=1,
+        security_groups_created=0,
+        rules_created=0,
+        ipsets_created=0,
+        aliases_created=0,
+        per_endpoint=[],
+        error=None,
+    )
+    datacenter_result = SimpleNamespace(
+        success=True,
+        endpoints_processed=1,
+        cpu_models_created=0,
+        cpu_models_updated=0,
+        cpu_models_stale=0,
+        per_endpoint=[],
+        error=None,
+    )
+    template_result = SimpleNamespace(
+        success=True,
+        endpoint_id=1,
+        endpoint_name="pve-1",
+        templates_created=0,
+        templates_updated=0,
+        templates_skipped=0,
+        templates_deleted=0,
+        error=None,
+    )
+    services = {
+        "netbox_proxbox.services.sync_cluster": (
+            "sync_cluster_and_nodes",
+            cluster_result,
+        ),
+        "netbox_proxbox.services.sync_firewall": ("sync_firewall", firewall_result),
+        "netbox_proxbox.services.sync_datacenter": (
+            "sync_datacenter",
+            datacenter_result,
+        ),
+        "netbox_proxbox.services.sync_vm_template": (
+            "sync_vm_templates",
+            template_result,
+        ),
+    }
+    for module_name, (function_name, result) in services.items():
+        phase_name = module_name.rsplit(".", 1)[-1]
+
+        def phase(*args, _name=phase_name, _result=result, **kwargs):
+            record_phase(_name)
+            return _result
+
+        monkeypatch.setattr(sys.modules[module_name], function_name, phase)
+    stream_module = types.ModuleType("netbox_proxbox.services")
+    stream_module.run_sync_stream = lambda *args, **kwargs: (
+        {"stream": True, "response": {"ok": True}},
+        200,
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", stream_module)
+    job = module.ProxboxSyncJob()
+    job.logger = logging.getLogger("test_local_phase_branch_activation")
+    job.job = MagicMock(pk=325, user=None, data=None)
+
+    module.ProxboxSyncJob.run(job, sync_type=module.SyncTypeChoices.DEVICES)
+
+    assert phase_calls == [
+        "sync_cluster",
+        "sync_firewall",
+        "sync_datacenter",
+        "sync_vm_template",
+    ]
+    assert active == []
+
+
+@pytest.mark.parametrize(
+    ("service_module", "service_name", "kind"),
+    [
+        ("sync_cluster", "sync_cluster_and_nodes", "cluster"),
+        ("sync_firewall", "sync_firewall", "firewall"),
+        ("sync_datacenter", "sync_datacenter", "datacenter"),
+        ("sync_vm_template", "sync_vm_templates", "vm_template"),
+    ],
+)
+def test_failed_local_service_is_persisted_and_never_merged(
+    monkeypatch,
+    proxbox_sync_job_module,
+    service_module,
+    service_name,
+    kind,
+):
+    """Each pre-SSE service failure leaves its partial branch unmerged."""
+    module = proxbox_sync_job_module
+    branch = SimpleNamespace(name="isolated-local-failure", schema_id="schema-325")
+    merge = MagicMock(side_effect=AssertionError("partial inventory was merged"))
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        _branch_lifecycle_stub(
+            "ENABLED",
+            settings={"prefix": "isolated", "on_conflict": "fail"},
+            create=MagicMock(return_value=branch),
+            merge=merge,
+        ),
+    )
+    result = SimpleNamespace(
+        success=False,
+        error=f"{kind} injected failure",
+        endpoint_id=1,
+        endpoint_name="pve-1",
+        endpoints_processed=0,
+        clusters_created=0,
+        clusters_updated=0,
+        nodes_created=0,
+        nodes_updated=0,
+        security_groups_created=0,
+        rules_created=0,
+        ipsets_created=0,
+        aliases_created=0,
+        cpu_models_created=0,
+        cpu_models_updated=0,
+        cpu_models_stale=0,
+        templates_created=0,
+        templates_updated=0,
+        templates_skipped=0,
+        templates_deleted=0,
+        per_endpoint=[],
+    )
+    monkeypatch.setattr(
+        sys.modules[f"netbox_proxbox.services.{service_module}"],
+        service_name,
+        lambda *args, **kwargs: result,
+    )
+    stream_module = types.ModuleType("netbox_proxbox.services")
+    stream_module.run_sync_stream = lambda *args, **kwargs: (
+        {"stream": True, "response": {"ok": True}},
+        200,
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", stream_module)
+    job = module.ProxboxSyncJob()
+    job.logger = logging.getLogger(f"test_failed_local_{kind}")
+    job.job = MagicMock(pk=325, user=None, data=None)
+
+    with pytest.raises(RuntimeError, match=f"{kind} injected failure"):
+        module.ProxboxSyncJob.run(
+            job,
+            sync_type=module.SyncTypeChoices.DEVICES,
+            proxmox_endpoint_ids=["1"],
+        )
+
+    response = job.job.data["proxbox_sync"]["response"]
+    failed = [phase for phase in response["local_phases"] if phase["kind"] == kind]
+    assert len(failed) == 1
+    assert failed[0]["status"] == "warning"
+    assert failed[0]["summary"] == f"{kind} injected failure"
+    assert response["branch_disposition"] == {
+        "status": "left_open",
+        "branch_name": "isolated-local-failure",
+        "reason": "local_reconciliation_failed",
+    }
+    merge.assert_not_called()
 
 
 def test_proxbox_sync_job_network_interfaces_includes_vm_interfaces_stage(
@@ -1602,33 +2345,6 @@ def test_proxbox_sync_job_persists_endpoint_runtime_breakdown(
             ],
         )
     )
-    sys.modules["netbox_proxbox.services.sync_sdn"].sync_sdn = lambda *a, **kw: (
-        SimpleNamespace(
-            success=True,
-            error=None,
-            endpoints_processed=2,
-            fabrics_created=0,
-            fabrics_updated=0,
-            route_maps_created=0,
-            route_maps_updated=0,
-            prefix_lists_created=0,
-            prefix_lists_updated=0,
-            per_endpoint=[
-                {
-                    "endpoint_id": 1,
-                    "endpoint_name": "pve-1",
-                    "success": True,
-                    "runtime_seconds": 0.5,
-                },
-                {
-                    "endpoint_id": 2,
-                    "endpoint_name": "pve-2",
-                    "success": True,
-                    "runtime_seconds": 0.75,
-                },
-            ],
-        )
-    )
     sys.modules["netbox_proxbox.services.sync_datacenter"].sync_datacenter = (
         lambda *a, **kw: SimpleNamespace(
             success=True,
@@ -2125,23 +2841,22 @@ def test_batch_selected_sync_fails_the_job_when_selected_objects_failed(
     monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
 
     # Branching deliberately enabled: asserting the merge did not happen only
-    # means something when it would otherwise have run. `run()` imports this
-    # module lazily and guards only `ModuleNotFoundError`, so registering it in
-    # `sys.modules` is what turns the merge on.
-    branch_mod = types.ModuleType("netbox_proxbox.services.branch_lifecycle")
-    branch_mod.branching_enabled_settings = lambda: {
-        "prefix": "proxbox-sync",
-        "on_conflict": "abort",
-    }
-    branch_mod.create_and_provision_branch = lambda **kwargs: SimpleNamespace(
+    # means something when it would otherwise have run. ``run()`` resolves the
+    # typed decision lazily, so this controlled module supplies that state.
+    create_branch = lambda **kwargs: SimpleNamespace(  # noqa: E731
         name=kwargs["name"], schema_id="branch-schema-1"
     )
 
     def _merge_branch(**kwargs):  # pragma: no cover - must not run
         merge_calls.append(kwargs)
-        return True, "merged"
+        return True, "merged", None
 
-    branch_mod.merge_branch = _merge_branch
+    branch_mod = _branch_lifecycle_stub(
+        "ENABLED",
+        settings={"prefix": "proxbox-sync", "on_conflict": "abort"},
+        create=create_branch,
+        merge=_merge_branch,
+    )
     monkeypatch.setitem(
         sys.modules, "netbox_proxbox.services.branch_lifecycle", branch_mod
     )
@@ -2403,6 +3118,11 @@ def test_batch_wire_endpoint_scope_narrows_rather_than_failing_on_partial_drift(
     )
 
 
+async def _inline_to_thread(function, *args, **kwargs):
+    """Run a zero-I/O thread mock inline without relying on loop wakeups."""
+    return function(*args, **kwargs)
+
+
 def _arrange_batch_storage_sync(monkeypatch, module):
     """Stub the models a `proxmox-storage` batch run resolves, and record calls.
 
@@ -2445,6 +3165,7 @@ def _arrange_batch_storage_sync(monkeypatch, module):
     )
 
     monkeypatch.setattr(module, "_proxbox_fetch_max_concurrency_setting", lambda: 2)
+    monkeypatch.setattr(module.asyncio, "to_thread", _inline_to_thread)
     return calls
 
 
@@ -2547,6 +3268,7 @@ def _arrange_batch_duplicate_identifier_sync(monkeypatch, module, *, cluster_own
     )
 
     monkeypatch.setattr(module, "_proxbox_fetch_max_concurrency_setting", lambda: 2)
+    monkeypatch.setattr(module.asyncio, "to_thread", _inline_to_thread)
     return calls
 
 

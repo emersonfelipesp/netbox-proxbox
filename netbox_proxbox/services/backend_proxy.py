@@ -48,6 +48,13 @@ def _safe_exception_text(exc: BaseException) -> str:
 logger = logging.getLogger(__name__)
 
 _SYNC_STREAM_READ_TIMEOUT = (5, 3600)
+
+# Failure provenance carried on failed stream payloads under ``failure_kind``.
+# ``sync_stages._classify_stage_failure`` trusts these over any phrase in the
+# detail text, which is why the producer — the only code that knows whether a
+# backend body was ever received — is the one that sets them.
+STAGE_FAILURE_TRANSPORT = "transport"
+STAGE_FAILURE_APPLICATION = "application"
 _BACKEND_JSON_METHODS = Literal["GET", "POST"]
 _REDIRECT_TRANSPORT_DETAIL = "ProxBox backend redirects are not permitted."
 _REDIRECT_TRANSPORT_STATUS = 502
@@ -170,24 +177,31 @@ def _consume_sse_until_complete(
                 try:
                     last_complete = SseCompletePayload.model_validate(data)
                 except ValidationError as exc:
+                    # The backend answered — with a frame this plugin cannot
+                    # read. That is a version-skew defect to act on, not a
+                    # transient path failure, so it must outrank a later TLS
+                    # or connection error in stage attribution.
                     return {
                         "stream": True,
                         "detail": (
                             "ProxBox backend stream sent an invalid complete event: "
                             f"{exc.errors()[0].get('msg', str(exc))}"
                         ),
+                        "failure_kind": STAGE_FAILURE_APPLICATION,
                     }, 502
     except requests.exceptions.RequestException as exc:
         detail, _ = extract_backend_error_detail(exc)
         return {
             "stream": True,
             "detail": detail,
+            "failure_kind": STAGE_FAILURE_TRANSPORT,
         }, 502
 
     if last_complete is None:
         return {
             "stream": True,
             "detail": "ProxBox backend stream ended without a complete event.",
+            "failure_kind": STAGE_FAILURE_TRANSPORT,
         }, 502
 
     if last_complete.ok is False:
@@ -200,6 +214,7 @@ def _consume_sse_until_complete(
             "stream": True,
             "detail": msg,
             "response": last_complete.model_dump(),
+            "failure_kind": STAGE_FAILURE_APPLICATION,
         }, 503
 
     return {
@@ -615,23 +630,42 @@ def run_sync_stream(
     else:
         context = get_fastapi_request_context(endpoint_id=endpoint_id)
     if context is None or not context.http_url:
-        return {"stream": False, "detail": "No FastAPI URL found."}, 404
+        # A missing configuration is deterministic: retrying cannot help and
+        # a later transport error must not hide it.
+        return {
+            "stream": False,
+            "detail": "No FastAPI URL found.",
+            "failure_kind": STAGE_FAILURE_APPLICATION,
+        }, 404
 
     ready, ready_msg = wait_for_backend_ready(context)
     if not ready:
         logger.error("Backend not ready: %s", ready_msg)
-        return {"stream": False, "detail": f"Backend not ready: {ready_msg}"}, 503
+        return {
+            "stream": False,
+            "detail": f"Backend not ready: {ready_msg}",
+            "failure_kind": STAGE_FAILURE_TRANSPORT,
+        }, 503
 
     active_context = context
     requested_urls: list[str] = []
-    last_detail: str | None = None
-    last_http_status: int | None = None
+    # Every candidate URL (hostname, then IP fallback) and every auth-rebound
+    # pass records its failure here. The returned cause is selected
+    # application-first, because a backend that answered on the hostname and
+    # then could not be reached on the IP fallback has still *answered*.
+    candidate_failures: list[tuple[str | None, int | None, str]] = []
     auth_register_attempted = False
 
     while True:
         http_url = active_context.http_url
         if not http_url:
-            last_detail = "No FastAPI URL found after authentication retry."
+            candidate_failures.append(
+                (
+                    "No FastAPI URL found after authentication retry.",
+                    None,
+                    STAGE_FAILURE_APPLICATION,
+                )
+            )
             break
         request_candidates = _build_request_candidates(
             http_url,
@@ -680,9 +714,16 @@ def run_sync_stream(
                     payload = _redacted_mapping(payload)
                 return payload, status
 
-            # Error tuple: detail, candidate-fallback flag, rebound context, status.
-            last_detail, should_retry, fresh_context, last_http_status = result
+            # Error tuple: detail, candidate-fallback flag, rebound context,
+            # status, failure provenance.
+            detail, should_retry, fresh_context, http_status, failure_kind = result
+            candidate_failures.append((detail, http_status, failure_kind))
             if fresh_context is not None:
+                # A successful rebind resolves the 401 that triggered it, so
+                # the failures recorded so far describe a context that no
+                # longer exists. Start a new selection epoch: only what the
+                # authenticated context reports can be the cause.
+                candidate_failures.clear()
                 auth_register_attempted = True
                 active_context = fresh_context
                 restart_candidate_selection = True
@@ -694,12 +735,32 @@ def run_sync_stream(
             continue
         break
 
+    detail, http_status, failure_kind = _select_stream_failure(candidate_failures)
     return {
         "stream": True,
         "path": path,
         "requested_urls": requested_urls,
-        "detail": last_detail or "Unable to reach the ProxBox backend stream.",
-    }, last_http_status or 503
+        "detail": detail or "Unable to reach the ProxBox backend stream.",
+        "failure_kind": failure_kind,
+    }, http_status or 503
+
+
+def _select_stream_failure(
+    failures: list[tuple[str | None, int | None, str]],
+) -> tuple[str | None, int | None, str]:
+    """Pick the failure ``run_sync_stream`` reports across URL candidates.
+
+    The first backend-authored (application) failure wins; when no candidate
+    reached the backend, the last transport failure is reported. This mirrors
+    the per-attempt rule in ``sync_stages``: the deterministic cause outranks
+    the transient one regardless of the order the candidates were tried in.
+    """
+    if not failures:
+        return None, None, STAGE_FAILURE_TRANSPORT
+    for failure in failures:
+        if failure[2] == STAGE_FAILURE_APPLICATION:
+            return failure
+    return failures[-1]
 
 
 def _try_sync_stream_url(
@@ -712,15 +773,24 @@ def _try_sync_stream_url(
     endpoint_id: int | None = None,
     auth_register_attempted: bool = False,
 ) -> (
-    tuple[str | None, bool, BackendRequestContext | None, int | None]
+    tuple[str | None, bool, BackendRequestContext | None, int | None, str]
     | requests.Response
 ):
     """Try a single URL for sync stream request.
 
     Returns:
         - An open ``requests.Response`` on success -- caller MUST close it.
-        - (error_detail, should_retry, fresh_context, http_status) on HTTP error.
-        - (error_detail, False, None, http_status) on connection error.
+        - (error_detail, should_retry, fresh_context, http_status, failure_kind)
+          on HTTP error.
+        - (error_detail, False, None, http_status, failure_kind) on connection
+          error.
+
+    ``failure_kind`` is the producer's own verdict on *what* failed —
+    :data:`STAGE_FAILURE_APPLICATION` when the backend answered with a JSON
+    body (it ran and rejected the request), :data:`STAGE_FAILURE_TRANSPORT`
+    when the request never got a backend-authored answer (connection, TLS,
+    timeout, refused redirect, or a non-JSON gateway error page). Consumers
+    that attribute retry failures trust this over any phrase in the detail.
     """
     try:
         response = requests.get(
@@ -738,46 +808,17 @@ def _try_sync_stream_url(
                 path=path,
                 url=url,
             )
-            return last_detail, False, None, redirect_status
+            return last_detail, False, None, redirect_status, STAGE_FAILURE_TRANSPORT
 
         if response.status_code >= 400:
-            actual_status = response.status_code
-            last_detail = f"HTTP {actual_status}"
-            try:
-                payload, json_err = parse_requests_response_json(
-                    response, log_label=f"sync-stream:{path}"
-                )
-                if not json_err and isinstance(payload, dict):
-                    d = payload.get("detail") or payload.get("message")
-                    if d:
-                        last_detail = redact_backend_detail(d)
-                    if (
-                        not auth_register_attempted
-                        and actual_status == 401
-                        and "API key" in str(d)
-                    ):
-                        response.close()
-                        fresh_context = _handle_auth_registration_and_retry(
-                            context,
-                            endpoint_id=endpoint_id,
-                        )
-                        if fresh_context is not None:
-                            return last_detail, True, fresh_context, 401
-                        return last_detail, False, None, 401
-            except (KeyboardInterrupt, SystemExit, GeneratorExit):
-                raise
-            except Exception:
-                logger.debug("Could not parse error JSON for %s", path)
-            logger.error(
-                "Sync stream HTTP %s for %s via %s: %s",
-                actual_status,
-                path,
-                url,
-                last_detail,
+            return _stream_http_error(
+                response,
+                url=url,
+                path=path,
+                context=context,
+                endpoint_id=endpoint_id,
+                auth_register_attempted=auth_register_attempted,
             )
-            should_retry = actual_status >= 500
-            response.close()
-            return last_detail, should_retry, None, actual_status
 
         # Success: return the open response for the caller to consume
         return response
@@ -792,12 +833,13 @@ def _try_sync_stream_url(
             "Sync stream request failed for %s via %s: %s", path, url, last_detail
         )
         if getattr(exc, "response", None) is not None:
-            return last_detail, False, None, http_st
+            return last_detail, False, None, http_st, STAGE_FAILURE_TRANSPORT
         return (
             last_detail,
             bool(http_st and http_st >= 500),
             None,
             http_st,
+            STAGE_FAILURE_TRANSPORT,
         )
     except (KeyboardInterrupt, SystemExit, GeneratorExit):
         raise
@@ -806,7 +848,86 @@ def _try_sync_stream_url(
         logger.error(
             "Unexpected sync stream error for %s via %s: %s", path, url, last_detail
         )
-        return last_detail, False, None, None
+        return last_detail, False, None, None, STAGE_FAILURE_TRANSPORT
+
+
+def _json_error_detail(payload: object) -> str | None:
+    """The human-readable detail of a JSON error body of any shape."""
+    if isinstance(payload, dict):
+        value = payload.get("detail") or payload.get("message")
+        return str(value) if value else None
+    if isinstance(payload, list) and payload:
+        first = payload[0]
+        if isinstance(first, dict):
+            value = first.get("detail") or first.get("msg") or first.get("message")
+            return str(value) if value else str(first)
+        return str(first)
+    if payload is None or payload == "":
+        return None
+    return str(payload)
+
+
+def _stream_http_error(
+    response: requests.Response,
+    *,
+    url: str,
+    path: str,
+    context: BackendRequestContext,
+    endpoint_id: int | None,
+    auth_register_attempted: bool,
+) -> tuple[str | None, bool, BackendRequestContext | None, int | None, str]:
+    """Turn an HTTP error response on the stream URL into the error tuple.
+
+    Provenance: a JSON body means proxbox-api itself answered, so the failure
+    is the backend's verdict rather than the path to it — even for a 5xx it
+    authored. A non-JSON 5xx is a gateway error page (transport); a non-JSON
+    4xx (an nginx 404 for a missing route, say) is still an answer about the
+    request, not about reaching it.
+    """
+    actual_status = response.status_code
+    last_detail = f"HTTP {actual_status}"
+    failure_kind = STAGE_FAILURE_TRANSPORT
+    try:
+        payload, json_err = parse_requests_response_json(
+            response, log_label=f"sync-stream:{path}"
+        )
+        if not json_err:
+            # Any JSON body — mapping, list, or scalar — is a backend-authored
+            # answer; a list or scalar is usually version skew, which is
+            # exactly the deterministic cause that must not be demoted.
+            failure_kind = STAGE_FAILURE_APPLICATION
+            d = _json_error_detail(payload)
+            if d:
+                last_detail = redact_backend_detail(d)
+            if (
+                isinstance(payload, dict)
+                and not auth_register_attempted
+                and actual_status == 401
+                and "API key" in str(d)
+            ):
+                response.close()
+                fresh_context = _handle_auth_registration_and_retry(
+                    context,
+                    endpoint_id=endpoint_id,
+                )
+                if fresh_context is not None:
+                    return last_detail, True, fresh_context, 401, failure_kind
+                return last_detail, False, None, 401, failure_kind
+    except (KeyboardInterrupt, SystemExit, GeneratorExit):
+        raise
+    except Exception:
+        logger.debug("Could not parse error JSON for %s", path)
+    logger.error(
+        "Sync stream HTTP %s for %s via %s: %s",
+        actual_status,
+        path,
+        url,
+        last_detail,
+    )
+    response.close()
+    if failure_kind == STAGE_FAILURE_TRANSPORT and actual_status < 500:
+        failure_kind = STAGE_FAILURE_APPLICATION
+    return last_detail, actual_status >= 500, None, actual_status, failure_kind
 
 
 def iter_backend_sse_lines(

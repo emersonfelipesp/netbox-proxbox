@@ -90,13 +90,13 @@ APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 CURRENT_PLUGIN_VERSION = "0.0.26.post7"
 CURRENT_RELEASE_VERSION = "0.0.26.post7"
 CURRENT_PACKAGE_VERSION = "0.0.26.post7"
-CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.21.post7"
+CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.22"
 CURRENT_PAIRING_LINE = (
     "Current backend-runtime pairing: netbox-proxbox 0.0.26.post7 <-> proxbox-api "
-    "0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST "
+    "0.0.22 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST "
     "dependency only and does not provide the semantic MCP bridge."
 )
-PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.20"
+PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.22"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
 # Ceiling of the backward-compatible stable tier, including NetBox 4.7 GA.
 CURRENT_NETBOX_STABLE_MAX_VERSION = "4.7.0"
@@ -754,7 +754,7 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         CURRENT_NETBOX_SUPPORT_LABEL,
         f"v{CURRENT_RELEASE_VERSION}",
         CURRENT_PROXBOX_API_PAIRING_LABEL,
-        "v0.0.10",
+        "v0.0.13",
         "v0.0.13",
     )
     for path in (README_PATH, DOCS_INDEX_PATH, CURRENT_RELEASE_NOTES_PATH):
@@ -766,7 +766,7 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         CURRENT_NETBOX_SUPPORT_LABEL,
         ">=3.12",
         CURRENT_PROXBOX_API_PAIRING_LABEL,
-        "v0.0.10",
+        "v0.0.13",
         "v0.0.13",
     )
     _assert_markdown_table_row(_read(COMPATIBILITY_PATH), compatibility_row)

@@ -8,6 +8,13 @@ from netbox_proxbox.filtersets import BackupRoutineFilterSet
 from netbox_proxbox.forms import BackupRoutineFilterForm, BackupRoutineForm
 from netbox_proxbox.models import BackupRoutine
 from netbox_proxbox.tables import BackupRoutineTable
+from netbox_proxbox.views.data_protection import (
+    ROUTINE_ORDER_FIELDS,
+    DataProtectionCalendarMixin,
+    _routine_details,
+    _routine_label,
+    _routine_muted,
+)
 
 
 __all__ = (
@@ -20,7 +27,7 @@ __all__ = (
 
 
 @register_model_view(BackupRoutine, "list", path="", detail=False)
-class BackupRoutineListView(generic.ObjectListView):
+class BackupRoutineListView(DataProtectionCalendarMixin, generic.ObjectListView):
     """Global list of backup routines with export and bulk delete actions."""
 
     queryset = BackupRoutine.objects.select_related("endpoint", "node", "storage")
@@ -29,6 +36,14 @@ class BackupRoutineListView(generic.ObjectListView):
     filterset_form = BackupRoutineFilterForm
     template_name = "netbox_proxbox/backup_routine_list.html"
     actions = (BulkExport, BulkDelete)
+    calendar_kind = "routine"
+    calendar_schedule_field = "schedule"
+    calendar_order_fields = ROUTINE_ORDER_FIELDS
+    calendar_value_fields = ("job_id", "node__name", "enabled", "status")
+    calendar_label_builder = staticmethod(_routine_label)
+    calendar_muted_builder = staticmethod(_routine_muted)
+    calendar_detail_builder = staticmethod(_routine_details)
+    calendar_url_name = "plugins:netbox_proxbox:backuproutine"
 
 
 @register_model_view(BackupRoutine)

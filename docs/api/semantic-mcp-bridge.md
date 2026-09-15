@@ -10,7 +10,7 @@ plugin-local routes.
 !!! warning "Consumer activation is currently blocked"
     Proxbox publishes the producer-side descriptor, but no released
     `netbox-sdk` version has passed the immutable paired gate for this payload.
-    The currently documented `netbox-sdk 0.0.10` pairing belongs only to the
+    The currently documented `netbox-sdk 0.0.13` pairing belongs only to the
     separate proxbox-api REST runtime and does **not** provide this MCP bridge.
     Do not expose these tools to an agent until
     `tests/fixtures/netbox_sdk_bridge_activation.json` names an exact compatible

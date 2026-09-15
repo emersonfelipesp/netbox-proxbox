@@ -18,6 +18,9 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 - **Network Interfaces and IPs** — Proxmox NICs (`net0`, `net1`) as core NetBox VM interfaces, optional guest-OS interfaces (`ens18`, `eth0`) as plugin `GuestVMInterface` rows, and IP addresses assigned to VMs and containers
 - **Backup Routines** — Backup job definitions from Proxmox
 - **Replications** — Replication job status and configuration
+- **Data Protection Calendar** — Month and ISO-week views for backups,
+  snapshots, replications, and routines, with a combined permission-aware page
+  and cluster, node, virtual-machine, date-range, and event-kind filters
 - **Opt-in service monitoring** — Proxmox endpoint systemd service state collected through the optional `netbox-rpc` procedure `os.linux.proxmox.show_systemctl_services`
 
 > **Note:** All metrics (CPU, memory, uptime, etc.) are captured as point-in-time snapshots at sync time, not continuous monitoring.
@@ -242,9 +245,9 @@ other tenants.
 
 ## What's New in v0.0.26.post7
 
-Current backend-runtime pairing: netbox-proxbox 0.0.26.post7 <-> proxbox-api 0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.26.post7 <-> proxbox-api 0.0.22 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
-Paired with backend: `proxbox-api 0.0.21.post7`.
+Paired with backend: `proxbox-api 0.0.22`.
 
 - **Virtual machines list search and filtering.** The Proxbox virtual machines page now uses NetBox's `VirtualMachineFilterSet`, exposes Results and Filters tabs, and keeps sync actions and pagination aligned with the API list view.
 - **Feature retention.** Retains the browser-console handoff, Proxmox metrics, and human-only soft-deleted VM purge surface from earlier `0.0.26.post` releases.
@@ -373,7 +376,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
-| 4.5.8-4.7.0 GA | v0.0.26.post7 | v0.0.21.post7 | v0.0.10 | v0.0.13 |
+| 4.5.8-4.7.0 GA | v0.0.26.post7 | v0.0.22 | v0.0.13 | v0.0.13 |
 | >=4.5.8 | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |

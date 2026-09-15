@@ -105,11 +105,36 @@ def proxbox_sync_command(monkeypatch):
     models_mod.ProxmoxEndpoint = _ProxmoxEndpoint
     monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_mod)
 
+    # netbox_proxbox.services.branch_lifecycle
+    branch_lifecycle_mod = types.ModuleType("netbox_proxbox.services.branch_lifecycle")
+    branch_lifecycle_mod.BranchingUnavailableError = type(
+        "BranchingUnavailableError", (RuntimeError,), {}
+    )
+    branch_lifecycle_mod.error = None
+
+    def _require_branch_isolation_or_raise():
+        if branch_lifecycle_mod.error is not None:
+            raise branch_lifecycle_mod.BranchingUnavailableError(
+                branch_lifecycle_mod.error
+            )
+        return SimpleNamespace(state="disabled")
+
+    branch_lifecycle_mod.require_branch_isolation_or_raise = (
+        _require_branch_isolation_or_raise
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        branch_lifecycle_mod,
+    )
+
     # netbox_proxbox.services.backend_auth
     backend_auth_mod = types.ModuleType("netbox_proxbox.services.backend_auth")
     backend_auth_mod.wait_for_backend_ready_result = (True, "Backend is reachable")
+    backend_auth_mod.wait_calls = []
 
     def _wait_for_backend_ready(context, max_retries: int = 30, **kwargs):
+        backend_auth_mod.wait_calls.append((context, max_retries, kwargs))
         return backend_auth_mod.wait_for_backend_ready_result
 
     backend_auth_mod.wait_for_backend_ready = _wait_for_backend_ready
@@ -120,9 +145,13 @@ def proxbox_sync_command(monkeypatch):
     # netbox_proxbox.services.backend_context
     backend_context_mod = types.ModuleType("netbox_proxbox.services.backend_context")
     backend_context_mod.context_result = SimpleNamespace(http_url="http://backend.test")
-    backend_context_mod.get_fastapi_request_context = lambda **kw: (
-        backend_context_mod.context_result
-    )
+    backend_context_mod.calls = []
+
+    def _get_fastapi_request_context(**kwargs):
+        backend_context_mod.calls.append(kwargs)
+        return backend_context_mod.context_result
+
+    backend_context_mod.get_fastapi_request_context = _get_fastapi_request_context
     monkeypatch.setitem(
         sys.modules, "netbox_proxbox.services.backend_context", backend_context_mod
     )
@@ -216,6 +245,7 @@ def proxbox_sync_command(monkeypatch):
         models_mod=models_mod,
         backend_auth_mod=backend_auth_mod,
         backend_context_mod=backend_context_mod,
+        branch_lifecycle_mod=branch_lifecycle_mod,
         netbox_jobs_mod=netbox_jobs_mod,
         django_rq_mod=django_rq_mod,
         user_model=_UserModel,
@@ -289,6 +319,20 @@ def test_backend_unreachable_raises_command_error(proxbox_sync_command):
     )
     with pytest.raises(CommandError, match="not reachable"):
         _run(proxbox_sync_command.module)
+    assert proxbox_sync_command.enqueue_calls == []
+
+
+def test_branch_isolation_failure_precedes_backend_transport(proxbox_sync_command):
+    """Configured but unavailable isolation must fail before backend inspection."""
+    proxbox_sync_command.branch_lifecycle_mod.error = (
+        "Proxbox sync refused: branching_enabled=True requires netbox-branching."
+    )
+
+    with pytest.raises(CommandError, match="branching_enabled=True"):
+        _run(proxbox_sync_command.module)
+
+    assert proxbox_sync_command.backend_context_mod.calls == []
+    assert proxbox_sync_command.backend_auth_mod.wait_calls == []
     assert proxbox_sync_command.enqueue_calls == []
 
 

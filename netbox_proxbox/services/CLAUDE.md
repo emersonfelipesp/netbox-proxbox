@@ -15,6 +15,13 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
 
 ## Files And Ownership
 
+- [`data_protection_calendar.py`](./data_protection_calendar.py): pure calendar
+  range, navigation, query-string, grid, and per-day overflow helpers. It must
+  remain importable without Django.
+- [`pve_calendar_event.py`](./pve_calendar_event.py): bounded, fail-open parser
+  for the supported Proxmox calendar-event grammar. Unsupported or hostile
+  input must never raise and must remain visible on every projected day with an
+  approximate marker.
 - [`encryption_recovery.py`](./encryption_recovery.py): exhaustive registry of
   plugin-owned encrypted model fields, the optional netbox-pbs fallback API-key
   ciphertext, and trust receipts; secret-free family status; ordinary
@@ -118,14 +125,13 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
 - [`endpoint_enabled.py`](./endpoint_enabled.py): shared `enabled=False` guard helpers for endpoint-like rows.
 - [`endpoint_scope.py`](./endpoint_scope.py): shared helper that translates enabled `ProxmoxEndpoint` rows to proxbox-api backend ids and returns `source=database` query params for multi-endpoint live reads. `enabled_backend_endpoint_scope(endpoint_ids=…)` narrows the scope to specific plugin pks: `None` keeps the historic all-enabled scope, a non-empty list becomes a `pk__in` filter beside `enabled=True`, and an **empty list is "no scope", never "all"** — the backend reads a missing `proxmox_endpoint_ids` as "use every endpoint I hold", so widening an empty selection would send the widest request precisely when the caller asked for the narrowest. `sync_firewall()` and `sync_datacenter()` take the same `endpoint_ids` and forward it here, so a job launched against one endpoint no longer syncs every enabled endpoint's firewall objects and CPU models in its pre-SSE passes (`jobs.py` passes `endpoint_ids_to_sync`); stale marking in both passes runs per resolved endpoint, so a narrowed run leaves out-of-scope rows untouched. **The scope travels twice**: once to the backend as `proxmox_endpoint_ids`, and once locally as the allowed plugin-pk set (the keys of the resolved mapping) that both passes check before writing a response entry — a backend that ignores the query filter (older release, or a bug) returns every endpoint's clusters, and the by-cluster-name resolution would otherwise write rows for endpoints outside the run's selection. **A cluster name claimed by more than one endpoint is refused outright** in both passes' `_resolve_endpoint_by_cluster_name()`: cluster names are only unique *per endpoint*, so a response row naming only the cluster cannot be attributed when two endpoints both hold a `pve` — the old `.first()` guess wrote one estate's firewall/CPU data under the other, or let an out-of-scope row impersonate an in-scope endpoint through the shared name. Ambiguous never guesses (the batch path's rule), and the refusal is logged naming every claimant. Pinned by `tests/test_endpoint_scope.py`, the forwarding and out-of-scope-refusal tests in `tests/test_services_sync_firewall.py` / `tests/test_services_sync_datacenter.py` / `tests/test_datacenter_models.py`, and `test_run_scopes_firewall_and_datacenter_to_the_runs_endpoints` in `tests/test_jobs.py`.
 - [`http_client.py`](./http_client.py): low-level HTTP client abstraction (session management, retries, timeout helpers) used by other service modules.
-- [`individual_sync.py`](./individual_sync.py): per-object sync handlers called from `views/sync_now/` for cluster, node, storage, and VM objects. `sync_individual()` accepts an optional **`fastapi_endpoint_id`** and resolves its backend with `get_first_fastapi_context(endpoint_id=…)`, returning a 503 that names the selected id when that endpoint cannot be resolved; `sync_individual_with_dependencies()` and the internal `_sync_dependency()` forward it so every recursive dependent sync lands on the *same* proxbox-api. Pass the **id**, never a `fastapi_url` — the URL branch skips the resolved context's `verify_ssl` and would silently force TLS verification on. The selected-object batch sync path in `sync_stages.py::_run_batch_selected_sync()` pins it for exactly this reason: each per-object call resolves its own backend, so an unpinned call in a multi-backend install syncs against whichever row sorts first rather than the backend the job's preflight validated. The per-object views (`views/sync_now/`) leave it unset and keep the "first enabled backend" default.
+- [`individual_sync.py`](./individual_sync.py): per-object sync handlers called from `views/sync_now/` for cluster, node, storage, and VM objects. `sync_individual()` accepts an optional **`fastapi_endpoint_id`** and resolves its backend with `get_first_fastapi_context(endpoint_id=…)`, returning a 503 that names the selected id when that endpoint cannot be resolved; `sync_individual_with_dependencies()` and the internal `_sync_dependency()` forward it so every recursive dependent sync lands on the *same* proxbox-api. Pass the **id**, never a `fastapi_url` — the URL branch skips the resolved context's `verify_ssl` and would silently force TLS verification on. The selected-object batch sync path in `sync_stages.py::_run_batch_selected_sync()` pins it for exactly this reason: each per-object call resolves its own backend, so an unpinned call in a multi-backend install syncs against whichever row sorts first rather than the backend the job's preflight validated. The per-object views (`views/sync_now/`) leave it unset and keep the "first enabled backend" default. The create-instance sync-back is different: it reuses the FastAPI endpoint already selected for provisioning and passes that row's ID, the exact backend Proxmox endpoint ID, and the active branch schema ID after enforcing the branch-isolation guard; it never re-elects or widens the post-create mutation.
 
   **`netbox_branch_schema_id` must be passed as an *argument*, not merely as a query param.** `_sync_dependency()` rebuilds each dependent call's params dict from scratch out of `_CONTEXT_KEYS`, and that tuple does **not** include `netbox_branch_schema_id` — so a schema id that travelled only inside `query_params` reaches the object itself and is then dropped for everything resolved off it. The object lands on the branch schema while its dependencies are written to **main**, which is a silent cross-schema write, not a failed one. `sync_individual_with_dependencies()` therefore takes the id explicitly and re-injects it on every recursive call, and `sync_stages.py::_run_batch_selected_sync()` sets **both** (`query_params["netbox_branch_schema_id"]` *and* the keyword) for the same reason. Pinned by `test_run_batch_selected_sync_passes_the_branch_schema_to_dependency_syncs`.
 
   **`proxmox_endpoint_ids` travels the same way, and dropping it is worse.** `sync_individual()` merges an optional `proxmox_endpoint_ids: str | None` into its outgoing `query_params`, and `sync_individual_with_dependencies()` / `_sync_dependency()` forward it recursively — again because `_CONTEXT_KEYS` omits it. The failure mode is not a *narrower* dependency sync, it is a **wider** one: proxbox-api resolves every `sync/individual/*` route's Proxmox sessions through `ProxmoxSessionsDep`, which reads a missing `proxmox_endpoint_ids` as "use every endpoint I hold" — including endpoints disabled in this NetBox. So a scope that reached the selected object but not its dependencies would resolve those dependencies against the *whole* backend estate. `sync_stages.py::_run_batch_selected_sync()` takes the resolved scope as keyword-only `proxmox_wire_endpoint_ids=` and sets both the query param and the argument; `jobs.py` resolves it with `sync_stages._batch_wire_endpoint_scope()` and refuses the run when nothing resolves. Pinned by `test_run_batch_selected_sync_passes_the_proxmox_scope_to_dependency_syncs`.
 - [`openapi_schema.py`](./openapi_schema.py): OpenAPI schema caching and retrieval from the backend.
 - [`service_status.py`](./service_status.py): `ServiceStatus` class and helpers for keepalive/health checks against FastAPI, NetBox, and Proxmox endpoints. Lightweight backend reachability and `/version` probes use `request_timeout`; Proxmox keepalive synchronization, backend endpoint resolution, and version reads use the `backend_status_timeout` aggregate deadline because proxbox-api may initialize an upstream Proxmox session before returning. Each backend request receives only the remaining deadline, including retry sleeps. Do not reduce those backend-operation calls to the five-second lightweight budget or remove their aggregate bound.
-- [`sync_backup_routines.py`](./sync_backup_routines.py): sync coordination for backup routine inventory between NetBox and proxbox-api.
 - [`sync_cluster.py`](./sync_cluster.py): sync coordination for cluster and node inventory.
 
 ## Dependencies
@@ -292,6 +298,28 @@ are reserved for roles with the superuser attribute"` (`sync_types.py`,
 Postgres-overload explanation). Neither is a credential assignment, and
 `_SENSITIVE_ASSIGNMENT_RE` requires a `[:=]` separator. Guarded by the
 redaction section of `tests/test_run_sync_stream.py`.
+
+Stage retries preserve a typed record for every failed attempt. Terminal
+diagnosis uses `sync_types.py::_compose_stage_failure_message()` to select the
+first application-level failure as the primary cause; only an all-transport
+sequence uses the final attempt. The primary line remains byte-for-byte
+compatible with `_format_stage_sync_error()`, including the PostgreSQL overload
+guidance and exception suffix. Divergent details add bounded per-attempt lines,
+and the final job-log error exactly matches the raised `RuntimeError`. The
+`"init_ok"` backend-readiness diagnosis is evaluated against every recorded
+attempt, independently of which one was selected as the primary cause.
+Classification is the producer's verdict: every failed `run_sync_stream()`
+payload carries `failure_kind` (`STAGE_FAILURE_APPLICATION` when proxbox-api
+authored the body — including an unparseable `complete` frame and the missing
+FastAPI URL configuration; `STAGE_FAILURE_TRANSPORT` for connection, TLS,
+timeout, refused redirect, incomplete stream, non-JSON gateway page, and
+backend-not-ready) and the stage runner trusts it over any phrase in the
+detail text. Across the hostname and IP-address candidates,
+`_select_stream_failure()` reports the first application failure and only
+otherwise the last transport failure, so the IP fallback failing TLS cannot
+erase the backend's answer on the hostname. A successful 401 rebind clears the
+recorded failures (a new epoch), and any JSON error body — mapping, list, or
+scalar (`_json_error_detail()`) — is application provenance.
 
 The one place the **raw** value is still read is the 401 auth-retry guard in
 `_try_sync_stream_url()` (`"API key" in str(d)`) — control flow only; the value

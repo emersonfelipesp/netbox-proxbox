@@ -3,7 +3,7 @@
 Machine-generated help captures for representative `pxb` commands.
 
 !!! info "Generated"
-    Last updated: `2026-04-01T19:39:49.416217+00:00`
+    Last updated: `2026-09-14T17:13:11.556323+00:00`
 
 ## Sections
 

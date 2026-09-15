@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from django.contrib import messages
-from django.http import HttpResponseRedirect
+from django.http import HttpResponse, HttpResponseRedirect
 from django.utils.translation import gettext_lazy as _
 
 __all__ = (
@@ -84,3 +84,31 @@ def _handle_sync_response(
             _(f"Failed to sync {object_label.lower()}: Unknown error"),
         )
     return HttpResponseRedirect(redirect_url)
+
+
+def _branch_isolation_precondition(
+    request,
+    object_label: str,
+    redirect_url: str,
+) -> tuple[str | None, HttpResponse | None]:
+    """Resolve branch context or return an actionable precondition failure."""
+    from netbox_proxbox.services.branch_lifecycle import (  # noqa: PLC0415
+        ActiveBranchRequiredError,
+        BranchingUnavailableError,
+        require_active_branch_schema_id,
+        require_branch_isolation_or_raise,
+    )
+
+    try:
+        decision = require_branch_isolation_or_raise()
+        schema_id = require_active_branch_schema_id(decision)
+    except ActiveBranchRequiredError as exc:
+        message = str(exc)
+        messages.error(request, _(message))
+        return None, HttpResponse(content=message, status=409)
+    except BranchingUnavailableError as exc:
+        response = _handle_sync_response(
+            request, {"error": str(exc)}, 503, [], object_label, redirect_url
+        )
+        return None, response
+    return schema_id, None

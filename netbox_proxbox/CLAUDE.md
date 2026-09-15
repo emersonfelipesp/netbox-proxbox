@@ -436,6 +436,19 @@ the core VirtualMachine delete permission, and the page never calls Proxmox.
 > it would make "No sync stage ran" unreachable as soon as any endpoint
 > contributed a sync-mode skip.
 >
+> **Local service failures fail before merge too.** The cluster/node, firewall,
+> datacenter, and VM-template results are normalized into explicit success or
+> warning classifications and persisted under `response.local_phases` before
+> the job classifies them. Any warning fails the run before
+> `_merge_sync_branch()`; an isolated run also records
+> `response.branch_disposition.status="left_open"` and the branch name. Every
+> local activation and merge refreshes the branch and requires a current
+> `READY` status. A successful merge must refresh to `MERGED`; the
+> `netbox-branching` `1.2.0-beta1` no-change return remains `READY`, so the
+> wrapper first confirms that `get_unmerged_changes()` is empty, archives it
+> through `Branch.archive(user=...)`, and verifies `ARCHIVED`. A `READY` return
+> that still has changes is left open.
+>
 > **A selected-object run that did not sync everything fails the job too.** Every
 > object in a batch was named by an operator, so there is no "partial success"
 > reading of a list somebody typed out — a `batch_result["failed"] > 0` therefore
@@ -556,7 +569,10 @@ the core VirtualMachine delete permission, and the page never calls Proxmox.
 - [`redaction.py`](./redaction.py): the shared, dependency-free vocabulary of credential-bearing field markers and HTTP authentication schemes, imported by **both** `anonymize.py` (public report) and `views/error_utils.py` (job log). It also owns `redact_assignments()`, the single-pass scanner both use: it captures a whole candidate field name and asks `is_sensitive_key` about it rather than searching for a marker inside the key, which removes the second spelling of the vocabulary, every length cap, and a quadratic scan in one move. **Must import nothing but `re`** — `anonymize` needs it without Django, and `error_utils` sits behind a package that requires Django.
 - [`anonymize.py`](./anonymize.py): pure `re` + stdlib scrubber for that payload. Replaces credentials, URLs, e-mails, realm principals, colon/hyphen/Cisco-dotted MACs, IPv4/IPv6, and allowlisted-suffix FQDNs with **stable** per-instance placeholders (`<host-1>`, `<ip-2>`) so a report stays correlatable without naming the estate. MAC separators are normalized for placeholder identity. Complete UUID protection plus identifier-safe bare/labeled MAC branches avoid corrupting longer hyphen-, dot-, or colon-delimited diagnostic identifiers; explicit hardware-address labels keep compact `hwaddr:`/`macaddr:` fields redacted. Broader IPv6/FQDN matching runs first to prevent partial disclosure. **Must never import Django** — `tests/test_bug_report.py` exec-loads its consumer without one. Takes its credential vocabulary from `redaction.py`.
 - [`type_defs.py`](./type_defs.py): shared type aliases and lightweight protocol helpers used across the package.
-- [`utils.py`](./utils.py): URL and host helpers, especially for the FastAPI backend and mkcert-aware local TLS handling.
+- [`utils/`](./utils): URL, host, VM-list filtering, encryption, and metrics
+  helpers. The package initializer is the canonical `netbox_proxbox.utils`
+  import target; do not recreate a peer `utils.py` module that Python cannot
+  reach while the package exists.
 - [`websocket_client.py`](./websocket_client.py): long-lived WebSocket client, message queue, and HTTP view used to stream backend messages into NetBox pages. The view resolves only enabled FastAPI rows and returns before URL/header construction for disabled inventory.
 - [`signals.py`](./signals.py): Django signal handlers that authenticate an
   already-persisted FastAPIEndpoint key before downstream endpoint delivery.

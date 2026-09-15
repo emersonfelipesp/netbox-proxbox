@@ -41,6 +41,7 @@ from .datacenter import (
 from .cloud_image_template import *
 from .deletion_request_approve import *
 from .deletion_request_reject import *
+from .data_protection import *
 from .fastapi import *
 from .guest_vm_interface import *
 from .netbox import *

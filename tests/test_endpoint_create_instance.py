@@ -130,10 +130,28 @@ def _stub_create_view_imports(monkeypatch):
         sys.modules, "netbox_proxbox.services.individual_sync", individual_sync_mod
     )
 
+    branch_lifecycle_mod = types.ModuleType("netbox_proxbox.services.branch_lifecycle")
+    branch_lifecycle_mod.ActiveBranchRequiredError = type(
+        "ActiveBranchRequiredError", (RuntimeError,), {}
+    )
+    branch_lifecycle_mod.BranchingUnavailableError = type(
+        "BranchingUnavailableError", (RuntimeError,), {}
+    )
+    branch_lifecycle_mod.require_branch_isolation_or_raise = lambda: SimpleNamespace(
+        state="disabled"
+    )
+    branch_lifecycle_mod.require_active_branch_schema_id = lambda decision: None
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        branch_lifecycle_mod,
+    )
+
     services_pkg = types.ModuleType("netbox_proxbox.services")
     services_pkg._endpoint_errors = endpoint_errors_mod
     services_pkg.backend_context = backend_context_mod
     services_pkg.individual_sync = individual_sync_mod
+    services_pkg.branch_lifecycle = branch_lifecycle_mod
     monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_pkg)
 
     backend_sync_mod = types.ModuleType("netbox_proxbox.views.backend_sync")

@@ -66,6 +66,19 @@ NetBox's stock numeric version gate; exact GA source, package, and dependency
 provenance are CI evidence. Keep the vendored `compat.py` byte-identical across
 all five Proxbox-family plugins.
 
+## Branch Isolation Fail-Closed Boundary
+
+Resolve `ProxboxSyncJob` branch isolation before backend authentication,
+endpoint preflight, branch creation, or reconciliation. An explicit
+`branching_enabled=False` permits the existing sync on `main`. When branching is
+configured but `netbox_branching` is not a loaded Django app, cannot import, or
+the plugin settings cannot be read safely, record a `branch-isolation` failure
+and stop; never silently reconcile on `main`. The companion compatibility
+wrapper `branching_enabled_settings()` must raise `BranchingUnavailableError`
+for that state. `netboxlabs-netbox-branching` releases through `1.0.3` declare
+`max_version = "4.6.99"`; production uses `1.2.0-beta1`, which loads on NetBox
+`4.7.0`.
+
 ## Pre-commit Checklist
 
 Before committing any change:
@@ -91,6 +104,25 @@ When implementing or changing behavior, prefer solutions in this order:
 3. Django - standard `django.*` APIs when NetBox does not provide an equivalent.
 
 Do not add new third-party PyPI dependencies to replace what NetBox or Django already provides. Existing runtime dependencies in `pyproject.toml` — `requests`, `websockets`, `pydantic` (used throughout `schemas/`), and the optional CLI extras — are fine.
+
+## Standalone `pxb` CLI
+
+Keep backend authentication outside command arguments. `proxbox_cli` reads the
+API key only from `PROXBOX_API_KEY` or config field `api_key`, sends it as
+`X-Proxbox-API-Key`, and never prints the value. Environment values override
+the config file. `PROXBOX_CLI_TIMEOUT`/`timeout` must be finite, greater than
+zero, and no more than 600 seconds. The positive
+`PROXBOX_CLI_MAX_RESPONSE_BYTES`/`max_response_bytes` limit defaults to 8 MiB
+and must be enforced while streaming, not after buffering the body.
+
+All CLI HTTP methods must set `allow_redirects=False`. A typed redirect error
+may identify only the configured backend host; it must not disclose or follow
+the untrusted target. Backend HTTP commands return `0` for success, render a
+`4xx`/`5xx` body before returning `1`, return `2` for invalid configuration or
+a missing key required by the backend, and return `130` for keyboard
+interruption. JSON mode retains backend error bodies. The local
+`pxb sync run` management-command wrapper retains its subprocess-status
+contract.
 
 ## Security
 
@@ -166,6 +198,43 @@ environment override → plugin value → default precedence. The polling
 interval must not exceed the timeout at plugin boundaries, while proxbox-api
 also normalizes environment-derived values. A run's independently renewed
 lease is an immutable persisted snapshot, not a live mutable setting.
+
+## Data Protection Calendar
+
+The four Data Protection list views build their calendar from the filtered and
+permission-restricted `self.queryset` supplied by NetBox's `ObjectListView`.
+Timestamp sources must query only the displayed window and convert aware
+timestamps with `timezone.localtime()` before choosing their calendar day;
+null timestamps remain represented by the undated notice. Each source loads at
+most 1,000 rows (fetched as ``limit + 1`` so truncation is known without a full
+``COUNT``); scheduled sources are ordered active/enabled first and stop
+projecting at 1,000 events. Truncation is reported through
+``SourceTruncation`` in its own units (omitted occurrences, unprojected
+objects, more rows) — never as a single misleading "events" number.
+Multi-node filters keep each node's name paired with that node's own
+cluster/endpoint (``_node_fallback_query``), and every anchor passes through
+``_safe_anchor`` so year 1 and year 9999 inputs cannot raise.
+Each day renders four primary badges, at most 40 overflow badges, and a count of
+further hidden events.
+
+Scheduled replications and backup routines use the fail-open parser in
+`services/pve_calendar_event.py`: unsupported input is projected onto every
+visible day with its raw text and an unparsed marker. Their displayed time is
+the Proxmox node's local wall-clock time. The plugin does not persist endpoint
+time zones; per-endpoint time-zone resolution remains a follow-up.
+
+Keep calendar state in `cal_view` and `cal_date`, preserve all other query
+parameters, and keep the calendar outside `#object_list` so HTMX table
+replacement does not remove it. Applying the combined filter form omits
+`cal_date` and anchors to `date_from`; a stale navigation anchor outside a
+complete valid date range also re-anchors to `date_from`.
+
+The combined page must apply `.restrict(request.user, "view")` independently to
+all four source querysets and must not infer a backup-routine VM association
+from an unverified numeric VMID. Snapshot node-name fallback matching must also
+match the selected node's linked NetBox cluster, replication target-name
+fallback matching must also match its endpoint, and all-node routines must
+match selected nodes through their endpoint.
 
 ## Sync Mode Controls
 
@@ -286,9 +355,18 @@ into `develop`. Never `twine --skip-existing` — fix forward with the next
 ## CI/CD Workflows
 
 Gitea pull-request CI serializes `docs-and-package` after `quality` on the
-capacity-bounded `ci-untrusted-python312` host. One fixed concurrency group
-covers every ref without auto-cancellation, so feature churn cannot preempt
-protected-branch or immutable-tag evidence. Both jobs must require 384 MiB free
+capacity-bounded `ci-untrusted-python312` host. The concurrency group is
+scoped per ref (`netbox-proxbox-ci-${{ github.ref }}`) without
+auto-cancellation: Gitea 1.26 keeps at most one pending run per group — a
+new pending run replaces the older pending one (in the 2026-09-14 incident,
+with the older run stuck in an inconsistent queued state, it was the
+arriving runs that ended up cancelled) — so a repository-wide group made one
+pull request's pending run and another's mutually destructive and silently
+removed the gate. Per ref, the same rule means same-ref pushes do not pile
+up. Runs from different refs can therefore overlap up to
+the runner's capacity (the shared untrusted lane is capacity 2); the durable
+serialisation is a capacity-1 lane, which is a runner-host change, not a
+workflow one. Never reintroduce a repository-wide group to obtain queueing. Both jobs must require 384 MiB free
 and log measured/required KiB before environment creation. This floor preserves
 more than 150 MiB above the measured 195,498 KiB quality environment and 42,021
 KiB source tree. Keep `UV_NO_CACHE=1`, and always clean environments, tool

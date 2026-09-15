@@ -36,6 +36,7 @@ CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
 DJANGO_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "django-tests.yml"
 PRE_COMMIT_CONFIG = REPO_ROOT / ".pre-commit-config.yaml"
 RELEASE_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "publish-testpypi.yml"
+NIGHTLY_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "nightly-contracts.yml"
 GITEA_PUBLISH_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "publish-gitea.yml"
 TRACEABILITY_DOC = REPO_ROOT / "docs" / "developer" / "endpoint-autoconfiguration.md"
 CI_WORKFLOW_DOC = REPO_ROOT / "docs" / "developer" / "ci-e2e-workflows.md"
@@ -92,6 +93,15 @@ def test_release_mocked_suites_disable_pytest_django():
         "publish-testpypi.yml must disable pytest-django for every mocked "
         "full-suite run, or its release validation aborts during collection"
     )
+
+
+def test_nightly_mocked_suites_disable_pytest_django():
+    """Every nightly mocked run needs the same collection guard."""
+    workflow = NIGHTLY_WORKFLOW.read_text()
+    run_lines = [line for line in workflow.splitlines() if "pytest" in line]
+
+    assert len(run_lines) == 2, "expected two nightly mocked pytest invocations"
+    assert all("-p no:django" in line for line in run_lines)
 
 
 def test_gitea_package_publish_requires_manual_main_dispatch():

@@ -161,6 +161,7 @@ nav:
     - Backup: 'features/backup.md'
     - Backup Routines: 'features/backup-routines.md'
     - Replications: 'features/replications.md'
+    - Data Protection Calendar: 'features/data-protection-calendar.md'
     - HA Status: 'features/ha.md'
     - Backend Logs: 'features/backend-logs.md'
     - Monitoring: 'features/monitoring.md'

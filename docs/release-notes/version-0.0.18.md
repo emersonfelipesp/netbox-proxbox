@@ -23,10 +23,11 @@ and one new column; run `manage.py migrate netbox_proxbox` after upgrade.
 - **Datacenter CPU model scaffolding.** New `ProxmoxDatacenterCpuModel` model
   with full CRUD and REST API; listed under the **Infrastructure** navigation
   group.
-- **SDN and CPU-model sync services.** `services/sync_sdn.py` calls
-  `GET /proxmox/sdn/fabrics`, `/sdn/route-maps`, and `/sdn/prefix-lists`.
-  `services/sync_datacenter.py` calls `GET /proxmox/datacenter/cpu-models`.
-  Both upsert records and mark removed rows stale.
+- **SDN and CPU-model sync services.** This release introduced SDN reads from
+  `GET /proxmox/sdn/fabrics`, `/sdn/route-maps`, and `/sdn/prefix-lists`, plus
+  CPU-model reads from `GET /proxmox/datacenter/cpu-models`. The legacy SDN
+  service was later superseded by the production sync pipeline and removed;
+  `services/sync_datacenter.py` remains the CPU-model reconciliation service.
 - **Completed node-level firewall sync.** `services/sync_firewall.py` gains
   `sync_node_firewall()` (calls `GET /proxmox/firewall/nodes/{node}/rules`)
   so per-node `ProxmoxFirewallRule` rows are populated automatically during

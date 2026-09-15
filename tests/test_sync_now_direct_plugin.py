@@ -56,6 +56,7 @@ DIRECT_ACTIONS = (
 )
 
 RESOLVER_ACTIONS = tuple(action for action in DIRECT_ACTIONS if action[2] is not None)
+ISOLATION_ACTIONS = (*DIRECT_ACTIONS, ("vm", "VirtualMachineSyncNowView", None, ""))
 
 
 def _install_action_stubs(
@@ -81,7 +82,16 @@ def _install_action_stubs(
     )
 
     branch_lifecycle = types.ModuleType("netbox_proxbox.services.branch_lifecycle")
-    branch_lifecycle.get_active_branch_schema_id = lambda: "branch-schema"
+    branch_lifecycle.BranchingUnavailableError = type(
+        "BranchingUnavailableError", (RuntimeError,), {}
+    )
+    branch_lifecycle.ActiveBranchRequiredError = type(
+        "ActiveBranchRequiredError", (RuntimeError,), {}
+    )
+    branch_lifecycle.require_branch_isolation_or_raise = lambda: SimpleNamespace(
+        state="enabled"
+    )
+    branch_lifecycle.require_active_branch_schema_id = lambda decision: "branch-schema"
     monkeypatch.setitem(
         sys.modules,
         "netbox_proxbox.services.branch_lifecycle",
@@ -92,6 +102,16 @@ def _install_action_stubs(
     if resolver_name is not None:
         setattr(sync_params, resolver_name, lambda obj: resolver_result)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.sync_params", sync_params)
+
+    tenant_assignment = types.ModuleType("netbox_proxbox.services.tenant_assignment")
+    tenant_assignment.maybe_assign_tenant_from_cluster = lambda *args, **kwargs: False
+    tenant_assignment.maybe_assign_tenant_from_regex = lambda *args, **kwargs: False
+    tenant_assignment.maybe_assign_tenant_from_tags = lambda *args, **kwargs: False
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.tenant_assignment",
+        tenant_assignment,
+    )
 
     endpoint_scope = types.ModuleType("netbox_proxbox.views.sync_now.endpoint_scope")
     resolved_scope = scope_result or (
@@ -132,6 +152,12 @@ def _install_action_stubs(
         return HttpResponseRedirect(redirect_url)
 
     sync_now._handle_sync_response = handle_sync_response
+
+    def branch_isolation_precondition(request, object_label, redirect_url):
+        captured["isolation"] = (object_label, redirect_url)
+        return "branch-schema", None
+
+    sync_now._branch_isolation_precondition = branch_isolation_precondition
     monkeypatch.setitem(sys.modules, "netbox_proxbox.views.sync_now", sync_now)
     return captured
 
@@ -154,6 +180,18 @@ def _target(module_name: str, pk: int):
         return SimpleNamespace(
             name="local-lvm",
             cluster=SimpleNamespace(name="shared-cluster"),
+            **common,
+        )
+    if module_name == "vm":
+        return SimpleNamespace(
+            name="vm-100",
+            cluster=SimpleNamespace(name="shared-cluster"),
+            device=None,
+            proxbox_sync_state=SimpleNamespace(
+                proxmox_vm_id=100,
+                proxmox_vm_type="qemu",
+            ),
+            custom_field_data={},
             **common,
         )
     return SimpleNamespace(
@@ -307,6 +345,55 @@ def test_direct_action_with_unresolved_owner_redirects_without_syncing(
         "error",
         "The owning Proxmox endpoint is disabled.",
     )
+
+
+@pytest.mark.parametrize(
+    ("module_name", "view_name", "resolver_name", "object_label"),
+    ISOLATION_ACTIONS,
+)
+def test_missing_active_branch_stops_every_individual_transport(
+    monkeypatch,
+    module_name,
+    view_name,
+    resolver_name,
+    object_label,
+):
+    """Every enabled action must return 409 before individual transport."""
+    captured = _install_action_stubs(
+        monkeypatch,
+        resolver_name=resolver_name,
+        resolver_result={"path": "unused", "query_params": {}},
+    )
+    lifecycle = sys.modules["netbox_proxbox.services.branch_lifecycle"]
+
+    def require_active(decision):
+        del decision
+        raise lifecycle.ActiveBranchRequiredError(
+            "Proxbox sync refused: branch isolation is enabled, but this request "
+            "has no active READY branch schema; activate a branch or disable "
+            "branch isolation."
+        )
+
+    lifecycle.require_active_branch_schema_id = require_active
+    module = load_plugin_module(
+        f"netbox_proxbox.views.sync_now.{module_name}",
+        monkeypatch=monkeypatch,
+    )
+    monkeypatch.setattr(
+        module,
+        "_branch_isolation_precondition",
+        _load_current_sync_now_init()._branch_isolation_precondition,
+    )
+    target = _target(module_name, 31)
+    monkeypatch.setattr(module, "get_object_or_404", lambda *args, **kwargs: target)
+
+    response = getattr(module, view_name)().post(
+        SimpleNamespace(user=SimpleNamespace(username="operator")), pk=31
+    )
+
+    assert response.status_code == 409
+    assert "activate a branch or disable branch isolation" in response.content
+    assert "sync" not in captured
 
 
 def _load_real_sync_params():
@@ -919,6 +1006,18 @@ def test_direct_action_scope_refuses_missing_tracking(monkeypatch, action_name):
     assert captured["resolved"] == []
 
 
+def _load_current_sync_now_init():
+    """Load the real shared response helpers against the current test stubs."""
+    spec = importlib.util.spec_from_file_location(
+        "_sync_now_response_under_test",
+        REPO_ROOT / "netbox_proxbox" / "views" / "sync_now" / "__init__.py",
+    )
+    assert spec and spec.loader
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _load_sync_now_init(monkeypatch):
     _install_action_stubs(
         monkeypatch,
@@ -929,14 +1028,7 @@ def _load_sync_now_init(monkeypatch):
         "netbox_proxbox.views.sync_now.backup",
         monkeypatch=monkeypatch,
     )
-    spec = importlib.util.spec_from_file_location(
-        "_sync_now_response_under_test",
-        REPO_ROOT / "netbox_proxbox" / "views" / "sync_now" / "__init__.py",
-    )
-    assert spec and spec.loader
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+    return _load_current_sync_now_init()
 
 
 def test_shared_response_handler_treats_http_200_error_payload_as_failure(monkeypatch):
@@ -958,3 +1050,58 @@ def test_shared_response_handler_treats_http_200_error_payload_as_failure(monkey
             "No Proxmox session matches this object.",
         )
     ]
+
+
+def test_shared_branch_precondition_returns_actionable_503_style_error(monkeypatch):
+    """The shared guard translates refusal without touching backend transport."""
+    module = _load_sync_now_init(monkeypatch)
+    lifecycle = sys.modules["netbox_proxbox.services.branch_lifecycle"]
+
+    def refuse():
+        raise lifecycle.BranchingUnavailableError(
+            "Proxbox sync refused: branching_enabled=True requires netbox-branching."
+        )
+
+    lifecycle.require_branch_isolation_or_raise = refuse
+    schema_id, response = module._branch_isolation_precondition(
+        SimpleNamespace(),
+        "Cluster 'pve'",
+        "/plugins/proxbox/clusters/1/",
+    )
+
+    assert schema_id is None
+    assert response.url == "/plugins/proxbox/clusters/1/"
+    assert module.messages.calls == [
+        (
+            "error",
+            "Failed to sync cluster 'pve': Proxbox sync refused: "
+            "branching_enabled=True requires netbox-branching.",
+        )
+    ]
+
+
+def test_shared_branch_precondition_returns_409_without_active_ready_branch(
+    monkeypatch,
+):
+    """Enabled isolation requires an active READY schema for request writes."""
+    module = _load_sync_now_init(monkeypatch)
+    lifecycle = sys.modules["netbox_proxbox.services.branch_lifecycle"]
+
+    def require_active(decision):
+        del decision
+        raise lifecycle.ActiveBranchRequiredError(
+            "Proxbox sync refused: branch isolation is enabled, but this request "
+            "has no active READY branch schema; activate a branch or disable "
+            "branch isolation."
+        )
+
+    lifecycle.require_active_branch_schema_id = require_active
+    schema_id, response = module._branch_isolation_precondition(
+        SimpleNamespace(),
+        "Cluster 'pve'",
+        "/plugins/proxbox/clusters/1/",
+    )
+
+    assert schema_id is None
+    assert response.status_code == 409
+    assert "activate a branch or disable branch isolation" in response.content

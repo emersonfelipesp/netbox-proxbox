@@ -4,13 +4,15 @@ These two helpers encode the plugin's branch_on_conflict policy:
 
 * ``branch_has_conflicts`` is a thin wrapper around
   ``ChangeDiff.objects.filter(branch=..., conflicts__isnull=False).exists()``.
-* ``merge_branch`` reads ``on_conflict`` from ProxboxPluginSettings and decides
+* ``merge_branch`` applies ``on_conflict`` and decides
   whether to call ``branch.merge(user=...)``. When conflicts exist:
-  - ``on_conflict='fail'`` returns ``(False, message)`` and leaves the branch
+  - ``on_conflict='fail'`` returns a failed result and leaves the branch
     open (no ``merge`` call).
   - ``on_conflict='acknowledge'`` proceeds to call ``merge``.
-* On a successful ``branch.merge()`` it returns ``(True, message)``.
-* When ``branch.merge()`` raises, it returns ``(False, error_message)`` rather
+* On a successful ``branch.merge()`` it verifies ``MERGED``.
+* When v1.2.0-beta1 returns normally in ``READY`` for a no-change branch, the
+  helper leaves it open and returns the ``no_changes_left_open`` disposition.
+* When ``branch.merge()`` raises, it returns a failed result rather
   than propagating, so the caller decides how to fail the job.
 """
 
@@ -79,6 +81,7 @@ def _install_branching_stubs(
     class _BranchStatusChoices:
         READY = "ready"
         FAILED = "failed"
+        MERGED = "merged"
 
     nb_choices.BranchStatusChoices = _BranchStatusChoices
     monkeypatch.setitem(sys.modules, "netbox_branching.choices", nb_choices)
@@ -105,17 +108,45 @@ def _install_branching_stubs(
 
 
 class _FakeBranch:
-    """Records merge calls; raise_on_merge optionally simulates merge failure."""
+    """Mirror v1.2.0-beta1 lifecycle persistence and stale instance state."""
 
-    def __init__(self, name: str = "branch-1", raise_on_merge: bool = False) -> None:
+    def __init__(
+        self,
+        name: str = "branch-1",
+        raise_on_merge: bool = False,
+        no_changes: bool = False,
+        status: str = "ready",
+    ) -> None:
         self.name = name
+        self.schema_id = "abcd1234"
+        self.status = status
+        self.persisted_status = status
         self.merge_calls: list[object | None] = []
+        self.archive_calls: list[object | None] = []
+        self.refresh_calls = 0
+        self.unmerged_change_checks = 0
         self._raise_on_merge = raise_on_merge
+        self._no_changes = no_changes
+
+    def refresh_from_db(self):
+        self.refresh_calls += 1
+        self.status = self.persisted_status
 
     def merge(self, *, user):
         self.merge_calls.append(user)
         if self._raise_on_merge:
             raise RuntimeError("merge strategy refused")
+        if not self._no_changes:
+            self.persisted_status = "merged"
+
+    def archive(self, *, user):
+        self.archive_calls.append(user)
+        self.persisted_status = "archived"
+
+    def get_unmerged_changes(self):
+        self.unmerged_change_checks += 1
+        has_changes = not self._no_changes
+        return SimpleNamespace(exists=lambda: has_changes)
 
 
 # ---------------------------------------------------------------------------
@@ -148,11 +179,73 @@ def test_merge_branch_no_conflicts_calls_merge_with_user(monkeypatch):
     branch = _FakeBranch(name="b-clean")
     user = SimpleNamespace(username="op")
 
-    merged, message = mod.merge_branch(branch=branch, user=user, on_conflict="fail")
+    merged, message, disposition = mod.merge_branch(
+        branch=branch, user=user, on_conflict="fail"
+    )
 
     assert merged is True
     assert branch.merge_calls == [user]
     assert "b-clean" in message and "merged" in message
+    assert disposition is None
+
+
+def test_merge_branch_leaves_v120b1_no_change_branch_open(monkeypatch):
+    """The real merge() leaves a no-change branch READY and returns normally."""
+    mod, _ = _install_branching_stubs(monkeypatch, has_conflicts=False)
+    user = SimpleNamespace(username="op")
+    branch = _FakeBranch(name="b-converged", no_changes=True)
+
+    merged, message, disposition = mod.merge_branch(
+        branch=branch, user=user, on_conflict="fail"
+    )
+
+    assert merged is True
+    assert branch.merge_calls == [user]
+    assert branch.archive_calls == []
+    assert branch.refresh_calls == 2
+    assert branch.unmerged_change_checks == 1
+    assert branch.status == "ready"
+    assert disposition == "no_changes_left_open"
+    assert "branch left open" in message
+    assert "netbox-branching UI" in message
+
+
+def test_merge_branch_rechecks_ready_before_merge(monkeypatch):
+    mod, _ = _install_branching_stubs(monkeypatch, has_conflicts=False)
+    branch = _FakeBranch(name="b-stale", status="failed")
+
+    merged, message, disposition = mod.merge_branch(
+        branch=branch, user=None, on_conflict="fail"
+    )
+
+    assert merged is False
+    assert branch.merge_calls == []
+    assert "b-stale" in message
+    assert "status=failed" in message
+    assert "left open" in message
+    assert disposition is None
+
+
+def test_merge_branch_does_not_archive_ready_branch_with_unmerged_changes(monkeypatch):
+    """READY alone is not proof that the merge was the no-change return."""
+    mod, _ = _install_branching_stubs(monkeypatch, has_conflicts=False)
+    branch = _FakeBranch(name="b-unmerged")
+
+    def ineffective_merge(*, user):
+        branch.merge_calls.append(user)
+
+    branch.merge = ineffective_merge
+
+    merged, message, disposition = mod.merge_branch(
+        branch=branch, user=None, on_conflict="fail"
+    )
+
+    assert merged is False
+    assert branch.archive_calls == []
+    assert branch.unmerged_change_checks == 1
+    assert "unmerged changes" in message
+    assert "left open" in message
+    assert disposition is None
 
 
 # ---------------------------------------------------------------------------
@@ -164,12 +257,15 @@ def test_merge_branch_fail_policy_with_conflicts_does_not_merge(monkeypatch):
     mod, _ = _install_branching_stubs(monkeypatch, has_conflicts=True)
 
     branch = _FakeBranch(name="b-conflicted")
-    merged, message = mod.merge_branch(branch=branch, user=None, on_conflict="fail")
+    merged, message, disposition = mod.merge_branch(
+        branch=branch, user=None, on_conflict="fail"
+    )
 
     assert merged is False
     assert branch.merge_calls == [], "merge must not be invoked under 'fail' policy"
     assert "unresolved conflicts" in message
     assert "b-conflicted" in message
+    assert disposition is None
 
 
 # ---------------------------------------------------------------------------
@@ -183,13 +279,14 @@ def test_merge_branch_acknowledge_policy_proceeds_despite_conflicts(monkeypatch)
     branch = _FakeBranch(name="b-ack")
     user = SimpleNamespace(username="op")
 
-    merged, message = mod.merge_branch(
+    merged, message, disposition = mod.merge_branch(
         branch=branch, user=user, on_conflict="acknowledge"
     )
 
     assert merged is True
     assert branch.merge_calls == [user]
     assert "merged" in message
+    assert disposition is None
 
 
 # ---------------------------------------------------------------------------
@@ -201,8 +298,11 @@ def test_merge_branch_returns_failure_when_merge_raises(monkeypatch):
     mod, _ = _install_branching_stubs(monkeypatch, has_conflicts=False)
 
     branch = _FakeBranch(name="b-boom", raise_on_merge=True)
-    merged, message = mod.merge_branch(branch=branch, user=None, on_conflict="fail")
+    merged, message, disposition = mod.merge_branch(
+        branch=branch, user=None, on_conflict="fail"
+    )
 
     assert merged is False
     assert "merge failed" in message
     assert "merge strategy refused" in message
+    assert disposition is None

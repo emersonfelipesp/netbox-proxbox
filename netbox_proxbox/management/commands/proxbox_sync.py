@@ -105,6 +105,10 @@ class Command(BaseCommand):
             ProxboxSyncJob,
         )
         from netbox_proxbox.models import ProxmoxEndpoint
+        from netbox_proxbox.services.branch_lifecycle import (
+            BranchingUnavailableError,
+            require_branch_isolation_or_raise,
+        )
         from netbox_proxbox.services.backend_auth import wait_for_backend_ready
         from netbox_proxbox.services.backend_context import (
             get_fastapi_request_context,
@@ -128,6 +132,11 @@ class Command(BaseCommand):
             else float(worker_grace_raw)
         )
         enqueue_once = bool(options.get("enqueue_once"))
+
+        try:
+            require_branch_isolation_or_raise()
+        except BranchingUnavailableError as exc:
+            raise CommandError(str(exc)) from exc
 
         user = self._resolve_user(username)
 

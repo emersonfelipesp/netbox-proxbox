@@ -2,10 +2,10 @@
 
 Pins the contract that ``ProxboxSyncJob`` relies on:
 
-* ``branching_enabled_settings()`` returns ``None`` when the plugin flag is off
-  or when the optional ``netbox_branching`` plugin is not installed.
-* ``branching_enabled_settings()`` returns the ``{"prefix", "on_conflict"}``
-  dict otherwise, with defaults applied when persisted fields are blank.
+* ``resolve_branching_decision()`` distinguishes disabled, enabled, and
+  configured-but-unavailable states.
+* ``branching_enabled_settings()`` remains a companion-plugin compatibility
+  wrapper, but raises instead of silently falling open when isolation is required.
 * ``create_and_provision_branch()`` calls ``Branch.save(provision=False)`` and
   then ``Branch.provision(user=...)``, polls ``refresh_from_db`` until status
   becomes ``READY``, and raises ``RuntimeError`` on ``FAILED`` or timeout.
@@ -13,6 +13,8 @@ Pins the contract that ``ProxboxSyncJob`` relies on:
 
 from __future__ import annotations
 
+from contextlib import contextmanager
+from contextvars import ContextVar
 import importlib.util
 import pathlib
 import sys
@@ -33,6 +35,7 @@ def _install_branching_stubs(
     *,
     plugin_settings: object,
     available: bool = True,
+    importable: bool = True,
 ):
     """Load ``branch_lifecycle.py`` directly with stubbed deps."""
 
@@ -68,14 +71,19 @@ def _install_branching_stubs(
     django_apps.apps = _AppRegistry()  # type: ignore[attr-defined]
     monkeypatch.setitem(sys.modules, "django.apps", django_apps)
 
-    if available:
+    if importable:
         nb = types.ModuleType("netbox_branching")
         monkeypatch.setitem(sys.modules, "netbox_branching", nb)
+    else:
+        monkeypatch.setitem(sys.modules, "netbox_branching", None)
+
+    if available and importable:
         nb_choices = types.ModuleType("netbox_branching.choices")
 
         class _BranchStatusChoices:
             READY = "ready"
             FAILED = "failed"
+            MERGED = "merged"
             NEW = "new"
             PROVISIONING = "provisioning"
 
@@ -84,10 +92,8 @@ def _install_branching_stubs(
         nb_models = types.ModuleType("netbox_branching.models")
         monkeypatch.setitem(sys.modules, "netbox_branching.models", nb_models)
     else:
-        sys.modules.pop("netbox_branching", None)
         sys.modules.pop("netbox_branching.choices", None)
         sys.modules.pop("netbox_branching.models", None)
-        monkeypatch.setitem(sys.modules, "netbox_branching", None)
 
     sys.modules.pop("netbox_proxbox.services.branch_lifecycle", None)
     spec = importlib.util.spec_from_file_location(
@@ -105,10 +111,15 @@ def test_branching_enabled_settings_returns_none_when_flag_off(monkeypatch):
     settings = SimpleNamespace(branching_enabled=False)
     mod = _install_branching_stubs(monkeypatch, plugin_settings=settings)
 
+    decision = mod.resolve_branching_decision()
+    assert decision.state is mod.BranchingDecisionState.DISABLED
+    assert decision.settings is None
+    assert decision.reason is None
+    assert decision.configured is False
     assert mod.branching_enabled_settings() is None
 
 
-def test_branching_enabled_settings_returns_none_when_branching_unavailable(
+def test_configured_branching_is_unavailable_when_the_app_is_not_loaded(
     monkeypatch,
 ):
     settings = SimpleNamespace(
@@ -120,7 +131,13 @@ def test_branching_enabled_settings_returns_none_when_branching_unavailable(
         monkeypatch, plugin_settings=settings, available=False
     )
 
-    assert mod.branching_enabled_settings() is None
+    decision = mod.resolve_branching_decision()
+    assert decision.state is mod.BranchingDecisionState.CONFIGURED_BUT_UNAVAILABLE
+    assert decision.settings is None
+    assert "Django app is not loaded" in decision.reason
+    assert decision.configured is True
+    with pytest.raises(mod.BranchingUnavailableError, match="Django app is not loaded"):
+        mod.branching_enabled_settings()
 
 
 def test_branching_enabled_settings_returns_dict_when_enabled(monkeypatch):
@@ -131,10 +148,48 @@ def test_branching_enabled_settings_returns_dict_when_enabled(monkeypatch):
     )
     mod = _install_branching_stubs(monkeypatch, plugin_settings=settings)
 
-    assert mod.branching_enabled_settings() == {
+    expected = {
         "prefix": "custom-prefix",
         "on_conflict": "acknowledge",
     }
+    decision = mod.resolve_branching_decision()
+    assert decision.state is mod.BranchingDecisionState.ENABLED
+    assert decision.settings == expected
+    assert decision.reason is None
+    assert decision.configured is True
+    assert mod.branching_enabled_settings() == expected
+
+
+def test_enabled_request_requires_an_active_ready_branch_schema(monkeypatch):
+    settings = SimpleNamespace(branching_enabled=True)
+    mod = _install_branching_stubs(monkeypatch, plugin_settings=settings)
+    decision = mod.require_branch_isolation_or_raise()
+
+    with pytest.raises(
+        mod.ActiveBranchRequiredError,
+        match="activate a branch or disable branch isolation",
+    ):
+        mod.require_active_branch_schema_id(decision)
+
+
+def test_enabled_request_returns_the_active_ready_branch_schema(monkeypatch):
+    settings = SimpleNamespace(branching_enabled=True)
+    mod = _install_branching_stubs(monkeypatch, plugin_settings=settings)
+    contextvars = types.ModuleType("netbox_branching.contextvars")
+    active_branch = ContextVar("active_branch", default=None)
+    branch = SimpleNamespace(
+        name="request-branch",
+        status="ready",
+        schema_id="schema-request",
+        refresh_from_db=lambda: None,
+    )
+    active_branch.set(branch)
+    contextvars.active_branch = active_branch
+    monkeypatch.setitem(sys.modules, "netbox_branching.contextvars", contextvars)
+
+    decision = mod.require_branch_isolation_or_raise()
+
+    assert mod.require_active_branch_schema_id(decision) == "schema-request"
 
 
 def test_branching_enabled_settings_uses_defaults_for_blank_values(monkeypatch):
@@ -151,8 +206,8 @@ def test_branching_enabled_settings_uses_defaults_for_blank_values(monkeypatch):
     }
 
 
-def test_branching_enabled_settings_swallows_get_solo_errors(monkeypatch):
-    """If the singleton row cannot be loaded, treat branching as disabled."""
+def test_branching_settings_failure_is_configured_but_unavailable(monkeypatch):
+    """If the singleton cannot be loaded, the wrapper must fail closed."""
 
     class _Boom:
         @classmethod
@@ -161,9 +216,30 @@ def test_branching_enabled_settings_swallows_get_solo_errors(monkeypatch):
 
     mod = _install_branching_stubs(monkeypatch, plugin_settings=None)
     # Replace the stubbed ProxboxPluginSettings with one that raises.
-    sys.modules["netbox_proxbox.models"].ProxboxPluginSettings = _Boom
+    monkeypatch.setattr(mod, "ProxboxPluginSettings", _Boom)
 
-    assert mod.branching_enabled_settings() is None
+    decision = mod.resolve_branching_decision()
+    assert decision.state is mod.BranchingDecisionState.CONFIGURED_BUT_UNAVAILABLE
+    assert "settings could not be loaded" in decision.reason
+    assert decision.configured is None
+    with pytest.raises(
+        mod.BranchingUnavailableError, match="settings could not be loaded"
+    ):
+        mod.branching_enabled_settings()
+
+
+def test_configured_branching_is_unavailable_when_the_app_import_fails(monkeypatch):
+    settings = SimpleNamespace(branching_enabled=True)
+    mod = _install_branching_stubs(
+        monkeypatch,
+        plugin_settings=settings,
+        available=True,
+        importable=False,
+    )
+
+    decision = mod.resolve_branching_decision()
+    assert decision.state is mod.BranchingDecisionState.CONFIGURED_BUT_UNAVAILABLE
+    assert "could not import" in decision.reason
 
 
 class _FakeBranch:
@@ -223,6 +299,120 @@ def test_create_and_provision_branch_polls_until_ready(monkeypatch):
     assert branch.save_calls == [{"provision": False}]
     assert branch.provision_calls == [user]
     assert branch.refresh_calls >= 2
+
+
+@pytest.mark.parametrize("schema_id", ["", "   ", None])
+def test_ready_branch_without_usable_schema_id_fails_closed(monkeypatch, schema_id):
+    """READY is unsafe until the branch has a non-empty schema identifier."""
+    settings = SimpleNamespace(branching_enabled=True)
+    mod = _install_branching_stubs(monkeypatch, plugin_settings=settings)
+    branch = _FakeBranch(name="placeholder", statuses=["ready"])
+    if schema_id is None:
+        del branch.schema_id
+    else:
+        branch.schema_id = schema_id
+    _install_branch_class(monkeypatch, branch)
+
+    with pytest.raises(
+        mod.BranchingUnavailableError,
+        match="READY without a usable schema_id",
+    ):
+        mod.create_and_provision_branch(name="b-no-schema", user=None)
+
+
+def test_activate_sync_branch_uses_netbox_branching_context(monkeypatch):
+    """Programmatic activation must enter and restore the supplied branch."""
+    settings = SimpleNamespace(branching_enabled=True)
+    mod = _install_branching_stubs(monkeypatch, plugin_settings=settings)
+    utilities = types.ModuleType("netbox_branching.utilities")
+    active: list[object] = []
+
+    @contextmanager
+    def activate_branch(branch):
+        active.append(branch)
+        try:
+            yield
+        finally:
+            assert active.pop() is branch
+
+    utilities.activate_branch = activate_branch
+    monkeypatch.setitem(sys.modules, "netbox_branching.utilities", utilities)
+    branch = _FakeBranch(name="b-1", statuses=["ready"])
+
+    with mod.activate_sync_branch(branch):
+        assert active == [branch]
+
+    assert active == []
+
+
+def test_activate_sync_branch_rechecks_status_before_each_activation(monkeypatch):
+    """A branch that changes status between local phases must stop the run."""
+    settings = SimpleNamespace(branching_enabled=True)
+    mod = _install_branching_stubs(monkeypatch, plugin_settings=settings)
+    utilities = types.ModuleType("netbox_branching.utilities")
+
+    @contextmanager
+    def activate_branch(branch):
+        yield
+
+    utilities.activate_branch = activate_branch
+    monkeypatch.setitem(sys.modules, "netbox_branching.utilities", utilities)
+    branch = _FakeBranch(name="b-changing", statuses=["ready", "ready", "failed"])
+
+    with mod.activate_sync_branch(branch):
+        pass
+    with pytest.raises(mod.BranchingUnavailableError, match="b-changing.*left open"):
+        with mod.activate_sync_branch(branch):
+            pytest.fail("a non-READY branch was activated")
+
+
+def test_activate_sync_branch_names_activation_exception_and_disposition(monkeypatch):
+    settings = SimpleNamespace(branching_enabled=True)
+    mod = _install_branching_stubs(monkeypatch, plugin_settings=settings)
+    utilities = types.ModuleType("netbox_branching.utilities")
+
+    @contextmanager
+    def activate_branch(branch):
+        del branch
+        raise RuntimeError("context activation failed")
+        yield  # pragma: no cover
+
+    utilities.activate_branch = activate_branch
+    monkeypatch.setitem(sys.modules, "netbox_branching.utilities", utilities)
+    branch = _FakeBranch(name="b-activation", statuses=["ready"])
+
+    with pytest.raises(
+        mod.BranchingUnavailableError,
+        match="b-activation.*context activation failed.*left open",
+    ):
+        with mod.activate_sync_branch(branch):
+            pytest.fail("failed activation entered its body")
+
+
+def test_activate_sync_branch_restores_contextvar_after_body_exception(monkeypatch):
+    settings = SimpleNamespace(branching_enabled=True)
+    mod = _install_branching_stubs(monkeypatch, plugin_settings=settings)
+    utilities = types.ModuleType("netbox_branching.utilities")
+    active = ContextVar("test_active_branch", default="main")
+
+    @contextmanager
+    def activate_branch(branch):
+        token = active.set(branch)
+        try:
+            yield
+        finally:
+            active.reset(token)
+
+    utilities.activate_branch = activate_branch
+    monkeypatch.setitem(sys.modules, "netbox_branching.utilities", utilities)
+    branch = _FakeBranch(name="b-context", statuses=["ready"])
+
+    with pytest.raises(RuntimeError, match="service failed"):
+        with mod.activate_sync_branch(branch):
+            assert active.get() is branch
+            raise RuntimeError("service failed")
+
+    assert active.get() == "main"
 
 
 def test_create_and_provision_branch_raises_on_failed(monkeypatch):

@@ -1,0 +1,82 @@
+{% extends 'generic/_base.html' %}
+{% load form_helpers i18n %}
+
+{% block title %}{% trans "Data Protection" %}{% endblock %}
+
+{% block content %}
+  <div class="row g-3">
+    <aside class="col-12 col-xl-3">
+      <div class="card">
+        <h2 class="card-header h5">{% trans "Filters" %}</h2>
+        <div class="card-body">
+          <form method="get">
+            <input type="hidden" name="cal_view" value="{{ calendar.view }}">
+            {{ filter_form.kinds_submitted }}
+            {% if filter_form.non_field_errors %}
+              <div class="alert alert-danger">{{ filter_form.non_field_errors }}</div>
+            {% endif %}
+            {% render_field filter_form.cluster %}
+            {% render_field filter_form.node %}
+            {% render_field filter_form.virtual_machine %}
+            {% render_field filter_form.date_from %}
+            {% render_field filter_form.date_to %}
+            <fieldset class="mb-3">
+              <legend class="h6">{% trans "Kinds" %}</legend>
+              {% render_field filter_form.backups %}
+              {% render_field filter_form.snapshots %}
+              {% render_field filter_form.replications %}
+              {% render_field filter_form.routines %}
+            </fieldset>
+            <div class="d-flex gap-2">
+              <button type="submit" class="btn btn-primary">{% trans "Apply" %}</button>
+              <a href="{% url 'plugins:netbox_proxbox:data_protection' %}" class="btn btn-outline-secondary">{% trans "Clear" %}</a>
+            </div>
+          </form>
+        </div>
+      </div>
+    </aside>
+    <div class="col-12 col-xl-9">
+      {% include "netbox_proxbox/inc/data_protection_calendar.html" %}
+    </div>
+  </div>
+
+  <section class="card mt-3" aria-labelledby="visible-events-title">
+    <h2 id="visible-events-title" class="card-header h5">{% trans "Visible-range events" %} <span class="badge text-bg-secondary">{{ event_rows_total }}</span></h2>
+    {% if event_rows_total > event_rows_limit %}
+      <div class="alert alert-warning rounded-0 mb-0" role="status">
+        {% blocktrans with limit=event_rows_limit total=event_rows_total %}Showing the first {{ limit }} of {{ total }} materialized events in this range. Narrow the filters or switch to the week view to list the rest.{% endblocktrans %}
+      </div>
+    {% endif %}
+    <div class="table-responsive">
+      <table class="table table-hover mb-0">
+        <thead>
+          <tr>
+            <th scope="col">{% trans "Kind" %}</th>
+            <th scope="col">{% trans "Date and time" %}</th>
+            <th scope="col">{% trans "Virtual machine" %}</th>
+            <th scope="col">{% trans "Node or target" %}</th>
+            <th scope="col">{% trans "Label" %}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in event_rows %}
+            <tr class="{% if row.event.muted %}text-muted{% endif %}">
+              <td>
+                <span class="badge {% if row.event.muted %}text-bg-secondary{% elif row.event.kind == 'backup' %}text-bg-blue{% elif row.event.kind == 'snapshot' %}text-bg-purple{% elif row.event.kind == 'replication' %}text-bg-orange{% else %}text-bg-teal{% endif %}">{{ row.event.kind|title }}</span>
+              </td>
+              <td><time datetime="{{ row.event.day|date:'Y-m-d' }}">{{ row.event.day }}</time> {{ row.event.time_text }}{% if row.event.kind == 'replication' or row.event.kind == 'routine' %} {% trans "(node local time)" %}{% endif %}</td>
+              <td>{{ row.virtual_machine|default:"—" }}</td>
+              <td>{{ row.node|default:"—" }}</td>
+              <td>
+                <a href="{{ row.event.url }}">{{ row.event.label }}</a>
+                {% if row.event.approximate %}<span class="badge text-bg-warning">{% trans "unparsed schedule" %}</span>{% endif %}
+              </td>
+            </tr>
+          {% empty %}
+            <tr><td colspan="5" class="text-muted text-center py-4">{% trans "No permitted events match this visible range." %}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </section>
+{% endblock %}

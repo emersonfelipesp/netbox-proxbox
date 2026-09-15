@@ -17,12 +17,15 @@ part of the same plugin family.
 - The sync-state bootstrap status card now surfaces the actionable
   `no_netbox_session` backend reason and explains that proxbox-api requires its
   own NetBox endpoint configuration.
+- Data Protection list pages now include permission-aware month and ISO-week
+  calendars, and the new combined Data Protection page provides unified
+  cluster, node, virtual-machine, date-range, and event-kind filtering.
 
 ## Highlights By Version
 
 | Version | Summary |
 |---------|---------|
-| `0.0.26.post7` | Exports VM list filter helpers from `netbox_proxbox.utils` and ships production deploy compatibility with the `proxbox-api 0.0.21.post7` pairing. |
+| `0.0.26.post7` | Exports VM list filter helpers from `netbox_proxbox.utils` and ships production deploy compatibility with the `proxbox-api 0.0.22` pairing. |
 | `0.0.26.post6` | Restores migration `0083` for production deploy compatibility and ships VM list search/filtering with the `proxbox-api 0.0.21.post7` pairing. |
 | `0.0.26.post5` | Adds NetBox-native search and filtering to the Proxbox virtual machines list while retaining the `proxbox-api 0.0.21.post7` pairing and existing console, metrics, and purge surfaces. |
 | `0.0.26.post4` | Maintenance release that aligns the migration helper with the currently deployed production digest while retaining the soft-deleted VM purge surface and the `proxbox-api 0.0.21.post7` pairing. |
@@ -69,4 +72,4 @@ part of the same plugin family.
 - Older pages are intentionally brief because the repository does not preserve fuller release-note prose for those versions.
 
 
-> **Current release:** netbox-proxbox `0.0.26.post7` pairs with proxbox-api `0.0.21.post7` (NetBox `4.5.8`-`4.7.0`, including official v4.7.0 GA). Current backend-runtime pairing: netbox-proxbox 0.0.26.post7 <-> proxbox-api 0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+> **Current release:** netbox-proxbox `0.0.26.post7` pairs with proxbox-api `0.0.22` (NetBox `4.5.8`-`4.7.0`, including official v4.7.0 GA). Current backend-runtime pairing: netbox-proxbox 0.0.26.post7 <-> proxbox-api 0.0.22 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.

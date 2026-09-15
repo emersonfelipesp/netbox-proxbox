@@ -64,6 +64,9 @@ def _add_sync_now_stubs(monkeypatch, individual_sync_response=None):
         return HttpResponseRedirect(url)
 
     sync_now_pkg._handle_sync_response = _handle_sync_response
+    sync_now_pkg._branch_isolation_precondition = (
+        lambda request, object_label, redirect_url: (None, None)
+    )
     monkeypatch.setitem(sys.modules, "netbox_proxbox.views.sync_now", sync_now_pkg)
 
     return captured

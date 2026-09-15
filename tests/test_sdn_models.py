@@ -300,34 +300,3 @@ def test_forms_init_exports_sdn_forms():
     assert "ProxmoxSdnFabricForm" in content
     assert "ProxmoxSdnRouteMapForm" in content
     assert "ProxmoxSdnPrefixListForm" in content
-
-
-# ---------------------------------------------------------------------------
-# Sync service
-# ---------------------------------------------------------------------------
-
-
-def test_sync_sdn_service_file_exists():
-    assert (REPO_ROOT / "netbox_proxbox/services/sync_sdn.py").exists()
-
-
-def test_sync_sdn_service_defines_sync_function():
-    content = _read("netbox_proxbox/services/sync_sdn.py")
-    assert "def sync_sdn" in content
-
-
-def test_sync_sdn_service_fetches_fabrics_route_maps_prefix_lists():
-    content = _read("netbox_proxbox/services/sync_sdn.py")
-    assert "/proxmox/sdn/fabrics" in content
-    assert "/proxmox/sdn/route-maps" in content
-    assert "/proxmox/sdn/prefix-lists" in content
-
-
-def test_sync_sdn_service_has_result_dataclass():
-    content = _read("netbox_proxbox/services/sync_sdn.py")
-    assert "SdnSyncResult" in content
-    assert "fabrics_created" in content
-    assert "route_maps_created" in content
-    assert "prefix_lists_created" in content
-    assert "per_endpoint" in content
-    assert "runtime_seconds" in content

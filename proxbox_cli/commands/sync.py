@@ -13,10 +13,18 @@ from typing import Annotated, Optional
 import typer
 
 from proxbox_cli._locate_manage import (
+    ManageLocation,
     ManagePyNotFoundError,
     locate_manage_py,
 )
-from proxbox_cli.config import load_config
+from proxbox_cli.config import (
+    ALLOW_INSECURE_TRANSPORT_ENV_VAR,
+    API_KEY_ENV_VAR,
+    BASE_URL_ENV_VAR,
+    MAX_RESPONSE_BYTES_ENV_VAR,
+    TIMEOUT_ENV_VAR,
+    load_netbox_manage_py,
+)
 from proxbox_cli.support import console, emit_cli_error, stderr
 
 sync_app = typer.Typer(no_args_is_help=True, help="Run Proxbox sync jobs from the CLI.")
@@ -25,6 +33,13 @@ JOB_PK_RE = re.compile(r"\(pk=(\d+)\)")
 COMPLETE_RE = re.compile(r"\bcompleted\b", re.IGNORECASE)
 FAIL_RE = re.compile(r"\b(errored|failed)\b", re.IGNORECASE)
 TERMINATE_GRACE_SECONDS = 5.0
+HTTP_ONLY_ENV_VARS = {
+    ALLOW_INSECURE_TRANSPORT_ENV_VAR,
+    API_KEY_ENV_VAR,
+    BASE_URL_ENV_VAR,
+    MAX_RESPONSE_BYTES_ENV_VAR,
+    TIMEOUT_ENV_VAR,
+}
 
 
 def _extract_job_pk(output: str) -> int | None:
@@ -67,6 +82,17 @@ def _build_argv(
     argv.extend(["--poll-interval", str(poll_interval)])
     argv.extend(["--worker-grace", str(worker_grace)])
     return argv
+
+
+def _subprocess_environment() -> dict[str, str]:
+    """Build the local wrapper environment without remote HTTP settings."""
+    environment = {
+        name: value
+        for name, value in os.environ.items()
+        if name not in HTTP_ONLY_ENV_VARS
+    }
+    environment["PYTHONUNBUFFERED"] = "1"
+    return environment
 
 
 @sync_app.command("run")
@@ -134,16 +160,8 @@ def run_sync(
     ] = None,
 ) -> None:
     """Enqueue a full Proxmox→NetBox sync via the proxbox_sync management command."""
-    cfg = load_config()
-
-    try:
-        location = locate_manage_py(
-            override=netbox_path,
-            config_manage_py=cfg.netbox_manage_py,
-        )
-    except ManagePyNotFoundError as exc:
-        emit_cli_error(str(exc))
-
+    config_manage_py = load_netbox_manage_py()
+    location = _locate_management_command(netbox_path, config_manage_py)
     argv = _build_argv(
         python=location.python,
         manage_py=location.manage_py,
@@ -153,15 +171,27 @@ def run_sync(
         worker_grace=worker_grace,
         user=user,
     )
+    proc = _launch_sync(argv)
+    exit_code = _consume_sync(proc, location, argv, json_out, wait, timeout)
+    raise typer.Exit(code=exit_code)
 
-    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
-    # stderr=STDOUT is deliberate: merging into one stream avoids the
-    # deadlock that splitting them risks (a child blocked on its stderr
-    # write would hang us while we're blocked on a stdout read). The
-    # management command writes errors through Django's styled
-    # `CommandError` / `self.stderr.write`, which keeps the merged output
-    # readable.
-    proc = subprocess.Popen(  # noqa: S603 — argv is composed from validated inputs
+
+def _locate_management_command(
+    netbox_path: Path | None, config_manage_py: str | None
+) -> ManageLocation:
+    """Resolve the local management command or emit an actionable error."""
+    try:
+        return locate_manage_py(
+            override=netbox_path,
+            config_manage_py=config_manage_py,
+        )
+    except ManagePyNotFoundError as exc:
+        emit_cli_error(str(exc))
+
+
+def _launch_sync(argv: list[str]) -> subprocess.Popen[str]:
+    """Launch with merged output so neither child pipe can deadlock the wrapper."""
+    return subprocess.Popen(  # noqa: S603 — argv is composed from validated inputs
         argv,
         stdout=subprocess.PIPE,
         stderr=subprocess.STDOUT,
@@ -169,31 +199,48 @@ def run_sync(
         text=True,
         encoding="utf-8",
         errors="replace",
-        env=env,
+        env=_subprocess_environment(),
     )
 
+
+def _consume_sync(
+    proc: subprocess.Popen[str],
+    location: ManageLocation,
+    argv: list[str],
+    json_out: bool,
+    wait: bool,
+    timeout: int | None,
+) -> int:
+    """Relay process output in the selected format and preserve its status."""
     try:
         if json_out:
-            output, exit_code = _drain_for_json(proc, wait=wait, timeout=timeout)
-            payload = {
-                "exit_code": exit_code,
-                "success": exit_code == 0,
-                "job_pk": _extract_job_pk(output),
-                "manage_py": str(location.manage_py),
-                "command": argv,
-                "output": output,
-            }
-            # Bypass Rich so the JSON document is unstyled and pipe-safe.
-            sys.stdout.write(json.dumps(payload, indent=2))
-            sys.stdout.write("\n")
-            sys.stdout.flush()
-        else:
-            exit_code = _stream_lines(proc)
+            return _emit_json_result(proc, location, argv, wait, timeout)
+        return _stream_lines(proc)
     except KeyboardInterrupt:
         _terminate(proc)
         raise
 
-    raise typer.Exit(code=exit_code)
+
+def _emit_json_result(
+    proc: subprocess.Popen[str],
+    location: ManageLocation,
+    argv: list[str],
+    wait: bool,
+    timeout: int | None,
+) -> int:
+    """Emit one pipe-safe JSON result for the completed child process."""
+    output, exit_code = _drain_for_json(proc, wait=wait, timeout=timeout)
+    payload = {
+        "exit_code": exit_code,
+        "success": exit_code == 0,
+        "job_pk": _extract_job_pk(output),
+        "manage_py": str(location.manage_py),
+        "command": argv,
+        "output": output,
+    }
+    sys.stdout.write(f"{json.dumps(payload, indent=2)}\n")
+    sys.stdout.flush()
+    return exit_code
 
 
 def _stream_lines(proc: subprocess.Popen[str]) -> int:

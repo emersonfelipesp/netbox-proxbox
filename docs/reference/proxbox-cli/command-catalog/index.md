@@ -3,9 +3,9 @@
 Machine-generated command inventory for the `proxbox_cli` package.
 
 !!! info "Generated"
-    Last updated: `2026-04-01T19:39:49.416217+00:00`
-    Command groups: `14`
-    Leaf commands: `63`
+    Last updated: `2026-09-14T17:13:11.556323+00:00`
+    Command groups: `15`
+    Leaf commands: `64`
 
 | Command | Kind | Summary | Example |
 |---------|------|---------|---------|
@@ -66,6 +66,8 @@ Machine-generated command inventory for the `proxbox_cli` package.
 | `pxb proxmox viewer openapi-embedded` | `command` | Return the Proxmox OpenAPI as embedded in the FastAPI custom schema. | `pxb proxmox viewer openapi-embedded` |
 | `pxb proxmox viewer pydantic` | `command` | Print the generated Pydantic v2 model source code. | `pxb proxmox viewer pydantic` |
 | `pxb proxmox vm-config` | `command` | Get VM config for a specific VM. | `pxb proxmox vm-config <NODE> <VM-TYPE> <VMID>` |
+| `pxb sync` | `group` | Run Proxbox sync jobs from the CLI. | `pxb sync --help` |
+| `pxb sync run` | `command` | Enqueue a full Proxmox→NetBox sync via the proxbox_sync management command. | `pxb sync run` |
 | `pxb test` | `command` | Test connectivity to the proxbox-api server. | `pxb test` |
 | `pxb version` | `command` | Show the proxbox-api backend version. | `pxb version` |
 | `pxb virtualization` | `group` | Virtualization commands. | `pxb virtualization --help` |

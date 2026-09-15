@@ -137,6 +137,11 @@ urlpatterns = [
         name="home_quick_edit",
     ),
     path("dashboard/", views.DashboardView.as_view(), name="dashboard"),
+    path(
+        "data-protection/",
+        views.DataProtectionView.as_view(),
+        name="data_protection",
+    ),
     path("ha/", views.HAClusterView.as_view(), name="ha"),
     path("sitemap.txt", views.SitemapView.as_view(), name="sitemap"),
     path("clusters/", views.ClustersView.as_view(), name="clusters"),

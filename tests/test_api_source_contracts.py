@@ -37,7 +37,6 @@ SERIALIZERS_PACKAGE = REPO_ROOT / "netbox_proxbox" / "api" / "serializers"
 VIEWS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "views.py"
 FILTERS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "filters.py"
 URLS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "urls.py"
-UTILS_PATH = REPO_ROOT / "netbox_proxbox" / "utils.py"
 UTILS_PACKAGE_PATH = REPO_ROOT / "netbox_proxbox" / "utils" / "__init__.py"
 PROXMOX_ENDPOINT_VIEWS_PATH = (
     REPO_ROOT / "netbox_proxbox" / "views" / "endpoints" / "proxmox.py"
@@ -659,20 +658,19 @@ def test_resource_vm_api_views_gate_native_vm_type_field_for_netbox_45():
 def test_get_proxbox_tagged_object_ids_has_no_helper_level_limit():
     """The shared tag helper must not slice before VM type filters run."""
 
-    for path in (UTILS_PATH, UTILS_PACKAGE_PATH):
-        source = path.read_text()
-        module = ast.parse(source, filename=str(path))
-        function = next(
-            node
-            for node in module.body
-            if isinstance(node, ast.FunctionDef)
-            and node.name == "get_proxbox_tagged_object_ids"
-        )
-        function_source = ast.get_source_segment(source, function) or ""
+    source = UTILS_PACKAGE_PATH.read_text()
+    module = ast.parse(source, filename=str(UTILS_PACKAGE_PATH))
+    function = next(
+        node
+        for node in module.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "get_proxbox_tagged_object_ids"
+    )
+    function_source = ast.get_source_segment(source, function) or ""
 
-        assert [arg.arg for arg in function.args.args] == ["model_class"]
-        assert "limit" not in function_source
-        assert "[:100]" not in function_source
+    assert [arg.arg for arg in function.args.args] == ["model_class"]
+    assert "limit" not in function_source
+    assert "[:100]" not in function_source
 
 
 def test_vm_resource_api_filters_full_queryset_before_limit_offset_pagination():

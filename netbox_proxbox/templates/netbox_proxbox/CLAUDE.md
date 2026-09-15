@@ -15,6 +15,11 @@ This is the main Django template namespace for the plugin.
 
 ## Main Templates
 
+- Data Protection calendars use `data_protection.html` and the
+  `inc/data_protection_calendar*.html` partials. The four object-list templates
+  include the calendar immediately before `{{ block.super }}` in their content
+  blocks, keeping it outside NetBox's HTMX-replaced `#object_list`. These
+  templates are server-rendered and contain no calendar JavaScript.
 - Dashboard and informational pages: `home.html`, `dashboard.html`, `community.html`, `contributing.html`, `devices.html`, `interfaces.html`, `ip_addresses.html`, `lxc_containers.html`, `virtual_machines.html`, `logs.html`, `settings.html`, `status_badge.html`, `proxbox-backend-status.html`, and `websocket_page.html`.
 - `settings.html` distinguishes plugin-at-rest encryption, proxbox-api database
   encryption, and API authentication; renders only family labels/counts/states;

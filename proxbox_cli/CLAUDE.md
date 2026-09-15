@@ -17,8 +17,9 @@ This package contains the standalone Typer-based CLI client for the companion `p
 
 - [`__init__.py`](./__init__.py): Typer app entrypoint, root commands (`init`, `config`, `test`, `version`, `info`, `cache`, `clear-cache`, `full-update`), and sub-app wiring.
 - [`__main__.py`](./__main__.py): module runner so `python -m proxbox_cli` executes `main()`.
-- [`client.py`](./client.py): async `aiohttp` API client (`ProxboxApiClient`) and `ApiResponse` wrapper.
-- [`config.py`](./config.py): CLI config model and persistence (`~/.config/proxbox-cli/config.json` or `$XDG_CONFIG_HOME/proxbox-cli/config.json`) with `PROXBOX_URL` override support.
+- [`client.py`](./client.py): async `aiohttp` API client (`ProxboxApiClient`) and `ApiResponse` wrapper, including authenticated headers, bounded response streaming, and redirect refusal.
+- [`config.py`](./config.py): validated CLI config model and persistence (`~/.config/proxbox-cli/config.json` or `$XDG_CONFIG_HOME/proxbox-cli/config.json`) with environment-over-file precedence.
+- [`errors.py`](./errors.py): typed configuration and transport-policy failures with stable exit statuses.
 - [`runtime.py`](./runtime.py): cached config loader and client factory helpers.
 - [`support/`](./support/): package providing async bridge, output formatting (human/JSON/YAML), table rendering, and CLI error helpers. Key modules:
   - `async_bridge.py`: event-loop bridge for running async code from sync Typer callbacks
@@ -49,6 +50,11 @@ This package contains the standalone Typer-based CLI client for the companion `p
 - The CLI is optional (`netbox-proxbox[cli]`) and can run independently from the NetBox plugin runtime.
 - Root command `pxb docs generate-capture` updates generated docs artifacts under `docs/generated/proxbox-cli/`.
 - Global output flags `--json` and `--yaml` are mutually exclusive and enforced by shared helpers in `support/output.py`.
+- Backend authentication comes only from `PROXBOX_API_KEY` or config field `api_key`; do not add an API-key CLI flag or print the secret. Treat the backend origin and API key as one credential bundle: a `PROXBOX_URL` origin change must not reuse the file key without `PROXBOX_API_KEY`. `pxb init` reads the file separately and never persists the environment key; it preserves the stored key for the same normalized origin and requires explicit `--keep-api-key` to retain it across an origin change.
+- A configured API key requires HTTPS for non-loopback hosts. `PROXBOX_CLI_ALLOW_INSECURE_TRANSPORT=1` is the explicit cleartext opt-in and must print a warning to standard error. Every response body and HTTP exception must redact exact occurrences of the configured key before any human, JSON, or YAML rendering.
+- `PROXBOX_CLI_TIMEOUT`/`timeout` must be finite, greater than zero, and no more than 600 seconds. `PROXBOX_CLI_MAX_RESPONSE_BYTES`/`max_response_bytes` defaults to 8 MiB and is enforced while streaming.
+- Every request sends `Accept: application/json`, adds `X-Proxbox-API-Key` when configured, and sets `allow_redirects=False`. Redirect errors identify only the configured host.
+- Backend HTTP commands exit `0` on success, `1` after rendering a `4xx`/`5xx` response or transport-policy failure, `2` for invalid configuration or a missing required key, and `130` for keyboard interruption. `pxb sync run` retains its documented subprocess-status contract.
 
 ## Links
 

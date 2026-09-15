@@ -13,10 +13,12 @@ from utilities.views import (
 )
 
 from netbox_proxbox.models import ProxmoxNode
-from netbox_proxbox.services.branch_lifecycle import get_active_branch_schema_id
 from netbox_proxbox.services.individual_sync import sync_individual_with_dependencies
 from netbox_proxbox.views.proxbox_access import permission_enqueue_proxbox_sync
-from netbox_proxbox.views.sync_now import _handle_sync_response
+from netbox_proxbox.views.sync_now import (
+    _branch_isolation_precondition,
+    _handle_sync_response,
+)
 from netbox_proxbox.views.sync_now.endpoint_scope import (
     resolve_target_proxmox_endpoint_scope,
 )
@@ -42,7 +44,6 @@ class ProxmoxNodeSyncNowView(
             ProxmoxNode.objects.restrict(request.user, "view"), pk=pk
         )
         node_name = node.name
-
         cluster_name = ""
         if node.proxmox_cluster:
             cluster_name = node.proxmox_cluster.name
@@ -52,6 +53,11 @@ class ProxmoxNodeSyncNowView(
         if not cluster_name:
             messages.error(request, _("Node is not linked to a Proxmox cluster."))
             return HttpResponseRedirect(node.get_absolute_url())
+        branch_schema_id, isolation_error = _branch_isolation_precondition(
+            request, f"Node '{node_name}'", node.get_absolute_url()
+        )
+        if isolation_error is not None:
+            return isolation_error
 
         scope_kwargs, owner_cluster_name, scope_error = (
             resolve_target_proxmox_endpoint_scope(node)
@@ -68,7 +74,7 @@ class ProxmoxNodeSyncNowView(
         response, status, dependencies = sync_individual_with_dependencies(
             "sync/individual/node",
             {"cluster_name": cluster_name, "node_name": node_name},
-            netbox_branch_schema_id=get_active_branch_schema_id(),
+            netbox_branch_schema_id=branch_schema_id,
             **scope_kwargs,
         )
 

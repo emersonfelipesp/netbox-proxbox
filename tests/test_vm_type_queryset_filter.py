@@ -12,10 +12,7 @@ import pytest
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-UTILS_PATHS = (
-    REPO_ROOT / "netbox_proxbox" / "utils.py",
-    REPO_ROOT / "netbox_proxbox" / "utils" / "__init__.py",
-)
+UTILS_PACKAGE_PATH = REPO_ROOT / "netbox_proxbox" / "utils" / "__init__.py"
 
 
 class _Q:
@@ -51,8 +48,8 @@ class _QuerySet:
         return _QuerySet(row for row in self.rows if query.matches(row))
 
 
-@pytest.fixture(params=UTILS_PATHS, ids=("module", "package"))
-def utils_module(request, monkeypatch):
+@pytest.fixture
+def utils_module(monkeypatch):
     root = types.ModuleType("netbox_proxbox")
     root.__path__ = [str(REPO_ROOT / "netbox_proxbox")]
     monkeypatch.setitem(sys.modules, "netbox_proxbox", root)
@@ -73,8 +70,8 @@ def utils_module(request, monkeypatch):
     monkeypatch.setitem(sys.modules, "django.db", django_db)
     monkeypatch.setitem(sys.modules, "django.db.models", django_models)
 
-    module_name = f"_vm_filter_{request.param.parent.name}"
-    spec = importlib.util.spec_from_file_location(module_name, request.param)
+    module_name = "_vm_filter_utils_package"
+    spec = importlib.util.spec_from_file_location(module_name, UTILS_PACKAGE_PATH)
     assert spec and spec.loader
     module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(module)

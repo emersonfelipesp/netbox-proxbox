@@ -505,3 +505,356 @@ def test_stream_transport_failure_never_logs_the_raw_exception(
         assert record.exc_info is None, (
             "a transport failure must not be logged with its raw traceback"
         )
+
+
+# --- failure provenance -----------------------------------------------------
+
+
+class _NonJsonErrorResponse:
+    """Gateway error page: a status code with a body that is not JSON."""
+
+    def __init__(self, status_code: int):
+        self.status_code = status_code
+        self.closed = False
+
+    def close(self):
+        self.closed = True
+
+    def json(self):
+        raise ValueError("not JSON")
+
+
+def _try_url(bp, response_or_exc):
+    def fake_get(url, **kwargs):
+        if isinstance(response_or_exc, Exception):
+            raise response_or_exc
+        return response_or_exc
+
+    return fake_get
+
+
+def test_backend_json_error_body_is_application_provenance(
+    backend_proxy_module, monkeypatch
+):
+    """A JSON body means proxbox-api answered — even a 5xx it authored."""
+    bp = backend_proxy_module
+    monkeypatch.setattr(
+        bp.requests,
+        "get",
+        _try_url(bp, _ErrorBodyResponse(503, {"detail": "Connection refused"})),
+    )
+    result = bp._try_sync_stream_url(
+        url="https://backend.example:8800/dcim/devices/create/stream",
+        verify=True,
+        path="dcim/devices/create/stream",
+        query_params=None,
+        context=_stream_context(bp),
+        on_frame=None,
+    )
+    assert isinstance(result, tuple)
+    assert result[3] == 503
+    assert result[4] == bp.STAGE_FAILURE_APPLICATION, (
+        "a transport phrase inside a backend-authored body must not demote it"
+    )
+
+
+def test_non_json_gateway_error_is_transport_provenance(
+    backend_proxy_module, monkeypatch
+):
+    """An nginx 502 page never came from proxbox-api."""
+    bp = backend_proxy_module
+    monkeypatch.setattr(bp.requests, "get", _try_url(bp, _NonJsonErrorResponse(502)))
+    result = bp._try_sync_stream_url(
+        url="https://backend.example:8800/dcim/devices/create/stream",
+        verify=True,
+        path="dcim/devices/create/stream",
+        query_params=None,
+        context=_stream_context(bp),
+        on_frame=None,
+    )
+    assert isinstance(result, tuple)
+    assert result[3] == 502
+    assert result[4] == bp.STAGE_FAILURE_TRANSPORT
+
+
+def test_non_json_client_error_is_application_provenance(
+    backend_proxy_module, monkeypatch
+):
+    """A non-JSON 404 is still an answer about the request, not about reaching it."""
+    bp = backend_proxy_module
+    monkeypatch.setattr(bp.requests, "get", _try_url(bp, _NonJsonErrorResponse(404)))
+    result = bp._try_sync_stream_url(
+        url="https://backend.example:8800/dcim/devices/create/stream",
+        verify=True,
+        path="dcim/devices/create/stream",
+        query_params=None,
+        context=_stream_context(bp),
+        on_frame=None,
+    )
+    assert isinstance(result, tuple)
+    assert result[4] == bp.STAGE_FAILURE_APPLICATION
+
+
+def test_connection_error_is_transport_provenance(backend_proxy_module, monkeypatch):
+    bp = backend_proxy_module
+    import requests as _req
+
+    monkeypatch.setattr(
+        bp.requests,
+        "get",
+        _try_url(bp, _req.exceptions.SSLError("certificate verify failed")),
+    )
+    result = bp._try_sync_stream_url(
+        url="https://backend.example:8800/dcim/devices/create/stream",
+        verify=True,
+        path="dcim/devices/create/stream",
+        query_params=None,
+        context=_stream_context(bp),
+        on_frame=None,
+    )
+    assert isinstance(result, tuple)
+    assert result[4] == bp.STAGE_FAILURE_TRANSPORT
+
+
+def test_run_sync_stream_stamps_failure_kind_on_completed_failure(
+    backend_proxy_module, monkeypatch
+):
+    """The production shape: ok=false completes as HTTP 503 with application provenance."""
+    bp = backend_proxy_module
+    lines = [
+        "event: complete",
+        f"data: {json.dumps({'ok': False, 'message': 'failed', 'errors': [{'detail': 'netboxinterfacetype.bridge is not a valid choice'}]})}",
+        "",
+    ]
+    monkeypatch.setattr(bp.requests, "get", _mock_backend_get(_StreamResponse(lines)))
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status == 503
+    assert payload["failure_kind"] == bp.STAGE_FAILURE_APPLICATION
+    assert "response" in payload
+
+
+def test_run_sync_stream_stamps_failure_kind_on_transport_failure(
+    backend_proxy_module, monkeypatch
+):
+    bp = backend_proxy_module
+    import requests as _req
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/health"):
+            return _HealthResponse()
+        raise _req.exceptions.SSLError("TLS error connecting")
+
+    monkeypatch.setattr(bp.requests, "get", fake_get)
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status >= 500
+    assert payload["failure_kind"] == bp.STAGE_FAILURE_TRANSPORT
+
+
+def test_run_sync_stream_keeps_the_application_cause_across_ip_fallback(
+    backend_proxy_module, monkeypatch
+):
+    """Hostname answers with a backend-authored 503; the IP fallback fails TLS.
+
+    The real two-candidate builder is used. The returned cause must be the
+    backend's answer, not the later transport failure on the fallback URL.
+    """
+    bp = backend_proxy_module
+    import requests as _req
+
+    application_detail = "netboxinterfacetype.bridge is not a valid choice"
+    urls: list[str] = []
+
+    def fake_get(url, **kwargs):
+        urls.append(url)
+        if url.endswith("/health"):
+            return _HealthResponse()
+        if url.startswith(_stream_context(bp).ip_address_url + "/"):
+            raise _req.exceptions.SSLError("TLS error connecting to ProxBox backend")
+        return _ErrorBodyResponse(503, {"detail": application_detail})
+
+    monkeypatch.setattr(bp.requests, "get", fake_get)
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert len(payload["requested_urls"]) == 2, "the IP fallback must have been tried"
+    assert status == 503
+    assert payload["failure_kind"] == bp.STAGE_FAILURE_APPLICATION
+    assert payload["detail"] == application_detail
+
+
+def test_run_sync_stream_reports_last_transport_failure_when_no_candidate_answers(
+    backend_proxy_module, monkeypatch
+):
+    bp = backend_proxy_module
+    import requests as _req
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/health"):
+            return _HealthResponse()
+        if url.startswith(_stream_context(bp).ip_address_url + "/"):
+            raise _req.exceptions.SSLError("handshake failed")
+        # A non-JSON 502 page is a transport failure that still allows the
+        # IP fallback to be tried.
+        return _NonJsonErrorResponse(502)
+
+    monkeypatch.setattr(bp.requests, "get", fake_get)
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert len(payload["requested_urls"]) == 2
+    assert payload["failure_kind"] == bp.STAGE_FAILURE_TRANSPORT
+    assert "TLS" in payload["detail"], "the last transport failure is reported"
+
+
+def test_invalid_complete_event_is_application_provenance(
+    backend_proxy_module, monkeypatch
+):
+    """A frame the plugin cannot parse is the backend's answer (version skew)."""
+    bp = backend_proxy_module
+    lines = [
+        "event: complete",
+        "data: " + json.dumps({"ok": "not-a-bool-shape", "x": []}),
+        "",
+    ]
+    monkeypatch.setattr(bp.requests, "get", _mock_backend_get(_StreamResponse(lines)))
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status == 502
+    assert "invalid complete event" in payload["detail"]
+    assert payload["failure_kind"] == bp.STAGE_FAILURE_APPLICATION
+
+
+def test_backend_not_ready_is_transport_provenance(backend_proxy_module, monkeypatch):
+    bp = backend_proxy_module
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
+    monkeypatch.setattr(
+        bp, "wait_for_backend_ready", lambda ctx: (False, "init_ok=false")
+    )
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status == 503
+    assert payload["failure_kind"] == bp.STAGE_FAILURE_TRANSPORT
+    assert "init_ok" in payload["detail"]
+
+
+def test_missing_backend_url_is_application_provenance(
+    backend_proxy_module, monkeypatch
+):
+    bp = backend_proxy_module
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: None)
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status == 404
+    assert payload["failure_kind"] == bp.STAGE_FAILURE_APPLICATION
+
+
+def test_list_shaped_json_error_is_application_provenance(
+    backend_proxy_module, monkeypatch
+):
+    """A JSON list under a 5xx is a backend answer (usually version skew)."""
+    bp = backend_proxy_module
+    monkeypatch.setattr(
+        bp.requests,
+        "get",
+        _try_url(bp, _ErrorBodyResponse(503, [{"detail": "schema-skew failure"}])),
+    )
+    result = bp._try_sync_stream_url(
+        url="https://backend.example:8800/dcim/devices/create/stream",
+        verify=True,
+        path="dcim/devices/create/stream",
+        query_params=None,
+        context=_stream_context(bp),
+        on_frame=None,
+    )
+    assert isinstance(result, tuple)
+    assert result[4] == bp.STAGE_FAILURE_APPLICATION
+    assert result[0] == "schema-skew failure"
+
+
+def test_scalar_json_error_is_application_provenance(backend_proxy_module, monkeypatch):
+    bp = backend_proxy_module
+    monkeypatch.setattr(
+        bp.requests, "get", _try_url(bp, _ErrorBodyResponse(500, "worker crashed"))
+    )
+    result = bp._try_sync_stream_url(
+        url="https://backend.example:8800/dcim/devices/create/stream",
+        verify=True,
+        path="dcim/devices/create/stream",
+        query_params=None,
+        context=_stream_context(bp),
+        on_frame=None,
+    )
+    assert isinstance(result, tuple)
+    assert result[4] == bp.STAGE_FAILURE_APPLICATION
+    assert result[0] == "worker crashed"
+
+
+def _rebinding_backend(bp, monkeypatch, after_rebind):
+    """First request 401s and rebinds; ``after_rebind`` answers the retry."""
+    import requests as _req
+
+    calls = {"n": 0}
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/health"):
+            return _HealthResponse()
+        calls["n"] += 1
+        if calls["n"] == 1:
+            return _ErrorBodyResponse(401, {"detail": "Invalid API key"})
+        if isinstance(after_rebind, Exception):
+            raise after_rebind
+        return after_rebind
+
+    monkeypatch.setattr(bp.requests, "get", fake_get)
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
+    monkeypatch.setattr(
+        bp,
+        "_handle_auth_registration_and_retry",
+        lambda context, endpoint_id=None: _stream_context(bp),
+    )
+    return _req
+
+
+def test_rebind_starts_a_new_epoch_so_the_authenticated_answer_is_reported(
+    backend_proxy_module, monkeypatch
+):
+    """The 401 that triggered a successful rebind is resolved; the retry's answer wins."""
+    bp = backend_proxy_module
+    _rebinding_backend(
+        bp,
+        monkeypatch,
+        _ErrorBodyResponse(403, {"detail": "Authenticated key lacks sync permission"}),
+    )
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status == 403
+    assert payload["detail"] == "Authenticated key lacks sync permission"
+    assert payload["failure_kind"] == bp.STAGE_FAILURE_APPLICATION
+
+
+def test_rebind_followed_by_transport_failure_reports_the_transport_failure(
+    backend_proxy_module, monkeypatch
+):
+    import requests as _req
+
+    bp = backend_proxy_module
+    _rebinding_backend(bp, monkeypatch, _req.exceptions.SSLError("handshake"))
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert payload["failure_kind"] == bp.STAGE_FAILURE_TRANSPORT
+    assert "Invalid API key" not in payload["detail"]
+    assert "TLS" in payload["detail"]

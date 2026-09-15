@@ -37,7 +37,48 @@ pxb config
 pxb test
 ```
 
-The CLI stores its config under `~/.config/proxbox-cli/config.json` unless `XDG_CONFIG_HOME` overrides that path.
+The CLI stores its config under `~/.config/proxbox-cli/config.json` unless
+`XDG_CONFIG_HOME` overrides that path. `pxb init` reads only the on-disk file
+and never persists a key supplied through `PROXBOX_API_KEY`. It preserves a
+stored key when the normalized backend origin remains the same. Changing the
+origin removes the stored key unless the operator explicitly runs
+`pxb init --keep-api-key`.
+
+Protected backend routes require an API key. Set `PROXBOX_API_KEY`, or put an
+`api_key` field in the config file and restrict that file to the operator. The
+CLI has no API-key command-line flag and `pxb config` never prints the key.
+Any keyed remote backend must use `https://`. Explicit loopback hosts may use
+HTTP. `PROXBOX_CLI_ALLOW_INSECURE_TRANSPORT=1` is an exceptional opt-in for a
+keyed remote HTTP origin and prints a cleartext-credential warning to standard
+error.
+
+```bash
+export PROXBOX_URL=https://proxbox-api.example.com
+export PROXBOX_API_KEY='<proxbox-api-key>'
+pxb version
+```
+
+Configuration resolves in this order: environment variable, config file, then
+built-in default. The backend origin and API key are one credential bundle. If
+`PROXBOX_URL` selects a different origin from the config file,
+the stored `api_key` is not sent to that origin; supply `PROXBOX_API_KEY` for
+the selected origin instead. Equivalent normalized origins, including an
+explicit default port, may continue using the stored key.
+
+| Environment variable | Config field | Default | Validation |
+|----------------------|--------------|---------|------------|
+| `PROXBOX_URL` | `base_url` | `http://localhost:8000` | An `http://` or `https://` origin without credentials, a path, query, or fragment. A different origin does not inherit the file key. |
+| `PROXBOX_API_KEY` | `api_key` | unset | A nonempty value when the selected backend route requires authentication. |
+| `PROXBOX_CLI_TIMEOUT` | `timeout` | `30` seconds | Finite, greater than `0`, and no more than `600`. |
+| `PROXBOX_CLI_MAX_RESPONSE_BYTES` | `max_response_bytes` | `8388608` bytes (8 MiB) | A positive byte count. |
+| `PROXBOX_CLI_ALLOW_INSECURE_TRANSPORT` | n/a | unset | Set to exactly `1` to permit a configured API key over non-loopback HTTP; emits a warning to standard error. |
+
+The response limit is enforced incrementally while reading the decoded body.
+The client also disables redirects for every method. A redirect error includes
+only the configured backend host and does not expose or follow `Location`.
+Every exact occurrence of the configured API key is replaced with
+`[REDACTED]` before a response body or HTTP exception is rendered to standard
+output or standard error, including JSON, YAML, and human-readable output.
 
 ## Quick Reference
 
@@ -57,7 +98,7 @@ The `pxb sync` group wraps the `proxbox_sync` Django management command as a sub
 
 | Command | Description |
 |---------|-------------|
-| `pxb init` | Interactively configure the backend URL and timeout |
+| `pxb init` | Interactively configure the backend URL and timeout; use `--keep-api-key` to retain a stored key across an intentional origin change |
 | `pxb config` | Show the current CLI configuration |
 | `pxb test` | Test connectivity to the backend |
 | `pxb version` | Show the backend version |
@@ -118,6 +159,16 @@ All commands that fetch data support `--json` and `--yaml` output flags:
 pxb virtualization vms list --json
 pxb proxmox cluster status --yaml
 ```
+
+For backend HTTP commands, success exits `0`. A backend `4xx` or `5xx` response
+is rendered and exits `1`; JSON output retains the response body. A missing API
+key detected from a protected backend, an invalid URL, or an invalid HTTP limit
+exits `2`. Keyboard interruption exits `130`. Click command-line usage errors
+also use `2`.
+
+`pxb sync run` is a local management-command wrapper rather than an HTTP
+command and returns the wrapped process status described on the
+[Sync Command](sync.md) page.
 
 ## Generated Reference
 

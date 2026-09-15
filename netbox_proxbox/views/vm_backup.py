@@ -11,6 +11,11 @@ from netbox_proxbox.forms import VMBackupFilterForm, VMBackupForm
 from netbox_proxbox.models import VMBackup
 from netbox_proxbox.tables import VMBackupTable
 from netbox_proxbox.views.mixins import TableConfigOverrideMixin
+from netbox_proxbox.views.data_protection import (
+    DataProtectionCalendarMixin,
+    _backup_details,
+    _backup_label,
+)
 
 
 __all__ = (
@@ -24,7 +29,7 @@ __all__ = (
 
 
 @register_model_view(VMBackup, "list", path="", detail=False)
-class VMBackupListView(generic.ObjectListView):
+class VMBackupListView(DataProtectionCalendarMixin, generic.ObjectListView):
     """Global list of VM backups with export and bulk delete actions."""
 
     queryset = VMBackup.objects.all()
@@ -33,6 +38,16 @@ class VMBackupListView(generic.ObjectListView):
     filterset_form = VMBackupFilterForm
     template_name = "netbox_proxbox/vmbackup_list.html"
     actions = (BulkExport, BulkDelete)
+    calendar_kind = "backup"
+    calendar_timestamp_field = "creation_time"
+    calendar_value_fields = (
+        "virtual_machine__name",
+        "virtual_machine__device__name",
+        "volume_id",
+    )
+    calendar_label_builder = staticmethod(_backup_label)
+    calendar_detail_builder = staticmethod(_backup_details)
+    calendar_url_name = "plugins:netbox_proxbox:vmbackup"
 
 
 @register_model_view(VMBackup)

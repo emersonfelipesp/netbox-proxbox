@@ -273,7 +273,7 @@ through the actual route and assert exact enqueue or fail-closed behavior.
   no backend → `503`, backend without the route (old proxbox-api) → `503`,
   unreachable/upstream error → `502`. The operator still confirms the pin before
   Save — no silent auto-trust.
-- Resource views use `get_proxbox_tagged_object_ids()` from `netbox_proxbox/utils.py` to look up objects tagged `proxbox` without repeating the `TaggedItem` query pattern.
+- Resource views use `get_proxbox_tagged_object_ids()` from `netbox_proxbox/utils/__init__.py` to look up objects tagged `proxbox` without repeating the `TaggedItem` query pattern.
 - `DashboardAPIView` makes live HTTP calls to the proxbox-api backend to fetch current cluster/VM statistics; it returns partial data (with error context) when the backend is unreachable rather than failing the entire request.
 - Contract tests for this API layer live in `tests/test_api_source_contracts.py`.
 

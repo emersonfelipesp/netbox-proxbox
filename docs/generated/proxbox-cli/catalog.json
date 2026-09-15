@@ -1,12 +1,12 @@
 {
   "meta": {
-    "generated_at": "2026-04-01T19:39:49.416217+00:00",
-    "python": "3.13.3",
-    "platform": "Linux-6.8.12-4-pve-x86_64-with-glibc2.41"
+    "generated_at": "2026-09-14T17:13:11.556323+00:00",
+    "python": "3.14.3",
+    "platform": "Linux-7.0.6-2-pve-x86_64-with-glibc2.41"
   },
   "generated_by": "proxbox_cli.docgen",
-  "command_count": 63,
-  "group_count": 14,
+  "command_count": 64,
+  "group_count": 15,
   "commands": [
     {
       "path": [],
@@ -583,6 +583,25 @@
       "kind": "command",
       "summary": "Get VM config for a specific VM.",
       "example": "pxb proxmox vm-config <NODE> <VM-TYPE> <VMID>"
+    },
+    {
+      "path": [
+        "sync"
+      ],
+      "command": "pxb sync",
+      "kind": "group",
+      "summary": "Run Proxbox sync jobs from the CLI.",
+      "example": "pxb sync --help"
+    },
+    {
+      "path": [
+        "sync",
+        "run"
+      ],
+      "command": "pxb sync run",
+      "kind": "command",
+      "summary": "Enqueue a full Proxmox\u2192NetBox sync via the proxbox_sync management command.",
+      "example": "pxb sync run"
     },
     {
       "path": [

@@ -28,10 +28,19 @@ def test_capacity_bound_gitea_jobs_are_serialized_without_cache() -> None:
     quality = jobs["quality"]
     docs = jobs["docs-and-package"]
 
+    # A repository-wide group is not a queue on Gitea 1.26: at most one run
+    # per group may be pending, and a new pending run replaces the older
+    # pending one (in the 2026-09-14 incident, with the older run stuck in an
+    # inconsistent queued state, it was the arriving runs that ended up
+    # cancelled). Either way a group shared across refs silently removed the
+    # pull-request gate from every other open pull request. The group must
+    # therefore be scoped to the ref, and in-progress protected-branch runs
+    # must never be cancelled by feature churn.
     assert workflow["concurrency"] == {
-        "group": "netbox-proxbox-ci",
+        "group": "netbox-proxbox-ci-${{ github.ref }}",
         "cancel-in-progress": False,
     }
+    assert "${{ github.ref }}" in workflow["concurrency"]["group"]
     assert docs["needs"] == "quality"
     assert quality["env"]["UV_NO_CACHE"] == "1"
     assert docs["env"]["UV_NO_CACHE"] == "1"

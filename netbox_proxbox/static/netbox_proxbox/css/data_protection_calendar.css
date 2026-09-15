@@ -1,0 +1,125 @@
+.data-protection-calendar-grid {
+  table-layout: fixed;
+  min-width: 70rem;
+}
+
+.data-protection-calendar .card-header h2 {
+  text-wrap: balance;
+}
+
+.data-protection-calendar .card-header .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 2.5rem;
+  min-height: 2.5rem;
+}
+
+.data-protection-calendar-grid th {
+  width: 14.285%;
+  text-align: center;
+  font-size: 0.75rem;
+  color: var(--tblr-secondary-color);
+}
+
+.data-protection-calendar-grid .calendar-day {
+  height: 8.5rem;
+  padding: 0.45rem;
+  vertical-align: top;
+  background: var(--tblr-bg-surface);
+}
+
+.data-protection-calendar-grid .calendar-day-outside {
+  background: var(--tblr-bg-surface-secondary);
+  color: var(--tblr-secondary-color);
+}
+
+.data-protection-calendar-grid .calendar-day-today {
+  box-shadow: inset 0 0 0 2px var(--tblr-primary);
+}
+
+.calendar-day-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 1.7rem;
+  min-height: 1.7rem;
+  margin-bottom: 0.25rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+.calendar-day-today .calendar-day-number {
+  border-radius: 999px;
+  background: var(--tblr-primary);
+  color: var(--tblr-white);
+}
+
+.calendar-day-events,
+.calendar-overflow {
+  display: grid;
+  gap: 0.2rem;
+}
+
+.calendar-event {
+  display: flex;
+  gap: 0.3rem;
+  max-width: 100%;
+  text-align: left;
+  line-height: 1.35;
+}
+
+.calendar-event:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+.calendar-event-time {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.calendar-event-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-event-approximate {
+  overflow: hidden;
+  font-size: 0.65rem;
+  text-overflow: ellipsis;
+}
+
+.calendar-overflow summary {
+  cursor: pointer;
+  color: var(--tblr-link-color);
+  font-size: 0.75rem;
+  line-height: 2rem;
+}
+
+.calendar-overflow-hidden {
+  display: block;
+  padding: 0.25rem 0;
+  font-size: 0.7rem;
+  line-height: 1.35;
+  text-wrap: pretty;
+}
+
+.calendar-legend {
+  font-size: 0.75rem;
+}
+
+.calendar-schedule-time-note {
+  text-wrap: pretty;
+}
+
+@media (max-width: 767.98px) {
+  .data-protection-calendar-grid {
+    min-width: 56rem;
+  }
+
+  .data-protection-calendar-grid .calendar-day {
+    height: 7rem;
+  }
+}

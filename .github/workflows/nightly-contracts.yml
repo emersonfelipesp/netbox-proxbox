@@ -27,7 +27,7 @@ jobs:
         run: ty check proxbox_cli
 
       - name: Run contract-sensitive mocked tests
-        run: pytest -q tests/test_keepalive_status.py tests/test_sync.py tests/test_cards.py
+        run: pytest -p no:django -q tests/test_keepalive_status.py tests/test_sync.py tests/test_cards.py
 
       - name: Run REST/SSE wire contract mirrors
-        run: pytest -q tests/test_sse_schema_mirror.py tests/test_overwrite_flags_contract.py
+        run: pytest -p no:django -q tests/test_sse_schema_mirror.py tests/test_overwrite_flags_contract.py

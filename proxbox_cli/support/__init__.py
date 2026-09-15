@@ -10,6 +10,7 @@ from proxbox_cli.support.output import (
     emit_cli_error,
     load_json_payload,
     print_response,
+    print_text_response,
     resolve_output_format,
 )
 from proxbox_cli.support.tables import (
@@ -29,6 +30,7 @@ __all__ = [
     "emit_cli_error",
     "load_json_payload",
     "print_response",
+    "print_text_response",
     "render_detail_table",
     "render_list_table",
     "render_table",

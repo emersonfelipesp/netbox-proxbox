@@ -96,6 +96,11 @@ settings_item = PluginMenuItem(
     link_text="Settings",
 )
 
+data_protection_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:data_protection",
+    link_text="Data Protection",
+)
+
 backups_item = PluginMenuItem(
     link="plugins:netbox_proxbox:vmbackup_list",
     link_text="Backups",
@@ -451,6 +456,7 @@ menu = PluginMenu(
         (
             "Data Protection",
             (
+                data_protection_item,
                 backups_item,
                 backup_routines_item,
                 snapshots_item,

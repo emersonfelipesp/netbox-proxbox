@@ -22,6 +22,13 @@ from netbox_proxbox.forms import (
 from netbox_proxbox.models import Replication
 from netbox_proxbox.tables import ReplicationTable
 from netbox_proxbox.views.mixins import TableConfigOverrideMixin
+from netbox_proxbox.views.data_protection import (
+    REPLICATION_ORDER_FIELDS,
+    DataProtectionCalendarMixin,
+    _replication_details,
+    _replication_label,
+    _replication_muted,
+)
 
 __all__ = (
     "ReplicationView",
@@ -36,7 +43,7 @@ __all__ = (
 
 
 @register_model_view(Replication, "list", path="", detail=False)
-class ReplicationListView(generic.ObjectListView):
+class ReplicationListView(DataProtectionCalendarMixin, generic.ObjectListView):
     """Global list of replications with export and bulk delete actions."""
 
     queryset = Replication.objects.select_related(
@@ -47,6 +54,21 @@ class ReplicationListView(generic.ObjectListView):
     filterset_form = ReplicationFilterForm
     template_name = "netbox_proxbox/replication_list.html"
     actions = (AddObject, BulkImport, BulkExport, BulkEdit, BulkDelete)
+    calendar_kind = "replication"
+    calendar_schedule_field = "schedule"
+    calendar_order_fields = REPLICATION_ORDER_FIELDS
+    calendar_value_fields = (
+        "virtual_machine__name",
+        "replication_id",
+        "target",
+        "proxmox_node__name",
+        "disable",
+        "status",
+    )
+    calendar_label_builder = staticmethod(_replication_label)
+    calendar_muted_builder = staticmethod(_replication_muted)
+    calendar_detail_builder = staticmethod(_replication_details)
+    calendar_url_name = "plugins:netbox_proxbox:replication"
 
 
 @register_model_view(Replication)

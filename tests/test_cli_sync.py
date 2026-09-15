@@ -22,6 +22,28 @@ from proxbox_cli._locate_manage import (  # noqa: E402
     ManagePyNotFoundError,
 )
 from proxbox_cli.commands import sync as sync_module  # noqa: E402
+from proxbox_cli.config import (  # noqa: E402
+    ALLOW_INSECURE_TRANSPORT_ENV_VAR,
+    API_KEY_ENV_VAR,
+    BASE_URL_ENV_VAR,
+    MAX_RESPONSE_BYTES_ENV_VAR,
+    TIMEOUT_ENV_VAR,
+)
+
+HTTP_ENV_NAMES = (
+    ALLOW_INSECURE_TRANSPORT_ENV_VAR,
+    API_KEY_ENV_VAR,
+    BASE_URL_ENV_VAR,
+    MAX_RESPONSE_BYTES_ENV_VAR,
+    TIMEOUT_ENV_VAR,
+)
+INVALID_HTTP_CONFIG: dict[str, object] = {
+    "base_url": "ftp://invalid.example/private",
+    "api_key": "file-secret",
+    "timeout": 999,
+    "unknown_http_option": True,
+    "netbox_manage_py": "/configured/manage.py",
+}
 
 
 class FakePopen:
@@ -78,9 +100,10 @@ def _popen_factory(output: str = "", returncode: int = 0):
 
 
 @pytest.fixture(autouse=True)
-def _stub_locate(monkeypatch: pytest.MonkeyPatch) -> None:
+def _stub_locate(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     """Every test resolves manage.py to a deterministic stub location."""
     FakePopen.reset()
+    monkeypatch.setenv("XDG_CONFIG_HOME", str(tmp_path))
     fake_manage = Path("/opt/netbox/manage.py")
     fake_python = Path("/opt/netbox/venv/bin/python")
     location = ManageLocation(manage_py=fake_manage, python=fake_python)
@@ -94,6 +117,12 @@ def runner() -> CliRunner:
 
 def _invoke(runner: CliRunner, args: list[str]):
     return runner.invoke(proxbox_cli.app, ["sync", "run", *args])
+
+
+def _write_cli_config(tmp_path: Path, data: dict[str, object]) -> None:
+    config_dir = tmp_path / "proxbox-cli"
+    config_dir.mkdir()
+    (config_dir / "config.json").write_text(json.dumps(data))
 
 
 def test_run_no_flags_argv(runner: CliRunner, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -268,3 +297,36 @@ def test_popen_uses_merged_stream(
     assert kwargs["bufsize"] == 1
     assert kwargs["text"] is True
     assert kwargs["env"]["PYTHONUNBUFFERED"] == "1"
+
+
+def test_local_run_ignores_invalid_http_configuration(
+    runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+) -> None:
+    _write_cli_config(tmp_path, INVALID_HTTP_CONFIG)
+    captured: dict[str, Any] = {}
+
+    def capturing_locate(**kwargs: Any) -> ManageLocation:
+        captured.update(kwargs)
+        return ManageLocation(Path("/opt/netbox/manage.py"), Path(sys.executable))
+
+    monkeypatch.setattr(sync_module, "locate_manage_py", capturing_locate)
+    monkeypatch.setattr(sync_module.subprocess, "Popen", _popen_factory())
+    assert _invoke(runner, []).exit_code == 0
+    assert captured["config_manage_py"] == "/configured/manage.py"
+
+
+def test_local_run_strips_http_environment_from_child(
+    runner: CliRunner,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    for name in HTTP_ENV_NAMES:
+        monkeypatch.setenv(name, f"secret-{name}")
+    monkeypatch.setenv("PRESERVED_FOR_NETBOX", "preserved")
+    monkeypatch.setattr(sync_module.subprocess, "Popen", _popen_factory())
+
+    assert _invoke(runner, []).exit_code == 0
+    child_environment = FakePopen.instances[0].kwargs["env"]
+    assert all(name not in child_environment for name in HTTP_ENV_NAMES)
+    assert child_environment["PRESERVED_FOR_NETBOX"] == "preserved"

@@ -28,16 +28,48 @@ pxb init
 
 You will be prompted for:
 
-- **proxbox-api base URL** — e.g. `http://localhost:8000` (or `http://<host>:8800` when using Docker)
-- **Request timeout** — request timeout in seconds (default: `30`)
+- **proxbox-api base URL** — e.g. `http://localhost:8000` for a local backend or `https://proxbox-api.example.com` for a remote backend
+- **Request timeout** — a finite request timeout from more than `0` through `600` seconds (default: `30`)
 
-The CLI stores its configuration in `~/.config/proxbox-cli/config.json` (or `$XDG_CONFIG_HOME/proxbox-cli/config.json` when set).
+The CLI stores its configuration in `~/.config/proxbox-cli/config.json` (or
+`$XDG_CONFIG_HOME/proxbox-cli/config.json` when set). `pxb init` reads this
+file without applying environment overrides and never copies
+`PROXBOX_API_KEY` into the file. It preserves a stored API key when the
+normalized backend origin remains the same. Changing the origin removes that
+key unless the operator explicitly runs `pxb init --keep-api-key`.
+
+Protected `proxbox-api` routes require an API key. Supply it through
+`PROXBOX_API_KEY` or the config file's `api_key` field. The CLI deliberately
+has no API-key command-line flag, so the secret does not enter command history
+or process arguments. `pxb config` reports only whether a key is configured.
+When a key is configured, remote backends require `https://`. Cleartext HTTP
+remains available for explicit loopback hosts. For an exceptional trusted
+network deployment, `PROXBOX_CLI_ALLOW_INSECURE_TRANSPORT=1` permits a remote
+HTTP origin and prints a warning to standard error because the key crosses the
+network without transport encryption.
+
+```bash
+export PROXBOX_API_KEY='<proxbox-api-key>'
+pxb version
+```
+
+The config file also accepts `timeout` and `max_response_bytes`. Environment
+variables take precedence over file values, which take precedence over the
+built-in defaults. The backend origin and API key are treated as one credential
+bundle: when `PROXBOX_URL` selects a different origin from the file's
+`base_url`, the file's `api_key` is not sent. Supply `PROXBOX_API_KEY` for the
+selected origin. Equivalent normalized origins, including an explicit default
+port, may continue using the file key.
 
 ### Environment variables
 
 | Variable | Description | Default |
 |----------|-------------|---------|
-| `PROXBOX_URL` | Backend base URL (overrides config file) | `http://localhost:8000` |
+| `PROXBOX_URL` | Backend base URL; a different origin does not inherit the config-file key | `http://localhost:8000` |
+| `PROXBOX_API_KEY` | API key sent as `X-Proxbox-API-Key` (overrides config file) | unset |
+| `PROXBOX_CLI_TIMEOUT` | Finite total HTTP timeout in seconds; must be `> 0` and `<= 600` | `30` |
+| `PROXBOX_CLI_MAX_RESPONSE_BYTES` | Maximum decoded response body accepted while streaming; must be positive | `8388608` (8 MiB) |
+| `PROXBOX_CLI_ALLOW_INSECURE_TRANSPORT` | Set to exactly `1` to permit a configured API key over non-loopback HTTP; emits a warning to standard error | unset |
 
 ### Show current configuration
 
@@ -57,7 +89,7 @@ pxb test
 
 | Command | Description |
 |---------|-------------|
-| `pxb init` | Interactively configure backend URL and timeout |
+| `pxb init` | Interactively configure the backend URL and timeout; use `--keep-api-key` to retain a stored key across an intentional origin change |
 | `pxb config` | Display current configuration |
 | `pxb test` | Test connectivity to the backend |
 | `pxb version` | Show backend version |
@@ -239,6 +271,29 @@ pxb cache --json
 
 These flags are mutually exclusive — using both produces an error.
 
+## Exit codes and HTTP limits
+
+Backend HTTP commands use these stable process exit codes:
+
+| Exit code | Meaning |
+|-----------|---------|
+| `0` | The command completed successfully. |
+| `1` | The backend returned a `4xx`/`5xx` response, or an HTTP transport-policy failure occurred. The backend detail is rendered first; `--json` retains the JSON body. |
+| `2` | CLI configuration is invalid or a protected backend requires the missing `PROXBOX_API_KEY`. Click also uses `2` for command-line usage errors. |
+| `130` | The command was interrupted from the keyboard. |
+
+The client never follows backend redirects. A `3xx` response fails with exit
+code `1`, and the error names only the configured backend host, not the
+untrusted redirect target. Response bodies are streamed into the configured
+`max_response_bytes` limit and rejected as soon as they exceed it.
+Before rendering any response body or HTTP exception in human, JSON, or YAML
+form, the CLI replaces every exact occurrence of the configured API key with
+`[REDACTED]`. This applies to standard output and standard error.
+
+`pxb sync run` is the separate local management-command wrapper. It continues
+to return the wrapped `proxbox_sync` process status as documented by
+`pxb sync run --help`.
+
 ## Environment
 
 The CLI requires network access to the configured `proxbox-api` host and port. It also needs the remote NetBox instance to be reachable from the `proxbox-api` service (the backend proxies to NetBox during sync operations).
@@ -246,7 +301,8 @@ The CLI requires network access to the configured `proxbox-api` host and port. I
 Default backend URL is `http://localhost:8000`. Set `PROXBOX_URL` to override:
 
 ```bash
-export PROXBOX_URL=http://proxbox-api:8000
+export PROXBOX_URL=https://proxbox-api.example.com
+export PROXBOX_API_KEY='<proxbox-api-key>'
 pxb test
 ```
 
@@ -255,7 +311,7 @@ pxb test
 ### Connection refused
 
 ```
-Error: Connection failed (HTTP None)
+Connection failed (HTTP 503)
 ```
 
 - Verify `proxbox-api` is running: `pxb test`
@@ -264,7 +320,12 @@ Error: Connection failed (HTTP None)
 
 ### HTTP 401 / 403 on sync commands
 
-Sync commands require valid NetBox and Proxmox endpoint records in the backend database. Ensure endpoints are created:
+If the CLI reports that `proxbox-api` requires authentication, set
+`PROXBOX_API_KEY` or add `api_key` to the protected config file. An invalid key
+remains an ordinary backend `401` and exits `1` after rendering the backend
+detail.
+
+Sync commands also require valid NetBox and Proxmox endpoint records in the backend database. Ensure endpoints are created:
 
 ```bash
 pxb netbox endpoint list
@@ -281,7 +342,7 @@ These are stubs in the backend. Use the NetBox UI or REST API to manage cluster 
 
 ```bash
 pxb init
-# set timeout to 120 or higher
+# set timeout to 120 or higher, up to 600
 ```
 
 The backend also has its own streaming endpoints (`/full-update/stream`, etc.) which the CLI calls as regular `GET` requests. For very large environments, consider running sync through the NetBox plugin UI instead, which uses background jobs with longer timeouts.
