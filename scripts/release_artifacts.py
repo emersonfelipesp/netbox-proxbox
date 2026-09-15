@@ -872,16 +872,13 @@ def publish_gitea_manifest(
         method="PUT",
         payload=raw,
     )
-    link_url = (
-        "https://git.nmulti.cloud/api/v1/packages/"
-        f"{_quoted(owner)}/generic/{_quoted(package)}/-/link/{_quoted(repository)}"
-    )
-    _request(
-        link_url,
+    link_gitea_package(
+        registry=CANONICAL_GITEA_REGISTRY,
+        owner=owner,
+        repository=repository,
+        package_type="generic",
+        package=package,
         token=token,
-        maximum=MAX_RESPONSE_BYTES,
-        method="POST",
-        payload=b"",
     )
     verified = fetch_gitea_manifest(
         owner=owner,
@@ -1213,16 +1210,13 @@ def publish_gitea_attestation(
         method="PUT",
         payload=_manifest_bytes(evidence),
     )
-    link_url = (
-        "https://git.nmulti.cloud/api/v1/packages/"
-        f"{_quoted(owner)}/generic/{_quoted(package)}/-/link/{_quoted(repository)}"
-    )
-    _request(
-        link_url,
+    link_gitea_package(
+        registry=CANONICAL_GITEA_REGISTRY,
+        owner=owner,
+        repository=repository,
+        package_type="generic",
+        package=package,
         token=token,
-        maximum=MAX_RESPONSE_BYTES,
-        method="POST",
-        payload=b"",
     )
     verified = fetch_gitea_attestation(
         owner=owner, repository=repository, manifest=manifest, token=token

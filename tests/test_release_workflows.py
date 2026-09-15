@@ -2636,6 +2636,108 @@ def test_manifest_publication_tolerates_only_a_byte_identical_republish(
         )
 
 
+def test_attestation_publication_verifies_after_an_idempotent_package_link(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A registry conflict on an already-created link must not make deploy red."""
+    release_artifacts = _load_release_artifacts()
+    manifest = {"package": "netbox-proxbox", "version": "0.0.27rc3"}
+    evidence = {"state": "completed"}
+    calls: list[tuple[str, object]] = []
+
+    monkeypatch.setattr(
+        release_artifacts,
+        "validate_release_attestation",
+        lambda **kwargs: calls.append(("validate", kwargs)),
+    )
+    monkeypatch.setattr(
+        release_artifacts,
+        "_request",
+        lambda *_args, **kwargs: calls.append(("upload", kwargs)) or b"",
+    )
+    monkeypatch.setattr(
+        release_artifacts,
+        "link_gitea_package",
+        lambda **kwargs: calls.append(("link", kwargs)),
+    )
+    monkeypatch.setattr(
+        release_artifacts,
+        "fetch_gitea_attestation",
+        lambda **kwargs: calls.append(("fetch", kwargs)) or evidence,
+    )
+
+    assert (
+        release_artifacts.publish_gitea_attestation(
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            manifest=manifest,
+            evidence=evidence,
+            token="t",
+        )
+        == evidence
+    )
+    assert [name for name, _kwargs in calls] == [
+        "validate",
+        "upload",
+        "link",
+        "fetch",
+    ]
+    link_kwargs = calls[2][1]
+    assert isinstance(link_kwargs, dict)
+    assert link_kwargs == {
+        "registry": _TEST_REGISTRY,
+        "owner": "emersonfelipesp",
+        "repository": "netbox-proxbox",
+        "package_type": "generic",
+        "package": f"{manifest['package']}-{''.join(('n', 'm', 's'))}-attestation",
+        "token": "t",
+    }
+
+
+def test_manifest_publication_uses_the_idempotent_package_link(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A fresh manifest must verify linkage after Gitea's conflict response."""
+    release_artifacts, manifest = _artifact_manifest(tmp_path)
+    fetch_results: list[object] = [
+        release_artifacts.RegistryNotFound("absent"),
+        manifest,
+    ]
+    calls: list[str] = []
+
+    def fake_fetch(**_kwargs: object) -> dict[str, object]:
+        result = fetch_results.pop(0)
+        if isinstance(result, Exception):
+            raise result
+        assert isinstance(result, dict)
+        return result
+
+    monkeypatch.setattr(release_artifacts, "fetch_gitea_manifest", fake_fetch)
+    monkeypatch.setattr(
+        release_artifacts,
+        "_request",
+        lambda *_args, **_kwargs: calls.append("upload") or b"",
+    )
+    monkeypatch.setattr(
+        release_artifacts,
+        "link_gitea_package",
+        lambda **_kwargs: calls.append("link"),
+    )
+
+    assert (
+        release_artifacts.publish_gitea_manifest(
+            registry=_TEST_REGISTRY,
+            owner="emersonfelipesp",
+            repository="netbox-proxbox",
+            manifest=manifest,
+            token="t",
+        )
+        == manifest
+    )
+    assert calls == ["upload", "link"]
+    assert fetch_results == []
+
+
 def test_publish_workflow_verifies_the_artifact_set_before_the_manifest() -> None:
     """The registry gate must be the manifest-based one, not the old count."""
     workflow = _read(GITEA_PUBLISH_WORKFLOW)
