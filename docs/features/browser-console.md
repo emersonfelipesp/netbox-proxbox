@@ -146,10 +146,15 @@ No external console URL setting is required or accepted.
 
 ## Failure behavior
 
-| Symptom | Check |
+Console identity errors include a stable diagnostic code, a plain-language cause, and the exact operator action. The page offers **Repair all enabled endpoints** when the failure can be repaired by a full sync and the current user has the core Job `add` permission used by normal Proxbox sync enqueue actions. The button is a CSRF-protected POST to the existing guarded repair workflow; it reconciles compatibility fields, re-pushes endpoint configuration, and queues one full sync across every enabled Proxmox endpoint. That reconciliation can update or remove stale synchronized NetBox inventory outside the displayed VM, so the page states the scope beside the button. It does not grant permissions, enable endpoints, expose secrets, guess a missing endpoint, or bypass an active repair job.
+
+| Symptom or code | Required action |
 |---|---|
-| Console tab is absent | Confirm the user has `netbox_proxbox.open_console_proxmoxendpoint`. |
-| Tab shows incomplete sync identity | Run a full Proxbox sync and confirm the VM sidecar links one enabled endpoint and node. |
+| Console tab is absent | A NetBox administrator must grant `netbox_proxbox.open_console_proxmoxendpoint` for the required endpoint and ensure the user can view the VM. Users cannot grant themselves console access. |
+| `SYNC_STATE_MISSING` | Review the disclosed estate-wide scope, then select **Repair all enabled endpoints** when offered. Otherwise ask an administrator with Job `add` permission to run **Proxbox → Repair / Rebuild Proxbox sync-state**. Return after the job completes. |
+| `SYNC_ENDPOINT_LINK_MISSING` | The proxbox-api endpoint can be healthy while the VM's typed NetBox endpoint or node relation is missing. Review the disclosed estate-wide scope, then select **Repair all enabled endpoints** when offered, or ask an administrator with Job `add` permission to run the same recovery action. Return after the job completes. |
+| `SYNC_ENDPOINT_DISABLED` | A Proxbox administrator must enable the linked NetBox `ProxmoxEndpoint`, run a full sync, and retry. The console does not enable endpoints inline because enablement changes the endpoint's estate-wide synchronization posture. |
+| Tab shows another incomplete or drifted identity code | Run a full Proxbox sync and confirm the VM sidecar links one enabled endpoint and node. Do not repair ambiguous identity by guessing an endpoint. |
 | Session reports no trusted backend | Confirm the endpoint has been synchronized to exactly one enabled FastAPI backend and its stored target still matches. |
 | Session requires HTTPS | Serve NetBox over HTTPS and configure a public WSS proxbox-api endpoint. |
 | WebSocket closes as invalid or expired | Create a new session; tokens are short-lived, origin-bound, and one-use. |

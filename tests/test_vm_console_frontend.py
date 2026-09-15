@@ -159,6 +159,19 @@ def test_template_limits_protocol_selector_by_guest_type() -> None:
     assert "{% if not console_ready %}disabled{% endif %}" in source
 
 
+def test_unavailable_console_explains_and_offers_authorized_repair() -> None:
+    source = _source(TEMPLATE_PATH)
+
+    assert "{{ remediation }}" in source
+    assert "{{ error_code }}" in source
+    assert "{% if can_quick_fix %}" in source
+    assert 'action="{{ quick_fix_url }}"' in source
+    assert "Repair all enabled endpoints" in source
+    assert "every enabled Proxmox endpoint" in source
+    assert "remove stale synchronized NetBox inventory outside this VM" in source
+    assert "{% csrf_token %}" in source
+
+
 def test_session_request_and_response_are_minimal_and_hide_upstream_details() -> None:
     source = _source(JS_PATH)
 
@@ -168,6 +181,8 @@ def test_session_request_and_response_are_minimal_and_hide_upstream_details() ->
     assert '"X-CSRFToken": this.csrfToken' in source
     assert '"X-Requested-With": "XMLHttpRequest"' in source
     assert "JSON.stringify({ console_type: consoleType })" in source
+    assert "payload?.remediation" in source
+    assert "payload.remediation.length <= 600" in source
     assert (
         '"websocket_url",\n  "stream_token",\n  "expires_at",\n  "console_type",'
         in source

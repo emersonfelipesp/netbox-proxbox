@@ -67,7 +67,7 @@ function failureForStatus(status) {
     401: "You are not authorized to open this console.",
     403: "You are not authorized to open this console.",
     404: "Console access is unavailable for this guest.",
-    409: "That console session was already used. Request a new session.",
+    409: "The console session conflicts with the current configuration. Review the diagnostic details or ask an administrator to verify the console backend mapping.",
     410: "The console session expired. Request a new session.",
   };
   if (fixedFailures[status]) return { retryable: false, message: fixedFailures[status] };
@@ -81,13 +81,24 @@ function failureForStatus(status) {
   return { retryable: false, message: "The console session could not be created." };
 }
 
-function sessionError(status, payload) {
+export function sessionError(status, payload) {
   const detail = [payload?.detail, payload?.error]
     .filter((value) => typeof value === "string")
     .join(" ")
     .toLowerCase();
   const detailMessage = detailFailure(detail);
   if (detailMessage) return { retryable: false, message: detailMessage };
+  if (
+    typeof payload?.error === "string" &&
+    typeof payload?.remediation === "string" &&
+    payload.error.length <= 600 &&
+    payload.remediation.length <= 600
+  ) {
+    return {
+      retryable: false,
+      message: `${payload.error} ${payload.remediation}`,
+    };
+  }
   return failureForStatus(status);
 }
 

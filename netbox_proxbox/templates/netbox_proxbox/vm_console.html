@@ -31,7 +31,24 @@
   <div class="card-body d-flex flex-column gap-3">
     {% if not console_ready %}
       <div class="alert alert-warning mb-0" role="alert">
-        {% if detail %}{{ detail }}{% else %}{% trans "Console access is unavailable for this guest." %}{% endif %}
+        <div class="fw-semibold">
+          {% if detail %}{{ detail }}{% else %}{% trans "Console access is unavailable for this guest." %}{% endif %}
+        </div>
+        {% if remediation %}<p class="mb-0 mt-2">{{ remediation }}</p>{% endif %}
+        {% if error_code %}<p class="text-secondary small mb-0 mt-2">{% trans "Diagnostic code" %}: <code>{{ error_code }}</code></p>{% endif %}
+        {% if can_quick_fix %}
+          <p class="mb-0 mt-2">
+            {% trans "This recovery runs a full sync across every enabled Proxmox endpoint. It can update or remove stale synchronized NetBox inventory outside this VM." %}
+          </p>
+          <form method="post" action="{{ quick_fix_url }}" class="mt-3">
+            {% csrf_token %}
+            <input type="hidden" name="next" value="repair">
+            <button type="submit" class="btn btn-warning btn-sm">
+              <i class="mdi mdi-wrench" aria-hidden="true"></i>
+              {% trans "Repair all enabled endpoints" %}
+            </button>
+          </form>
+        {% endif %}
       </div>
     {% endif %}
 

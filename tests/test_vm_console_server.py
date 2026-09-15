@@ -107,33 +107,92 @@ def test_console_identity_requires_the_complete_typed_sync_tuple(monkeypatch) ->
 
 
 @pytest.mark.parametrize(
-    ("overrides", "message"),
+    ("overrides", "message", "code"),
     [
-        ({"virtual_machine_id": 12}, "inconsistent"),
-        ({"proxmox_node": None}, "node is unavailable"),
-        ({"proxmox_node_name": "foreign"}, "node identity has drifted"),
+        ({"virtual_machine_id": 12}, "does not belong", "SYNC_IDENTITY_INCONSISTENT"),
+        ({"proxmox_node": None}, "node link is missing", "SYNC_NODE_LINK_INVALID"),
+        (
+            {"proxmox_node_name": "foreign"},
+            "node name no longer matches",
+            "SYNC_NODE_IDENTITY_DRIFTED",
+        ),
         (
             {"proxmox_cluster": SimpleNamespace(endpoint_id=99)},
-            "cluster identity has drifted",
+            "cluster belongs to another endpoint",
+            "SYNC_CLUSTER_IDENTITY_DRIFTED",
         ),
-        ({"proxmox_vm_id": 0}, "guest identity is incomplete"),
-        ({"proxmox_vm_type": "template"}, "guest identity is incomplete"),
+        (
+            {"proxmox_vm_id": 0},
+            "missing a valid VMID",
+            "SYNC_GUEST_IDENTITY_INCOMPLETE",
+        ),
+        (
+            {"proxmox_vm_type": "template"},
+            "missing a valid VMID or workload type",
+            "SYNC_GUEST_IDENTITY_INCOMPLETE",
+        ),
     ],
 )
 def test_console_identity_fails_closed_on_drift(
-    monkeypatch, overrides: dict[str, object], message: str
+    monkeypatch, overrides: dict[str, object], message: str, code: str
 ) -> None:
     module, endpoint_type, _context, _sync = _load_service(monkeypatch)
 
-    with pytest.raises(module.ConsoleResolutionError, match=message):
+    with pytest.raises(module.ConsoleResolutionError, match=message) as captured:
         module.resolve_console_identity(_vm(endpoint_type(), **overrides))
+
+    assert captured.value.code == code
+    assert "Repair / Rebuild" in captured.value.remediation
 
 
 def test_console_identity_rejects_a_disabled_endpoint(monkeypatch) -> None:
     module, endpoint_type, _context, _sync = _load_service(monkeypatch)
 
-    with pytest.raises(module.ConsoleResolutionError, match="endpoint is unavailable"):
+    with pytest.raises(module.ConsoleResolutionError) as captured:
         module.resolve_console_identity(_vm(endpoint_type(enabled=False)))
+
+    assert captured.value.code == "SYNC_ENDPOINT_DISABLED"
+    assert "endpoint linked to this VM is disabled" in captured.value.detail
+    assert "enable the linked endpoint" in captured.value.remediation
+
+
+def test_console_identity_explains_a_missing_typed_endpoint_link(monkeypatch) -> None:
+    module, endpoint_type, _context, _sync = _load_service(monkeypatch)
+    vm = _vm(endpoint_type())
+    vm.proxbox_sync_state.endpoint = None
+
+    with pytest.raises(module.ConsoleResolutionError) as captured:
+        module.resolve_console_identity(vm)
+
+    assert captured.value.code == "SYNC_ENDPOINT_LINK_MISSING"
+    assert "endpoint API can still be connected" in captured.value.detail
+    assert "Repair / Rebuild" in captured.value.remediation
+
+
+def test_console_identity_explains_a_missing_sync_state(monkeypatch) -> None:
+    module, _endpoint_type, _context, _sync = _load_service(monkeypatch)
+
+    with pytest.raises(module.ConsoleResolutionError) as captured:
+        module.resolve_console_identity(SimpleNamespace(pk=11))
+
+    assert captured.value.code == "SYNC_STATE_MISSING"
+    assert "no Proxbox synchronization state" in captured.value.detail
+    assert "Repair / Rebuild" in captured.value.remediation
+
+
+def test_console_identity_does_not_claim_missing_backend_data_exists(
+    monkeypatch,
+) -> None:
+    module, endpoint_type, _context, _sync = _load_service(monkeypatch)
+    vm = _vm(endpoint_type(), proxmox_endpoint_raw_id=None)
+    vm.proxbox_sync_state.endpoint = None
+
+    with pytest.raises(module.ConsoleResolutionError) as captured:
+        module.resolve_console_identity(vm)
+
+    assert captured.value.code == "SYNC_ENDPOINT_LINK_MISSING"
+    assert "missing both" in captured.value.detail
+    assert "backend endpoint data" not in captured.value.detail
 
 
 def test_console_backend_requires_one_matching_trusted_backend(monkeypatch) -> None:
@@ -273,6 +332,27 @@ def test_console_session_authorizes_before_contacting_the_backend() -> None:
     assert "response.status_code != 201" in post
     assert "response.text" not in post
     assert "str(exc)" not in post
+
+
+def test_console_error_contract_is_actionable_and_bounded() -> None:
+    source = VIEW_PATH.read_text(encoding="utf-8")
+
+    assert 'payload["code"] = code' in source
+    assert 'payload["remediation"] = remediation' in source
+    assert "SYNC_ENDPOINT_LINK_MISSING" in source
+    assert "permission_enqueue_proxbox_sync()" in source
+    assert "repair_sync_state" in source
+
+
+def test_unclassified_console_errors_do_not_prescribe_a_false_sync_fix(
+    monkeypatch,
+) -> None:
+    module, _endpoint_type, _context, _sync = _load_service(monkeypatch)
+
+    error = module.ConsoleResolutionError("Invalid JSON payload.", status=400)
+
+    assert error.code is None
+    assert error.remediation is None
 
 
 def test_console_tab_is_registered_on_the_core_virtual_machine() -> None:

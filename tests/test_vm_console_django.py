@@ -66,6 +66,7 @@ from django.contrib.contenttypes.models import ContentType  # noqa: E402
 from django.core.exceptions import FieldDoesNotExist  # noqa: E402
 from django.test import Client  # noqa: E402
 from django.urls import reverse  # noqa: E402
+from core.models import Job  # noqa: E402
 from users.models import ObjectPermission  # noqa: E402
 from utilities.testing import create_test_virtualmachine  # noqa: E402
 
@@ -215,6 +216,104 @@ def test_console_tab_accepts_permission_for_the_synchronized_endpoint(
 
     assert response.status_code == 200
     assert b"Console" in response.content
+
+
+def test_console_tab_explains_missing_endpoint_link_and_offers_guarded_repair(
+    console_inventory,
+) -> None:
+    vm, endpoint, _node = console_inventory
+    state = vm.proxbox_sync_state
+    state.endpoint = None
+    state.proxmox_node = None
+    state.save(update_fields=("endpoint", "proxmox_node"))
+    user = get_user_model().objects.create_user(username="console-link-repair")
+    _grant(
+        user,
+        name="console-link-repair-vm-view",
+        action="view",
+        model=type(vm),
+    )
+    _grant(
+        user,
+        name="console-link-repair-console",
+        action="open_console",
+        model=type(endpoint),
+    )
+    _grant(
+        user,
+        name="console-link-repair-job-add",
+        action="add",
+        model=Job,
+    )
+    client = Client()
+    client.force_login(user)
+
+    response = client.get(_console_tab_route(vm))
+
+    assert response.status_code == 200
+    assert b"SYNC_ENDPOINT_LINK_MISSING" in response.content
+    assert b"endpoint API can still be connected" in response.content
+    assert b"Repair all enabled endpoints" in response.content
+    assert (
+        reverse("plugins:netbox_proxbox:repair_sync_state").encode() in response.content
+    )
+
+
+def test_console_tab_hides_repair_without_job_add_permission(
+    console_inventory,
+) -> None:
+    vm, endpoint, _node = console_inventory
+    state = vm.proxbox_sync_state
+    state.endpoint = None
+    state.proxmox_node = None
+    state.save(update_fields=("endpoint", "proxmox_node"))
+    user = get_user_model().objects.create_user(username="console-link-no-repair")
+    _grant(
+        user,
+        name="console-link-no-repair-vm-view",
+        action="view",
+        model=type(vm),
+    )
+    _grant(
+        user,
+        name="console-link-no-repair-console",
+        action="open_console",
+        model=type(endpoint),
+    )
+    client = Client()
+    client.force_login(user)
+
+    response = client.get(_console_tab_route(vm))
+
+    assert response.status_code == 200
+    assert b"SYNC_ENDPOINT_LINK_MISSING" in response.content
+    assert b"Repair all enabled endpoints" not in response.content
+
+
+def test_console_repair_post_rejects_missing_csrf_before_enqueue(
+    console_inventory,
+) -> None:
+    _vm, _endpoint, _node = console_inventory
+    user = get_user_model().objects.create_user(username="console-repair-no-csrf")
+    _grant(
+        user,
+        name="console-repair-no-csrf-job-add",
+        action="add",
+        model=Job,
+    )
+    client = Client(enforce_csrf_checks=True)
+    client.force_login(user)
+
+    with patch(
+        "netbox_proxbox.views.sync_state_repair.build_sync_state_repair_outcome"
+    ) as repair:
+        response = client.post(
+            reverse("plugins:netbox_proxbox:repair_sync_state"),
+            data={"next": "repair"},
+        )
+
+    assert response.status_code == 403
+    repair.assert_not_called()
 
 
 @pytest.mark.parametrize(

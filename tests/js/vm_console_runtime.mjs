@@ -3,8 +3,41 @@ import { pathToFileURL } from "node:url";
 
 const modulePath = process.argv[2];
 assert.ok(modulePath, "vm_console.js path is required");
-const { createConsoleController, decodeTerminalFrame, classifyWebSocketClose } =
+const {
+  createConsoleController,
+  decodeTerminalFrame,
+  classifyWebSocketClose,
+  sessionError,
+} =
   await import(pathToFileURL(modulePath).href);
+
+assert.deepEqual(
+  sessionError(409, {
+    error: "The endpoint link is missing.",
+    remediation: "Run Repair / Rebuild.",
+  }),
+  {
+    retryable: false,
+    message: "The endpoint link is missing. Run Repair / Rebuild.",
+  },
+);
+assert.equal(sessionError(409, { error: "x", remediation: "y".repeat(601) }).message,
+  "The console session conflicts with the current configuration. Review the diagnostic details or ask an administrator to verify the console backend mapping.");
+assert.equal(sessionError(409, { error: {}, remediation: [] }).message,
+  "The console session conflicts with the current configuration. Review the diagnostic details or ask an administrator to verify the console backend mapping.");
+assert.equal(
+  sessionError(409, {
+    error: "Multiple proxbox-api endpoints match this synchronized guest; refusing to guess.",
+  }).message,
+  "The console session conflicts with the current configuration. Review the diagnostic details or ask an administrator to verify the console backend mapping.",
+);
+assert.equal(
+  sessionError(409, {
+    error: "<img src=x onerror=alert(1)>",
+    remediation: "<script>alert(1)</script>",
+  }).message,
+  "<img src=x onerror=alert(1)> <script>alert(1)</script>",
+);
 
 const ELEMENT_IDS = [
   "proxbox-console-status",

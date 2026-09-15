@@ -21,7 +21,10 @@ from netbox_proxbox.services.vm_console import (
     resolve_console_backend,
     resolve_console_identity,
 )
-from netbox_proxbox.views.proxbox_access import permission_open_console
+from netbox_proxbox.views.proxbox_access import (
+    permission_enqueue_proxbox_sync,
+    permission_open_console,
+)
 
 _SESSION_PATH = "proxmox/console/browser-sessions"
 _BACKEND_SESSION_FIELDS = {
@@ -30,10 +33,30 @@ _BACKEND_SESSION_FIELDS = {
     "expires_at",
     "console_type",
 }
+_SYNC_REPAIRABLE_CODES = {
+    "SYNC_STATE_MISSING",
+    "SYNC_ENDPOINT_LINK_MISSING",
+    "SYNC_IDENTITY_INCONSISTENT",
+    "SYNC_NODE_LINK_INVALID",
+    "SYNC_NODE_IDENTITY_DRIFTED",
+    "SYNC_CLUSTER_IDENTITY_DRIFTED",
+    "SYNC_GUEST_IDENTITY_INCOMPLETE",
+}
 
 
-def _json_error(detail: str, status: int) -> JsonResponse:
-    return JsonResponse({"error": detail}, status=status)
+def _json_error(
+    detail: str,
+    status: int,
+    *,
+    code: str | None = None,
+    remediation: str | None = None,
+) -> JsonResponse:
+    payload = {"error": detail}
+    if code:
+        payload["code"] = code
+    if remediation:
+        payload["remediation"] = remediation
+    return JsonResponse(payload, status=status)
 
 
 def _console_type(body: object, vm_type: str) -> str:
@@ -121,7 +144,21 @@ class ProxboxVMConsoleTabView(generic.ObjectView):
         try:
             identity = resolve_console_identity(instance)
         except ConsoleResolutionError as exc:
-            return {"console_ready": False, "detail": exc.detail, "vm_type": ""}
+            can_repair = bool(
+                exc.code in _SYNC_REPAIRABLE_CODES
+                and request.user.has_perm(permission_enqueue_proxbox_sync())
+            )
+            return {
+                "console_ready": False,
+                "detail": exc.detail,
+                "error_code": exc.code,
+                "remediation": exc.remediation,
+                "can_quick_fix": can_repair,
+                "quick_fix_url": reverse("plugins:netbox_proxbox:repair_sync_state")
+                if can_repair
+                else "",
+                "vm_type": "",
+            }
         if not _endpoint_console_permitted(request.user, identity.endpoint):
             raise PermissionDenied
         return {
@@ -164,7 +201,12 @@ class ProxboxVMConsoleSessionView(View):
             origin = console_origin(request)
             backend = resolve_console_backend(identity)
         except ConsoleResolutionError as exc:
-            return _json_error(exc.detail, exc.status)
+            return _json_error(
+                exc.detail,
+                exc.status,
+                code=exc.code,
+                remediation=exc.remediation,
+            )
 
         payload = {
             "endpoint_id": backend.backend_endpoint_id,

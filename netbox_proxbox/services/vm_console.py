@@ -20,10 +20,19 @@ _STREAM_TOKEN = re.compile(r"[A-Za-z0-9_-]{32,256}\Z")
 class ConsoleResolutionError(Exception):
     """A safe, user-facing refusal at the console identity boundary."""
 
-    def __init__(self, detail: str, *, status: int = 409) -> None:
+    def __init__(
+        self,
+        detail: str,
+        *,
+        status: int = 409,
+        code: str | None = None,
+        remediation: str | None = None,
+    ) -> None:
         super().__init__(detail)
         self.detail = detail
         self.status = status
+        self.code = code
+        self.remediation = remediation
 
 
 @dataclass(frozen=True, slots=True)
@@ -63,7 +72,12 @@ def resolve_console_identity(vm: object) -> ConsoleIdentity:
         state = getattr(vm, "proxbox_sync_state")
     except AttributeError as exc:
         raise ConsoleResolutionError(
-            "This virtual machine has no Proxbox synchronization state. Run a sync and try again."
+            "This virtual machine has no Proxbox synchronization state.",
+            code="SYNC_STATE_MISSING",
+            remediation=(
+                "Run Repair / Rebuild to synchronize this guest from Proxmox, "
+                "then return here and connect again."
+            ),
         ) from exc
 
     vm_pk = _positive_int(getattr(vm, "pk", None))
@@ -71,36 +85,90 @@ def resolve_console_identity(vm: object) -> ConsoleIdentity:
     endpoint = getattr(state, "endpoint", None)
     node = getattr(state, "proxmox_node", None)
     vmid = _positive_int(getattr(state, "proxmox_vm_id", None))
+    backend_raw_id = _positive_int(getattr(state, "proxmox_endpoint_raw_id", None))
     vm_type = str(getattr(state, "proxmox_vm_type", "") or "").strip().lower()
     node_name = str(getattr(node, "name", "") or "").strip()
     stored_node_name = str(getattr(state, "proxmox_node_name", "") or "").strip()
 
     if vm_pk is None or state_vm_pk != vm_pk:
         raise ConsoleResolutionError(
-            "The Proxbox synchronization identity is inconsistent."
+            "The Proxbox synchronization identity does not belong to this VM.",
+            code="SYNC_IDENTITY_INCONSISTENT",
+            remediation=(
+                "Run Repair / Rebuild to replace the stale identity from live "
+                "Proxmox inventory, then retry."
+            ),
         )
-    if not isinstance(endpoint, ProxmoxEndpoint) or not endpoint.enabled:
+    if not isinstance(endpoint, ProxmoxEndpoint):
+        detail = (
+            "This VM has backend endpoint data, but its required NetBox Proxmox "
+            "endpoint link is missing. The endpoint API can still be connected; "
+            "the console cannot authorize an unlinked backend endpoint."
+            if backend_raw_id is not None
+            else "This VM is missing both its NetBox Proxmox endpoint link and "
+            "its synchronized backend mapping, so the console cannot determine "
+            "which endpoint it may authorize."
+        )
         raise ConsoleResolutionError(
-            "The synchronized Proxmox endpoint is unavailable."
+            detail,
+            code="SYNC_ENDPOINT_LINK_MISSING",
+            remediation=(
+                "Run Repair / Rebuild to refresh the VM's typed endpoint and node "
+                "links from Proxmox. An administrator must run it if you do not "
+                "have permission to enqueue Proxbox sync jobs."
+            ),
+        )
+    if not endpoint.enabled:
+        raise ConsoleResolutionError(
+            "The NetBox Proxmox endpoint linked to this VM is disabled. An API "
+            "health check can still succeed independently, but disabled endpoints "
+            "cannot authorize console sessions.",
+            code="SYNC_ENDPOINT_DISABLED",
+            remediation=(
+                "Ask a Proxbox administrator to enable the linked endpoint, run a "
+                "full sync, and retry the console."
+            ),
         )
     if (
         node is None
         or getattr(node, "endpoint_id", None) != endpoint.pk
         or not node_name
     ):
-        raise ConsoleResolutionError("The synchronized Proxmox node is unavailable.")
+        raise ConsoleResolutionError(
+            "The synchronized Proxmox node link is missing or belongs to another endpoint.",
+            code="SYNC_NODE_LINK_INVALID",
+            remediation=(
+                "Run Repair / Rebuild to refresh the endpoint and node relations, "
+                "then retry."
+            ),
+        )
     if stored_node_name and stored_node_name != node_name:
         raise ConsoleResolutionError(
-            "The synchronized Proxmox node identity has drifted."
+            "The synchronized Proxmox node name no longer matches its linked node.",
+            code="SYNC_NODE_IDENTITY_DRIFTED",
+            remediation=(
+                "Run Repair / Rebuild to refresh the node identity from live "
+                "Proxmox inventory, then retry."
+            ),
         )
     cluster = getattr(state, "proxmox_cluster", None)
     if cluster is not None and getattr(cluster, "endpoint_id", None) != endpoint.pk:
         raise ConsoleResolutionError(
-            "The synchronized Proxmox cluster identity has drifted."
+            "The synchronized Proxmox cluster belongs to another endpoint.",
+            code="SYNC_CLUSTER_IDENTITY_DRIFTED",
+            remediation=(
+                "Run Repair / Rebuild to refresh the cluster relationship from "
+                "live Proxmox inventory, then retry."
+            ),
         )
     if vmid is None or vm_type not in {"qemu", "lxc"}:
         raise ConsoleResolutionError(
-            "The synchronized Proxmox guest identity is incomplete."
+            "The synchronized guest is missing a valid VMID or workload type.",
+            code="SYNC_GUEST_IDENTITY_INCOMPLETE",
+            remediation=(
+                "Run Repair / Rebuild to refresh the guest identity from live "
+                "Proxmox inventory, then retry."
+            ),
         )
 
     return ConsoleIdentity(
@@ -109,7 +177,7 @@ def resolve_console_identity(vm: object) -> ConsoleIdentity:
         vmid=vmid,
         node=node_name,
         vm_type=vm_type,
-        backend_raw_id=_positive_int(getattr(state, "proxmox_endpoint_raw_id", None)),
+        backend_raw_id=backend_raw_id,
     )
 
 

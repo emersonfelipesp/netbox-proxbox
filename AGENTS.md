@@ -4,6 +4,8 @@
 
 Read [`docs/features/browser-console.md`](docs/features/browser-console.md) before changing `services/vm_console.py`, `views/vm_console.py`, the `open_console_proxmoxendpoint` permission, migration `0095`, `vm_console.html`, `vm_console.js`, the vendored noVNC runtime, or their tests. NetBox owns exact restricted-VM and endpoint-object authorization plus the Console UI. proxbox-api owns the opaque, origin-bound, one-use WebSocket relay. The browser must never receive another management application's URL, Proxmox credentials, API keys, tickets, or private-topology material. Other applications remain optional parallel consumers and are not part of the NetBox console request path.
 
+Console identity failures must retain their stable diagnostic code, plain-language distinction between backend health and typed NetBox identity, and exact operator remedy. Offer the existing CSRF-protected Repair / Rebuild action only when the failure is sync-repairable and the current user has the normal Job `add` permission. Never let the console grant its own access, guess a missing endpoint, enable an endpoint, or disclose raw endpoint identifiers as a quick fix.
+
 ## Audited Write Integration Plan
 
 Read `docs/companion-plugins/audited-proxmox-writes.md` before changing cross-plugin
