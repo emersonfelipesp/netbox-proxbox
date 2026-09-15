@@ -106,11 +106,11 @@ commit, final `release.yaml` metadata, and upstream requirements checksum before
 installing a reviewed Python 3.12/Linux lock with artifact hashes and an
 explicit PyPI first-index policy.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.26.post7 <-> proxbox-api 0.0.22 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.27rc1 <-> proxbox-api 0.0.22.post1 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 | netbox-proxbox | NetBox | Python | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |---|---|---|---|---|---|
-| v0.0.26.post7 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.22 | v0.0.13 | v0.0.13 |
+| v0.0.27rc1 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.22.post1 | v0.0.13 | v0.0.13 |
 | v0.0.26.post1 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.20 | v0.0.10 | v0.0.13 |
 | v0.0.23.post2 | >=4.5.8 | >=3.12 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | v0.0.23.post1 | >=4.5.8 | >=3.12 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |

@@ -73,7 +73,7 @@ RELEASE_NOTES_026_POST6_PATH = (
     REPO_ROOT / "docs" / "release-notes" / "version-0.0.26.post6.md"
 )
 RELEASE_NOTES_026_POST7_PATH = (
-    REPO_ROOT / "docs" / "release-notes" / "version-0.0.26.post7.md"
+    REPO_ROOT / "docs" / "release-notes" / "version-0.0.27.md"
 )
 E2E_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "e2e-docker.yml"
 PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "publish-testpypi.yml"
@@ -87,16 +87,16 @@ CERTIFICATION_PATH = REPO_ROOT / "CERTIFICATION.md"
 DOCS_CERTIFICATION_PATH = REPO_ROOT / "docs" / "certification.md"
 APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
-CURRENT_PLUGIN_VERSION = "0.0.26.post7"
-CURRENT_RELEASE_VERSION = "0.0.26.post7"
-CURRENT_PACKAGE_VERSION = "0.0.26.post7"
-CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.22"
+CURRENT_PLUGIN_VERSION = "0.0.27rc1"
+CURRENT_RELEASE_VERSION = "0.0.27rc1"
+CURRENT_PACKAGE_VERSION = "0.0.27rc1"
+CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.22.post1"
 CURRENT_PAIRING_LINE = (
-    "Current backend-runtime pairing: netbox-proxbox 0.0.26.post7 <-> proxbox-api "
-    "0.0.22 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST "
+    "Current backend-runtime pairing: netbox-proxbox 0.0.27rc1 <-> proxbox-api "
+    "0.0.22.post1 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST "
     "dependency only and does not provide the semantic MCP bridge."
 )
-PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.22"
+PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.22.post1"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
 # Ceiling of the backward-compatible stable tier, including NetBox 4.7 GA.
 CURRENT_NETBOX_STABLE_MAX_VERSION = "4.7.0"

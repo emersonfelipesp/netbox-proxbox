@@ -4,7 +4,7 @@ This section tracks the release line represented by this repository and keeps ol
 
 ## Current Release Line
 
-The plugin source in this repository is currently `0.0.26.post7` on the
+The plugin source in this repository is currently `0.0.27rc1` on the
 development line. The sibling plugins (`netbox-pbs`,
 `netbox-ceph`, and `netbox-pdm`) live in standalone repositories under
 [@emersonfelipesp](https://github.com/emersonfelipesp) and declare
@@ -25,7 +25,7 @@ part of the same plugin family.
 
 | Version | Summary |
 |---------|---------|
-| `0.0.26.post7` | Exports VM list filter helpers from `netbox_proxbox.utils` and ships production deploy compatibility with the `proxbox-api 0.0.22` pairing. |
+| `0.0.27rc1` | Exports VM list filter helpers from `netbox_proxbox.utils` and ships production deploy compatibility with the `proxbox-api 0.0.22` pairing. |
 | `0.0.26.post6` | Restores migration `0083` for production deploy compatibility and ships VM list search/filtering with the `proxbox-api 0.0.21.post7` pairing. |
 | `0.0.26.post5` | Adds NetBox-native search and filtering to the Proxbox virtual machines list while retaining the `proxbox-api 0.0.21.post7` pairing and existing console, metrics, and purge surfaces. |
 | `0.0.26.post4` | Maintenance release that aligns the migration helper with the currently deployed production digest while retaining the soft-deleted VM purge surface and the `proxbox-api 0.0.21.post7` pairing. |
@@ -72,4 +72,4 @@ part of the same plugin family.
 - Older pages are intentionally brief because the repository does not preserve fuller release-note prose for those versions.
 
 
-> **Current release:** netbox-proxbox `0.0.26.post7` pairs with proxbox-api `0.0.22` (NetBox `4.5.8`-`4.7.0`, including official v4.7.0 GA). Current backend-runtime pairing: netbox-proxbox 0.0.26.post7 <-> proxbox-api 0.0.22 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+> **Current release:** netbox-proxbox `0.0.27rc1` pairs with proxbox-api `0.0.22` (NetBox `4.5.8`-`4.7.0`, including official v4.7.0 GA). Current backend-runtime pairing: netbox-proxbox 0.0.27rc1 <-> proxbox-api 0.0.22.post1 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.

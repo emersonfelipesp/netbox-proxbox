@@ -23,7 +23,7 @@ NetBox warns, omits the plugin, and continues startup.
 
 | NetBox   | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
-| 4.5.8-4.7.0 GA | v0.0.26.post7 | v0.0.22 | v0.0.13 | v0.0.13 |
+| 4.5.8-4.7.0 GA | v0.0.27rc1 | v0.0.22.post1 | v0.0.13 | v0.0.13 |
 | >=4.5.8  | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8  | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8  | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |
@@ -54,7 +54,7 @@ and WebSocket.
 The current repository code declares support for:
 
 - NetBox `4.5.8` through `4.7.0`, including official `v4.7.0` GA
-- Plugin version `0.0.26.post7` in source
+- Plugin version `0.0.27rc1` in source
 
 That support comes directly from the plugin config in this repository:
 
@@ -78,9 +78,9 @@ proxbox-api relays short-lived, origin-bound, one-use QEMU noVNC/terminal and
 LXC terminal sessions. The path does not navigate to or depend on another management UI. See
 [Standalone Browser Console](features/browser-console.md).
 
-Current backend-runtime pairing: netbox-proxbox 0.0.26.post7 <-> proxbox-api 0.0.22 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.27rc1 <-> proxbox-api 0.0.22.post1 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
-The `0.0.26.post7` release adds NetBox-native search and filtering to the Proxbox virtual machines list while retaining the production console handoff, Proxmox metrics, soft-deleted VM purge surface, and the official NetBox 4.7.0 GA compatibility contract. The historical rows remain documented below.
+The `0.0.27rc1` release adds NetBox-native search and filtering to the Proxbox virtual machines list while retaining the production console handoff, Proxmox metrics, soft-deleted VM purge surface, and the official NetBox 4.7.0 GA compatibility contract. The historical rows remain documented below.
 
 ## Important Packaging Note
 
