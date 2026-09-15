@@ -2641,7 +2641,7 @@ def test_attestation_publication_verifies_after_an_idempotent_package_link(
 ) -> None:
     """A registry conflict on an already-created link must not make deploy red."""
     release_artifacts = _load_release_artifacts()
-    manifest = {"package": "netbox-proxbox", "version": "0.0.27rc3"}
+    manifest = {"package": "netbox-proxbox", "version": "0.0.27rc4"}
     evidence = {"state": "completed"}
     calls: list[tuple[str, object]] = []
 
