@@ -21,6 +21,7 @@ This directory holds the actual static assets referenced by plugin templates.
   grid and badge layout without JavaScript.
 - [`js/`](./js/): browser-side interaction code for plugin pages.
 - [`styles/`](./styles/): SCSS sources and compiled CSS/JS theme assets.
+- [`vendor/novnc/`](./vendor/novnc/): exact noVNC 1.7.0 runtime modules and the required pako subset used by the standalone VM Console tab. Preserve both upstream licenses and update the exhaustive file-list/tree-digest test whenever the pinned runtime changes.
 
 ## Dependencies
 

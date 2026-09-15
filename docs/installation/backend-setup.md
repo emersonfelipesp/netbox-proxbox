@@ -375,9 +375,10 @@ page: it locks the settings row and every registered ciphertext table, verifies 
 non-empty ciphertext against the current key, and only then re-encrypts everything and
 stores the new key — all in one transaction. A wrong current key, or a single corrupt row,
 aborts the whole thing without changing any ciphertext or any setting. If the old key is
-genuinely lost, a separate `netbox_proxbox.reset_encrypted_secrets` permission gates a
-**destructive reset** that clears the affected secrets so they can be re-entered; there is
-no way to recover the plaintext without the key.
+genuinely lost, a separate NetBox Object Permission on the Proxbox plugin
+settings object type, with the additional action `reset_encrypted_secrets`,
+gates a **destructive reset** that clears the affected secrets so they can be
+re-entered; there is no way to recover the plaintext without the key.
 
 **proxbox-api-at-rest key (backend SQLite).** Re-point `PROXBOX_ENCRYPTION_KEY` and
 re-encrypt the backend database before restarting. Verified plugin rotation additionally

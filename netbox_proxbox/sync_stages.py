@@ -6,6 +6,8 @@ import asyncio
 import json
 import time
 from collections.abc import Sequence, Callable, Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from typing import TYPE_CHECKING
 
 try:
@@ -84,6 +86,10 @@ _HEARTBEAT_SECONDS = 20.0
 _STAGE_RETRY_MAX = 2
 _STAGE_RETRY_DELAY = 8.0
 _SDN_SYNC_TYPE = getattr(SyncTypeChoices, "SDN", "sdn")
+_WIRE_ENDPOINT_ID_CAPTURE: ContextVar[dict[str, str] | None] = ContextVar(
+    "proxbox_wire_endpoint_id_capture",
+    default=None,
+)
 
 # Phrases that mark a backend error as a transport/availability failure rather
 # than a genuine client-side rejection.  proxbox-api raises ``ProxboxException``
@@ -1063,7 +1069,22 @@ def _resolve_wire_endpoint_ids(
     )
     if error:
         return {}, error
-    return {str(pk): str(backend_id) for pk, backend_id in mapping.items()}, None
+    resolved = {str(pk): str(backend_id) for pk, backend_id in mapping.items()}
+    capture = _WIRE_ENDPOINT_ID_CAPTURE.get()
+    if capture is not None:
+        capture.update(resolved)
+    return resolved, None
+
+
+@contextmanager
+def capture_wire_endpoint_ids() -> Iterator[dict[str, str]]:
+    """Capture wire endpoint ids resolved inside one stage-run call tree."""
+    captured: dict[str, str] = {}
+    token = _WIRE_ENDPOINT_ID_CAPTURE.set(captured)
+    try:
+        yield captured
+    finally:
+        _WIRE_ENDPOINT_ID_CAPTURE.reset(token)
 
 
 def _no_endpoint_scope_reason(requested_endpoint_ids: object) -> str:

@@ -130,6 +130,8 @@ systemctl enable --now proxbox-sync.timer
 
 - UI equivalent: **Full Update** button on the plugin home page
   (`SyncFullUpdateView` in `netbox_proxbox/views/sync.py`).
+- One-off endpoint-FK repair:
+  [`proxbox_backfill_sync_state_endpoints`](sync-state-endpoint-backfill.md).
 - Token-status diagnostics: `python manage.py proxbox_fix_tokens`.
 - Sync internals: [`netbox_proxbox/jobs.py`](https://github.com/emersonfelipesp/netbox-proxbox/blob/develop/netbox_proxbox/jobs.py).
 - Container-based scheduler with cron/continuous modes: [`docs/scheduler/README.md`](../scheduler/README.md) (issue #372).

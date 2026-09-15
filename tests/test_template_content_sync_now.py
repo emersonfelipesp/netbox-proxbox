@@ -151,13 +151,12 @@ def template_content_module(monkeypatch):
     job = _model_class("Job", app_label="core", model_name="job")
 
     model_module = _module("netbox_proxbox.models", **model_classes)
+    model_module.ProxboxPluginSettings = SimpleNamespace(
+        get_solo=lambda: SimpleNamespace(branching_enabled=False)
+    )
     model_module.ProxmoxEndpoint.objects = SimpleNamespace(
         filter=lambda **kwargs: SimpleNamespace(first=lambda: None)
     )
-    model_module.ProxboxPluginSettings = SimpleNamespace(
-        get_solo=lambda: SimpleNamespace(console_url="")
-    )
-
     root = _module("netbox_proxbox")
     root.__path__ = [str(MODULE_PATH.parent)]
     intent = _module("netbox_proxbox.intent")
@@ -256,12 +255,6 @@ def _context(obj, *permissions: str):
     }
 
 
-def _set_console_url(harness, value: str) -> None:
-    harness.module.ProxboxPluginSettings.get_solo = lambda: SimpleNamespace(
-        console_url=value
-    )
-
-
 def test_vm_intent_card_is_absent_without_an_intent_row(template_content_module):
     harness = template_content_module
     vm = harness.virtual_machine()
@@ -341,216 +334,6 @@ def test_vm_intent_card_fails_closed_without_restrict(template_content_module):
     )
 
     assert extension.right_page() == ""
-    assert extension.render_calls == []
-
-
-@pytest.mark.parametrize(
-    ("vm_type", "resource"),
-    [("qemu", "virtual-machines"), ("lxc", "lxc-containers")],
-)
-def test_console_button_hands_off_to_management_console(
-    template_content_module,
-    vm_type,
-    resource,
-):
-    """Console entry points never expose an endpoint URL to the browser."""
-    harness = template_content_module
-    vm = harness.virtual_machine()
-    vm.pk = 73
-    host = ".".join(("console", "example", "invalid"))
-    _set_console_url(harness, f"https://{host}")
-    vm.proxbox_sync_state = SimpleNamespace(
-        endpoint=SimpleNamespace(pk=1, enabled=True),
-        proxmox_vm_id=100,
-        proxmox_vm_type=vm_type,
-    )
-
-    extension = harness.module.ProxboxVirtualMachineTemplateExtension(
-        _context(vm, SYNC_PERMISSION)
-    )
-
-    assert extension.console_button() == ""
-    _template, context = extension.render_calls[-1]
-    assert context["console_url"] == f"https://{host}/virtualization/{resource}/73"
-
-
-def test_console_button_is_composed_into_netbox_buttons_hook(
-    template_content_module,
-):
-    """The supported NetBox ``buttons`` hook must render the console handoff."""
-    harness = template_content_module
-    vm = harness.virtual_machine()
-    vm.pk = 73
-    _set_console_url(harness, "https://console.example.invalid")
-    vm.proxbox_sync_state = SimpleNamespace(
-        endpoint=SimpleNamespace(pk=1, enabled=True),
-        proxmox_vm_id=100,
-        proxmox_vm_type="qemu",
-    )
-    extension = harness.module.ProxboxVirtualMachineTemplateExtension(
-        _context(vm, SYNC_PERMISSION)
-    )
-
-    extension.buttons()
-
-    assert extension.render_calls[-1] == (
-        "netbox_proxbox/inc/vm_console_button.html",
-        {
-            "console_url": (
-                "https://console.example.invalid/virtualization/virtual-machines/73"
-            )
-        },
-    )
-
-
-def test_console_button_hides_when_management_console_url_is_unsafe(
-    template_content_module,
-):
-    harness = template_content_module
-    _set_console_url(harness, "http://console.example.invalid")
-    vm = harness.virtual_machine()
-    vm.pk = 74
-    vm.proxbox_sync_state = SimpleNamespace(
-        endpoint=SimpleNamespace(pk=1, enabled=True),
-        proxmox_vm_id=100,
-        proxmox_vm_type="qemu",
-    )
-
-    extension = harness.module.ProxboxVirtualMachineTemplateExtension(
-        _context(vm, SYNC_PERMISSION)
-    )
-
-    assert extension.console_button() == ""
-    assert extension.render_calls == []
-
-
-@pytest.mark.parametrize(
-    "url",
-    [
-        "https://[::1",
-        "https://console.example.invalid:bad",
-        "https://console.example.invalid:65536",
-    ],
-)
-def test_console_button_hides_when_management_console_url_is_malformed(
-    template_content_module, url
-):
-    harness = template_content_module
-    _set_console_url(harness, url)
-    vm = harness.virtual_machine()
-    vm.pk = 75
-    vm.proxbox_sync_state = SimpleNamespace(
-        endpoint=SimpleNamespace(pk=1, enabled=True),
-        proxmox_vm_id=100,
-        proxmox_vm_type="qemu",
-    )
-
-    extension = harness.module.ProxboxVirtualMachineTemplateExtension(
-        _context(vm, SYNC_PERMISSION)
-    )
-
-    assert extension.console_button() == ""
-    assert extension.render_calls == []
-
-
-def test_console_button_hides_without_synchronized_guest(
-    template_content_module,
-):
-    harness = template_content_module
-    vm = harness.virtual_machine()
-    vm.pk = 76
-
-    extension = harness.module.ProxboxVirtualMachineTemplateExtension(
-        _context(vm, SYNC_PERMISSION)
-    )
-
-    assert extension.console_button() == ""
-    assert extension.render_calls == []
-
-
-@pytest.mark.parametrize(
-    "endpoint",
-    [None, SimpleNamespace(pk=1, enabled=False)],
-)
-def test_console_button_defers_mutable_endpoint_policy_to_management_console(
-    template_content_module,
-    endpoint,
-):
-    """A stale endpoint relation cannot suppress the safe management handoff."""
-    harness = template_content_module
-    _set_console_url(harness, "https://console.example.invalid")
-    vm = harness.virtual_machine()
-    vm.pk = 76
-    vm.proxbox_sync_state = SimpleNamespace(
-        endpoint=endpoint,
-        proxmox_vm_id=100,
-        proxmox_vm_type="qemu",
-    )
-
-    extension = harness.module.ProxboxVirtualMachineTemplateExtension(
-        _context(vm, SYNC_PERMISSION)
-    )
-
-    extension.console_button()
-
-    assert extension.render_calls[-1] == (
-        "netbox_proxbox/inc/vm_console_button.html",
-        {
-            "console_url": (
-                "https://console.example.invalid/virtualization/virtual-machines/76"
-            )
-        },
-    )
-
-
-@pytest.mark.parametrize(
-    "sync_state",
-    [
-        SimpleNamespace(
-            endpoint=SimpleNamespace(pk=1), proxmox_vm_id=None, proxmox_vm_type="qemu"
-        ),
-        SimpleNamespace(
-            endpoint=SimpleNamespace(pk=1),
-            proxmox_vm_id=100,
-            proxmox_vm_type="template",
-        ),
-    ],
-)
-def test_console_button_hides_when_authoritative_sync_state_is_ineligible(
-    template_content_module, sync_state
-):
-    """Legacy or incomplete state cannot create a browser console handoff."""
-    harness = template_content_module
-    vm = harness.virtual_machine()
-    vm.pk = 77
-    vm.proxbox_sync_state = sync_state
-
-    extension = harness.module.ProxboxVirtualMachineTemplateExtension(
-        _context(vm, SYNC_PERMISSION)
-    )
-
-    assert extension.console_button() == ""
-    assert extension.render_calls == []
-
-
-def test_console_button_hides_when_management_console_url_contains_whitespace(
-    template_content_module,
-):
-    harness = template_content_module
-    _set_console_url(harness, "https://console example")
-    vm = harness.virtual_machine()
-    vm.pk = 78
-    vm.proxbox_sync_state = SimpleNamespace(
-        endpoint=SimpleNamespace(pk=1, enabled=True),
-        proxmox_vm_id=100,
-        proxmox_vm_type="qemu",
-    )
-
-    extension = harness.module.ProxboxVirtualMachineTemplateExtension(
-        _context(vm, SYNC_PERMISSION)
-    )
-
-    assert extension.console_button() == ""
     assert extension.render_calls == []
 
 

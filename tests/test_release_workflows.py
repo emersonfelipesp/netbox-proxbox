@@ -1244,6 +1244,13 @@ _IP_PATTERN = re.compile(r"\b\d{1,3}(?:\.\d{1,3}){3}\b")
 # Exact addresses only. `localhost` is a name, not an address, and never matches
 # the address pattern at all.
 _ALLOWED_ADDRESSES = frozenset({_LOOPBACK_ADDRESS})
+_NOVNC_RUNTIME_ROOT = Path("netbox_proxbox/static/netbox_proxbox/vendor/novnc")
+_DIGEST_PINNED_VENDORED_RUNTIME_PATHS = frozenset(
+    _NOVNC_RUNTIME_ROOT / relative
+    for relative in (REPO_ROOT / _NOVNC_RUNTIME_ROOT / "RUNTIME_FILES.txt")
+    .read_text(encoding="utf-8")
+    .splitlines()
+)
 
 
 def _split_camel(text: str) -> str:
@@ -1443,6 +1450,14 @@ def _iter_branch_added_lines() -> "list[tuple[Path, int, str]]":
 
     additions: list[tuple[Path, int, str]] = []
     for relative in text_paths:
+        relative_path = Path(relative)
+        if relative_path in _DIGEST_PINNED_VENDORED_RUNTIME_PATHS:
+            # Third-party runtime bytes cannot be rewritten to satisfy the
+            # prose disclosure scan. The exhaustive manifest, file-list, and
+            # SHA-256 tree-digest contracts in test_vm_console_frontend.py
+            # cover every permitted file and byte in this exact set. Authored
+            # provenance and manifest files remain subject to this scanner.
+            continue
         result = _git("diff", "-U0", "--diff-filter=d", base, "HEAD", "--", relative)
         if result.returncode != 0:
             pytest.fail(f"cannot resolve branch additions: {result.stderr.strip()}")
@@ -1711,6 +1726,34 @@ def test_text_filename_with_a_tab_is_still_scanned(
     assert any(call[-2:] == ["--", odd_name] for call in calls)
     with pytest.raises(AssertionError, match=re.escape(_PRIVATE_STACK_TOKEN)):
         test_public_files_name_no_private_infrastructure()
+
+
+def test_only_digest_pinned_vendored_runtime_files_skip_disclosure_scan(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Authored, unrelated, and sibling files cannot inherit the runtime exemption."""
+    monkeypatch.setattr(sys.modules[__name__], "_review_base", lambda: "base")
+    runtime_path = next(iter(_DIGEST_PINNED_VENDORED_RUNTIME_PATHS)).as_posix()
+    scanned_paths = (
+        (_NOVNC_RUNTIME_ROOT / "SOURCE.md").as_posix(),
+        (_NOVNC_RUNTIME_ROOT / "UNRELATED.md").as_posix(),
+        Path(f"{_NOVNC_RUNTIME_ROOT}-extra/core.js").as_posix(),
+    )
+    changed_paths = (runtime_path, *scanned_paths)
+    numstat = "".join(f"1\t0\t{path}\0" for path in changed_paths)
+    diff = f"@@ -0,0 +1 @@\n+{_PRIVATE_STACK_TOKEN}\n"
+    calls = _fake_git(
+        monkeypatch,
+        {"diff --numstat": (0, numstat), "diff -U0": (0, diff)},
+    )
+
+    additions = _iter_branch_added_lines()
+
+    assert [path.relative_to(REPO_ROOT).as_posix() for path, _n, _t in additions] == [
+        *scanned_paths
+    ]
+    assert not any(call[-2:] == ["--", runtime_path] for call in calls)
+    assert all(_disclosures(line) for _path, _number, line in additions)
 
 
 def test_the_disclosure_guard_catches_what_it_is_for() -> None:

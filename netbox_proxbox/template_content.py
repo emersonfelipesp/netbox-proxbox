@@ -27,7 +27,6 @@ from netbox_proxbox.models import (
     ProxmoxNode,
     ProxmoxStorage,
     ProxmoxVMIntent,
-    ProxboxPluginSettings,
     VMBackup,
     VMSnapshot,
     VMTaskHistory,
@@ -68,44 +67,6 @@ def _sync_now_action_url(target) -> str | None:
         return reverse(viewname, kwargs={"pk": target.pk})
     except NoReverseMatch:
         return None
-
-
-def _console_base_url() -> str | None:
-    """Return the configured console origin, rejecting unsafe values."""
-    try:
-        value = (
-            str(ProxboxPluginSettings.get_solo().console_url or "").strip().rstrip("/")
-        )
-    except (AttributeError, RuntimeError):
-        return None
-    if any(character.isspace() for character in value):
-        return None
-    try:
-        parsed = urlsplit(value)
-        parsed.port
-    except ValueError:
-        return None
-    if (
-        parsed.scheme != "https"
-        or not parsed.hostname
-        or parsed.username is not None
-        or parsed.password is not None
-        or parsed.path not in {"", "/"}
-        or parsed.query
-        or parsed.fragment
-    ):
-        return None
-    return value
-
-
-def _synced_console_vm_type(vm: VirtualMachine) -> str | None:
-    """Return the console type recorded by an authoritative guest sync."""
-    state = getattr(vm, "proxbox_sync_state", None)
-    vmid = getattr(state, "proxmox_vm_id", None)
-    vm_type = str(getattr(state, "proxmox_vm_type", "") or "").strip().lower()
-    if not isinstance(vmid, int) or vmid < 1:
-        return None
-    return vm_type if vm_type in {"qemu", "lxc"} else None
 
 
 def _optional_related(obj: object, relation: str) -> object | None:
@@ -634,9 +595,6 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
                         },
                     )
                 )
-        console_button = self.console_button()
-        if console_button:
-            parts.append(console_button)
         # Joined HTML comes from this plugin's own templates rendered above.
         return mark_safe("".join(parts)) if parts else ""  # nosec
 
@@ -677,27 +635,6 @@ class ProxboxVirtualMachineTemplateExtension(PluginTemplateExtension):
             {"intent": intent, "edit_url": edit_url},
         )
         return mark_safe(rendered)  # nosec - autoescaped plugin template
-
-    def console_button(self) -> str:
-        """Handle console button."""
-        obj = self.context["object"]
-        if not isinstance(obj, VirtualMachine):
-            return ""
-        user = self.context["request"].user
-        if not user.has_perm(permission_enqueue_proxbox_sync()):
-            return ""
-
-        vm_type = _synced_console_vm_type(obj)
-        console_base_url = _console_base_url()
-        if vm_type is None or not console_base_url or not obj.pk:
-            return ""
-        resource = "lxc-containers" if vm_type == "lxc" else "virtual-machines"
-        console_url = f"{console_base_url}/virtualization/{resource}/{obj.pk}"
-
-        return self.render(
-            "netbox_proxbox/inc/vm_console_button.html",
-            {"console_url": console_url},
-        )
 
 
 class ProxboxSyncStateTemplateExtension(PluginTemplateExtension):

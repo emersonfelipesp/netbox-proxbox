@@ -42,9 +42,9 @@ field errors or false readiness, never uncaught form-validation exceptions.
   (`ProxboxPluginSettings` singleton), write-only verified key-rotation form,
   and family-selective destructive-reset form with acknowledgement plus exact
   typed confirmation. Ordinary encryption controls are disabled while
-  ciphertext exists. `clean_console_url()` normalizes an optional trailing
-  slash and accepts only an HTTPS origin for the credential-free NMS handoff;
-  keep it aligned with the shared model validator and
+  ciphertext exists. The retired external browser-console handoff is not a plugin
+  setting; the standalone console uses the configured FastAPI endpoint and the
+  server-side trust boundary documented in
   `../../docs/features/browser-console.md`.
 - [`storage.py`](./storage.py): create/edit and filter forms for `ProxmoxStorage`.
 - [`vm_backup.py`](./vm_backup.py): create/edit and filter forms for `VMBackup`.

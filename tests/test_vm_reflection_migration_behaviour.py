@@ -99,18 +99,24 @@ def _load_migration():
 
 
 class _FakeCustomField:
-    def __init__(self, name: str, **fields: Any) -> None:
+    def __init__(self, name: str, pk: int | None = None, **fields: Any) -> None:
         self.name = name
+        self.pk = pk
         self.__dict__.update(fields)
-        self.object_types = _FakeM2M()
 
 
-class _FakeM2M:
+class _ThroughManager:
     def __init__(self) -> None:
-        self.added: list[Any] = []
+        self.rows: list[dict[str, int]] = []
 
-    def add(self, value: Any) -> None:
-        self.added.append(value)
+    def using(self, _alias: str) -> "_ThroughManager":
+        return self
+
+    def get_or_create(self, **kwargs: int) -> tuple[object, bool]:
+        if kwargs in self.rows:
+            return object(), False
+        self.rows.append(kwargs)
+        return object(), True
 
 
 class _FakeVM:
@@ -133,6 +139,8 @@ class _CustomFieldQuerySet:
 class _CustomFieldManager:
     def __init__(self, store: dict[str, _FakeCustomField]) -> None:
         self._store = store
+        for pk, field in enumerate(store.values(), start=1):
+            field.pk = pk
 
     def using(self, _alias: str) -> "_CustomFieldManager":
         return self
@@ -152,7 +160,7 @@ class _CustomFieldManager:
         if existing is not None:
             existing.__dict__.update(defaults)
             return existing, False
-        created = _FakeCustomField(name, **defaults)
+        created = _FakeCustomField(name, pk=len(self._store) + 1, **defaults)
         self._store[name] = created
         return created, True
 
@@ -181,7 +189,7 @@ class _VMManager:
 class _ContentTypeManager:
     def __init__(self, present: bool = True) -> None:
         self.present = present
-        self.sentinel = object()
+        self.sentinel = type("ContentTypeRow", (), {"pk": 42})()
 
     def using(self, _alias: str) -> "_ContentTypeManager":
         return self
@@ -197,6 +205,28 @@ class _ContentTypeDoesNotExist(Exception):
     pass
 
 
+class _ObjectTypesField:
+    def __init__(self, through_model: type) -> None:
+        self.remote_field = types.SimpleNamespace(through=through_model)
+
+    @staticmethod
+    def m2m_field_name() -> str:
+        return "customfield"
+
+    @staticmethod
+    def m2m_reverse_field_name() -> str:
+        return "contenttype"
+
+
+class _CustomFieldMeta:
+    def __init__(self, object_types_field: _ObjectTypesField) -> None:
+        self.object_types_field = object_types_field
+
+    def get_field(self, name: str) -> _ObjectTypesField:
+        assert name == "object_types"
+        return self.object_types_field
+
+
 class _FakeApps:
     def __init__(
         self,
@@ -206,8 +236,16 @@ class _FakeApps:
         content_type_present: bool = True,
     ) -> None:
         self.custom_field_store = custom_fields
+        self.through_manager = _ThroughManager()
+        through_model = type(
+            "CustomFieldObjectType", (), {"objects": self.through_manager}
+        )
+        object_types_field = _ObjectTypesField(through_model)
+        model_meta = _CustomFieldMeta(object_types_field)
         self.custom_field_model = type(
-            "CustomField", (), {"objects": _CustomFieldManager(custom_fields)}
+            "CustomField",
+            (),
+            {"objects": _CustomFieldManager(custom_fields), "_meta": model_meta},
         )
         self.vm_manager = _VMManager(vms)
         self.vm_model = type("VirtualMachine", (), {"objects": self.vm_manager})
@@ -326,7 +364,10 @@ def test_reverse_restores_every_definition_and_binds_the_vm_content_type(migrati
     )
     sentinel = apps.content_type_manager.sentinel
     for name, field in store.items():
-        assert field.object_types.added == [sentinel], (
+        assert {
+            "customfield_id": field.pk,
+            "contenttype_id": sentinel.pk,
+        } in apps.through_manager.rows, (
             f"{name} was recreated without its VirtualMachine binding, which "
             "leaves a definition that renders nowhere"
         )

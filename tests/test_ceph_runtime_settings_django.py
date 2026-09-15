@@ -48,9 +48,7 @@ except Exception as exc:  # pragma: no cover - depends on external test services
     )
 
 from django.core.exceptions import ValidationError as DjangoValidationError  # noqa: E402
-from django.db import connection  # noqa: E402
-from django.db.migrations.executor import MigrationExecutor  # noqa: E402
-from django.test import SimpleTestCase, TestCase, TransactionTestCase  # noqa: E402
+from django.test import SimpleTestCase, TestCase  # noqa: E402
 from netbox.models import NetBoxModel  # noqa: E402
 from rest_framework.exceptions import ValidationError as DRFValidationError  # noqa: E402
 
@@ -59,6 +57,7 @@ from netbox_proxbox.api.serializers.settings import (  # noqa: E402
 )
 from netbox_proxbox.forms.settings import ProxboxPluginSettingsForm  # noqa: E402
 from netbox_proxbox.models import ProxboxPluginSettings  # noqa: E402
+from tests.django_support import ForwardOnlyMigrationTestCase  # noqa: E402
 
 
 class CephRuntimeSettingsValidationTest(TestCase):
@@ -171,7 +170,7 @@ class CephRuntimeSettingsNullValidationTest(SimpleTestCase):
         self.assertIn("ceph_task_poll_interval", model_error.exception.message_dict)
 
 
-class CephRuntimeSettingsMigrationTest(TransactionTestCase):
+class CephRuntimeSettingsMigrationTest(ForwardOnlyMigrationTestCase):
     """Apply migration 0077 and verify existing rows receive safe defaults."""
 
     migrate_from = (
@@ -179,18 +178,9 @@ class CephRuntimeSettingsMigrationTest(TransactionTestCase):
         "0076_pluginsettings_hardware_discovery_sync_nic_macs",
     )
     migrate_to = ("netbox_proxbox", "0077_ceph_runtime_timing_settings")
-
-    def _migrate_to(self, target: tuple[str, str]):
-        executor = MigrationExecutor(connection)
-        executor.migrate([target])
-        executor = MigrationExecutor(connection)
-        return executor.loader.project_state([target]).apps
+    migration_floor = migrate_from
 
     def test_existing_settings_row_receives_runtime_timing_defaults(self) -> None:
-        executor = MigrationExecutor(connection)
-        leaf_targets = executor.loader.graph.leaf_nodes("netbox_proxbox")
-        self.assertEqual(len(leaf_targets), 1)
-        restore_target = leaf_targets[0]
         try:
             apps_0076 = self._migrate_to(self.migrate_from)
             Settings0076 = apps_0076.get_model(
@@ -210,4 +200,4 @@ class CephRuntimeSettingsMigrationTest(TransactionTestCase):
             self.assertEqual(migrated.ceph_task_poll_interval, Decimal("1.00"))
             self.assertEqual(migrated.ceph_run_lease_seconds, Decimal("360.00"))
         finally:
-            self._migrate_to(restore_target)
+            self._restore_current_leaf()

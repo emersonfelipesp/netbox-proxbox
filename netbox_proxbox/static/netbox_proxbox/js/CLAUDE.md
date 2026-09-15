@@ -26,6 +26,7 @@ This directory contains the plugin's browser-side JavaScript.
 - [`sync.js`](./sync.js): shared DOM/SSE helpers used by sync pages and backend stream consumers.
 - [`table.js`](./table.js): table-specific dynamic behavior.
 - [`virtual_machine.js`](./virtual_machine.js): client behavior for VM sync views.
+- [`vm_console.js`](./vm_console.js): standalone Console-tab lifecycle for noVNC and terminal sessions. It requests a fresh one-use relay session for every connection attempt, validates the minimal response, bounds automatic retries, implements Proxmox terminal framing, and disposes every transport and input handler on disconnect or page exit. It must never accept a non-WSS relay or expose backend/Proxmox credentials.
 - [`websocket.js`](./websocket.js): browser integration for backend WebSocket message streaming. Provides `onSyncEnd(listener)` and `notifySyncEnd(syncObject)` hooks.
 
 ## Dependencies

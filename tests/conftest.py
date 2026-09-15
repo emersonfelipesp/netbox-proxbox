@@ -220,6 +220,26 @@ def _make_model_class(name: str, *, first=None, objects_by_pk=None):
     return cls
 
 
+def _stub_get_object_or_404(klass, *args, **kwargs):
+    try:
+        if hasattr(klass, "get"):
+            return klass.get(*args, **kwargs)
+    except Exception as exc:
+        if type(exc).__name__ == "DoesNotExist":
+            raise Http404 from exc
+        raise
+    raise Http404()
+
+
+def _stub_backend_auth_headers(obj):
+    token = (getattr(obj, "token", "") or "").strip()
+    if not token:
+        return {}
+    if token.startswith(("Bearer ", "Token ")):
+        return {"Authorization": token}
+    return {"Authorization": f"Bearer {token}"}
+
+
 def load_plugin_module(
     module_name: str,
     *,
@@ -246,17 +266,7 @@ def load_plugin_module(
     }
     django_shortcuts.redirect = lambda name: {"redirect": name}
 
-    def get_object_or_404(klass, *args, **kwargs):
-        try:
-            if hasattr(klass, "get"):
-                return klass.get(*args, **kwargs)
-        except Exception as exc:
-            if type(exc).__name__ == "DoesNotExist":
-                raise Http404 from exc
-            raise
-        raise Http404()
-
-    django_shortcuts.get_object_or_404 = get_object_or_404
+    django_shortcuts.get_object_or_404 = _stub_get_object_or_404
 
     django_views = types.ModuleType("django.views")
     django_views.View = View
@@ -510,17 +520,7 @@ def load_plugin_module(
             "websocket_url": "wss://proxbox.local:8801/ws",
         }
     )
-    utils_module.get_backend_auth_headers = lambda obj: (
-        {}
-        if not (getattr(obj, "token", "") or "").strip()
-        else {
-            "Authorization": (
-                getattr(obj, "token").strip()
-                if getattr(obj, "token").strip().startswith(("Bearer ", "Token "))
-                else f"Bearer {getattr(obj, 'token').strip()}"
-            )
-        }
-    )
+    utils_module.get_backend_auth_headers = _stub_backend_auth_headers
     utils_module.get_ip_address_host = lambda value: (
         str(value).split("/")[0] if value else "127.0.0.1"
     )
@@ -746,6 +746,9 @@ def load_plugin_module(
     proxbox_access.permission_enqueue_proxbox_sync = lambda: "stub.enqueue_proxbox_sync"
     proxbox_access.permission_change_proxbox_plugin_settings = lambda: (
         "stub.change_proxboxpluginsettings"
+    )
+    proxbox_access.permission_reset_encrypted_secrets = lambda: (
+        "stub.reset_encrypted_secrets_proxboxpluginsettings"
     )
     proxbox_access.permission_run_proxmox_action = lambda: "core.run_proxmox_action"
     proxbox_access.permission_view_fastapi_endpoint = lambda: (

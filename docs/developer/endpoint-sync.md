@@ -31,6 +31,24 @@ detail: Please add a NetBox endpoint in the database
 The same gap exists for `ProxmoxEndpoint`: the backend needs Proxmox credentials in its own
 SQLite table before it can open a Proxmox session for sync stages.
 
+The databases also assign independent endpoint primary keys. proxbox-api writes
+its own endpoint database ID into typed sync state as
+`proxmox_endpoint_raw_id`; that value is not a NetBox `ProxmoxEndpoint` primary
+key or sufficient historical ownership evidence because a restored/reseeded
+backend or recreated endpoint row can reuse it. After backend stages finish,
+`ProxboxSyncJob` reuses the plugin-PK to backend-ID map already resolved for the
+run and binds a null `endpoint` foreign key only when the row's related cluster
+or node includes at least one present relation and every present relation
+belongs to the mapped endpoint. A recorded cluster name without either relation
+is reported as `no_relation_evidence`, not used for automatic binding. The local
+update runs under the same active branch as reconciliation. Existing foreign
+keys, unrelated raw IDs, ambiguous backend IDs, and uncorroborated rows are never
+changed. The job reports uncorroborated rows but never supplies an operator
+confirmation. The one-off
+[`proxbox_backfill_sync_state_endpoints`](../operations/sync-state-endpoint-backfill.md)
+command applies the same rule to historical rows and provides a dry-run-first,
+explicit confirmation path for independently verified restored-backend cases.
+
 ---
 
 ## System Overview

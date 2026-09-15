@@ -26,6 +26,7 @@ This directory contains Django management commands for the ProxBox plugin.
   A nonblank drifted fingerprint is refused before network access and requires
   explicit key resubmission through the form/API.
 - [`proxbox_sync.py`](./proxbox_sync.py): management command that enqueues a full Proxmox→NetBox `ProxboxSyncJob` from the shell — the headless equivalent of clicking **Full Update** in the plugin UI. Supports `--user`, `--wait`, `--timeout`, `--poll-interval`, and `--worker-grace`. See [`docs/operations/headless-sync.md`](../../../docs/operations/headless-sync.md).
+- [`proxbox_backfill_sync_state_endpoints.py`](./proxbox_backfill_sync_state_endpoints.py): one-off repair that resolves all enabled plugin `ProxmoxEndpoint` rows against a selected proxbox-api backend and binds null VM sync-state endpoint foreign keys automatically only when at least one cluster/node relation is present and every present relation corroborates the current mapping. Name-only rows remain unbound under `no_relation_evidence`, with the recorded name retained in the bounded sample. `--dry-run` reports without changing rows; `--fastapi-endpoint PK` pins backend selection. Repeatable dry-run `--confirm-binding BACKEND_ID=PLUGIN_PK` assertions list every otherwise unverified row and issue a deterministic review token. Apply requires `--confirm-binding BACKEND_ID=PLUGIN_PK:TOKEN`, refuses added/removed reviewed PKs, and performs locked revalidation and mutation within one transaction. Real updates use the fail-closed branch lifecycle. See [`docs/operations/sync-state-endpoint-backfill.md`](../../../docs/operations/sync-state-endpoint-backfill.md).
 
 ## Dependencies
 
@@ -53,6 +54,14 @@ python manage.py proxbox_fix_tokens --fix
 # Enqueue a full Proxmox→NetBox sync (cron / systemd / CI entry point)
 python manage.py proxbox_sync
 
+# Preview and apply historical sync-state endpoint binding
+python manage.py proxbox_backfill_sync_state_endpoints --dry-run
+python manage.py proxbox_backfill_sync_state_endpoints
+
+# Preview an independently justified restored-backend assertion before applying it
+python manage.py proxbox_backfill_sync_state_endpoints --dry-run --confirm-binding 14=5
+python manage.py proxbox_backfill_sync_state_endpoints --confirm-binding 14=5:v1.PAYLOAD.DIGEST
+
 # Same, but block until the job finishes and mirror its exit code
 python manage.py proxbox_sync --wait --timeout 7200
 ```
@@ -66,6 +75,7 @@ python manage.py proxbox_sync --wait --timeout 7200
   token previews are intentionally omitted. Disabled rows make no request even
   with `--fix`.
 - `proxbox_sync` raises `CommandError` (exit non-zero) when `proxbox-api` is unreachable, no `FastAPIEndpoint` is configured, no usable user is found, or — with `--wait` — the job ends in a non-success terminal state. The job appears under **Background Jobs** identical to a UI-triggered sync.
+- `proxbox_backfill_sync_state_endpoints` raises `CommandError` when branching cannot be enforced, the selected FastAPI endpoint is unusable, endpoint resolution fails, no enabled plugin endpoint resolves, an applied confirmation omits its review token, or the locked unverified PK set differs from the reviewed set. With branch isolation enabled, a real repair creates, activates, and merges a dedicated branch; dry-run creates no branch.
 
 ## Links
 

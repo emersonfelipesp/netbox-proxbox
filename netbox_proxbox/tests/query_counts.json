@@ -1,0 +1,8 @@
+{
+  "fastapiendpoint:api_list_objects": 12,
+  "netboxendpoint:api_list_objects": 12,
+  "proxmoxendpoint:api_list_objects": 19,
+  "vmbackup:api_list_objects": 12,
+  "vmsnapshot:api_list_objects": 12,
+  "vmtaskhistory:api_list_objects": 12
+}

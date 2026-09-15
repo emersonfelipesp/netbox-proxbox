@@ -525,6 +525,32 @@ the core VirtualMachine delete permission, and the page never calls Proxmox.
 > that id, falling back to all enabled endpoints when the VM has no reflected
 > Proxmox cluster yet. Guarded by `tests/test_targeted_sync_scope.py` and
 > `tests/test_vm_sync_now_view.py`.
+> **Sync-state endpoint binding reuses the run's backend scope.** proxbox-api
+> persists its own durable endpoint database ID in
+> `ProxboxVirtualMachineSyncState.proxmox_endpoint_raw_id`; that ID must never be
+> treated as the plugin `ProxmoxEndpoint` primary key or as sufficient historical
+> ownership evidence. A restored/reseeded backend or deleted-and-recreated
+> endpoint can reuse it. The SSE endpoint resolver
+> copies its already-resolved plugin-PK to backend-ID map into a caller-owned,
+> run-local `ContextVar` capture, and the selected-object path reuses the
+> equivalent map it already resolved. After backend work completes, `jobs.py` calls
+> `services.sync_state_endpoint_backfill.backfill_sync_state_endpoints()` with
+> that map. The ORM update is wrapped in `activate_sync_branch()` so it lands in
+> the same branch as reconciliation, its frozen summary is stored under
+> `job.data['proxbox_sync']['sync_state_endpoint_backfill']`, and one summary
+> line is logged. A row binds automatically only when at least one related
+> cluster or node is present and every present relation belongs to the mapped
+> endpoint. Rows with both relations null stay unbound under
+> `no_relation_evidence`; their recorded cluster names remain in the bounded
+> sample for operator review but never corroborate ownership automatically.
+> Selection, related-evidence locking, revalidation, and mutation share one
+> transaction. Only the management command accepts an explicit operator
+> confirmation, and its dry run lists every uncorroborated row and emits the
+> exact-set review token required on apply. The job never
+> confirms them. If no usable map was resolved, the job records and logs a skip
+> instead of making another backend request or guessing ownership. Existing
+> endpoint FKs, nonmatching raw IDs, and ambiguous backend IDs remain untouched.
+
 - [`sync_params.py`](./sync_params.py): normalises and serialises sync parameters passed into `ProxboxSyncJob.enqueue`.
 - [`sync_stages.py`](./sync_stages.py): runs a single named sync stage against the backend SSE stream.
 > **Which failures get retried.** `_is_retryable_stage_failure()` retries 5xx and
@@ -564,7 +590,7 @@ the core VirtualMachine delete permission, and the page never calls Proxmox.
 - [`sync_ownership.py`](./sync_ownership.py): helpers that claim and release RQ job ownership to prevent concurrent duplicate runs.
 - [`schedule_hints.py`](./schedule_hints.py): quick-schedule heuristics and UI defaults for the home dashboard.
 - [`github.py`](./github.py): fetches markdown content from GitHub for the contributing page.
-- [`template_content.py`](./template_content.py): plugin template extensions for Job, VirtualMachine, and reflected-resource buttons/panels. Sync Now buttons resolve the target model's registered `proxbox_sync_now` action with NetBox `get_viewname()` plus Django `reverse()`; core Cluster/Device pages target their linked plugin tracking row, while plugin storage/backup/snapshot/task rows and core VMs target themselves. `ProxboxVirtualMachineTemplateExtension.buttons()` also composes the browser-console handoff after its other VM actions. `console_button()` requires the sync permission, a runtime-revalidated HTTPS `console_url`, a saved VM, and authoritative typed sync state with a positive VMID and `qemu`/`lxc` type; it links only to the NMS guest detail route using the NetBox VM primary key and does not append `?tab=console`. See `../docs/features/browser-console.md`. `ProxboxJobTemplateExtension.buttons()` also renders a **Bug report** button on core Job detail pages for Proxbox sync jobs that ended in an error/unknown state (see `bug_report.py`); the Proxbox-only jobs list links to that page rather than repeating the modal per row.
+- [`template_content.py`](./template_content.py): plugin template extensions for Job, VirtualMachine, and reflected-resource buttons/panels. Sync Now buttons resolve the target model's registered `proxbox_sync_now` action with NetBox `get_viewname()` plus Django `reverse()`; core Cluster/Device pages target their linked plugin tracking row, while plugin storage/backup/snapshot/task rows and core VMs target themselves. The former external console button is retired; the core VM detail page receives a registered standalone Console tab from `views/vm_console.py`. See `../docs/features/browser-console.md`. `ProxboxJobTemplateExtension.buttons()` also renders a **Bug report** button on core Job detail pages for Proxbox sync jobs that ended in an error/unknown state (see `bug_report.py`); the Proxbox-only jobs list links to that page rather than repeating the modal per row.
 - [`bug_report.py`](./bug_report.py): pure, read-only helper that assembles the failed-job **Bug report** modal context — plugin/NetBox versions, job metadata, formatted `log_entries`, a copy-to-clipboard `report_text`, and a prefilled netbox-proxbox GitHub *new issue* URL. Gated by `is_reportable_status(status)` (errored/failed or any unknown status). Every string it emits is scrubbed by a **single** `anonymize.Anonymizer`, and `report_text` plus the issue URL are composed from the already-scrubbed parts — see the root [`CLAUDE.md`](../CLAUDE.md) §"Bug-report anonymization" for why the URL is the invariant that matters.
 - [`redaction.py`](./redaction.py): the shared, dependency-free vocabulary of credential-bearing field markers and HTTP authentication schemes, imported by **both** `anonymize.py` (public report) and `views/error_utils.py` (job log). It also owns `redact_assignments()`, the single-pass scanner both use: it captures a whole candidate field name and asks `is_sensitive_key` about it rather than searching for a marker inside the key, which removes the second spelling of the vocabulary, every length cap, and a quadratic scan in one move. **Must import nothing but `re`** — `anonymize` needs it without Django, and `error_utils` sits behind a package that requires Django.
 - [`anonymize.py`](./anonymize.py): pure `re` + stdlib scrubber for that payload. Replaces credentials, URLs, e-mails, realm principals, colon/hyphen/Cisco-dotted MACs, IPv4/IPv6, and allowlisted-suffix FQDNs with **stable** per-instance placeholders (`<host-1>`, `<ip-2>`) so a report stays correlatable without naming the estate. MAC separators are normalized for placeholder identity. Complete UUID protection plus identifier-safe bare/labeled MAC branches avoid corrupting longer hyphen-, dot-, or colon-delimited diagnostic identifiers; explicit hardware-address labels keep compact `hwaddr:`/`macaddr:` fields redacted. Broader IPv6/FQDN matching runs first to prevent partial disclosure. **Must never import Django** — `tests/test_bug_report.py` exec-loads its consumer without one. Takes its credential vocabulary from `redaction.py`.
@@ -799,10 +825,15 @@ exhaustive across all plugin `*_enc` model fields and conditionally includes
 netbox-pbs `PBSPluginSettings.proxbox_api_key_enc` when that Django app is
 installed. Only genuine app absence is skipped; installed-but-unresolved
 models or tables fail closed. Ordinary serializers never expose the plugin
-key. The backend-only runtime action temporarily retains its existing
-superuser/settings-change permission gate because current proxbox-api releases
-still use it as their final at-rest-key fallback; remove that path only with a
-paired backend migration. Prefer independent plugin-at-rest,
+key. The settings serializer checks ordinary key replacement against the
+persisted instance before NetBox's parent validation can copy incoming data
+onto that instance. Credential writers that encounter stale-key ciphertext
+must instruct the operator to submit an explicit replacement credential; an
+unchanged corrupt ciphertext value never authorizes a write. The backend-only
+runtime action temporarily retains its existing superuser/settings-change
+permission gate because current proxbox-api releases still use it as their
+final at-rest-key fallback; remove that path only with a paired backend
+migration. Prefer independent plugin-at-rest,
 backend-at-rest, and FastAPI request-authentication keys.
 
 Tenant assignment for Proxmox-synced NetBox `VirtualMachine` rows is plugin-side

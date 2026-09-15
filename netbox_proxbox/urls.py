@@ -166,6 +166,11 @@ urlpatterns = [
         name="virtual_machines",
     ),
     path(
+        "virtual-machines/<int:pk>/console/session/",
+        views.ProxboxVMConsoleSessionView.as_view(),
+        name="virtualmachine_console_session",
+    ),
+    path(
         "lxc_containers/",
         views.LXCContainersView.as_view(),
         name="lxc_containers",

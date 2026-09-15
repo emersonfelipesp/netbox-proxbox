@@ -321,9 +321,15 @@ def test_permission_routes_and_signal_fail_closed_boundaries_are_wired() -> None
     )
     urls = (ROOT / "netbox_proxbox" / "urls.py").read_text()
     signals = (ROOT / "netbox_proxbox" / "signals.py").read_text()
+    access = (ROOT / "netbox_proxbox" / "views" / "proxbox_access.py").read_text()
+    settings_view = (ROOT / "netbox_proxbox" / "views" / "settings.py").read_text()
 
     assert '"reset_encrypted_secrets"' in model
     assert '"reset_encrypted_secrets"' in migration
+    assert "get_permission_for_model(\n        ProxboxPluginSettings," in access
+    assert '        "reset_encrypted_secrets",' in access
+    assert "permission_reset_encrypted_secrets()" in settings_view
+    assert '"netbox_proxbox.reset_encrypted_secrets"' not in settings_view
     assert 'name="encryption_key_rotate"' in urls
     assert 'name="encrypted_secret_reset"' in urls
     assert "except EncryptionError:" in signals

@@ -67,7 +67,6 @@ except Exception as exc:  # pragma: no cover - external test harness availabilit
 
 from django.core.exceptions import ValidationError  # noqa: E402
 from django.core.management import call_command  # noqa: E402
-from django.contrib.auth import get_user_model  # noqa: E402
 from django.db import IntegrityError, connection, transaction  # noqa: E402
 from django.db.models.signals import post_save  # noqa: E402
 from django.test import TransactionTestCase, override_settings  # noqa: E402
@@ -109,6 +108,7 @@ from netbox_proxbox.websocket_client import (  # noqa: E402
     WebSocketView,
     _load_websocket_credentials,
 )
+from tests.django_support import make_user  # noqa: E402
 
 
 OLD_KEY = "old-backend-key-0123456789abcdef0123456789"
@@ -621,7 +621,7 @@ class BackendKeyPersistenceTests(TransactionTestCase):
         PLUGINS_CONFIG={},
     )
     def test_local_netbox_and_unique_service_token_are_discovered(self) -> None:
-        user = get_user_model().objects.create_user(username="proxbox-service")
+        user = make_user("proxbox-service")
         Token.objects.create(
             user=user,
             version=1,
@@ -653,7 +653,7 @@ class BackendKeyPersistenceTests(TransactionTestCase):
         PLUGINS_CONFIG={"netbox_proxbox": {"netbox_url": "http://192.0.2.60:8080"}},
     )
     def test_explicit_netbox_ip_and_service_token_are_discovered(self) -> None:
-        user = get_user_model().objects.create_user(username="proxbox-ip-service")
+        user = make_user("proxbox-ip-service")
         token = Token.objects.create(
             user=user,
             version=1,
@@ -678,7 +678,7 @@ class BackendKeyPersistenceTests(TransactionTestCase):
         PLUGINS_CONFIG={},
     )
     def test_existing_netbox_endpoint_discovers_unique_service_token(self) -> None:
-        user = get_user_model().objects.create_user(username="proxbox-existing")
+        user = make_user("proxbox-existing")
         disabled_token = Token.objects.create(
             user=user,
             version=1,
@@ -713,7 +713,7 @@ class BackendKeyPersistenceTests(TransactionTestCase):
         self,
     ) -> None:
         self._create_enabled("netbox-signal-rollback")
-        user = get_user_model().objects.create_user(username="proxbox-signal")
+        user = make_user("proxbox-signal")
         token = Token.objects.create(
             user=user,
             version=1,
@@ -759,7 +759,7 @@ class BackendKeyPersistenceTests(TransactionTestCase):
         PLUGINS_CONFIG={},
     )
     def test_ambiguous_netbox_service_tokens_remain_pending(self) -> None:
-        user = get_user_model().objects.create_user(username="proxbox-ambiguous")
+        user = make_user("proxbox-ambiguous")
         for index in range(2):
             Token.objects.create(
                 user=user,

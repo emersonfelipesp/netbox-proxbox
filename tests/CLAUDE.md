@@ -35,7 +35,7 @@ remaining in `READY`. Real Django/PostgreSQL integration with
 `netbox-branching` installed is tracked separately under #328 and is not claimed
 by these tests.
 
-The browser-console handoff is covered primarily by `test_template_content_sync_now.py`, with settings persistence and migration-graph coverage in `test_settings_view_encryption.py`, `test_settings_view_hardware_discovery.py`, and `test_migration_graph_single_leaf.py`. Keep QEMU/LXC route selection, NetBox VM primary-key use, supported `buttons()` composition, every permission/sync/origin hide condition, render-time URL revalidation, opener isolation, and the absence of Proxmox topology or credentials aligned with `../docs/features/browser-console.md`.
+The standalone browser console is covered by `test_vm_console_server.py`, `test_vm_console_frontend.py`, the real-Django detail-view and migration suites, and the complete regression suite. Keep restricted VM and endpoint-object authorization, typed QEMU/LXC identity, exact proxbox-api affinity, HTTPS/WSS and opaque-token validation, response allowlisting, terminal framing, noVNC runtime integrity, bounded retries, deterministic cleanup, migration `0095`, and the absence of external-management or Proxmox credentials aligned with `../docs/features/browser-console.md`. Historical migration `0084` remains immutable; no current test should require the retired settings or template-extension handoff.
 
 `test_proxmox_endpoint_allowed_tenants.py` keeps its source contracts in the
 mocked suite and runs its database filter/serializer checks in the explicitly
@@ -59,8 +59,115 @@ endpoints without requiring an OpenBao deployment for tenant behavior.
   `test_data_protection_views_django.py`, renders all four list pages and the
   combined page with real model rows and calendar navigation.
 - `conftest.py`: shared fixtures and compatibility stubs for Django/NetBox/requests so tests can run without a full NetBox install. Includes `StreamingHttpResponse` stubs and mock request helpers.
+- `django_support.py`: shared real-NetBox helpers. `make_user()` creates the
+  user through NetBox's restricted manager before persisting supported
+  staff/superuser flags and permissions; do not pass those flags to
+  `create_user()`. `make_api_token()` returns the current v1/v2-aware
+  authentication header instead of assuming a legacy `Token <key>` format.
+  `ForwardOnlyMigrationTestCase` discovers the earliest floor needed by the
+  collected migration-test classes, creates one empty suite-foundation database,
+  and migrates it normally in one executor run: dependency applications reach
+  their leaves while Proxbox stops at the earliest selected floor. The helper
+  then emits `post_migrate` for every installed app with the returned historical
+  `ProjectState`, migration plan, `interactive=False`, and the active database
+  alias, matching Django's `migrate` command. This creates the content types and
+  auth permissions that a real fresh installation has. NetBox's current
+  `ObjectType` signal does not consume the supplied historical registry, and its
+  multi-table parent is `ContentType`; after signal delivery, the helper removes
+  only Proxbox content types whose models are absent from the returned historical
+  state. This prevents current-code `ObjectType` parents from leaking later
+  Proxbox content types into the floor. Each test class clones that foundation
+  once, advances only Proxbox to its own floor, emits `post_migrate` with that
+  class-floor state, applies the same boundary cleanup, and uses the resulting
+  dedicated database as a PostgreSQL template.
+  Each test then clones the class template with
+  `CREATE DATABASE ... TEMPLATE ...`, uses the
+  clone, and drops it afterward. The helper temporarily rebinds Django's
+  `default` alias only after closing both its previous connection and psycopg
+  pool, because a retained pooled connection keeps the old database name and
+  historical RunPython operations use the schema editor's default alias;
+  cleanup restores the pytest-django database and closes the connection and
+  pool before Django teardown. Tests must resolve every
+  model, including NetBox core relations and `ContentType`, from the target's
+  historical `apps` registry and
+  must never combine those models with live-registry instances. A reverse test
+  for a migration before irreversible migration 0092 may move backward only in
+  a class template whose floor and every applied target predate 0092. It must
+  never reverse the shared pytest-django database across 0092. The shared
+  database is therefore not flushed by this test base. Every disposable database
+  name encodes the run's UTC start minute and PID while retaining xdist-worker and
+  random entropy. Every database also has a versioned ownership comment containing
+  the owner ID, host, PID, creation time, advisory-lock key, and renewable UTC
+  `lease_until`. The harness holds the run's PostgreSQL advisory lock until process
+  exit and renews every registered database lease once per 60 seconds with a
+  15-minute expiry. It verifies the maintenance connection and ownership lock
+  before creating each database. If that connection, lock, or any renewal is lost,
+  the renewal thread records the failure and the next migration-test setup refuses
+  to create a clone. It never continues with unprotected databases.
+
+  Normal cleanup uses the class and process-exit registries. Harness startup and
+  the standalone recovery command reclaim an exactly named and validly marked
+  database only when all three conditions hold: its creation time is more than two
+  hours old, its lease is expired, and its advisory lock can be acquired. The
+  comment and lease are read again while holding that lock before the database is
+  dropped, so a concurrent renewal closes the reclamation attempt. An unexpired
+  lease remains authoritative across hosts even when the original lock connection
+  has disappeared. Invalid names, obsolete or uncertain comments, young runs,
+  unexpired leases, held locks, and inspection errors are left untouched with a log
+  explaining why. Age, a remote hostname, a dead PID, or a free lock alone never
+  authorizes a drop. Migration transitions suppress requests for the already-active
+  floor and reuse one executor's loader for migration and explicit target-state
+  construction, avoiding a redundant graph load without trusting the executor's
+  implicit returned state.
+
+  Stale databases can also be reclaimed without pytest after configuring the same
+  NetBox Python path and database settings used by the harness:
+
+  ```bash
+  PYTHONPATH=/path/to/netbox/netbox:$PWD \
+  NETBOX_CONFIGURATION=tests.netbox_test_configuration \
+  DJANGO_SETTINGS_MODULE=netbox.settings \
+  .venv/bin/python -m tests.django_database_reclamation --reclaim
+  ```
+
+  Set `NETBOX_TEST_DB_HOST` and `NETBOX_TEST_DB_PORT` when PostgreSQL is not on
+  the test configuration's default address. After an interrupted run, first allow
+  its 15-minute lease to expire. The automated command will still wait until the
+  database is more than two hours old; run it then and inspect its keep/reclaim
+  log. Do not edit the ownership comment or force the lease to expire. If immediate
+  removal is necessary, inspect the exact database, comment, active sessions, and
+  advisory lock directly before using an operator-controlled PostgreSQL command.
+
+  **Warning: This recovery command permanently drops databases that pass all
+  harness name, ownership-marker, minimum-age, expired-lease, and free-lock checks.
+  PostgreSQL cannot restore them unless you have an independent backup.**
+
+  The complete v4.7.0 selection was measured on 2026-09-15 with the workflow's
+  two branch-coverage targets and `--durations=0`: pytest reported 3,658.85
+  seconds (1:00:58), and the harness wall time was 3,682 seconds (1:01:22). The
+  measured pytest breakdown was 946.980 seconds for initial pytest database
+  setup, 854.646 seconds for the clean historical foundation migration, 677.824
+  seconds for historical class setup and migration tests beyond that foundation,
+  and 1,179.400 seconds for all remaining tests and fixtures. The clean
+  dependency migration and the initial pytest database dominate fixed setup;
+  repeated `TransactionTestCase` flushes dominate the remaining integration-test
+  cost. Keep these measured components explicit when evaluating future runtime
+  changes rather than replacing them with an aspirational budget.
 - `django_stubs.py`: the single source of the `django.db` / `django.utils.crypto` stub pair that every path-loader of `views/backend_sync.py` installs. **Six** independent loaders exist — `conftest.py::load_plugin_module()`, `test_jobs.py::load_real_backend_sync()`, and the module loaders in `test_multi_endpoint_scoping.py`, `test_preflight_diagnosis.py`, `test_backend_sync_placement.py`, and `test_endpoint_enabled_guards.py` — and each must install the pair *itself* rather than relying on a predecessor: `test_hardware_discovery_custom_fields_migration.py` leaks a **partial** `django.db` into `sys.modules` permanently, so whichever loader runs after it would otherwise import a `django.db` with no `DatabaseError`. Exports `TEST_SECRET_KEY`, `DatabaseError`, a faithful `salted_hmac()`, `django_stub_modules(*, models_module=None)`, and `install_django_stubs(monkeypatch, *, models_module=None)`. `salted_hmac` is **implemented**, not stubbed to a constant — a constant would make every credential fingerprint compare equal, which is the exact opposite of what the fingerprint detects, and every fingerprint test would pass while testing nothing. Only those two dotted names are needed; `backend_sync.py` touches nothing else in Django at import time.
-- `test_api_cluster.py`, `test_api_netbox_integration.py`, `test_api_source_contracts.py`: API layer, cluster serializer, and serializer contract checks. `test_api_netbox_integration.py` uses NetBox's `APIViewTestCases` and needs the real-Django workflow; its module-level skip in the mocked suite is not execution evidence, and it is added to the real-Django selection together with the matrix repair so it lands on a green matrix. `test_api_source_contracts.py` also covers the ten non-model `APIView` classes (`HomeAPIView`, `DashboardAPIView`, resource views, `ScheduleSyncAPIView`, `BackendLogsAPIView`): class existence, base class, permission class assignment, HTTP methods, URL registration, API root keys, and serializer field contracts.
+- `test_api_cluster.py`, `test_api_netbox_integration.py`, `test_api_source_contracts.py`:
+  API layer, cluster serializer, and serializer contract checks.
+  `test_api_netbox_integration.py` is selected explicitly in the real-Django
+  matrix. It runs NetBox's REST CRUD, object-permission, ETag, bulk-operation,
+  brief-response, and query-count contracts for six plugin models. It composes
+  the REST mixins without the GraphQL mixin because the plugin does not register
+  a GraphQL schema. Its endpoint fixtures select legacy encrypted credential
+  storage with a generated test key, and `netbox_proxbox/tests/query_counts.json`
+  records the required per-model list-query baselines. `test_api_source_contracts.py`
+  also covers the ten non-model `APIView` classes (`HomeAPIView`,
+  `DashboardAPIView`, resource views, `ScheduleSyncAPIView`,
+  `BackendLogsAPIView`): class existence, base class, permission class
+  assignment, HTTP methods, URL registration, API root keys, and serializer
+  field contracts.
 - `test_packer_endpoint_authorization_contract.py` and `test_packer_endpoint_authorization_django.py`: default-off desired/confirmed Packer policy, operator/enabled/broad/narrow truth table, divergent backend ID translation, post-commit fresh-row behavior, rollback no-call, failed-revocation deletion block, successful revocation, and stable single/bulk REST deletion conflict behavior.
 - `test_mcp_bridge_contract.py`, `test_mcp_bridge_docs.py`, `test_mcp_bridge_django.py`, `validate_paired_netbox_sdk_bridge.py`, `fixtures/netbox_sdk_bridge_activation.json`, and `fixtures/proxbox_bridge_v1.json`: exact Proxbox-owned manifest snapshot/source contracts; a checked blocked activation state until an exact released SDK identity exists; an immutable paired-SDK model/argument/response gate requiring an SDK root whose complete package inventory matches the exact full commit, fixed relative module origin, bounded commit/tree/blob graph verification, explicit blob rehashing, and package bytes materialized from those verified Git blobs; required LLM/project documentation and executable generic `plugin_list_tools` / `plugin_call_tool` envelopes; plus real-Django discovery, permission-before-validation/identity/enqueue ordering, conditional authentication, destructive hints, exact 13-stage-to-internal-`all` identity, recurring hint/repair debounce integration, response envelopes, immediate/future/recurring enqueue, omitted/explicit Proxmox scope, full signed-64-bit integer-literal PK bounds, float/Decimal normalization only through `9007199254740991`, rejected unsafe rounded floats/bool/string/fraction values, rejected MCP NetBox scope and legacy fields, strict RFC 3339 including normalized-UTC month-boundary leap seconds and leap/offset overflow rejection, exactly-one-unit recurrence and per-unit persisted bounds, unknown/duplicate/nonpositive/overlong validation, and unknown/disabled endpoint fail-closed behavior. Every rejected scheduling case asserts that no ORM lookup or job enqueue occurs where applicable; a separate compatibility case pins the unadvertised legacy REST `all`, flat recurrence, timezone-less date parsing, and NetBox scope. Bridge schema version 1 identifies the generic descriptor protocol; it does not make this producer snapshot a shared SDK fixture authority.
 - `test_backend_integration.py`, `test_backend_logs_view.py`, `test_job_stream.py`, `test_job_stream_django.py`, `test_run_sync_stream.py`, `test_sse_contracts.py`: backend proxy, log view, stream, and SSE behavior. `test_job_stream.py` pins the job observer's resource-lifetime contract: Nginx buffering stays disabled, idle streams emit bounded comment heartbeats, and closing the iterator stops the producer instead of leaving a Gunicorn gthread blocked indefinitely. It also exercises every invalid ownership-metadata shape—null, malformed JSON, JSON scalars, and non-dictionary nested values—and proves that a custom-named stream survives initial and repeated null `Job.data`, uses bounded production-equivalent reclassification, and reports later terminal success. Queued-job cases cover both a persistent waiting state and direct `scheduled`→`completed`/`failed` transitions; the terminal cases require ordinary and structured persisted logs before exactly one completion frame, so the observer neither waits 60 seconds for an unobserved running state nor loses the final diagnostic details. `test_job_stream_django.py` runs in the real NetBox matrix and proves Django `StreamingHttpResponse.close()` propagates to the raw generator and releases the producer—the same resource-closer path Gunicorn invokes after a failed client write. `test_run_sync_stream.py`'s **redaction** section pins that credentials cannot reach the NetBox job log through the stream error path: a failed `complete` frame echoing the pushed endpoint body is redacted **including its raw `response` mirror** (the `ok is False` branch returns `last_complete.model_dump()` verbatim, so redacting `detail` alone is not enough), `on_frame` receives redacted frame data, and `_redacted_mapping()` stays fail-closed when redaction returns a non-mapping. Three counter-tests keep redaction from becoming lossy: the **success** payload's sync counters are untouched, the rejected field's *name* and `msg` survive so the error stays diagnosable, and the two substring markers downstream code branches on (`"init_ok"` in `sync_stages.py`, the Postgres `remaining connection slots …` phrase in `sync_types.py`) still match end-to-end. The fixture `sys.modules.pop`s `netbox_proxbox.views.error_utils` so the **real** redactor loads rather than a stub. `test_stream_transport_failure_never_logs_the_raw_exception` extends the same guarantee to the *application log*: a transport exception echoing a credential produces log records free of the secret and free of `exc_info` — redacting the user-facing detail while `logger.exception` writes the raw message beside it would be no redaction at all.
@@ -136,7 +243,7 @@ endpoints without requiring an OpenBao deployment for tenant behavior.
   `services.endpoint_autoconfiguration`.
 - `test_views_error_utils.py`: behavior tests for `parse_requests_response_json`, `extract_backend_error_detail`, and `extract_proxmox_backend_error_detail` covering connection-refused, timeout, HTML-on-error, generic-detail-with-message, and Python-exception-append branches. Its **credential redaction** section pins that a FastAPI 422 echoing a pushed endpoint payload never prints the NetBox API `token` or the Proxmox `password`/`token_value`/`api_key` while keeping the rejected field name and message readable, that `redact_sensitive()` matches keys rather than values (so an error text mentioning a password survives), and that a self-referential payload terminates on the depth limit. Six further tests close the holes key-only matching leaves: a **scalar** `input` echoed next to a `loc` naming a credential field is redacted, header-style keys (`X-Proxbox-API-Key`, `Private-Key`, `SSH Keys`) normalize to the same markers as `api_key`, a payload nested one level past `_REDACTION_DEPTH_LIMIT` is replaced with `_REDACTED_DEEP` rather than returned raw, credentials already rendered into `msg`/`python_exception` prose are swept (including `Authorization: Bearer <jwt>`, which must lose the **token** and not merely the scheme keyword), a bare `Bearer …` with no credential-named key in front of it is swept by `_BEARER_RE`, and a transport exception carrying no response body still has its rendered text swept before it is returned.
 - `test_services_sync_firewall.py`: behavior tests for `sync_firewall` against a stubbed `services.sync_firewall` module — payload parsing, per-resource counters, and the error paths (no context and no `fastapi_url`, HTTP error on the summary call). Also pins that `fastapi_endpoint_id` is forwarded to `get_fastapi_request_context(endpoint_id=…)`, so the pass resolves the backend the job selected rather than "first enabled row", and that `endpoint_ids` reaches `enabled_backend_endpoint_scope()` exactly as given (`None` included) — dropping the kwarg silently widens the run to every enabled endpoint. `test_out_of_scope_summary_entries_are_refused` pins the other half of the scope: a response row for an endpoint outside the resolved selection is refused locally, because a backend ignoring `proxmox_endpoint_ids` returns every endpoint's clusters anyway. The datacenter pass has the same forwarding pinned by AST in `test_datacenter_models.py::test_sync_datacenter_forwards_the_runs_endpoint_selection`, and the same out-of-scope refusal (upserts **and** stale marking) pinned behaviorally in `test_services_sync_datacenter.py`.
-- `test_vm_identity.py`, `test_vm_type_queryset_filter.py`, `test_vm_reflection_reader_contracts.py`, and `test_vm_reflection_custom_field_removal.py` pin the VM-only typed-sidecar cutover: canonical identity resolution with empty custom-field JSON, the preserved native VM-type filter branch, absence of live reflection custom-field lookups, and migration 0085's exact deletion boundary. `test_sync_state_models.py` runs the migration forward and reverse against historical models, including stale JSON stripping and out-of-scope custom-field survival. `test_other_reflection_migration_behaviour.py` executes migration 0086 against all fourteen affected core types and pins the thirty-name delete boundary, idempotent stripping, complete reverse definitions/bindings, and survival of every intent/plugin-owned field. `test_hardware_remainder_migration.py` executes migration 0087 against the six hardware-discovery fields 0086's label check refused. Its fixtures carry the production shape and bindings read from the live registry rather than the migration's own table, including NetBox's null-valued keys for an unpopulated field. It pins the emptiness gate that is 0087's real guard -- a field holding a value is untouched, including under the legacy `cf_` spelling, when the value is an empty list or object, and when the only populated row is deep in the table, while a null or blank key is stale metadata -- along with the three places that gate is applied: the definitions are locked before any delete, the scan is repeated under that lock, and each key is re-tested as it is stripped, each pinned by a test that lands a write at exactly that point. It also covers a reverse that refuses to rebind a populated field of our own shape while still rebinding an empty one forward released, plus the type-and-`ui_editable` candidate check under both the legacy and production labels, survival of a repurposed same-type editable field and of a row bound to a foreign content type, persisted bulk updates, idempotent stripping, a reverse that restores the full production metadata, and a reverse that leaves a skipped row unbound and unmodified. `test_vm_intent_custom_field_migration.py` applies and reverses the 0088 intent removal against independently transcribed production shapes and pins null/blank stripping plus list/object/value survival. `test_intent_diff_union.py` pins every VM/intent operation combination, deleted-intent resolution through `original`, single dispatch, and the merge-classification and password-warning oracle. `test_vm_intent_ui_contract.py` and `test_template_content_sync_now.py` cover form stamp exclusion, autoescaped user-data markup, and populated or absent intent cards. `test_other_reflection_readers.py` pins the typed virtual-disk storage relation and rejects remaining reflection custom-field reads.
+- `test_vm_identity.py`, `test_vm_type_queryset_filter.py`, `test_vm_reflection_reader_contracts.py`, and `test_vm_reflection_custom_field_removal.py` pin the VM-only typed-sidecar cutover: canonical identity resolution with empty custom-field JSON, the preserved native VM-type filter branch, absence of live reflection custom-field lookups, and migration 0085's exact deletion boundary. `test_sync_state_models.py` runs the migration forward and reverse against historical models in a forward-created isolated database, including stale JSON stripping and out-of-scope custom-field survival. `test_other_reflection_migration_behaviour.py` executes migration 0086 against all fourteen affected core types and pins the thirty-name delete boundary, idempotent stripping, complete reverse definitions/bindings, and survival of every intent/plugin-owned field. `test_hardware_remainder_migration.py` executes migration 0087 against the six hardware-discovery fields 0086's label check refused. Its fixtures carry the production shape and bindings read from the live registry rather than the migration's own table, including NetBox's null-valued keys for an unpopulated field. It pins the emptiness gate that is 0087's real guard -- a field holding a value is untouched, including under the legacy `cf_` spelling, when the value is an empty list or object, and when the only populated row is deep in the table, while a null or blank key is stale metadata -- along with the three places that gate is applied: the definitions are locked before any delete, the scan is repeated under that lock, and each key is re-tested as it is stripped, each pinned by a test that lands a write at exactly that point. It also covers a reverse that refuses to rebind a populated field of our own shape while still rebinding an empty one forward released, plus the type-and-`ui_editable` candidate check under both the legacy and production labels, survival of a repurposed same-type editable field and of a row bound to a foreign content type, persisted bulk updates, idempotent stripping, a reverse that restores the full production metadata, and a reverse that leaves a skipped row unbound and unmodified. `test_vm_intent_custom_field_migration.py` applies and reverses the 0088 intent removal against independently transcribed production shapes and pins null/blank stripping plus list/object/value survival. `test_intent_diff_union.py` pins every VM/intent operation combination, deleted-intent resolution through `original`, single dispatch, and the merge-classification and password-warning oracle. `test_vm_intent_ui_contract.py` and `test_template_content_sync_now.py` cover form stamp exclusion, autoescaped user-data markup, and populated or absent intent cards. `test_other_reflection_readers.py` pins the typed virtual-disk storage relation and rejects remaining reflection custom-field reads.
 - `test_vm_intent_django.py` renders the intent card through the real Django
   template engine and proves operator-supplied user data is escaped. Keep it
   enumerated in `.github/workflows/django-tests.yml`; a mocked-suite skip is
@@ -151,7 +258,7 @@ endpoints without requiring an OpenBao deployment for tenant behavior.
 - `test_detail_view_templates_django.py`: real-NetBox complement in the
   supported-version matrix. It imports the complete plugin URL surface, walks
   NetBox's populated runtime view registry, requires exact registry identifier
-  and qualified-class identity for all 53 mandatory views (plus the optional
+  and qualified-class identity for all 57 mandatory views (plus the optional
   netbox-pdm endpoint view), proves the pinned companion first registers its
   own PDM detail view and the Proxbox integration deliberately replaces it,
   resolves every plugin `ObjectView`'s actual
@@ -189,10 +296,10 @@ endpoints without requiring an OpenBao deployment for tenant behavior.
 - `test_storage_nodes_capacity_django.py`: real NetBox/Django coverage proving
   storage node membership longer than 255 characters passes the model, form,
   serializer, filterset, REST list/bulk, and database boundaries unchanged. Its
-  migration case asserts there is exactly one plugin leaf, discovers that
-  leaf's parent dynamically, and exercises expand-only rollback/reapply without
-  pinning a collision-prone migration number. Its no-database cases prove the
-  live-content fan-out stays at four workers, issues no more than 64
+  migration case discovers the storage migration and its parent dynamically,
+  then exercises expand-only rollback/reapply in a forward-created isolated
+  database without pinning a collision-prone migration number. Its no-database
+  cases prove the live-content fan-out stays at four workers, issues no more than 64
   authenticated calls for a 5,000-node membership, respects one absolute
   deadline even when a call ignores its socket timeout, bounds late-refill HTTP
   timeouts to the remaining budget, rejects real malformed/error envelopes
@@ -220,7 +327,7 @@ endpoints without requiring an OpenBao deployment for tenant behavior.
   audit payloads are secret-free, key material is withheld, and
   signal/list/dashboard recovery surfaces stay fail-closed.
 - `test_encryption_key_recovery_django.py`: real-NetBox coverage for the eight
-  always-installed families and eleven local ciphertext fields: successful rotation,
+  always-installed families and twelve local ciphertext fields: successful rotation,
   wrong-old-key refusal, drifted-setting repair, corrupt-value full rollback,
   proxbox-api versioned active-key/full-credential attestation, disabled-row
   zero-network rotation, and immutable target capture, model/API/form mutation
@@ -248,7 +355,7 @@ endpoints without requiring an OpenBao deployment for tenant behavior.
   missing-field fallback, and `update_fields` membership.
 - `test_cloud_customer_network_settings.py`: source contracts for the five `ProxboxPluginSettings` cloud-customer network fields, migration 0059, form/API/template/view/docs wiring, and estate-agnostic migration defaults.
 - `test_ceph_runtime_settings.py`: source contracts for migration 0077, bounded model/form fields, serializer/view/template wiring, documentation, environment override names, and the immutable cross-service timing contract.
-- `test_ceph_runtime_settings_django.py`: real Django/DRF validation checks proving the model, form, and settings serializer accept the documented bounds, reject polling greater than timeout (including partial API updates), and apply migration 0077 to an existing row with the documented defaults. Its migration test restores the current graph leaf, never a hard-coded historical target, so later matrix modules run against the final schema.
+- `test_ceph_runtime_settings_django.py`: real Django/DRF validation checks proving the model, form, and settings serializer accept the documented bounds, reject polling greater than timeout (including partial API updates), and apply migration 0077 to an existing row with the documented defaults. Its migration test creates an isolated database at migration 0076, advances to 0077, and drops that database without changing the shared test database's migration graph.
 - `test_settings_view_ceph_runtime.py`: stubbed SettingsView GET/POST behavior proving all three Ceph timing values populate the form, persist on the singleton, and are included in `update_fields`.
 - `test_node_ssh_credential_model.py`: `normalize_fingerprint` accept/reject behavior, Fernet-backed `set_password` / `get_password` and `set_private_key` / `get_private_key` round-trips, `EncryptionKeyMissing` and `DecryptionFailed` exits, and AST contract on `models/ssh_credential.py` (NetBoxModel base, required fields, `OneToOneField(ProxmoxNode)`, auth-method choices, `clean()` calling `normalize_fingerprint`).
 - `test_node_ssh_credential_api.py`: `_NetBoxTokenCanViewNodeSSHCredential.has_permission()` NetBox-token permission checks, `_credential_for_node_identifier()` ProxmoxNode/NetBox-device lookup compatibility, `_metadata_payload()` redaction, AST contract on the by-node viewset (`_ProxboxDashboardPermission` for metadata, NetBox-token permission for secrets, HTTPS-required guard in non-DEBUG, 503 on missing encryption key), and `api/urls.py` route registration. Also **behavioral** coverage of `NodeHostKeyFingerprintAPIView.get` (the Terminal-tab node host-key scan) via the stub loader: `ssh_access_enabled` 403 gate, no-IP 422, no-backend 503, success forwards `host`/`port` to proxbox-api and returns the fingerprint, invalid `?port=` defaults to 22, and old-backend 404→503 downgrade.
@@ -322,7 +429,23 @@ endpoints without requiring an OpenBao deployment for tenant behavior.
 - `test_stack_setup.py`, `test_stack_sync_polling.py`: integration-level stack setup and sync polling behavior tests.
 - `test_templatetags.py`: tests for custom Proxbox template tag helpers.
 - `e2e/`: stack-oriented tests that exercise the proxbox-api and NetBox integration flow end to end.
-- `management/`: tests for Django management commands. `conftest.py` installs `django.core.management.base` and `django.contrib.auth` stubs at conftest import time so command modules can be imported without bootstrapping Django. `test_proxbox_sync.py` covers the `proxbox_sync` command — enqueue happy path, `--user` override, missing-user / missing-FastAPI / unreachable-backend errors, and `--wait` polling (terminal success and terminal failure). `test_ensure_cloud_customer_network.py` covers idempotent Role/VLAN/Prefix/gateway creation and settings population for `ensure_cloud_customer_network`.
+- `test_sync_state_endpoint_backfill.py` and
+  `test_sync_state_endpoint_backfill_django.py`: focused-ORM and real-ORM
+  coverage for the endpoint repair. They prove locked cluster and node
+  corroboration; name-only rows remaining unbound under
+  `no_relation_evidence`, with their recorded cluster names retained in the
+  bounded sample; token-gated exact-row operator binding of those rows; refusal
+  and bounded reporting of contradicted or otherwise uncorroborated rows;
+  conjunctive ownership when cluster and node relations are both present,
+  including both disagreement orders; current-map ambiguity refusal; locked
+  evidence revalidation; deterministic exact-PK review tokens; stale-token
+  added/removed diagnostics; exact-row operator confirmations; and non-mutating
+  previews. The focused tests keep
+  mutation-sensitive transaction, `select_for_update()`, and
+  `endpoint__isnull=True` update assertions. The Django suite is explicitly
+  enumerated in `.github/workflows/django-tests.yml` and covered by
+  `test_pytest_django_scope.py`.
+- `management/`: tests for Django management commands. `conftest.py` installs `django.core.management.base` and `django.contrib.auth` stubs at conftest import time so command modules can be imported without bootstrapping Django. `test_proxbox_sync.py` covers the `proxbox_sync` command — enqueue happy path, `--user` override, missing-user / missing-FastAPI / unreachable-backend errors, and `--wait` polling (terminal success and terminal failure). `test_proxbox_backfill_sync_state_endpoints.py` loads the real backfill service against focused ORM fakes and proves dry-run versus update behavior, selected FastAPI endpoint forwarding, non-zero empty resolution, fail-closed branch guarding, active-branch update plus merge behavior, strict confirmation parsing/current-map validation, required apply tokens, changed-set refusal, name-only refusal with retained sample evidence, and exact token-gated confirmed-row output. `test_ensure_cloud_customer_network.py` covers idempotent Role/VLAN/Prefix/gateway creation and settings population for `ensure_cloud_customer_network`.
 - `netbox_test_configuration.py`: NetBox settings stub used during tests.
 
 ## Dependencies

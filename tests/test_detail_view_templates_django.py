@@ -9,6 +9,7 @@ import sys
 from unittest.mock import patch
 
 import pytest
+from cryptography.fernet import Fernet
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -64,7 +65,6 @@ except Exception as exc:  # pragma: no cover - external test harness availabilit
     )
 
 from django.apps import apps  # noqa: E402
-from django.contrib.auth import get_user_model  # noqa: E402
 from django.core.exceptions import ImproperlyConfigured  # noqa: E402
 from django.template.loader import get_template  # noqa: E402
 from django.test import Client, SimpleTestCase, TestCase  # noqa: E402
@@ -92,6 +92,7 @@ from netbox_proxbox.models import (  # noqa: E402
     ProxmoxFirewallSecurityGroup,
     ProxmoxMetricsInfluxDB,
     ProxmoxNode,
+    ProxboxPluginSettings,
     ProxmoxSdnBinding,
     ProxmoxSdnController,
     ProxmoxSdnFabric,
@@ -105,6 +106,7 @@ from netbox_proxbox.models.ssh_credential import (  # noqa: E402
     AUTH_METHOD_PASSWORD,
 )
 from netbox_proxbox.models.proxmox_metrics import MASKED_SECRET  # noqa: E402
+from tests.django_support import make_user, raw_update_fields  # noqa: E402
 
 
 _PLUGIN_VIEW_MODULE_PREFIX = "netbox_proxbox.views"
@@ -120,6 +122,7 @@ _REQUIRED_OBJECT_VIEW_REGISTRY = {
     "netbox_proxbox.netboxendpoint:netboxendpoint": "netbox_proxbox.views.endpoints.netbox.NetBoxEndpointView",
     "netbox_proxbox.nodesshcredential:nodesshcredential": "netbox_proxbox.views.ssh_credential.NodeSSHCredentialView",
     "netbox_proxbox.pdmendpoint:pdmendpoint": "netbox_proxbox.views.endpoints.pdm.PDMEndpointView",
+    "netbox_proxbox.proxboxbranchintent:proxboxbranchintent": "netbox_proxbox.views.branch_intent.ProxboxBranchIntentView",
     "netbox_proxbox.proxmoxcluster:proxmoxcluster": "netbox_proxbox.views.proxmox_cluster_node.ProxmoxClusterView",
     "netbox_proxbox.proxmoxdatacentercpumodel:proxmoxdatacentercpumodel": "netbox_proxbox.views.datacenter.ProxmoxDatacenterCpuModelView",
     "netbox_proxbox.proxmoxendpoint:cluster_nodes": "netbox_proxbox.views.cluster_nodes_tab.ProxmoxEndpointClusterNodesTabView",
@@ -135,6 +138,7 @@ _REQUIRED_OBJECT_VIEW_REGISTRY = {
     "netbox_proxbox.proxmoxfirewalloptions:proxmoxfirewalloptions": "netbox_proxbox.views.firewall.ProxmoxFirewallOptionsView",
     "netbox_proxbox.proxmoxfirewallrule:proxmoxfirewallrule": "netbox_proxbox.views.firewall.ProxmoxFirewallRuleView",
     "netbox_proxbox.proxmoxfirewallsecuritygroup:proxmoxfirewallsecuritygroup": "netbox_proxbox.views.firewall.ProxmoxFirewallSecurityGroupView",
+    "netbox_proxbox.proxmoxmetricsinfluxdb:data": "netbox_proxbox.views.proxmox_metrics.ProxmoxMetricsInfluxDBDataView",
     "netbox_proxbox.proxmoxmetricsinfluxdb:proxmoxmetricsinfluxdb": "netbox_proxbox.views.proxmox_metrics.ProxmoxMetricsInfluxDBView",
     "netbox_proxbox.proxmoxnode:proxmoxnode": "netbox_proxbox.views.proxmox_cluster_node.ProxmoxNodeView",
     "netbox_proxbox.proxmoxsdnbinding:proxmoxsdnbinding": "netbox_proxbox.views.sdn.ProxmoxSdnBindingView",
@@ -150,6 +154,7 @@ _REQUIRED_OBJECT_VIEW_REGISTRY = {
     "netbox_proxbox.proxmoxstorage:snapshots": "netbox_proxbox.views.storage.ProxmoxStorageSnapshotsTabView",
     "netbox_proxbox.proxmoxstorage:virtual_disks": "netbox_proxbox.views.storage.ProxmoxStorageVirtualDisksTabView",
     "netbox_proxbox.proxmoxvmcloudinit:proxmoxvmcloudinit": "netbox_proxbox.views.vm_cloudinit.ProxmoxVMCloudInitView",
+    "netbox_proxbox.proxmoxvmintent:proxmoxvmintent": "netbox_proxbox.views.vm_intent.ProxmoxVMIntentView",
     "netbox_proxbox.proxmoxvmtemplate:proxmoxvmtemplate": "netbox_proxbox.views.vm_template.ProxmoxVMTemplateView",
     "netbox_proxbox.replication:replication": "netbox_proxbox.views.replication.ReplicationView",
     "netbox_proxbox.vmbackup:vmbackup": "netbox_proxbox.views.vm_backup.VMBackupView",
@@ -161,6 +166,7 @@ _REQUIRED_OBJECT_VIEW_REGISTRY = {
     "virtualization.virtualmachine:proxmox_cloudinit": "netbox_proxbox.views.vm_cloudinit.ProxmoxVMCloudInitTabView",
     "virtualization.virtualmachine:proxmox_config": "netbox_proxbox.views.vm_config.ProxmoxVMConfigTabView",
     "virtualization.virtualmachine:proxmox_ha": "netbox_proxbox.views.vm_ha.ProxmoxVMHATabView",
+    "virtualization.virtualmachine:proxbox_console": "netbox_proxbox.views.vm_console.ProxboxVMConsoleTabView",
     "virtualization.virtualmachine:replications": "netbox_proxbox.views.replication.ReplicationTabView",
     "virtualization.virtualmachine:snapshots": "netbox_proxbox.views.vm_snapshot.VMSnapshotTabView",
     "virtualization.virtualmachine:task_history": "netbox_proxbox.views.vm_task_history.VMTaskHistoryTabView",
@@ -303,7 +309,10 @@ class RegisteredObjectViewTemplateRuntimeTest(SimpleTestCase):
         self.assertEqual(
             actual_registry,
             expected_registry,
-            "The runtime ObjectView registry drifted; update the explicit contract.",
+            "The runtime ObjectView registry drifted. ProxboxBranchIntent adds a "
+            "default detail registration, while ProxmoxMetricsInfluxDB registers "
+            "both its default detail and named `data` view; each needs its own "
+            "explicit registry key and template-loader contract.",
         )
 
         for registry_name, view_class in registrations:
@@ -319,8 +328,9 @@ class MissingDetailTemplateRenderTest(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
-        cls.user = get_user_model().objects.create_user(
-            username="detail-template-viewer",
+        cls.user = make_user(
+            "detail-template-viewer",
+            is_staff=True,
             is_superuser=True,
         )
         cls.endpoint = ProxmoxEndpoint.objects.create(name="detail-render-endpoint")
@@ -339,9 +349,14 @@ class MissingDetailTemplateRenderTest(TestCase):
             username="detail-render-ssh-user",
             auth_method=AUTH_METHOD_PASSWORD,
             known_host_fingerprint=f"SHA256:{'A' * 43}",
+        )
+        raw_update_fields(
+            NodeSSHCredential,
+            cls.ssh_credential.pk,
             password_enc=_SSH_PASSWORD_MARKER,
             private_key_enc=_SSH_PRIVATE_KEY_MARKER,
         )
+        cls.ssh_credential.refresh_from_db()
         cls.cpu_model = ProxmoxDatacenterCpuModel.objects.create(
             endpoint=cls.endpoint,
             cluster_name=cls.cluster.name,
@@ -377,15 +392,21 @@ class MissingDetailTemplateRenderTest(TestCase):
         cls.firewall_options = ProxmoxFirewallOptions.objects.create(
             endpoint=cls.endpoint,
             zone=FirewallZoneChoices.DATACENTER,
-            policy_in="DETAIL-RENDER-DROP",
+            policy_in="ACCEPT",
         )
         cls.metrics = ProxmoxMetricsInfluxDB.objects.create(
             name="detail-render-metrics",
             endpoint=cls.endpoint,
             proxmox_cluster=cls.cluster,
             influx_url="https://influx.example.test:8086",
+            enabled=False,
+        )
+        raw_update_fields(
+            ProxmoxMetricsInfluxDB,
+            cls.metrics.pk,
             query_token_enc="stored-query-ciphertext",
         )
+        cls.metrics.refresh_from_db()
         cls.sdn_fabric = ProxmoxSdnFabric.objects.create(
             endpoint=cls.endpoint,
             cluster_name=cls.cluster.name,
@@ -439,7 +460,7 @@ class MissingDetailTemplateRenderTest(TestCase):
             (cls.ipset, "detail-render-ipset"),
             (cls.ipset_entry, "192.0.2.195/32"),
             (cls.firewall_alias, "detail-render-alias"),
-            (cls.firewall_options, "DETAIL-RENDER-DROP"),
+            (cls.firewall_options, "ACCEPT"),
             (cls.metrics, "detail-render-metrics"),
             (cls.sdn_fabric, "detail-render-fabric"),
             (cls.sdn_controller, "detail-render-controller"),
@@ -479,14 +500,25 @@ class MissingDetailTemplateRenderTest(TestCase):
 
     def test_metrics_render_uses_fail_closed_display_properties(self) -> None:
         self.metrics.influx_url = _METRICS_INFLUX_URL_MARKER
-        self.metrics.query_token_enc = _METRICS_QUERY_TOKEN_MARKER
+        encryption_key = Fernet.generate_key().decode("ascii")
+        settings_obj = ProxboxPluginSettings.get_solo()
+        raw_update_fields(
+            ProxboxPluginSettings,
+            settings_obj.pk,
+            encryption_key=encryption_key,
+        )
+        self.metrics.set_query_token(
+            _METRICS_QUERY_TOKEN_MARKER,
+            key=encryption_key,
+        )
+        encrypted_query_token = self.metrics.query_token_enc
         url = reverse(
             "plugins:netbox_proxbox:proxmoxmetricsinfluxdb",
             args=[self.metrics.pk],
         )
 
         with patch(
-            "netbox.views.generic.get_object_or_404",
+            "netbox.views.generic.base.get_object_or_404",
             return_value=self.metrics,
         ):
             response = self.client.get(url)
@@ -494,6 +526,7 @@ class MissingDetailTemplateRenderTest(TestCase):
         self.assertEqual(response.status_code, 200, response.content)
         self.assertNotContains(response, _METRICS_INFLUX_URL_MARKER)
         self.assertNotContains(response, _METRICS_QUERY_TOKEN_MARKER)
+        self.assertNotContains(response, encrypted_query_token)
         self.assertContains(response, MASKED_SECRET, count=1)
         rendered_object = response.context["object"]
         self.assertEqual(rendered_object.influx_url_display, MASKED_SECRET)

@@ -10,6 +10,7 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 
 - **Clusters and Nodes** — Proxmox cluster name, mode (cluster/standalone), quorum status, node count, and Proxmox VE version. Each node includes online status, IP address, CPU usage, memory usage, and uptime at sync time. Optionally link to NetBox Cluster and Device objects.
 - **Virtual Machines** — VM status, resources, and configuration
+- **Standalone browser console** — a permission-gated Console tab on synchronized NetBox virtual machines, with QEMU noVNC/terminal and LXC terminal access relayed through proxbox-api without another management UI or browser-visible Proxmox credentials
 - **Containers (LXC)** — Container details and settings
 - **Firecracker Cloud inventory** — Host pools, host-agent VMs, image templates, and provisioned micro-VMs exposed separately from QEMU/LXC for NMS Cloud provisioning
 - **VM Snapshots** — Point-in-time snapshots for recovery

@@ -72,6 +72,12 @@ methods, tenant-scoped endpoint allowlists, bulk endpoint enablement, PDM
 endpoint sync, SDN inventory, Firecracker serializer hardening, dual VM
 interface sync, and the all-endpoint `enabled=False` no-connection guard.
 
+The current source also provides a standalone Console tab on synchronized core
+virtual machines. NetBox performs VM and endpoint-object authorization;
+proxbox-api relays short-lived, origin-bound, one-use QEMU noVNC/terminal and
+LXC terminal sessions. The path does not navigate to or depend on another management UI. See
+[Standalone Browser Console](features/browser-console.md).
+
 Current backend-runtime pairing: netbox-proxbox 0.0.26.post7 <-> proxbox-api 0.0.22 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The `0.0.26.post7` release adds NetBox-native search and filtering to the Proxbox virtual machines list while retaining the production console handoff, Proxmox metrics, soft-deleted VM purge surface, and the official NetBox 4.7.0 GA compatibility contract. The historical rows remain documented below.

@@ -29,6 +29,7 @@ __all__ = (
     "permission_intent_delete_vm",
     "permission_intent_update_lxc",
     "permission_intent_update_vm",
+    "permission_open_console",
     "permission_open_ssh_terminal",
     "permission_reset_encrypted_secrets",
     "permission_run_proxmox_action",
@@ -38,6 +39,7 @@ __all__ = (
 
 PROXMOX_ACTION_PERMISSION = "core.run_proxmox_action"
 SSH_TERMINAL_ACTION = "open_ssh_terminal"
+CONSOLE_ACTION = "open_console"
 
 
 class RequireProxboxDashboardAccessMixin(AccessMixin):
@@ -67,7 +69,10 @@ def permission_change_proxbox_plugin_settings() -> str:
 def permission_reset_encrypted_secrets() -> str:
     """Required for the destructive encrypted-secret recovery workflow."""
 
-    return f"{ProxboxPluginSettings._meta.app_label}.reset_encrypted_secrets"
+    return get_permission_for_model(
+        ProxboxPluginSettings,
+        "reset_encrypted_secrets",
+    )
 
 
 def permission_enqueue_proxbox_sync() -> str:
@@ -88,6 +93,11 @@ def permission_run_proxmox_action() -> str:
 def permission_open_ssh_terminal() -> str:
     """Required to open browser SSH terminal sessions through proxbox-api."""
     return get_permission_for_model(ProxmoxEndpoint, SSH_TERMINAL_ACTION)
+
+
+def permission_open_console() -> str:
+    """Required to open a synchronized VM console through proxbox-api."""
+    return get_permission_for_model(ProxmoxEndpoint, CONSOLE_ACTION)
 
 
 def permission_view_fastapi_endpoint() -> str:

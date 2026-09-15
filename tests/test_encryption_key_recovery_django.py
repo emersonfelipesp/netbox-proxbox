@@ -63,8 +63,7 @@ except Exception as exc:  # pragma: no cover - external test harness availabilit
     )
 
 from django.apps import apps  # noqa: E402
-from django.contrib.auth import get_user_model  # noqa: E402
-from django.contrib.auth.models import Permission  # noqa: E402
+from django.contrib.contenttypes.models import ContentType  # noqa: E402
 from django.core.exceptions import FieldDoesNotExist, ValidationError  # noqa: E402
 from django.db import DatabaseError, connection, connections, transaction  # noqa: E402
 from django.db.models.signals import post_save  # noqa: E402
@@ -74,6 +73,7 @@ from django.urls import reverse  # noqa: E402
 from django.views.debug import ExceptionReporter  # noqa: E402
 from core.models import ObjectChange  # noqa: E402
 from ipam.models import IPAddress  # noqa: E402
+from users.models import ObjectPermission  # noqa: E402
 from utilities.testing import create_test_virtualmachine  # noqa: E402
 
 from netbox_proxbox.api.serializers.settings import (  # noqa: E402
@@ -82,6 +82,7 @@ from netbox_proxbox.api.serializers.settings import (  # noqa: E402
 from netbox_proxbox.api.serializers.vm_cloudinit import (  # noqa: E402
     ProxmoxVMCloudInitSerializer,
 )
+from netbox_proxbox.choices import CredentialStorageBackendChoices  # noqa: E402
 
 
 _RESET_REPORTER_MARKER = "legacy-plaintext-reset-reporter-marker"
@@ -96,7 +97,9 @@ from netbox_proxbox.models import (  # noqa: E402
     NodeSSHCredential,
     PBSEndpoint,
     PDMEndpoint,
+    ProxmoxCluster,
     ProxmoxEndpoint,
+    ProxmoxMetricsInfluxDB,
     ProxmoxNode,
     ProxboxPluginSettings,
     ProxmoxVMCloudInit,
@@ -128,23 +131,10 @@ from netbox_proxbox.views.endpoints.proxmox import (  # noqa: E402
     ProxmoxEndpointSSHTerminalSessionView,
 )
 from netbox_proxbox.views.settings import SettingsView  # noqa: E402
-
-
-def _raw_update_fields(model: type, pk: object, **updates: object) -> None:
-    """Inject legacy/corrupt storage state without exercising guarded write APIs."""
-
-    quote_name = connection.ops.quote_name
-    table_name = quote_name(model._meta.db_table)
-    assignments = ", ".join(
-        f"{quote_name(model._meta.get_field(field_name).column)} = %s"
-        for field_name in updates
-    )
-    pk_column = quote_name(model._meta.pk.column)
-    with connection.cursor() as cursor:
-        cursor.execute(
-            f"UPDATE {table_name} SET {assignments} WHERE {pk_column} = %s",
-            [*updates.values(), pk],
-        )
+from tests.django_support import (  # noqa: E402
+    make_user,
+    raw_update_fields as _raw_update_fields,
+)
 
 
 class EncryptionKeyRecoveryTest(TestCase):
@@ -158,11 +148,10 @@ class EncryptionKeyRecoveryTest(TestCase):
             ProxboxPluginSettings,
             settings_obj.pk,
             encryption_key=self.old_key,
+            credential_storage_backend=CredentialStorageBackendChoices.LEGACY_ENCRYPTED,
         )
         self.settings_obj = ProxboxPluginSettings.objects.get(pk=settings_obj.pk)
-        self.operator = get_user_model().objects.create_user(
-            username="direct-recovery-operator"
-        )
+        self.operator = make_user("direct-recovery-operator")
 
         secret = lambda value: enc_helpers.encrypt(value, key=self.old_key)  # noqa: E731
         self.plaintexts = {
@@ -177,6 +166,7 @@ class EncryptionKeyRecoveryTest(TestCase):
             "node_private_key_enc": "node-private-key-recovery-test",
             "sshkeys_enc": "ssh-ed25519 recovery-test-public-key",
             "agent_token_enc": "firecracker-agent-recovery-test",
+            "metrics_query_token_enc": "metrics-query-token-recovery-test",
         }
 
         self.proxmox = ProxmoxEndpoint(
@@ -291,6 +281,22 @@ class EncryptionKeyRecoveryTest(TestCase):
             agent_token_enc=secret(self.plaintexts["agent_token_enc"]),
         )
         self.firecracker.refresh_from_db()
+        self.metrics_cluster = ProxmoxCluster.objects.create(
+            endpoint=self.proxmox,
+            name="recovery-metrics-cluster",
+        )
+        self.metrics = ProxmoxMetricsInfluxDB.objects.create(
+            name="recovery-metrics",
+            endpoint=self.proxmox,
+            proxmox_cluster=self.metrics_cluster,
+            enabled=False,
+        )
+        _raw_update_fields(
+            ProxmoxMetricsInfluxDB,
+            self.metrics.pk,
+            query_token_enc=secret(self.plaintexts["metrics_query_token_enc"]),
+        )
+        self.metrics.refresh_from_db()
 
     def _ciphertext_snapshot(self) -> dict[tuple[str, object], tuple[object, ...]]:
         snapshot: dict[tuple[str, object], tuple[object, ...]] = {}
@@ -310,8 +316,8 @@ class EncryptionKeyRecoveryTest(TestCase):
             audit_request_id=request_id,
         )
 
-        self.assertEqual(result.rows_rotated, 7)
-        self.assertEqual(result.ciphertext_values_rotated, 11)
+        self.assertEqual(result.rows_rotated, 8)
+        self.assertEqual(result.ciphertext_values_rotated, 12)
         self.settings_obj.refresh_from_db()
         self.assertEqual(self.settings_obj.encryption_key, self.new_key)
 
@@ -496,7 +502,7 @@ class EncryptionKeyRecoveryTest(TestCase):
             audit_request_id=uuid.uuid4(),
         )
 
-        self.assertEqual(result.ciphertext_values_rotated, 11)
+        self.assertEqual(result.ciphertext_values_rotated, 12)
         self.settings_obj.refresh_from_db()
         self.assertEqual(self.settings_obj.encryption_key, self.new_key)
         self.proxmox.refresh_from_db()
@@ -1123,8 +1129,11 @@ class EncryptionKeyRecoveryTest(TestCase):
             "/plugins/proxbox/settings/",
             {"encryption_key": submitted_key},
         )
-        request.user = get_user_model().objects.create_superuser(
-            username="initial-key-reporter", password="not-a-secret"
+        request.user = make_user(
+            "initial-key-reporter",
+            password="not-a-secret",
+            is_staff=True,
+            is_superuser=True,
         )
         with (
             patch(
@@ -1492,10 +1501,7 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.assertTrue(valid.is_valid(), valid.errors)
 
     def test_destructive_view_requires_the_separate_custom_permission(self) -> None:
-        user_model = get_user_model()
-        user = user_model.objects.create_user(
-            username="recovery-operator", password="not-a-secret"
-        )
+        user = make_user("recovery-operator", password="not-a-secret")
         client = Client()
         client.force_login(user)
         url = reverse("plugins:netbox_proxbox:encrypted_secret_reset")
@@ -1516,13 +1522,16 @@ class EncryptionKeyRecoveryTest(TestCase):
             password_enc="corrupt-password-for-permissioned-reset",
         )
 
-        permission = Permission.objects.get(
-            content_type__app_label="netbox_proxbox",
-            codename="reset_encrypted_secrets",
+        permission = ObjectPermission.objects.create(
+            name="Reset Proxbox encrypted secrets",
+            actions=["reset_encrypted_secrets"],
         )
-        user.user_permissions.add(permission)
-        if hasattr(user, "_perm_cache"):
-            delattr(user, "_perm_cache")
+        permission.object_types.add(
+            ContentType.objects.get_for_model(ProxboxPluginSettings)
+        )
+        permission.users.add(user)
+        user = type(user).objects.get(pk=user.pk)
+        client.force_login(user)
         allowed = client.post(url, payload)
         self.assertEqual(allowed.status_code, 302)
         self.proxmox.refresh_from_db()
@@ -1537,8 +1546,11 @@ class EncryptionKeyRecoveryTest(TestCase):
             self.proxmox.pk,
             password_enc=corrupt_marker,
         )
-        user = get_user_model().objects.create_superuser(
-            username="recovery-admin", password="not-a-secret"
+        user = make_user(
+            "recovery-admin",
+            password="not-a-secret",
+            is_staff=True,
+            is_superuser=True,
         )
         client = Client()
         client.force_login(user)
@@ -1645,7 +1657,7 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
             password_enc="corrupt-partial-save-ciphertext",
         )
         stale_endpoint = ProxmoxEndpoint.objects.get(pk=endpoint.pk)
-        actor = get_user_model().objects.create_user(username="partial-save-reset")
+        actor = make_user("partial-save-reset")
         reset_paused = threading.Event()
         allow_commit = threading.Event()
         reset_errors: list[BaseException] = []
@@ -1719,7 +1731,7 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
             host.pk,
             agent_token_enc="corrupt-concurrent-firecracker-token",
         )
-        actor = get_user_model().objects.create_user(username="bulk-status-reset")
+        actor = make_user("bulk-status-reset")
         reset_paused = threading.Event()
         allow_commit = threading.Event()
         reset_errors: list[BaseException] = []
@@ -1798,7 +1810,7 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
             host.pk,
             agent_token_enc="corrupt-conflict-upsert-firecracker-token",
         )
-        actor = get_user_model().objects.create_user(username="conflict-upsert-reset")
+        actor = make_user("conflict-upsert-reset")
         reset_paused = threading.Event()
         allow_commit = threading.Event()
         reset_errors: list[BaseException] = []
@@ -1875,7 +1887,7 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
             password_enc=enc_helpers.encrypt("current-secret", key=old_key),
         )
         late_ciphertext = enc_helpers.encrypt("late-secret", key=old_key)
-        operator = get_user_model().objects.create_user(username="queryset-race")
+        operator = make_user("queryset-race")
         rotation_paused = threading.Event()
         allow_commit = threading.Event()
         rotation_errors: list[BaseException] = []
@@ -1971,7 +1983,7 @@ class EncryptionRecoveryTableLockTest(TransactionTestCase):
         )
         stale_writer = ProxmoxEndpoint.objects.get(pk=endpoint.pk)
         stale_writer.password_enc = enc_helpers.encrypt("late-secret", key=old_key)
-        operator = get_user_model().objects.create_user(username="stale-writer")
+        operator = make_user("stale-writer")
 
         rotate_encryption_key(
             old_key=old_key,

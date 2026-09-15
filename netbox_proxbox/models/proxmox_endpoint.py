@@ -764,7 +764,10 @@ class ProxmoxEndpoint(EndpointBase):
         ordering = ("name", "pk")
         verbose_name = _("Proxmox endpoint")
         verbose_name_plural = _("Proxmox endpoints")
-        permissions = (("open_ssh_terminal", _("Can open Proxbox SSH terminal")),)
+        permissions = (
+            ("open_ssh_terminal", _("Can open Proxbox SSH terminal")),
+            ("open_console_proxmoxendpoint", _("Can open Proxbox VM consoles")),
+        )
         constraints = (
             models.UniqueConstraint(
                 fields=("name", "ip_address", "domain"),

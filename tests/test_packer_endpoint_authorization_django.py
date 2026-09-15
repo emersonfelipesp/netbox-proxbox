@@ -60,15 +60,15 @@ except Exception as exc:  # pragma: no cover - external harness availability
         f"NetBox test environment is not available: {exc}", allow_module_level=True
     )
 
-from django.contrib.auth import get_user_model  # noqa: E402
 from django.contrib.contenttypes.models import ContentType  # noqa: E402
 from django.core.exceptions import ValidationError  # noqa: E402
 from django.db import transaction  # noqa: E402
 from django.test import TestCase, TransactionTestCase  # noqa: E402
 from django.urls import reverse  # noqa: E402
-from users.models import ObjectPermission, Token  # noqa: E402
+from users.models import ObjectPermission  # noqa: E402
 
 from netbox_proxbox.models import ProxmoxEndpoint  # noqa: E402
+from tests.django_support import make_api_token, make_user  # noqa: E402
 
 
 def _create_endpoint(name: str, **overrides: object) -> ProxmoxEndpoint:
@@ -130,11 +130,11 @@ class PackerAuthorizationDeletionAPITest(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
-        cls.user = get_user_model().objects.create_user(
+        cls.user = make_user(
             username="packer-delete-operator",
             is_staff=True,
         )
-        cls.token = Token.objects.create(user=cls.user)
+        cls.token, cls.auth_headers = make_api_token(cls.user)
         permission = ObjectPermission.objects.create(
             name="delete-proxmox-endpoints-after-packer-revocation",
             actions=["view", "delete"],
@@ -143,7 +143,7 @@ class PackerAuthorizationDeletionAPITest(TestCase):
         permission.users.add(cls.user)
 
     def _auth_headers(self) -> dict[str, str]:
-        return {"HTTP_AUTHORIZATION": f"Token {self.token.key}"}
+        return self.auth_headers
 
     def test_failed_revocation_state_blocks_single_rest_delete(self) -> None:
         endpoint = _create_endpoint("failed-revocation")

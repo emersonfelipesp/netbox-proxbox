@@ -1,0 +1,94 @@
+{% extends 'generic/object.html' %}
+{% load i18n %}
+{% load static %}
+
+{% block content %}
+<link rel="stylesheet" href="{% static 'netbox_proxbox/vendor/xterm/xterm.css' %}">
+<link rel="stylesheet" href="{% static 'netbox_proxbox/css/vm_console.css' %}">
+
+<div
+  id="proxbox-vm-console"
+  class="card proxbox-vm-console"
+  data-session-url="{{ session_url }}"
+  data-csrf-token="{{ csrf_token }}"
+  data-console-ready="{% if console_ready %}true{% else %}false{% endif %}"
+  data-vm-type="{{ vm_type }}"
+  data-novnc-module-url="{% static 'netbox_proxbox/vendor/novnc/core/rfb.js' %}"
+>
+  <div class="card-header d-flex flex-wrap align-items-center justify-content-between gap-2">
+    <div>
+      <strong>{% trans "Console" %}</strong>
+      <div class="text-secondary small">{% trans "A short-lived, server-mediated connection to this guest." %}</div>
+    </div>
+    <span
+      id="proxbox-console-status"
+      class="badge text-bg-secondary"
+      role="status"
+      aria-live="polite"
+    >{% trans "Disconnected" %}</span>
+  </div>
+
+  <div class="card-body d-flex flex-column gap-3">
+    {% if not console_ready %}
+      <div class="alert alert-warning mb-0" role="alert">
+        {% if detail %}{{ detail }}{% else %}{% trans "Console access is unavailable for this guest." %}{% endif %}
+      </div>
+    {% endif %}
+
+    <div class="proxbox-console-toolbar">
+      <div>
+        <label class="form-label mb-1" for="proxbox-console-type">{% trans "Protocol" %}</label>
+        <select
+          id="proxbox-console-type"
+          class="form-select form-select-sm"
+          {% if not console_ready %}disabled{% endif %}
+        >
+          {% if vm_type == "qemu" %}
+            <option value="novnc">{% trans "Graphical (noVNC)" %}</option>
+          {% endif %}
+          <option value="term">{% trans "Terminal" %}</option>
+        </select>
+      </div>
+
+      <div class="proxbox-console-actions">
+        <button
+          id="proxbox-console-connect"
+          type="button"
+          class="btn btn-primary btn-sm"
+          {% if not console_ready %}disabled{% endif %}
+        >
+          <i class="mdi mdi-console-line" aria-hidden="true"></i>
+          <span id="proxbox-console-connect-label">{% trans "Connect" %}</span>
+        </button>
+        <button
+          id="proxbox-console-disconnect"
+          type="button"
+          class="btn btn-outline-secondary btn-sm"
+          disabled
+        >
+          <i class="mdi mdi-close-network-outline" aria-hidden="true"></i>
+          {% trans "Disconnect" %}
+        </button>
+      </div>
+    </div>
+
+    <div id="proxbox-console-message" class="alert alert-danger d-none mb-0" role="alert"></div>
+
+    <div id="proxbox-console-surface" class="proxbox-console-surface" aria-label="{% trans 'Guest console' %}">
+      <div id="proxbox-console-placeholder" class="proxbox-console-placeholder">
+        <i class="mdi mdi-monitor" aria-hidden="true"></i>
+        <p class="mb-0">{% trans "Select a protocol, then connect when you are ready." %}</p>
+      </div>
+      <div id="proxbox-console-novnc" class="proxbox-console-view d-none" tabindex="-1"></div>
+      <div id="proxbox-console-terminal" class="proxbox-console-view proxbox-console-terminal d-none" tabindex="-1"></div>
+    </div>
+
+    <p class="text-secondary small mb-0">
+      {% trans "Closing or leaving this page ends the browser session. A reconnect requests a new one-time session." %}
+    </p>
+  </div>
+</div>
+
+<script src="{% static 'netbox_proxbox/vendor/xterm/xterm.js' %}"></script>
+<script type="module" src="{% static 'netbox_proxbox/js/vm_console.js' %}"></script>
+{% endblock content %}

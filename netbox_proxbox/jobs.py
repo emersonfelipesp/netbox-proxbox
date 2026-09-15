@@ -1278,6 +1278,7 @@ class _SyncRunContext:
         "proxmox_endpoint_ids",
         "run_started",
         "stages",
+        "sync_state_endpoint_backfill",
         "types",
     )
 
@@ -1306,13 +1307,14 @@ class _SyncRunContext:
         self.run_started = time.monotonic()
         self.stages = expanded_sync_stages(types)
         self.branch: object | None = None
+        self.sync_state_endpoint_backfill: dict[str, object] | None = None
         self.params = _build_sync_run_params(self)
 
 
 class _StagedSyncState:
     """Preflight state accumulated before the estate-wide service phases."""
 
-    __slots__ = ("endpoint_ids", "phases", "preflight")
+    __slots__ = ("backend_id_by_plugin_pk", "endpoint_ids", "phases", "preflight")
 
     def __init__(
         self,
@@ -1321,6 +1323,7 @@ class _StagedSyncState:
         phases: list[dict[str, object]],
         preflight: PreflightResult,
     ) -> None:
+        self.backend_id_by_plugin_pk: dict[str, str] | None = None
         self.endpoint_ids = endpoint_ids
         self.phases = phases
         self.preflight = preflight
@@ -1523,6 +1526,8 @@ def _sync_data_with_branch(context: _SyncRunContext) -> dict[str, object]:
     identity = _branch_identity(context.branch)
     if identity is not None:
         sync_data["branch"] = identity
+    if context.sync_state_endpoint_backfill is not None:
+        sync_data["sync_state_endpoint_backfill"] = context.sync_state_endpoint_backfill
     return sync_data
 
 
@@ -1676,6 +1681,7 @@ def _run_batch_phase(context: _SyncRunContext) -> bool:
     preflight = _bootstrap_backend_endpoints(context)
     wire_scope, wire_by_pk = _resolve_batch_endpoint_scope(context)
     batch_result = _execute_batch_sync(context, wire_scope, wire_by_pk)
+    _backfill_sync_state_endpoints(context, wire_by_pk)
     _persist_batch_result(context, batch_result, preflight)
     summary = _batch_result_summary(batch_result)
     _raise_for_batch_failures(context.job, batch_result, summary)
@@ -2174,13 +2180,14 @@ def _run_sse_stages(
 ) -> list[dict[str, object]]:
     """Checkpoint accumulated local evidence if the SSE run does not return."""
     try:
-        return _run_all_stages_sync(
-            context.job,
-            context.stages,
-            context.params,
-            context.run_started,
-            preflight_hint=state.preflight.hint,
-        )
+        with sync_stages.capture_wire_endpoint_ids() as backend_id_by_plugin_pk:
+            stages = _run_all_stages_sync(
+                context.job,
+                context.stages,
+                context.params,
+                context.run_started,
+                preflight_hint=state.preflight.hint,
+            )
     except BaseException:
         disposition = _sse_failure_disposition(context, state.phases)
         _persist_staged_result(
@@ -2190,6 +2197,31 @@ def _run_sse_stages(
             branch_disposition=disposition,
         )
         raise
+    state.backend_id_by_plugin_pk = backend_id_by_plugin_pk or None
+    return stages
+
+
+def _backfill_sync_state_endpoints(
+    context: _SyncRunContext,
+    backend_id_by_plugin_pk: dict[str, str] | None,
+) -> None:
+    """Bind sync-state endpoint FKs inside the run's branch context."""
+    if not backend_id_by_plugin_pk:
+        reason = "the run resolved no usable plugin-to-backend endpoint map"
+        context.sync_state_endpoint_backfill = {"skipped": True, "reason": reason}
+        context.job.logger.warning(f"Sync-state endpoint backfill skipped: {reason}")
+        return
+    from netbox_proxbox.services.branch_lifecycle import (  # noqa: PLC0415
+        activate_sync_branch,
+    )
+    from netbox_proxbox.services.sync_state_endpoint_backfill import (  # noqa: PLC0415
+        backfill_sync_state_endpoints,
+    )
+
+    with activate_sync_branch(context.branch):
+        summary = backfill_sync_state_endpoints(backend_id_by_plugin_pk)
+    context.sync_state_endpoint_backfill = summary.as_dict()
+    context.job.logger.info(summary.one_line())
 
 
 def _finish_staged_sync(
@@ -2198,6 +2230,7 @@ def _finish_staged_sync(
 ) -> None:
     """Run SSE stages, persist their results, classify errors, and merge."""
     stages = _run_sse_stages(context, state)
+    _backfill_sync_state_endpoints(context, state.backend_id_by_plugin_pk)
     state.phases.extend(_phases_from_stage_results(stages))
     _warn_for_missing_stage_runtimes(context.job, stages)
     runtime_seconds = _persist_staged_result(context, stages, state.phases)

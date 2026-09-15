@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
+from cryptography.fernet import Fernet
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
@@ -36,41 +37,79 @@ except Exception as exc:  # pragma: no cover - depends on external test services
         f"NetBox test environment is not available: {exc}", allow_module_level=True
     )
 
-from ipam.models import IPAddress
-from users.models import Token
-from utilities.testing import (
+from django.urls import reverse  # noqa: E402
+from ipam.models import IPAddress  # noqa: E402
+from users.models import Token  # noqa: E402
+from utilities.testing import (  # noqa: E402
     APIViewTestCases,
     create_test_user,
     create_test_virtualmachine,
 )
-from virtualization.models import Cluster, ClusterType
+from virtualization.models import Cluster, ClusterType  # noqa: E402
 
-from netbox_proxbox.choices import (
+from netbox_proxbox.choices import (  # noqa: E402
+    CredentialStorageBackendChoices,
     ProxmoxBackupFormatChoices,
     ProxmoxBackupSubtypeChoices,
     ProxmoxModeChoices,
     ProxmoxSnapshotStatusChoices,
     ProxmoxSnapshotSubtypeChoices,
 )
-from netbox_proxbox.models import (
+from netbox_proxbox.models import (  # noqa: E402
     FastAPIEndpoint,
     NetBoxEndpoint,
     ProxmoxStorage,
     ProxmoxEndpoint,
+    ProxboxPluginSettings,
     VMBackup,
     VMSnapshot,
     VMTaskHistory,
 )
 
 
-class ProxmoxEndpointAPITest(APIViewTestCases.APIViewTestCase):
+class _ProxboxAPIViewTestCase(
+    APIViewTestCases.GetObjectViewTestCase,
+    APIViewTestCases.ListObjectsViewTestCase,
+    APIViewTestCases.CreateObjectViewTestCase,
+    APIViewTestCases.UpdateObjectViewTestCase,
+    APIViewTestCases.DeleteObjectViewTestCase,
+):
+    """Run NetBox's complete REST contract without claiming a GraphQL surface."""
+
+    __test__ = False
+    api_namespace = "plugins-api:netbox_proxbox-api"
+    api_basename: str | None = None
+
+    def _get_detail_url(self, instance):
+        basename = self.api_basename or instance._meta.model_name
+        return reverse(f"{self.api_namespace}:{basename}-detail", args=[instance.pk])
+
+    def _get_list_url(self):
+        basename = self.api_basename or self.model._meta.model_name
+        return reverse(f"{self.api_namespace}:{basename}-list")
+
+
+class _ProxboxEndpointAPIViewTestCase(_ProxboxAPIViewTestCase):
+    __test__ = False
+    api_namespace = "plugins-api:netbox_proxbox-api:endpoints"
+
+
+class ProxmoxEndpointAPITest(_ProxboxEndpointAPIViewTestCase):
+    __test__ = True
     model = ProxmoxEndpoint
     brief_fields = ["display", "domain", "id", "name", "port", "url"]
     bulk_update_data = {"verify_ssl": True}
-    validation_excluded_fields = ["ip_address"]
+    update_data = {"name": "pve-updated"}
+    validation_excluded_fields = ["ip_address", "password", "token_value"]
 
     @classmethod
     def setUpTestData(cls):
+        settings = ProxboxPluginSettings.get_solo()
+        settings.credential_storage_backend = (
+            CredentialStorageBackendChoices.LEGACY_ENCRYPTED
+        )
+        settings.encryption_key = Fernet.generate_key().decode("ascii")
+        settings.save(update_fields=("credential_storage_backend", "encryption_key"))
         cls.ip_addresses = [
             IPAddress.objects.create(address="192.0.2.1/24"),
             IPAddress.objects.create(address="192.0.2.2/24"),
@@ -161,10 +200,12 @@ class ProxmoxEndpointAPITest(APIViewTestCases.APIViewTestCase):
         assert "ip_address" in response.data
 
 
-class NetBoxEndpointAPITest(APIViewTestCases.APIViewTestCase):
+class NetBoxEndpointAPITest(_ProxboxEndpointAPIViewTestCase):
+    __test__ = True
     model = NetBoxEndpoint
     brief_fields = ["display", "domain", "id", "name", "port", "url"]
     bulk_update_data = {"verify_ssl": False}
+    update_data = {"name": "netbox-updated"}
     validation_excluded_fields = ["ip_address", "token"]
 
     @classmethod
@@ -240,10 +281,12 @@ class NetBoxEndpointAPITest(APIViewTestCases.APIViewTestCase):
         assert "ip_address" in response.data
 
 
-class FastAPIEndpointAPITest(APIViewTestCases.APIViewTestCase):
+class FastAPIEndpointAPITest(_ProxboxEndpointAPIViewTestCase):
+    __test__ = True
     model = FastAPIEndpoint
     brief_fields = ["display", "domain", "id", "name", "port", "url"]
     bulk_update_data = {"use_websocket": True}
+    update_data = {"name": "proxbox-updated"}
     validation_excluded_fields = ["ip_address", "token"]
 
     @classmethod
@@ -332,7 +375,8 @@ class FastAPIEndpointAPITest(APIViewTestCases.APIViewTestCase):
         assert "ip_address" in response.data
 
 
-class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
+class VMBackupAPITest(_ProxboxAPIViewTestCase):
+    __test__ = True
     model = VMBackup
     brief_fields = [
         "creation_time",
@@ -343,6 +387,7 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
         "url",
     ]
     bulk_update_data = {"encrypted": "1"}
+    update_data = {"encrypted": "1"}
     validation_excluded_fields = ["virtual_machine"]
 
     @classmethod
@@ -367,16 +412,10 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
             )
             for idx in range(6)
         ]
-        cls.storages = [
-            ProxmoxStorage.objects.create(
-                cluster=f"cluster-{idx}", name=f"storage-{idx}"
-            )
-            for idx in range(6)
-        ]
-
         for idx in range(3):
             VMBackup.objects.create(
-                storage=cls.storages[idx],
+                proxmox_storage=cls.storages[idx],
+                storage=f"storage-{idx}",
                 virtual_machine=cls.virtual_machines[idx],
                 subtype=ProxmoxBackupSubtypeChoices.BACKUP_SUBTYPE_QEMU,
                 format=ProxmoxBackupFormatChoices.BACKUP_FORMAT_TZST,
@@ -386,7 +425,8 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
 
         cls.create_data = [
             {
-                "storage": cls.storages[3].pk,
+                "proxmox_storage": cls.storages[3].pk,
+                "storage": "storage-3",
                 "virtual_machine": {"id": cls.virtual_machines[3].pk},
                 "subtype": ProxmoxBackupSubtypeChoices.BACKUP_SUBTYPE_QEMU,
                 "format": ProxmoxBackupFormatChoices.BACKUP_FORMAT_TZST,
@@ -394,7 +434,8 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
                 "encrypted": "",
             },
             {
-                "storage": cls.storages[4].pk,
+                "proxmox_storage": cls.storages[4].pk,
+                "storage": "storage-4",
                 "virtual_machine": {"id": cls.virtual_machines[4].pk},
                 "subtype": ProxmoxBackupSubtypeChoices.BACKUP_SUBTYPE_LXC,
                 "format": ProxmoxBackupFormatChoices.BACKUP_FORMAT_TGZ,
@@ -402,7 +443,8 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
                 "encrypted": "1",
             },
             {
-                "storage": cls.storages[5].pk,
+                "proxmox_storage": cls.storages[5].pk,
+                "storage": "storage-5",
                 "virtual_machine": {"id": cls.virtual_machines[5].pk},
                 "subtype": ProxmoxBackupSubtypeChoices.BACKUP_SUBTYPE_QEMU,
                 "format": ProxmoxBackupFormatChoices.BACKUP_FORMAT_RAW,
@@ -412,9 +454,20 @@ class VMBackupAPITest(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class VMSnapshotAPITest(APIViewTestCases.APIViewTestCase):
+class VMSnapshotAPITest(_ProxboxAPIViewTestCase):
+    __test__ = True
     model = VMSnapshot
-    brief_fields = ["display", "id", "name", "storage", "url"]
+    brief_fields = [
+        "display",
+        "id",
+        "name",
+        "proxmox_storage",
+        "status",
+        "url",
+        "virtual_machine",
+    ]
+    bulk_update_data = {"description": "Bulk-updated snapshot description"}
+    update_data = {"description": "Updated snapshot description"}
     validation_excluded_fields = ["virtual_machine"]
 
     @classmethod
@@ -439,16 +492,9 @@ class VMSnapshotAPITest(APIViewTestCases.APIViewTestCase):
             )
             for idx in range(6)
         ]
-        cls.storages = [
-            ProxmoxStorage.objects.create(
-                cluster=f"cluster-{idx}", name=f"storage-{idx}"
-            )
-            for idx in range(6)
-        ]
-
         for idx in range(3):
             VMSnapshot.objects.create(
-                storage=cls.storages[idx],
+                proxmox_storage=cls.storages[idx],
                 virtual_machine=cls.virtual_machines[idx],
                 name=f"snapshot-{idx}",
                 description="Snapshot description",
@@ -460,7 +506,7 @@ class VMSnapshotAPITest(APIViewTestCases.APIViewTestCase):
 
         cls.create_data = [
             {
-                "storage": cls.storages[3].pk,
+                "proxmox_storage": cls.storages[3].pk,
                 "virtual_machine": {"id": cls.virtual_machines[3].pk},
                 "name": "snapshot-3",
                 "description": "Snapshot description",
@@ -470,7 +516,7 @@ class VMSnapshotAPITest(APIViewTestCases.APIViewTestCase):
                 "status": ProxmoxSnapshotStatusChoices.SNAPSHOT_STATUS_ACTIVE,
             },
             {
-                "storage": cls.storages[4].pk,
+                "proxmox_storage": cls.storages[4].pk,
                 "virtual_machine": {"id": cls.virtual_machines[4].pk},
                 "name": "snapshot-4",
                 "description": "Snapshot description",
@@ -480,7 +526,7 @@ class VMSnapshotAPITest(APIViewTestCases.APIViewTestCase):
                 "status": ProxmoxSnapshotStatusChoices.SNAPSHOT_STATUS_ACTIVE,
             },
             {
-                "storage": cls.storages[5].pk,
+                "proxmox_storage": cls.storages[5].pk,
                 "virtual_machine": {"id": cls.virtual_machines[5].pk},
                 "name": "snapshot-5",
                 "description": "Snapshot description",
@@ -492,9 +538,21 @@ class VMSnapshotAPITest(APIViewTestCases.APIViewTestCase):
         ]
 
 
-class VMTaskHistoryAPITest(APIViewTestCases.APIViewTestCase):
+class VMTaskHistoryAPITest(_ProxboxAPIViewTestCase):
+    __test__ = True
     model = VMTaskHistory
-    brief_fields = ["display", "id", "start_time", "status", "url", "username"]
+    brief_fields = [
+        "display",
+        "end_time",
+        "id",
+        "start_time",
+        "status",
+        "url",
+        "username",
+        "virtual_machine",
+    ]
+    bulk_update_data = {"description": "Bulk-updated task description"}
+    update_data = {"description": "Updated task description"}
     validation_excluded_fields = ["virtual_machine"]
 
     @classmethod
@@ -510,7 +568,7 @@ class VMTaskHistoryAPITest(APIViewTestCases.APIViewTestCase):
                 upid=f"UPID:pve0{idx}:{idx}",
                 node=f"pve0{idx}",
                 pid=2000 + idx,
-                pstart=datetime(2024, 3, 9, 17, 0, idx, tzinfo=timezone.utc),
+                pstart=1_000_000 + idx,
                 task_id=str(100 + idx),
                 task_type="qmstart" if idx % 2 == 0 else "vzstart",
                 username="root@pam",
@@ -529,7 +587,7 @@ class VMTaskHistoryAPITest(APIViewTestCases.APIViewTestCase):
                 "upid": "UPID:pve03:3",
                 "node": "pve03",
                 "pid": 2003,
-                "pstart": datetime(2024, 3, 9, 17, 0, 3, tzinfo=timezone.utc),
+                "pstart": 1_000_003,
                 "task_id": "103",
                 "task_type": "qmstart",
                 "username": "root@pam",
@@ -546,7 +604,7 @@ class VMTaskHistoryAPITest(APIViewTestCases.APIViewTestCase):
                 "upid": "UPID:pve04:4",
                 "node": "pve04",
                 "pid": 2004,
-                "pstart": datetime(2024, 3, 9, 17, 0, 4, tzinfo=timezone.utc),
+                "pstart": 1_000_004,
                 "task_id": "104",
                 "task_type": "vzcreate",
                 "username": "root@pam",
@@ -563,7 +621,7 @@ class VMTaskHistoryAPITest(APIViewTestCases.APIViewTestCase):
                 "upid": "UPID:pve05:5",
                 "node": "pve05",
                 "pid": 2005,
-                "pstart": datetime(2024, 3, 9, 17, 0, 5, tzinfo=timezone.utc),
+                "pstart": 1_000_005,
                 "task_id": "105",
                 "task_type": "qmsnapshot",
                 "username": "root@pam",

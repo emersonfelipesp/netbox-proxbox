@@ -108,6 +108,9 @@ def test_reverse_restores_definitions_and_virtual_machine_bindings() -> None:
     source = MIGRATION_PATH.read_text()
 
     assert "manager.update_or_create(" in source
-    assert "custom_field.object_types.add(vm_content_type)" in source
+    assert 'CustomField._meta.get_field("object_types")' in source
+    assert "through_model.objects.using(db_alias).get_or_create(" in source
+    assert "source_id_field: custom_field.pk" in source
+    assert "target_id_field: vm_content_type.pk" in source
     assert 'app_label="virtualization"' in source
     assert 'model="virtualmachine"' in source

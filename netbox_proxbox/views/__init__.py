@@ -261,6 +261,7 @@ from .ha import HAClusterView
 from .sitemap import SitemapView
 from .vm_config import ProxmoxVMConfigTabView
 from .vm_ha import ProxmoxVMHATabView
+from .vm_console import ProxboxVMConsoleSessionView, ProxboxVMConsoleTabView
 from .vm_snapshot import (
     VMSnapshotBulkDeleteView,
     VMSnapshotBulkEditView,

@@ -52,13 +52,11 @@ except Exception as exc:  # pragma: no cover - depends on external test services
         f"NetBox test environment is not available: {exc}", allow_module_level=True
     )
 
-from django.contrib.auth import get_user_model  # noqa: E402
 from django.db import connection, models  # noqa: E402
 from django.db.migrations.executor import MigrationExecutor  # noqa: E402
 from django.http import QueryDict  # noqa: E402
-from django.test import SimpleTestCase, TestCase, TransactionTestCase  # noqa: E402
+from django.test import SimpleTestCase, TestCase  # noqa: E402
 from django.urls import reverse  # noqa: E402
-from users.models import Token  # noqa: E402
 from virtualization.models import Cluster, ClusterType  # noqa: E402
 
 from netbox_proxbox.api.serializers.storage import (  # noqa: E402
@@ -69,6 +67,11 @@ from netbox_proxbox.filtersets import ProxmoxStorageFilterSet  # noqa: E402
 from netbox_proxbox.models import ProxmoxStorage  # noqa: E402
 from netbox_proxbox.views import storage as storage_views  # noqa: E402
 from netbox_proxbox.views.storage import ProxmoxStorageView  # noqa: E402
+from tests.django_support import (  # noqa: E402
+    ForwardOnlyMigrationTestCase,
+    make_api_token,
+    make_user,
+)
 
 
 class ProxmoxStorageContentBudgetTest(SimpleTestCase):
@@ -308,12 +311,11 @@ class ProxmoxStorageNodesCapacityTest(TestCase):
             ",".join(f"pve-api-{index}-{node:03d}" for node in range(80))
             for index in range(2)
         ]
-        user = get_user_model().objects.create_user(
+        user = make_user(
             username="storage-long-membership-api",
             is_superuser=True,
         )
-        token = Token.objects.create(user=user)
-        headers = {"HTTP_AUTHORIZATION": f"Token {token.key}"}
+        _token, headers = make_api_token(user)
         list_url = reverse("plugins-api:netbox_proxbox-api:storage-list")
 
         bulk_response = self.client.patch(
@@ -345,34 +347,37 @@ class ProxmoxStorageNodesCapacityTest(TestCase):
         )
 
 
-class ProxmoxStorageNodesCapacityMigrationTest(TransactionTestCase):
-    """Prove the current leaf's expand-only rollback/reapply behavior."""
+class ProxmoxStorageNodesCapacityMigrationTest(ForwardOnlyMigrationTestCase):
+    """Prove the storage field's expand-only rollback/reapply behavior."""
 
-    def _migrate_to(self, target: tuple[str, str]):
-        executor = MigrationExecutor(connection)
-        executor.migrate([target])
-        executor = MigrationExecutor(connection)
-        return executor.loader.project_state([target]).apps
+    @classmethod
+    def resolve_migration_floor(
+        cls,
+        executor: MigrationExecutor,
+    ) -> tuple[str, str]:
+        """Use the storage migration's parent without pinning its number."""
 
-    def _migration_edge(self) -> tuple[tuple[str, str], tuple[str, str]]:
-        executor = MigrationExecutor(connection)
+        return cls._migration_edge_for_executor(executor)[0]
+
+    @staticmethod
+    def _migration_edge_for_executor(
+        executor: MigrationExecutor,
+    ) -> tuple[tuple[str, str], tuple[str, str]]:
         leaf_targets = tuple(executor.loader.graph.leaf_nodes("netbox_proxbox"))
-        self.assertEqual(
-            len(leaf_targets),
-            1,
-            f"Expected exactly one netbox_proxbox migration leaf: {leaf_targets}",
-        )
+        if len(leaf_targets) != 1:
+            raise AssertionError(
+                f"Expected exactly one netbox_proxbox migration leaf: {leaf_targets}"
+            )
         migration_targets = tuple(
             target
             for target in executor.loader.disk_migrations
             if target[0] == "netbox_proxbox"
             and target[1].endswith("_storage_nodes_text")
         )
-        self.assertEqual(
-            len(migration_targets),
-            1,
-            f"Expected exactly one storage-nodes migration: {migration_targets}",
-        )
+        if len(migration_targets) != 1:
+            raise AssertionError(
+                f"Expected exactly one storage-nodes migration: {migration_targets}"
+            )
         migrate_to = migration_targets[0]
         migration = executor.loader.get_migration(*migrate_to)
         plugin_dependencies = [
@@ -380,12 +385,14 @@ class ProxmoxStorageNodesCapacityMigrationTest(TransactionTestCase):
             for dependency in migration.dependencies
             if dependency[0] == "netbox_proxbox"
         ]
-        self.assertEqual(
-            len(plugin_dependencies),
-            1,
-            f"Expected one plugin parent for {migrate_to}: {plugin_dependencies}",
-        )
+        if len(plugin_dependencies) != 1:
+            raise AssertionError(
+                f"Expected one plugin parent for {migrate_to}: {plugin_dependencies}"
+            )
         return plugin_dependencies[0], migrate_to
+
+    def _migration_edge(self) -> tuple[tuple[str, str], tuple[str, str]]:
+        return self._migration_edge_for_executor(MigrationExecutor(connection))
 
     def test_forward_rollback_and_reapply_preserve_large_membership(self) -> None:
         migrate_from, migrate_to = self._migration_edge()
@@ -397,9 +404,9 @@ class ProxmoxStorageNodesCapacityMigrationTest(TransactionTestCase):
 
         try:
             apps_before = self._migrate_to(migrate_from)
+            StorageBefore = apps_before.get_model("netbox_proxbox", "ProxmoxStorage")
             ClusterTypeBefore = apps_before.get_model("virtualization", "ClusterType")
             ClusterBefore = apps_before.get_model("virtualization", "Cluster")
-            StorageBefore = apps_before.get_model("netbox_proxbox", "ProxmoxStorage")
             cluster_type = ClusterTypeBefore.objects.create(
                 name="storage-migration-type",
                 slug="storage-migration-type",
@@ -440,7 +447,4 @@ class ProxmoxStorageNodesCapacityMigrationTest(TransactionTestCase):
                 rollback_membership,
             )
         finally:
-            executor = MigrationExecutor(connection)
-            current_leaves = tuple(executor.loader.graph.leaf_nodes("netbox_proxbox"))
-            self.assertEqual(len(current_leaves), 1)
-            self._migrate_to(current_leaves[0])
+            self._restore_current_leaf()

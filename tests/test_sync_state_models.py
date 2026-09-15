@@ -53,12 +53,10 @@ except Exception as exc:  # pragma: no cover - depends on external test services
     )
 
 from django.apps import apps as django_apps  # noqa: E402
-from django.contrib.auth import get_user_model  # noqa: E402
 from django.contrib.contenttypes.models import ContentType  # noqa: E402
 from django.core.exceptions import ValidationError  # noqa: E402
 from django.db import IntegrityError, connection, models, transaction  # noqa: E402
-from django.db.migrations.executor import MigrationExecutor  # noqa: E402
-from django.test import TestCase, TransactionTestCase  # noqa: E402
+from django.test import TestCase  # noqa: E402
 from django.test.utils import CaptureQueriesContext  # noqa: E402
 from django.urls import reverse  # noqa: E402
 from dcim.models import Device, DeviceRole, DeviceType, Interface, Manufacturer, Site  # noqa: E402
@@ -115,6 +113,7 @@ from netbox_proxbox.models import (  # noqa: E402
     ProxmoxNode,
     ProxmoxStorage,
 )
+from tests.django_support import ForwardOnlyMigrationTestCase, make_user  # noqa: E402
 
 
 SYNC_STATE_MODELS = (
@@ -253,20 +252,12 @@ def _create_api_auth_token(user) -> Token:
     return token
 
 
-def _create_test_user(username: str):
-    user = get_user_model().objects.create_user(username=username)
-    if any(field.name == "is_staff" for field in user._meta.fields):
-        user.is_staff = True
-        user.save(update_fields=["is_staff"])
-    return user
-
-
 def _create_api_token(
     username: str,
     sidecar_models: tuple[type, ...],
     parent_models: set[type],
 ) -> Token:
-    user = _create_test_user(username)
+    user = make_user(username, is_staff=True)
     token = _create_api_auth_token(user)
     permission = ObjectPermission.objects.create(
         name=f"{username}-sync-state-rw",
@@ -521,7 +512,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
     @classmethod
     def setUpTestData(cls) -> None:
         super().setUpTestData()
-        cls.user = _create_test_user("sync-state-api")
+        cls.user = make_user("sync-state-api", is_staff=True)
         cls.token = _create_api_auth_token(cls.user)
         cls.auth_headers = _auth_headers(cls.token)
         permission = ObjectPermission.objects.create(
@@ -544,7 +535,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
         for model in parent_models:
             parent_permission.object_types.add(ContentType.objects.get_for_model(model))
         parent_permission.users.add(cls.user)
-        cls.sidecar_only_user = _create_test_user("sync-state-sidecar-only")
+        cls.sidecar_only_user = make_user("sync-state-sidecar-only", is_staff=True)
         cls.sidecar_only_token = _create_api_auth_token(cls.sidecar_only_user)
         cls.sidecar_only_auth_headers = _auth_headers(cls.sidecar_only_token)
         sidecar_only_permission = ObjectPermission.objects.create(
@@ -1494,7 +1485,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
         )
 
     def test_api_rejects_patch_to_hidden_parent(self) -> None:
-        limited_user = _create_test_user("sync-state-limited-parent")
+        limited_user = make_user("sync-state-limited-parent", is_staff=True)
         limited_token = _create_api_auth_token(limited_user)
         sidecar_permission = ObjectPermission.objects.create(
             name="sync-state-limited-sidecar",
@@ -2010,92 +2001,142 @@ class ProxboxSyncStateBackfillTest(_SyncStateFixturesMixin, TestCase):
         )
 
 
-class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
+class ProxboxSyncStateHistoricalMigrationTest(ForwardOnlyMigrationTestCase):
     """Exercise sync-state migrations through historical app registries."""
 
-    def _migrate_to(self, target: tuple[str, str]):
-        executor = MigrationExecutor(connection)
-        executor.migrate([target])
-        executor = MigrationExecutor(connection)
-        return executor.loader.project_state([target]).apps
+    migration_floor = MIGRATION_0064
 
-    def _restore_current_leaf(self) -> None:
-        """Restore the graph leaf so historical tests cannot pollute later suites."""
-
-        executor = MigrationExecutor(connection)
-        leaves = tuple(executor.loader.graph.leaf_nodes("netbox_proxbox"))
-        self.assertEqual(
-            len(leaves),
-            1,
-            f"Expected exactly one netbox_proxbox migration leaf: {leaves}",
+    def test_floor_post_migrate_state_matches_a_fresh_historical_install(self) -> None:
+        ContentTypeAtFloor = self.migration_apps.get_model(
+            "contenttypes", "ContentType"
         )
-        self._migrate_to(leaves[0])
+        PermissionAtFloor = self.migration_apps.get_model("auth", "Permission")
+        floor_content_type = ContentTypeAtFloor.objects.get(
+            app_label="netbox_proxbox",
+            model="proxmoxvmcloudinit",
+        )
+
+        self.assertTrue(
+            {
+                "add_proxmoxvmcloudinit",
+                "change_proxmoxvmcloudinit",
+                "delete_proxmoxvmcloudinit",
+                "view_proxmoxvmcloudinit",
+            }.issubset(
+                PermissionAtFloor.objects.filter(
+                    content_type=floor_content_type
+                ).values_list("codename", flat=True)
+            )
+        )
+        self.assertFalse(
+            ContentTypeAtFloor.objects.filter(
+                app_label="netbox_proxbox",
+                model="proxboxvirtualmachinesyncstate",
+            ).exists()
+        )
+        self.assertFalse(
+            PermissionAtFloor.objects.filter(
+                content_type__app_label="netbox_proxbox",
+                codename="add_proxboxvirtualmachinesyncstate",
+            ).exists()
+        )
 
     def _seed_sync_state_sources(self) -> dict[str, int]:
-        cluster_type = ClusterType.objects.create(
+        apps = self.migration_apps
+        ClusterTypeAtFloor = apps.get_model("virtualization", "ClusterType")
+        ClusterGroupAtFloor = apps.get_model("virtualization", "ClusterGroup")
+        ClusterAtFloor = apps.get_model("virtualization", "Cluster")
+        DeviceAtFloor = apps.get_model("dcim", "Device")
+        DeviceRoleAtFloor = apps.get_model("dcim", "DeviceRole")
+        DeviceTypeAtFloor = apps.get_model("dcim", "DeviceType")
+        InterfaceAtFloor = apps.get_model("dcim", "Interface")
+        ManufacturerAtFloor = apps.get_model("dcim", "Manufacturer")
+        SiteAtFloor = apps.get_model("dcim", "Site")
+        IPAddressAtFloor = apps.get_model("ipam", "IPAddress")
+        VLANAtFloor = apps.get_model("ipam", "VLAN")
+        VirtualDiskAtFloor = apps.get_model("virtualization", "VirtualDisk")
+        VirtualMachineAtFloor = apps.get_model("virtualization", "VirtualMachine")
+        VMInterfaceAtFloor = apps.get_model("virtualization", "VMInterface")
+        EndpointAtFloor = apps.get_model("netbox_proxbox", "ProxmoxEndpoint")
+        ProxmoxClusterAtFloor = apps.get_model("netbox_proxbox", "ProxmoxCluster")
+        ProxmoxNodeAtFloor = apps.get_model("netbox_proxbox", "ProxmoxNode")
+        StorageAtFloor = apps.get_model("netbox_proxbox", "ProxmoxStorage")
+
+        cluster_type = ClusterTypeAtFloor.objects.create(
             name="migration-sync-state-cluster-type",
             slug="migration-sync-state-cluster-type",
         )
-        cluster_group = ClusterGroup.objects.create(
+        cluster_group = ClusterGroupAtFloor.objects.create(
             name="migration-sync-state-cluster-group",
             slug="migration-sync-state-cluster-group",
         )
-        cluster = Cluster.objects.create(
+        cluster = ClusterAtFloor.objects.create(
             name="migration-sync-state-cluster",
             type=cluster_type,
             group=cluster_group,
         )
-        endpoint = ProxmoxEndpoint.objects.create(name="migration-sync-state-endpoint")
-        proxmox_cluster = ProxmoxCluster.objects.create(
+        manufacturer = ManufacturerAtFloor.objects.create(
+            name="migration-sync-state-maker",
+            slug="migration-sync-state-maker",
+        )
+        device_type = DeviceTypeAtFloor.objects.create(
+            manufacturer=manufacturer,
+            model="migration-sync-state-type",
+            slug="migration-sync-state-type",
+        )
+        device_role = DeviceRoleAtFloor.objects.create(
+            name="migration-sync-state-role",
+            slug="migration-sync-state-role",
+        )
+        site = SiteAtFloor.objects.create(
+            name="migration-sync-state-site",
+            slug="migration-sync-state-site",
+        )
+        device = DeviceAtFloor.objects.create(
+            name="migration-sync-state-device",
+            site=site,
+            device_type=device_type,
+            role=device_role,
+        )
+        endpoint = EndpointAtFloor.objects.create(name="migration-sync-state-endpoint")
+        proxmox_cluster = ProxmoxClusterAtFloor.objects.create(
             endpoint=endpoint,
             netbox_cluster=cluster,
             name="migration-pve",
             cluster_id="6600",
         )
-        device = create_test_device("migration-sync-state-device")
-        proxmox_node = ProxmoxNode.objects.create(
+        proxmox_node = ProxmoxNodeAtFloor.objects.create(
             endpoint=endpoint,
             proxmox_cluster=proxmox_cluster,
             netbox_device=device,
             name="migration-node",
             ip_address="192.0.2.66",
         )
-        storage = ProxmoxStorage.objects.create(
+        storage = StorageAtFloor.objects.create(
             cluster=cluster,
             name="migration-sync-state-storage",
         )
-        vm = create_test_virtualmachine("migration-sync-state-vm")
-        vm.cluster = cluster
-        vm.save()
-        bridge = Interface.objects.create(device=device, name="migration-vmbr0")
-        ip_address = IPAddress.objects.create(address="192.0.2.66/24")
-        vlan = VLAN.objects.create(name="migration-sync-state-vlan", vid=660)
-        virtual_disk = VirtualDisk.objects.create(
+        vm = VirtualMachineAtFloor.objects.create(
+            name="migration-sync-state-vm",
+            cluster=cluster,
+        )
+        bridge = InterfaceAtFloor.objects.create(
+            device=device,
+            name="migration-vmbr0",
+        )
+        ip_address = IPAddressAtFloor.objects.create(
+            address=f"{proxmox_node.ip_address}/24"
+        )
+        vlan = VLANAtFloor.objects.create(name="migration-sync-state-vlan", vid=660)
+        virtual_disk = VirtualDiskAtFloor.objects.create(
             virtual_machine=vm,
             name="migration-scsi0",
             size=1024,
         )
-        vm_interface = VMInterface.objects.create(
+        vm_interface = VMInterfaceAtFloor.objects.create(
             virtual_machine=vm,
             name="migration-net0",
             enabled=True,
-        )
-        manufacturer = Manufacturer.objects.create(
-            name="migration-sync-state-maker",
-            slug="migration-sync-state-maker",
-        )
-        device_type = DeviceType.objects.create(
-            manufacturer=manufacturer,
-            model="migration-sync-state-type",
-            slug="migration-sync-state-type",
-        )
-        device_role = DeviceRole.objects.create(
-            name="migration-sync-state-role",
-            slug="migration-sync-state-role",
-        )
-        site = Site.objects.create(
-            name="migration-sync-state-site",
-            slug="migration-sync-state-site",
         )
 
         _set_custom_field_data(
@@ -2191,12 +2232,16 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
         }
 
     def _seed_relation_edge_case_sources(self, ids: dict[str, int]) -> dict:
-        vm = VirtualMachine.objects.get(pk=ids["vm"])
+        apps = self.migration_apps
+        VirtualDiskAtFloor = apps.get_model("virtualization", "VirtualDisk")
+        VirtualMachineAtFloor = apps.get_model("virtualization", "VirtualMachine")
+        VMInterfaceAtFloor = apps.get_model("virtualization", "VMInterface")
+        vm = VirtualMachineAtFloor.objects.get(pk=ids["vm"])
         overflow_storage_raw = {"id": "999999999999999999999999"}
         unresolved_storage_raw = {"id": 987654321}
         named_bridge_raw = {"name": "vmbr0"}
 
-        overflow_disk = VirtualDisk.objects.create(
+        overflow_disk = VirtualDiskAtFloor.objects.create(
             virtual_machine=vm,
             name="migration-overflow-scsi0",
             size=1024,
@@ -2205,7 +2250,7 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
             overflow_disk,
             {"proxbox_storage_id": overflow_storage_raw},
         )
-        unresolved_disk = VirtualDisk.objects.create(
+        unresolved_disk = VirtualDiskAtFloor.objects.create(
             virtual_machine=vm,
             name="migration-unresolved-scsi0",
             size=1024,
@@ -2214,7 +2259,7 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
             unresolved_disk,
             {"proxbox_storage_id": unresolved_storage_raw},
         )
-        named_bridge_interface = VMInterface.objects.create(
+        named_bridge_interface = VMInterfaceAtFloor.objects.create(
             virtual_machine=vm,
             name="migration-named-net0",
             enabled=True,
@@ -2535,13 +2580,25 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
     def test_forward_removes_only_vm_reflection_fields_and_reverse_restores_them(
         self,
     ) -> None:
-        vm = create_test_virtualmachine("migration-vm-reflection-removal")
-
         try:
             apps_0083 = self._migrate_to(MIGRATION_0083)
             CustomField0083 = apps_0083.get_model("extras", "CustomField")
             ContentType0083 = apps_0083.get_model("contenttypes", "ContentType")
+            ClusterType0083 = apps_0083.get_model("virtualization", "ClusterType")
+            Cluster0083 = apps_0083.get_model("virtualization", "Cluster")
             VirtualMachine0083 = apps_0083.get_model("virtualization", "VirtualMachine")
+            cluster_type = ClusterType0083.objects.create(
+                name="migration-vm-reflection-type",
+                slug="migration-vm-reflection-type",
+            )
+            cluster = Cluster0083.objects.create(
+                name="migration-vm-reflection-cluster",
+                type=cluster_type,
+            )
+            vm = VirtualMachine0083.objects.create(
+                name="migration-vm-reflection-removal",
+                cluster=cluster,
+            )
             vm_content_type = ContentType0083.objects.get(
                 app_label="virtualization",
                 model="virtualmachine",
@@ -2650,11 +2707,11 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
                 "custom_fields_enabled",
                 {field.name for field in Settings0070._meta.get_fields()},
             )
+            settings = Settings0070.objects.get(singleton_key="default")
             legacy_field = models.BooleanField(default=False)
             legacy_field.set_attributes_from_name("custom_fields_enabled")
             with connection.schema_editor() as schema_editor:
                 schema_editor.add_field(Settings0070, legacy_field)
-            settings = Settings0070.objects.create()
             with connection.cursor() as cursor:
                 cursor.execute(
                     "UPDATE netbox_proxbox_proxboxpluginsettings "
@@ -2742,23 +2799,30 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
         try:
             self._migrate_to(MIGRATION_0064)
             apps_0069 = self._migrate_to(MIGRATION_0069)
-            cluster = Cluster.objects.get(pk=ids["cluster"])
-            device = Device.objects.get(pk=ids["device"])
-            vm = VirtualMachine.objects.get(pk=ids["vm"])
-            alternate_storage = ProxmoxStorage.objects.create(
+            Storage0069 = apps_0069.get_model("netbox_proxbox", "ProxmoxStorage")
+            Cluster0069 = apps_0069.get_model("virtualization", "Cluster")
+            Device0069 = apps_0069.get_model("dcim", "Device")
+            Interface0069 = apps_0069.get_model("dcim", "Interface")
+            VirtualDisk0069 = apps_0069.get_model("virtualization", "VirtualDisk")
+            VirtualMachine0069 = apps_0069.get_model("virtualization", "VirtualMachine")
+            VMInterface0069 = apps_0069.get_model("virtualization", "VMInterface")
+            cluster = Cluster0069.objects.get(pk=ids["cluster"])
+            device = Device0069.objects.get(pk=ids["device"])
+            vm = VirtualMachine0069.objects.get(pk=ids["vm"])
+            alternate_storage = Storage0069.objects.create(
                 cluster=cluster,
                 name="sync-state-api-patched-storage",
             )
-            alternate_bridge = Interface.objects.create(
+            alternate_bridge = Interface0069.objects.create(
                 device=device,
                 name="migration-patched-bridge",
             )
-            cleared_disk = VirtualDisk.objects.create(
+            cleared_disk = VirtualDisk0069.objects.create(
                 virtual_machine=vm,
                 name="migration-cleared-scsi0",
                 size=1024,
             )
-            cleared_vm_interface = VMInterface.objects.create(
+            cleared_vm_interface = VMInterface0069.objects.create(
                 virtual_machine=vm,
                 name="migration-cleared-net0",
                 enabled=True,
@@ -2929,14 +2993,20 @@ class ProxboxSyncStateHistoricalMigrationTest(TransactionTestCase):
 
     def test_relation_fk_data_migration_uses_targeted_relation_lookups(self) -> None:
         ids = self._seed_sync_state_sources()
-        cluster = Cluster.objects.get(pk=ids["cluster"])
-        device = Device.objects.get(pk=ids["device"])
+        StorageAtFloor = self.migration_apps.get_model(
+            "netbox_proxbox", "ProxmoxStorage"
+        )
+        ClusterAtFloor = self.migration_apps.get_model("virtualization", "Cluster")
+        DeviceAtFloor = self.migration_apps.get_model("dcim", "Device")
+        InterfaceAtFloor = self.migration_apps.get_model("dcim", "Interface")
+        cluster = ClusterAtFloor.objects.get(pk=ids["cluster"])
+        device = DeviceAtFloor.objects.get(pk=ids["device"])
         for index in range(5):
-            ProxmoxStorage.objects.create(
+            StorageAtFloor.objects.create(
                 cluster=cluster,
                 name=f"migration-unreferenced-storage-{index}",
             )
-            Interface.objects.create(
+            InterfaceAtFloor.objects.create(
                 device=device,
                 name=f"migration-unreferenced-iface-{index}",
             )

@@ -24,6 +24,24 @@ downloads/
 eggs/
 .eggs/
 lib/
+!netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/
+netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/*
+!netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/utils/
+netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/utils/*
+!netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/utils/common.js
+!netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/zlib/
+netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/zlib/*
+!netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/zlib/adler32.js
+!netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/zlib/constants.js
+!netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/zlib/crc32.js
+!netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/zlib/deflate.js
+!netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/zlib/gzheader.js
+!netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/zlib/inffast.js
+!netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/zlib/inflate.js
+!netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/zlib/inftrees.js
+!netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/zlib/messages.js
+!netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/zlib/trees.js
+!netbox_proxbox/static/netbox_proxbox/vendor/novnc/vendor/pako/lib/zlib/zstream.js
 lib64/
 parts/
 sdist/
@@ -147,3 +165,4 @@ dmypy.json
 # Claude Code local state and git worktrees (never commit worktree gitlinks)
 .claude/
 .worktrees/
+.tmp/

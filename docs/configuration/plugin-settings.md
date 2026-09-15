@@ -473,9 +473,12 @@ rotation** instead:
 
 ### Lost-key destructive reset
 
-If the old key is unavailable, a user with the separate
-`netbox_proxbox.reset_encrypted_secrets` permission may use **Destructive
-encrypted-secret reset**. Select only the affected families, acknowledge data
+If the old key is unavailable, a user with a NetBox Object Permission for the
+Proxbox plugin settings object type and the additional action
+`reset_encrypted_secrets` may use **Destructive encrypted-secret reset**. Its
+effective permission string is
+`netbox_proxbox.reset_encrypted_secrets_proxboxpluginsettings`. Select only the
+affected families, acknowledge data
 loss, and type `RESET PROXBOX ENCRYPTED SECRETS` exactly. While holding the
 recovery locks, the operation tests every non-empty ciphertext in each selected
 family against the configured key. It clears only values that fail decryption;

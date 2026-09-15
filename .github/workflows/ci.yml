@@ -90,6 +90,7 @@ jobs:
           python -m pip install --upgrade pip build twine
           python -m build
           python scripts/check_dist_inventory.py dist/*.whl dist/*.tar.gz
+          python scripts/verify_vm_console_artifacts.py dist
           python -m twine check dist/*
 
   test:

@@ -1,16 +1,12 @@
 """API serializer for ProxboxPluginSettings."""
 
-from django.core.exceptions import ValidationError
 from django.views.decorators.debug import sensitive_variables
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
 
 from netbox_proxbox.constants import OVERWRITE_FIELDS, SYNC_MODE_FIELDS
 from netbox_proxbox.models import ProxboxPluginSettings
-from netbox_proxbox.models.plugin_settings import (
-    CEPH_POLL_INTERVAL_TIMEOUT_ERROR,
-    validate_console_url,
-)
+from netbox_proxbox.models.plugin_settings import CEPH_POLL_INTERVAL_TIMEOUT_ERROR
 
 
 class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
@@ -39,6 +35,21 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """Validate timing relationships for full and partial API updates."""
 
+        if "encryption_key" in attrs and self.instance is not None:
+            from netbox_proxbox.services.encryption_recovery import (
+                EncryptionRecoveryError,
+                assert_ordinary_key_mutation_allowed,
+            )
+
+            try:
+                assert_ordinary_key_mutation_allowed(
+                    str(getattr(self.instance, "encryption_key", "") or ""),
+                    str(attrs.get("encryption_key") or ""),
+                )
+            except EncryptionRecoveryError as exc:
+                raise serializers.ValidationError(
+                    {"encryption_key": str(exc)}
+                ) from None
         validated = super().validate(attrs)
         timeout = validated.get(
             "ceph_task_timeout",
@@ -64,33 +75,6 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             raise serializers.ValidationError(
                 {"ceph_task_poll_interval": CEPH_POLL_INTERVAL_TIMEOUT_ERROR}
             )
-        console_url = (
-            str(
-                validated.get("console_url", getattr(self.instance, "console_url", ""))
-                or ""
-            )
-            .strip()
-            .rstrip("/")
-        )
-        try:
-            validate_console_url(console_url)
-        except ValidationError as exc:
-            raise serializers.ValidationError({"console_url": str(exc)}) from exc
-        if "encryption_key" in validated and self.instance is not None:
-            from netbox_proxbox.services.encryption_recovery import (
-                EncryptionRecoveryError,
-                assert_ordinary_key_mutation_allowed,
-            )
-
-            try:
-                assert_ordinary_key_mutation_allowed(
-                    str(getattr(self.instance, "encryption_key", "") or ""),
-                    str(validated.get("encryption_key") or ""),
-                )
-            except EncryptionRecoveryError as exc:
-                raise serializers.ValidationError(
-                    {"encryption_key": str(exc)}
-                ) from None
         return validated
 
     @sensitive_variables()
@@ -122,7 +106,6 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "url",
             "display",
             "singleton_key",
-            "console_url",
             "use_guest_agent_interface_name",
             "vm_interface_sync_strategy",
             "proxbox_fetch_max_concurrency",

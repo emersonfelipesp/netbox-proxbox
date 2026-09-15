@@ -24,11 +24,19 @@ pins that split so the fix cannot be "simplified" back into a global option.
 from __future__ import annotations
 
 import hashlib
+from datetime import UTC, datetime
 import pathlib
 import re
 import tomllib
 
 import pytest
+
+from tests.django_database_names import (
+    POSTGRES_IDENTIFIER_LIMIT,
+    disposable_database_name,
+    make_run_nonce,
+    parse_disposable_database_name,
+)
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 PYPROJECT = REPO_ROOT / "pyproject.toml"
@@ -43,6 +51,62 @@ CI_WORKFLOW_DOC = REPO_ROOT / "docs" / "developer" / "ci-e2e-workflows.md"
 MKDOCS = REPO_ROOT / "mkdocs.yml"
 README = REPO_ROOT / "README.md"
 NETBOX_TEST_CONFIG = REPO_ROOT / "tests" / "netbox_test_configuration.py"
+
+
+def test_disposable_database_names_differ_between_harness_instances():
+    """Concurrent harnesses must never target each other's PostgreSQL databases."""
+
+    first_nonce = make_run_nonce()
+    second_nonce = make_run_nonce()
+    first_name = disposable_database_name("test", "same-test", run_nonce=first_nonce)
+    second_name = disposable_database_name("test", "same-test", run_nonce=second_nonce)
+
+    assert first_nonce != second_nonce
+    assert first_name != second_name
+    assert len(first_name) <= POSTGRES_IDENTIFIER_LIMIT
+    assert len(second_name) <= POSTGRES_IDENTIFIER_LIMIT
+
+
+def test_disposable_database_names_bind_the_xdist_worker():
+    """Workers remain isolated even if their PID and random token are identical."""
+
+    first_nonce = make_run_nonce(
+        process_id=1234,
+        worker_id="gw0",
+        random_token="fixed-token",
+    )
+    second_nonce = make_run_nonce(
+        process_id=1234,
+        worker_id="gw1",
+        random_token="fixed-token",
+    )
+
+    assert first_nonce != second_nonce
+
+
+def test_disposable_database_name_encodes_utc_start_and_owner_pid():
+    """A dead run remains attributable after its Python process disappears."""
+
+    started_at = datetime(2026, 9, 15, 12, 34, 56, tzinfo=UTC)
+    run_nonce = make_run_nonce(
+        process_id=1234,
+        worker_id="gw0",
+        random_token="fixed-token",
+        started_at=started_at,
+    )
+    database_name = disposable_database_name(
+        "foundation",
+        "floor-0064",
+        run_nonce=run_nonce,
+    )
+    parsed = parse_disposable_database_name(database_name)
+
+    assert parsed is not None
+    assert parsed.run_nonce == run_nonce
+    assert parsed.process_id == 1234
+    assert parsed.started_minute == started_at.replace(second=0)
+    assert parsed.role == "foundation"
+    assert len(database_name) <= POSTGRES_IDENTIFIER_LIMIT
 
 
 def test_mocked_suite_disables_pytest_django():
@@ -154,6 +218,23 @@ def test_real_django_workflow_runs_pdm_object_permission_regression():
 
     assert "tests/test_pdm_endpoint_permissions_django.py" in workflow
     assert "pdm: true" in workflow
+
+
+def test_real_django_workflow_runs_sync_state_endpoint_backfill_regression():
+    """The ORM corroboration test must be explicit in the real-Django command."""
+    workflow = DJANGO_WORKFLOW.read_text()
+
+    assert "tests/test_sync_state_endpoint_backfill_django.py" in workflow
+
+
+def test_real_django_workflow_runs_api_netbox_integration():
+    """The API integration suite must execute against real NetBox models."""
+    workflow = DJANGO_WORKFLOW.read_text()
+
+    assert "tests/test_api_netbox_integration.py" in workflow, (
+        "django-tests.yml must select test_api_netbox_integration.py; the mocked "
+        "suite cannot prove its NetBox serializer and model integration"
+    )
 
 
 def test_endpoint_autoconfiguration_traceability_is_published():

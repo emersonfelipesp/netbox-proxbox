@@ -1,226 +1,174 @@
-# Browser Console Handoff
+# Standalone Browser Console
 
-This document is the canonical `netbox-proxbox` implementation guide for the browser-console handoff. The plugin owns configuration and safe navigation from a NetBox virtual-machine page to NMS. It does not request a Proxmox ticket, open a WebSocket, relay console traffic, or authorize the resulting console session.
+## Purpose
 
-The NMS frontend owns the Console tab and noVNC/xterm clients. `nms-backend` owns caller-scoped object authorization and the one-time WebSocket relay. `proxbox-api` owns Proxmox `vncproxy`/`termproxy` ticket acquisition.
+netbox-proxbox provides a Console tab directly on each synchronized NetBox `VirtualMachine`. It does not navigate to or require another management application. Other applications may provide their own consoles as parallel downstream consumers, but they are not part of this request path.
 
-## Contents
+The feature supports:
 
-1. [End-to-end role](#end-to-end-role)
-2. [Configuration model and migration](#configuration-model-and-migration)
-3. [URL validation](#url-validation)
-4. [Settings UI and API](#settings-ui-and-api)
-5. [Template extension lifecycle](#template-extension-lifecycle)
-6. [Button visibility gates](#button-visibility-gates)
-7. [Destination construction](#destination-construction)
-8. [Rendered link security](#rendered-link-security)
-9. [Authorization boundary](#authorization-boundary)
-10. [Failure behavior and diagnosis](#failure-behavior-and-diagnosis)
-11. [Regression coverage](#regression-coverage)
-12. [Security invariants](#security-invariants)
-13. [Change checklist](#change-checklist)
+- QEMU graphical consoles through noVNC;
+- QEMU terminal consoles through xterm.js; and
+- LXC terminal consoles through xterm.js.
 
-## End-to-end role
+LXC graphical consoles are rejected at the browser, NetBox, and proxbox-api boundaries.
+
+## Trust boundaries
 
 ```text
-NetBox VM detail page
-    |
-    | PluginTemplateExtension.buttons()
-    | safe link containing only NMS origin, route family, and NetBox VM ID
-    v
-NMS guest detail page
-    |
-    | operator selects the Console tab
-    | authenticated session request with complete Proxmox identity
-    v
-nms-backend one-time relay -> proxbox-api -> Proxmox
+Browser
+  | authenticated NetBox page + CSRF-protected session request
+  v
+netbox-proxbox
+  | exact restricted VM + open_console endpoint permission
+  | typed sync-state identity + authenticated service request
+  v
+proxbox-api
+  | encrypted, origin-bound, short-lived, one-use relay state
+  | Proxmox ticket acquisition and WebSocket authentication
+  v
+Proxmox vncwebsocket
 ```
 
-The current handoff opens one of these routes:
+netbox-proxbox owns NetBox object authorization and the user interface. proxbox-api owns Proxmox authentication and the WebSocket transport. This split is required because stock NetBox exposes Django plugin HTTP views but does not terminate plugin WebSockets.
 
-```text
-https://<nms-origin>/virtualization/virtual-machines/<netbox-vm-pk>
-https://<nms-origin>/virtualization/lxc-containers/<netbox-vm-pk>
+The browser receives only:
+
+- the configured public proxbox-api WebSocket authority plus a fixed relay path;
+- one short-lived opaque relay token;
+- the relay expiry timestamp; and
+- the selected console type.
+
+The browser never receives the Proxmox hostname, port, VNC ticket, authentication header or cookie, upstream WebSocket URL, endpoint ID, API key, or TLS verification policy. None of those values may appear in browser DOM attributes, JavaScript logs, Django error responses, or proxbox-api close reasons.
+
+## Authorization and identity
+
+The tab requires `netbox_proxbox.open_console_proxmoxendpoint`. Session creation repeats authorization server-side and never trusts fields supplied by JavaScript.
+
+`ProxboxVMConsoleSessionView` performs these checks in order:
+
+1. the caller is authenticated;
+2. the caller has the global console permission;
+3. `VirtualMachine.objects.restrict(user, "view")` returns the exact requested VM;
+4. its `ProxboxVirtualMachineSyncState` belongs to that VM;
+5. the typed `ProxmoxEndpoint` is enabled and remains visible through the caller's `open_console` object restriction;
+6. the typed `ProxmoxNode` belongs to that endpoint, and its current name matches the recorded synchronized name;
+7. any typed Proxmox cluster belongs to the same endpoint;
+8. VMID is positive and the synchronized guest type is exactly `qemu` or `lxc`;
+9. exactly one trusted `FastAPIEndpoint` maps the typed endpoint to a current proxbox-api endpoint row; and
+10. a recorded raw backend endpoint ID, when present, matches the resolved backend ID.
+
+Missing, ambiguous, partial, or drifted identity fails closed. The view does not fall back to the VM name, a custom field, the first Proxmox endpoint, or an unscoped proxbox-api request.
+
+The tab view keeps the two object types separate inside NetBox's generic view
+machinery. Its permission hook checks the endpoint-owned `open_console`
+permission together with any inherited `additional_permissions`,
+without allowing `ObjectPermissionRequiredMixin` to apply that
+action to the `VirtualMachine` queryset. The queryset is independently
+restricted with the caller's VM `view` permission, and the resolved synchronized
+endpoint is then checked through its own `open_console` restriction. Removing
+that explicit separation turns every endpoint-authorized VM lookup into a 404
+because `open_console` is not a `VirtualMachine` action.
+
+## Session protocol
+
+The browser sends only the selected `console_type` to the plugin session route. The plugin derives every target field server-side and calls:
+
+```http
+POST /proxmox/console/browser-sessions
+Content-Type: application/json
+X-Proxbox-API-Key: <server-side only>
+X-Proxbox-Actor: <NetBox username>
+
+{
+  "endpoint_id": 31,
+  "vmid": 101,
+  "node": "pve-01",
+  "vm_type": "qemu",
+  "console_type": "novnc",
+  "origin": "https://netbox.example.com"
+}
 ```
 
-It does **not** append `?tab=console`. The current NMS page does not consume that query parameter. The operator selects the Console tab after the guest detail page opens. Do not document or test automatic tab selection unless the NMS implementation is explicitly changed first.
+proxbox-api returns a short-lived opaque token and a relative browser relay path to the NetBox server. The plugin validates the response and returns a browser-safe projection:
 
-## Configuration model and migration
-
-`ProxboxPluginSettings.console_url` is the single configured browser-console destination. It is an optional `URLField` with an empty default. An empty value disables the handoff by hiding the button.
-
-Migration `0084_proxboxpluginsettings_console_url.py` adds the field to the singleton settings model. The migration follows the repository's idempotent settings-field pattern so installations can upgrade across already-partial schemas safely.
-
-The configured value must be the NMS **origin**, for example:
-
-```text
-https://nms.nmulti.cloud
+```json
+{
+  "websocket_url": "wss://relay.example.com/proxmox/console/browser-stream",
+  "stream_token": "<opaque>",
+  "expires_at": "2026-09-14T13:00:00+00:00",
+  "console_type": "novnc"
+}
 ```
 
-Do not configure a guest route, API route, path prefix, query string, fragment, username, password, or Proxmox endpoint.
+The configured `FastAPIEndpoint.websocket_domain` and WebSocket port must identify the public TLS endpoint that serves proxbox-api. The page and relay must use HTTPS/WSS. Redirects are disabled for the authenticated server request.
 
-## URL validation
+The browser WebSocket automatically supplies the NetBox page `Origin`. It offers
+`binary` plus a dedicated token subprotocol, while proxbox-api negotiates only
+`binary`. The token never appears in the URI, query string, DOM, console output,
+or access log. proxbox-api atomically consumes the token only when that origin
+matches the value bound during creation. Expired, replayed, malformed, or
+foreign-origin tokens cannot open a stream.
 
-`netbox_proxbox/models/plugin_settings.py::validate_console_url()` is the shared model/API validator. It allows an empty value and otherwise requires:
+## Graphical console
 
-- no whitespace anywhere;
-- scheme exactly `https`;
-- a hostname;
-- no username or password;
-- path empty or `/` only;
-- no query string;
-- no fragment; and
-- a syntactically valid optional port.
+The graphical client uses the vendored noVNC 1.7.0 ES-module runtime and connects without a password. The runtime includes the upstream noVNC and pako licenses and is pinned by a complete file-list and SHA-256 tree-digest test. proxbox-api performs the bounded RFB 3.8 authentication exchange with Proxmox server-side, answers the VNC challenge using the private ticket, and presents no-auth RFB to noVNC only after that upstream authentication succeeds.
 
-Calling `parsed.port` is deliberate: `urlsplit()` alone can accept a malformed or out-of-range textual port and defer the error until the port property is read.
+The UI enables `scaleViewport` and `resizeSession`. Disconnect, reconnect, page hide, and page unload paths destroy the RFB object and remove listeners before another session can start.
 
-`ProxboxPluginSettings.clean()` validates the normalized persisted value. The settings form and API serializer repeat validation at their boundaries so unsafe input is rejected before save and partial API updates cannot preserve or introduce an invalid console origin.
+## Terminal console
 
-The template path validates again at render time. `_console_base_url()` catches settings access errors, strips surrounding whitespace and a trailing slash, rejects embedded whitespace, forces port parsing, and repeats every origin-only rule. This defense means a legacy, manually corrupted, or partially migrated database value hides the link instead of rendering an unsafe destination.
+The terminal client uses the existing vendored xterm.js assets. It follows Proxmox termproxy framing:
 
-## Settings UI and API
+- terminal output frames begin with `d` and the prefix is removed before writing to xterm;
+- resize uses `1:<rows>:<cols>:0`;
+- the keepalive frame is `0` followed by NUL; and
+- keyboard input is forwarded only while the current WebSocket is open.
 
-`ProxboxPluginSettingsForm.console_url` renders **Browser console URL** on the plugin settings page. `clean_console_url()` trims the value, removes trailing slashes, validates the HTTPS origin, and returns the normalized string. `ProxboxPluginSettingsView` loads the current value and writes the cleaned value in the settings transaction.
+A `ResizeObserver` updates the terminal dimensions. The observer, socket, xterm instance, and event listeners are all released during disconnect and page teardown.
 
-`ProxboxPluginSettingsSerializer` exposes `console_url` through the plugin settings API. Its object-level validation reads either the incoming field or, for partial updates, the existing instance value; it normalizes and calls `validate_console_url()`. This prevents an unrelated PATCH from bypassing the invariant on an existing invalid value.
+## Migration from the external handoff
 
-Relevant files:
+Migration `0084_proxboxpluginsettings_console_url.py` remains immutable release history. Migration `0095_standalone_vm_console.py` removes `ProxboxPluginSettings.console_url` and adds the `open_console_proxmoxendpoint` permission. The settings form, settings API, template extension button, and external-link template no longer expose the retired handoff.
 
-| File | Responsibility |
+Upgrade proxbox-api first so the browser relay is available before the NetBox
+plugin exposes the Console tab. Deploying the plugin first fails closed with an
+unavailable-session response, but leaves operators without a working console
+until the backend is upgraded.
+
+After upgrading proxbox-api:
+
+1. upgrade netbox-proxbox and run the normal NetBox migration process;
+2. grant `netbox_proxbox.open_console_proxmoxendpoint` only to roles allowed to interact with guest consoles;
+3. configure the `FastAPIEndpoint` HTTP and public WebSocket authorities with HTTPS/WSS and certificate verification; and
+4. verify the Console tab with a synchronized QEMU and LXC guest.
+
+No external console URL setting is required or accepted.
+
+## Failure behavior
+
+| Symptom | Check |
 |---|---|
-| `netbox_proxbox/migrations/0084_proxboxpluginsettings_console_url.py` | Adds the persistent optional setting. |
-| `netbox_proxbox/models/plugin_settings.py` | Field definition, shared validator, and model validation. |
-| `netbox_proxbox/forms/settings.py` | Settings-page field, normalization, and form validation. |
-| `netbox_proxbox/views/settings.py` | Loads and persists the setting. |
-| `netbox_proxbox/api/serializers/settings.py` | API exposure and full/partial-update validation. |
-| `netbox_proxbox/templates/netbox_proxbox/settings.html` | Renders the field in the plugin settings UI. |
+| Console tab is absent | Confirm the user has `netbox_proxbox.open_console_proxmoxendpoint`. |
+| Tab shows incomplete sync identity | Run a full Proxbox sync and confirm the VM sidecar links one enabled endpoint and node. |
+| Session reports no trusted backend | Confirm the endpoint has been synchronized to exactly one enabled FastAPI backend and its stored target still matches. |
+| Session requires HTTPS | Serve NetBox over HTTPS and configure a public WSS proxbox-api endpoint. |
+| WebSocket closes as invalid or expired | Create a new session; tokens are short-lived, origin-bound, and one-use. |
+| QEMU graphical console fails before display | Check proxbox-api and Proxmox console permissions; the browser will not receive the private failure detail. |
+| LXC graphical option is absent | Expected; LXC supports terminal only. |
 
-## Template extension lifecycle
+## Verification
 
-`ProxboxVirtualMachineTemplateExtension` is registered for NetBox `virtualization.virtualmachine` detail pages. NetBox invokes its supported `buttons()` hook while composing the page actions.
-
-`buttons()` builds the complete Proxbox action group in stable order:
-
-1. create or edit Proxmox intent, when permitted;
-2. Sync Now, when permitted and routable;
-3. operational start/stop/snapshot/migrate controls, when permitted;
-4. browser-console handoff, when all console gates pass.
-
-The console implementation stays in `console_button()` so the visibility and route rules can be tested independently, but the method is called from `buttons()`. Rendering only a helper that NetBox never invokes would make the feature silently disappear even though unit tests of the helper passed.
-
-## Button visibility gates
-
-`console_button()` renders nothing unless every condition is true:
-
-1. the detail object is a real NetBox `VirtualMachine`;
-2. the requesting user has `permission_enqueue_proxbox_sync()`;
-3. the VM has the authoritative reverse one-to-one `proxbox_sync_state` relation;
-4. `proxmox_vm_id` on that state is a positive integer;
-5. `proxmox_vm_type` normalizes to `qemu` or `lxc`;
-6. the runtime-revalidated `console_url` is safe and non-empty; and
-7. the VM has a primary key.
-
-`_synced_console_vm_type()` intentionally uses typed sync state rather than legacy custom fields or a VM-name convention. The type determines only the NMS route family; it is not a Proxmox authorization decision.
-
-The button does not require the related endpoint object to be currently enabled or `allow_writes=true`. Endpoint policy is mutable and can be stale on the already loaded NetBox page. The NMS/backend session path re-reads and authorizes current state. Suppressing the safe navigation link based on a stale relation would produce false negatives without improving authorization.
-
-## Destination construction
-
-After all gates pass, `console_button()` selects:
-
-- `virtual-machines` for `vm_type="qemu"`; or
-- `lxc-containers` for `vm_type="lxc"`.
-
-It then appends the **NetBox VM primary key**:
-
-```python
-console_url = f"{console_base_url}/virtualization/{resource}/{obj.pk}"
-```
-
-The path does not include:
-
-- the Proxmox host or port;
-- endpoint ID;
-- node name;
-- Proxmox VMID;
-- VNC/terminal ticket;
-- TLS policy;
-- authentication header or cookie; or
-- a console stream token.
-
-NMS resolves the remaining synchronized identity from its authorized data sources. `nms-backend` compares the complete caller-visible identity before it requests a Proxmox ticket.
-
-## Rendered link security
-
-`netbox_proxbox/templates/netbox_proxbox/inc/vm_console_button.html` renders an ordinary anchor:
-
-```html
-<a href="{{ console_url }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">
-```
-
-`target="_blank"` keeps the NetBox page available. `rel="noopener noreferrer"` prevents the new NMS tab from controlling the NetBox opener and avoids sending the NetBox page URL as a referrer. Django template autoescaping applies to `console_url`.
-
-The button is labeled **Console** with the standard `mdi-console` icon. The template extension joins only HTML rendered from plugin-owned autoescaped templates before marking the final combined fragment safe.
-
-## Authorization boundary
-
-The plugin's permission and sync-state checks decide whether to display a navigation convenience. They do not grant console access.
-
-After navigation, NMS requires an authenticated user and a complete guest identity. `nms-backend` uses that caller's bearer token to read the exact NetBox VM and exactly one Proxbox sync-state row, then compares guest ID, endpoint, VMID, node, and workload type. It creates an origin-bound, single-use relay token only after those checks pass.
-
-Never place a Proxmox ticket or endpoint credential in this plugin's page, URL, context, template, model, or log. The browser handoff is intentionally credential-free.
-
-## Failure behavior and diagnosis
-
-| Symptom | Inspect |
-|---|---|
-| Console button absent everywhere | `console_url` is empty/invalid, the settings migration is absent, or the user lacks `permission_enqueue_proxbox_sync()`. |
-| Button absent for one VM | Missing `proxbox_sync_state`, invalid/missing `proxmox_vm_id`, unsupported/missing `proxmox_vm_type`, or unsaved VM. |
-| Button opens QEMU route for a container or the reverse | Authoritative sync-state `proxmox_vm_type`; do not infer from the VM name. |
-| Button opens the NMS detail page but not the Console tab | Expected current behavior; the handoff has no `?tab=console`, and the operator selects Console. |
-| NMS detail page opens but console is unavailable | Diagnose NMS identity resolution and backend object authorization; the NetBox link is not proof of session authorization. |
-| Browser console opens and then fails or stays gray | Diagnose `nms`, `nms-backend`, and `proxbox-api`; this plugin does not handle tickets or transport. |
-
-## Regression coverage
-
-`tests/test_template_content_sync_now.py` covers the console handoff together with the supported NetBox `buttons()` composition:
-
-- QEMU and LXC route-family selection;
-- use of the NetBox VM primary key;
-- absence of Proxmox endpoint data in the URL;
-- composition into `buttons()`;
-- unsafe, malformed, whitespace-containing, and empty origins;
-- missing or invalid sync state;
-- permission gating; and
-- deferral of mutable endpoint policy to the management console.
-
-Plugin-settings tests cover model, form, view, serializer, and migration behavior for `console_url`. Run the focused tests with the repository's normal Django test environment, including:
+Run the focused plugin tests:
 
 ```bash
-uv run pytest -q tests/test_template_content_sync_now.py tests/test_settings_view_encryption.py tests/test_settings_view_hardware_discovery.py tests/test_migration_graph_single_leaf.py
+uv run pytest -p no:django tests/test_vm_console_server.py tests/test_vm_console_frontend.py
 ```
 
-## Security invariants
+Run the real-Django migration and view tests plus the complete repository gates before release. Validate in an authenticated browser that:
 
-- Store only an optional HTTPS management origin, never a guest-specific URL or credential.
-- Validate the origin in the model, form, API serializer, and again at render time.
-- Hide the button on any invalid, ambiguous, unavailable, or incomplete local state.
-- Use typed `proxbox_sync_state` and the NetBox VM primary key.
-- Keep the handoff URL free of Proxmox topology, tickets, authentication, and TLS policy.
-- Keep `target="_blank"` paired with `rel="noopener noreferrer"`.
-- Treat the button permission as display gating, not console authorization.
-- Leave current endpoint policy and final object authorization to NMS/backend.
-- Do not claim automatic Console-tab selection while the NMS route does not implement it.
-
-## Change checklist
-
-When the handoff changes:
-
-1. update this guide, `README.md`, and the related root/package/model/form/API/migration/test LLM files;
-2. confirm the current NMS route and tab-selection behavior before documenting it;
-3. retain origin-only validation at every input and render boundary;
-4. test both QEMU and LXC destinations and every hide condition;
-5. verify the URL contains only the management origin, route family, and NetBox VM ID;
-6. keep button composition in NetBox's supported `buttons()` hook;
-7. run focused tests plus the repository's normal documentation and quality gates; and
-8. coordinate cross-service behavior changes with `nms`, `nms-backend`, and `proxbox-api`.
+- the Console tab stays inside NetBox;
+- QEMU graphical and terminal sessions exchange frames;
+- LXC terminal sessions exchange frames;
+- replay and expiry fail;
+- disconnect and reconnect create a fresh session; and
+- browser requests, rendered HTML, console logs, and network responses contain no external management URL or Proxmox ticket/authentication material.

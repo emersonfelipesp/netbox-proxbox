@@ -257,7 +257,9 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/netbox/netbox:${{ github.workspace }}/netbox-proxbox
         run: |
           .venv/bin/pytest tests/test_netbox_compat_django.py \
+            tests/test_api_netbox_integration.py \
             tests/test_list_view_render_django.py \
+            tests/test_django_database_reclamation_django.py \
             tests/test_sync_state_models.py tests/test_sync_state_contracts.py \
             tests/test_proxmox_endpoint_allowed_tenants.py \
             tests/test_openbao_optionality_django.py \
@@ -269,12 +271,14 @@ jobs:
             tests/test_influxdb_metrics_django.py \
             tests/test_node_ssh_credential_form_django.py \
             tests/test_detail_view_templates_django.py \
+            tests/test_vm_console_django.py \
             tests/test_pdm_endpoint_permissions_django.py \
             tests/test_packer_endpoint_authorization_django.py \
             tests/test_storage_nodes_capacity_django.py \
             tests/test_mcp_bridge_django.py \
             tests/test_proxbox_job_filter_django.py \
             tests/test_sync_jobs_api_django.py \
+            tests/test_sync_state_endpoint_backfill_django.py \
             tests/test_vm_intent_django.py \
             tests/test_soft_deleted_vm_purge_django.py \
             --ds=netbox.settings --reuse-db --create-db -v --no-header \

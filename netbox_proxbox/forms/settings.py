@@ -4,8 +4,6 @@ import json
 import re
 from decimal import Decimal
 from pathlib import PurePosixPath
-from urllib.parse import urlsplit
-
 from django import forms
 
 from dcim.models import DeviceRole
@@ -113,15 +111,6 @@ def _parse_tenant_regex_rules(
 
 class ProxboxPluginSettingsForm(forms.Form):
     """Toggle behavior flags that affect proxbox-api sync requests."""
-
-    console_url = forms.CharField(
-        required=False,
-        label="Browser console URL",
-        help_text=(
-            "HTTPS management origin used for browser console handoffs. "
-            "Leave empty to hide console actions."
-        ),
-    )
 
     use_guest_agent_interface_name = forms.BooleanField(
         required=False,
@@ -851,27 +840,6 @@ class ProxboxPluginSettingsForm(forms.Form):
                 "Backend log file path must include a filename, not only a directory."
             )
         return path
-
-    def clean_console_url(self) -> str:
-        """Accept only an optional HTTPS origin for console handoffs."""
-        value = (self.cleaned_data.get("console_url") or "").strip().rstrip("/")
-        try:
-            parsed = urlsplit(value)
-            parsed.port
-        except ValueError as exc:
-            raise forms.ValidationError("Console URL must be an HTTPS origin.") from exc
-        if value and (
-            any(character.isspace() for character in value)
-            or parsed.scheme != "https"
-            or not parsed.hostname
-            or parsed.username is not None
-            or parsed.password is not None
-            or parsed.path not in {"", "/"}
-            or parsed.query
-            or parsed.fragment
-        ):
-            raise forms.ValidationError("Console URL must be an HTTPS origin.")
-        return value
 
     def clean(self) -> dict:
         """Cross-field validation for timing and intent-direction fields."""

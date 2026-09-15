@@ -1,0 +1,110 @@
+.proxbox-vm-console {
+  min-height: 620px;
+  overflow: hidden;
+}
+
+.proxbox-console-toolbar {
+  align-items: end;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: minmax(220px, 360px) auto;
+  justify-content: space-between;
+}
+
+.proxbox-console-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.proxbox-console-actions .btn,
+.proxbox-console-toolbar .form-select {
+  min-height: 40px;
+}
+
+.proxbox-console-actions .btn {
+  transition-duration: 120ms;
+  transition-property: transform, box-shadow;
+}
+
+.proxbox-console-actions .btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.proxbox-console-surface {
+  background: #07090d;
+  border-radius: 0.5rem;
+  box-shadow:
+    inset 0 0 0 1px rgb(255 255 255 / 8%),
+    0 8px 24px rgb(0 0 0 / 14%);
+  height: min(68vh, 720px);
+  min-height: 420px;
+  overflow: hidden;
+  position: relative;
+}
+
+.proxbox-console-placeholder,
+.proxbox-console-view {
+  inset: 0;
+  position: absolute;
+}
+
+.proxbox-console-placeholder {
+  align-items: center;
+  color: #a9b4c3;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  justify-content: center;
+  padding: 2rem;
+  text-align: center;
+  text-wrap: pretty;
+}
+
+.proxbox-console-placeholder .mdi {
+  font-size: 2.75rem;
+  opacity: 0.45;
+}
+
+.proxbox-console-view {
+  outline: none;
+}
+
+.proxbox-console-view:focus-visible {
+  box-shadow: inset 0 0 0 2px var(--bs-primary);
+}
+
+.proxbox-console-terminal {
+  padding: 0.75rem;
+}
+
+.proxbox-console-terminal .terminal,
+.proxbox-console-terminal .xterm {
+  height: 100%;
+}
+
+.proxbox-console-novnc canvas {
+  outline: none;
+}
+
+@media (max-width: 768px) {
+  .proxbox-console-toolbar {
+    align-items: stretch;
+    grid-template-columns: 1fr;
+  }
+
+  .proxbox-console-actions .btn {
+    flex: 1 1 0;
+  }
+
+  .proxbox-console-surface {
+    height: 62vh;
+    min-height: 360px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .proxbox-console-actions .btn {
+    transition-duration: 0.01ms;
+  }
+}

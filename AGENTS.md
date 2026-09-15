@@ -1,8 +1,8 @@
 # Agent Entry Points
 
-## Browser Console Handoff
+## Standalone Browser Console
 
-Read [`docs/features/browser-console.md`](docs/features/browser-console.md) before changing `ProxboxPluginSettings.console_url`, its model/form/API validators, migration `0084`, `template_content.py::_console_base_url()`, `_synced_console_vm_type()`, `ProxboxVirtualMachineTemplateExtension.console_button()`, the console button template, or their tests. This plugin owns only a credential-free HTTPS navigation handoff. It requires typed VM sync state and builds `/virtualization/{virtual-machines|lxc-containers}/<NetBox VM pk>`; it does not append `?tab=console`, create a ticket, authorize the live session, or relay traffic. Keep all Proxmox topology, ticket, authentication, and TLS details out of the URL and browser context.
+Read [`docs/features/browser-console.md`](docs/features/browser-console.md) before changing `services/vm_console.py`, `views/vm_console.py`, the `open_console_proxmoxendpoint` permission, migration `0095`, `vm_console.html`, `vm_console.js`, the vendored noVNC runtime, or their tests. NetBox owns exact restricted-VM and endpoint-object authorization plus the Console UI. proxbox-api owns the opaque, origin-bound, one-use WebSocket relay. The browser must never receive another management application's URL, Proxmox credentials, API keys, tickets, or private-topology material. Other applications remain optional parallel consumers and are not part of the NetBox console request path.
 
 ## Audited Write Integration Plan
 

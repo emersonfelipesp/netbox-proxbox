@@ -160,6 +160,7 @@ jobs:
           set -euo pipefail
           .venv/bin/python -m build --no-isolation
           .venv/bin/python scripts/check_dist_inventory.py dist/*.whl dist/*.tar.gz
+          .venv/bin/python scripts/verify_vm_console_artifacts.py dist
           .venv/bin/twine check dist/*
 
       - name: Clean docs and package environment

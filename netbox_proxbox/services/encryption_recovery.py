@@ -386,6 +386,128 @@ def _available_family_models() -> tuple[tuple[EncryptedFieldFamily, type], ...]:
     return tuple(resolved)
 
 
+def _normalize_guarded_update_fields(
+    kwargs: dict[str, object],
+    recovery_fields: tuple[str, ...],
+) -> bool:
+    """Normalize one-shot iterables and identify unrelated partial saves."""
+
+    update_fields = kwargs.get("update_fields")
+    if update_fields is None:
+        return False
+    normalized_update_fields = tuple(str(field_name) for field_name in update_fields)  # type: ignore[union-attr]
+    kwargs["update_fields"] = normalized_update_fields
+    return set(recovery_fields).isdisjoint(normalized_update_fields)
+
+
+def _writer_database_alias(instance: object, kwargs: dict[str, object]) -> str:
+    """Resolve the write alias exactly as Django's model save path does."""
+
+    using_value = kwargs.get("using")
+    if isinstance(using_value, str):
+        return using_value
+    return router.db_for_write(type(instance), instance=instance)
+
+
+def _locked_writer_state(
+    settings_model: type,
+    instance: object,
+    encrypted_fields: tuple[str, ...],
+    using: str,
+) -> tuple[str, tuple[object, ...] | None]:
+    """Read the locked current key and persisted encrypted values."""
+
+    settings_obj = (
+        settings_model.objects.using(using)
+        .select_for_update()
+        .filter(singleton_key="default")
+        .first()
+    )
+    current_key = (
+        str(settings_obj.encryption_key or "").strip()
+        if settings_obj is not None
+        else ""
+    )
+    instance_pk = getattr(instance, "pk", None)
+    if instance_pk is None:
+        return current_key, None
+    persisted = (
+        type(instance)
+        .objects.using(using)
+        .filter(pk=instance_pk)
+        .values_list(*encrypted_fields)
+        .first()
+    )
+    return current_key, persisted
+
+
+def _validate_encrypted_field_replacements(
+    instance: object,
+    encrypted_fields: tuple[str, ...],
+    persisted: tuple[object, ...] | None,
+) -> None:
+    """Reject direct or stale ciphertext replacement attempts."""
+
+    if persisted is None:
+        return
+    expected_writes = dict(getattr(instance, _EXPLICIT_WRITE_MARKER, {}))
+    for field_name, persisted_ciphertext in zip(
+        encrypted_fields, persisted, strict=True
+    ):
+        candidate_value = getattr(instance, field_name, "") or ""
+        candidate = str(candidate_value)
+        current = str(persisted_ciphertext or "")
+        if candidate == current:
+            continue
+        expected = expected_writes.get(field_name)
+        setter_produced = isinstance(candidate_value, _SetterProducedCiphertext)
+        if setter_produced or (expected is not None and str(expected or "") == current):
+            continue
+        raise ValidationError(
+            {
+                "__all__": (
+                    "This object changed during encryption-key recovery. "
+                    "Reload it before saving credentials."
+                )
+            }
+        )
+
+
+def _validate_ciphertexts_use_current_key(
+    ciphertexts: tuple[str, ...],
+    current_key: str,
+) -> None:
+    """Reject ciphertext prepared under a stale or unavailable key."""
+
+    try:
+        for ciphertext in ciphertexts:
+            if ciphertext:
+                enc_helpers.decrypt(ciphertext, key=current_key)
+    except enc_helpers.EncryptionError:
+        raise ValidationError(
+            {
+                "__all__": (
+                    "Encrypted values were prepared with a stale or unavailable "
+                    "plugin key. Reload the object and submit an explicit "
+                    "replacement credential."
+                )
+            }
+        ) from None
+
+
+def _clear_encrypted_write_provenance(
+    instance: object,
+    encrypted_fields: tuple[str, ...],
+) -> None:
+    """Consume setter provenance after one successful persisted write."""
+
+    for field_name in encrypted_fields:
+        value = getattr(instance, field_name, "")
+        if isinstance(value, _SetterProducedCiphertext):
+            setattr(instance, field_name, str(value))
+    setattr(instance, _EXPLICIT_WRITE_MARKER, {})
+
+
 def install_encrypted_writer_guards() -> None:
     """Serialize registered recovery-sensitive writes with key recovery."""
 
@@ -489,94 +611,28 @@ def install_encrypted_writer_guards() -> None:
             _recovery_fields: tuple[str, ...] = recovery_fields,
             **kwargs: object,
         ) -> object:
-            update_fields = kwargs.get("update_fields")
-            if update_fields is not None:
-                normalized_update_fields = tuple(
-                    str(field_name) for field_name in update_fields
-                )
-                kwargs["update_fields"] = normalized_update_fields
-                if set(_recovery_fields).isdisjoint(normalized_update_fields):
-                    return _original_save(instance, *args, **kwargs)  # type: ignore[operator]
-
+            if _normalize_guarded_update_fields(kwargs, _recovery_fields):
+                return _original_save(instance, *args, **kwargs)  # type: ignore[operator]
             ciphertexts = tuple(
                 str(getattr(instance, field_name, "") or "")
                 for field_name in _encrypted_fields
             )
-            using_value = kwargs.get("using")
-            using = (
-                using_value
-                if isinstance(using_value, str)
-                else router.db_for_write(type(instance), instance=instance)
-            )
+            using = _writer_database_alias(instance, kwargs)
             with transaction.atomic(using=using):
-                settings_obj = (
-                    ProxboxPluginSettings.objects.using(using)
-                    .select_for_update()
-                    .filter(singleton_key="default")
-                    .first()
+                current_key, persisted = _locked_writer_state(
+                    ProxboxPluginSettings,
+                    instance,
+                    _encrypted_fields,
+                    using,
                 )
-                current_key = (
-                    str(settings_obj.encryption_key or "").strip()
-                    if settings_obj is not None
-                    else ""
+                _validate_encrypted_field_replacements(
+                    instance,
+                    _encrypted_fields,
+                    persisted,
                 )
-                persisted = None
-                instance_pk = getattr(instance, "pk", None)
-                if instance_pk is not None:
-                    persisted = (
-                        type(instance)
-                        .objects.using(using)
-                        .filter(pk=instance_pk)
-                        .values_list(*_encrypted_fields)
-                        .first()
-                    )
-                expected_writes = dict(getattr(instance, _EXPLICIT_WRITE_MARKER, {}))
-                if persisted is not None:
-                    for field_name, persisted_ciphertext in zip(
-                        _encrypted_fields, persisted, strict=True
-                    ):
-                        candidate_value = getattr(instance, field_name, "") or ""
-                        candidate = str(candidate_value)
-                        current = str(persisted_ciphertext or "")
-                        if candidate == current:
-                            continue
-                        expected = expected_writes.get(field_name)
-                        setter_produced = isinstance(
-                            candidate_value, _SetterProducedCiphertext
-                        )
-                        if not setter_produced and (
-                            expected is None or str(expected or "") != current
-                        ):
-                            raise ValidationError(
-                                {
-                                    "__all__": (
-                                        "This object changed during encryption-key "
-                                        "recovery. Reload it before saving credentials."
-                                    )
-                                }
-                            )
-                try:
-                    for ciphertext in ciphertexts:
-                        if ciphertext:
-                            enc_helpers.decrypt(ciphertext, key=current_key)
-                except enc_helpers.EncryptionError:
-                    raise ValidationError(
-                        {
-                            "__all__": (
-                                "Encrypted values were prepared with a stale or "
-                                "unavailable plugin key. Reload the object and "
-                                "submit the credential again."
-                            )
-                        }
-                    ) from None
+                _validate_ciphertexts_use_current_key(ciphertexts, current_key)
                 result = _original_save(instance, *args, **kwargs)  # type: ignore[operator]
-                for field_name in _encrypted_fields:
-                    value = getattr(instance, field_name, "")
-                    if isinstance(value, _SetterProducedCiphertext):
-                        # Provenance authorizes one persisted write only. Do not
-                        # leave a reusable bypass marker on a long-lived instance.
-                        setattr(instance, field_name, str(value))
-                setattr(instance, _EXPLICIT_WRITE_MARKER, {})
+                _clear_encrypted_write_provenance(instance, _encrypted_fields)
                 return result
 
         model.save = guarded_save

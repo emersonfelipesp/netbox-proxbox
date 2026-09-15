@@ -477,6 +477,42 @@ def proxbox_sync_job_module(monkeypatch):
         sys.modules, "netbox_proxbox.services.sync_vm_template", sync_vm_template_mod
     )
 
+    # Stub the local post-stage FK repair. Dedicated tests replace this function
+    # to assert mapping reuse and branch activation; ordinary job tests only need
+    # a serializable no-op summary.
+    sync_state_backfill_mod = types.ModuleType(
+        "netbox_proxbox.services.sync_state_endpoint_backfill"
+    )
+
+    class _BackfillSummary:
+        def as_dict(self):
+            return {
+                "rows_bound_by_model": {"ProxboxVirtualMachineSyncState": 0},
+                "skipped_backend_ids": {},
+                "unverified": {},
+                "confirmed_bindings": {},
+                "total_rows_bound": 0,
+                "total_unverified": 0,
+            }
+
+        def one_line(self):
+            return (
+                "Sync-state endpoint backfill: "
+                "automatic_corroboration=locked_relations_only "
+                'rows_bound_by_model={"ProxboxVirtualMachineSyncState": 0} '
+                "skipped_backend_ids={} unverified_rows_left_unbound=0 "
+                "unverified={} confirmed_bindings={}"
+            )
+
+    sync_state_backfill_mod.backfill_sync_state_endpoints = lambda mapping: (
+        _BackfillSummary()
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.sync_state_endpoint_backfill",
+        sync_state_backfill_mod,
+    )
+
     sys.modules.pop("netbox_proxbox.jobs", None)
     path = root / "netbox_proxbox" / "jobs.py"
     spec = importlib.util.spec_from_file_location("netbox_proxbox.jobs", path)
@@ -490,6 +526,7 @@ def proxbox_sync_job_module(monkeypatch):
     # would land in the "never resolved to a backend id" fail-loud branch. Tests that
     # care about resolution failures monkeypatch this themselves and win, because
     # they run after the fixture.
+    real_wire_endpoint_resolver = module.sync_stages._resolve_wire_endpoint_ids
     monkeypatch.setattr(
         module.sync_stages,
         "_resolve_wire_endpoint_ids",
@@ -498,6 +535,7 @@ def proxbox_sync_job_module(monkeypatch):
             None,
         ),
     )
+    module._real_wire_endpoint_resolver_for_tests = real_wire_endpoint_resolver
     monkeypatch.setitem(
         sys.modules,
         "netbox_proxbox.services.branch_lifecycle",
@@ -807,6 +845,271 @@ def test_run_with_branching_enabled_creates_syncs_and_merges_the_branch(
     assert all(query["netbox_branch_schema_id"] == "schema-325" for query in queries)
     assert job.job.data["proxbox_sync"]["branch"]["id"] == 902
     merge.assert_called_once_with(branch=branch, user=user, on_conflict="fail")
+
+
+def test_job_reuses_stage_endpoint_map_and_records_backfill_summary(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """The post-stage repair must reuse the map resolved by the stage runner."""
+    module = proxbox_sync_job_module
+    order: list[str] = []
+
+    @contextmanager
+    def capture_wire_endpoint_ids():
+        yield {"5": "14"}
+
+    def run_stages(*args, **kwargs):
+        del args, kwargs
+        order.append("stages")
+        return [
+            {
+                "sync_type": "devices",
+                "endpoint_id": "5",
+                "stream_path": "dcim/devices/create/stream",
+                "runtime_seconds": 0.1,
+                "result_summary": {"ok": True},
+            }
+        ]
+
+    summary_data = {
+        "rows_bound_by_model": {"ProxboxVirtualMachineSyncState": 197},
+        "skipped_backend_ids": {},
+        "unverified": {
+            "14=5": {
+                "count": 2,
+                "sample_pks": [198, 199],
+                "reason": "row evidence did not corroborate endpoint 5",
+            }
+        },
+        "confirmed_bindings": {},
+        "total_rows_bound": 197,
+        "total_unverified": 2,
+    }
+    summary = SimpleNamespace(
+        as_dict=lambda: summary_data,
+        one_line=lambda: (
+            "Sync-state endpoint backfill: "
+            "automatic_corroboration=locked_relations_only bound 197 row(s); "
+            "unverified_rows_left_unbound=2 reason=row evidence did not "
+            "corroborate endpoint 5"
+        ),
+    )
+    backfill = MagicMock(
+        side_effect=lambda mapping: order.append("backfill") or summary
+    )
+    monkeypatch.setattr(
+        module.sync_stages,
+        "capture_wire_endpoint_ids",
+        capture_wire_endpoint_ids,
+    )
+    monkeypatch.setattr(module, "_run_all_stages_sync", run_stages)
+    monkeypatch.setattr(
+        sys.modules["netbox_proxbox.services.sync_state_endpoint_backfill"],
+        "backfill_sync_state_endpoints",
+        backfill,
+    )
+    monkeypatch.setattr(module, "_sync_cluster_phase", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "sync_firewall", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "sync_datacenter", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "sync_vm_templates", lambda *args, **kwargs: [])
+    job = module.ProxboxSyncJob()
+    job.logger = MagicMock()
+    job.job = MagicMock(pk=479, user=None, data=None)
+
+    module.ProxboxSyncJob.run(
+        job,
+        sync_type=module.SyncTypeChoices.DEVICES,
+        proxmox_endpoint_ids=["5"],
+    )
+
+    assert order == ["stages", "backfill"]
+    backfill.assert_called_once_with({"5": "14"})
+    assert job.job.data["proxbox_sync"]["sync_state_endpoint_backfill"] == (
+        summary_data
+    )
+    job.logger.info.assert_any_call(
+        "Sync-state endpoint backfill: "
+        "automatic_corroboration=locked_relations_only bound 197 row(s); "
+        "unverified_rows_left_unbound=2 reason=row evidence did not "
+        "corroborate endpoint 5"
+    )
+
+
+def test_job_skips_backfill_when_stage_scope_resolution_failed(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """No local binding may run without a resolved plugin/backend map."""
+    module = proxbox_sync_job_module
+    backfill = MagicMock(side_effect=AssertionError("backfill should not run"))
+
+    def failed_scope(*args, **kwargs):
+        del args, kwargs
+        return [
+            {
+                "sync_type": "endpoint-scope",
+                "endpoint_id": "5",
+                "stream_path": None,
+                "runtime_seconds": 0.0,
+                "result_summary": {"ok": False, "error": "scope resolution failed"},
+            }
+        ]
+
+    monkeypatch.setattr(module, "_run_all_stages_sync", failed_scope)
+    monkeypatch.setattr(
+        sys.modules["netbox_proxbox.services.sync_state_endpoint_backfill"],
+        "backfill_sync_state_endpoints",
+        backfill,
+    )
+    monkeypatch.setattr(module, "_sync_cluster_phase", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "sync_firewall", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "sync_datacenter", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "sync_vm_templates", lambda *args, **kwargs: [])
+    job = module.ProxboxSyncJob()
+    job.logger = MagicMock()
+    job.job = MagicMock(pk=479, user=None, data=None)
+
+    with pytest.raises(RuntimeError, match="No sync stage ran"):
+        module.ProxboxSyncJob.run(
+            job,
+            sync_type=module.SyncTypeChoices.DEVICES,
+            proxmox_endpoint_ids=["5"],
+        )
+
+    backfill.assert_not_called()
+    assert job.job.data["proxbox_sync"]["sync_state_endpoint_backfill"] == {
+        "skipped": True,
+        "reason": "the run resolved no usable plugin-to-backend endpoint map",
+    }
+    job.logger.warning.assert_any_call(
+        "Sync-state endpoint backfill skipped: the run resolved no usable "
+        "plugin-to-backend endpoint map"
+    )
+
+
+def test_wire_endpoint_resolver_populates_the_run_local_capture(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """One resolver call must supply both the backend scope and local repair."""
+    module = proxbox_sync_job_module
+    backend_proxy = types.ModuleType("netbox_proxbox.services.backend_proxy")
+    backend_proxy.get_fastapi_request_context = lambda **kwargs: SimpleNamespace(
+        http_url="https://proxbox-api.internal",
+        headers={"X-Proxbox-API-Key": "redacted-test-value"},
+        verify_ssl=True,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.backend_proxy",
+        backend_proxy,
+    )
+    resolver = MagicMock(return_value=({5: 14}, None))
+    monkeypatch.setattr(
+        sys.modules["netbox_proxbox.views.backend_sync"],
+        "resolve_backend_endpoint_ids",
+        resolver,
+        raising=False,
+    )
+
+    with module.sync_stages.capture_wire_endpoint_ids() as captured:
+        mapping, error = module._real_wire_endpoint_resolver_for_tests(
+            [["5"]], fastapi_endpoint_id=7
+        )
+
+    assert mapping == {"5": "14"}
+    assert error is None
+    assert captured == mapping
+    resolver.assert_called_once()
+    assert resolver.call_args.kwargs == {
+        "base_url": "https://proxbox-api.internal",
+        "auth_headers": {"X-Proxbox-API-Key": "redacted-test-value"},
+        "backend_verify_ssl": True,
+    }
+
+
+def test_job_backfill_runs_inside_the_sync_branch(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """The local FK update must target the same branch as backend stages."""
+    module = proxbox_sync_job_module
+    branch = SimpleNamespace(pk=479, name="isolated-479", schema_id="schema-479")
+    active: list[object] = []
+
+    @contextmanager
+    def activate(candidate):
+        active.append(candidate)
+        try:
+            yield
+        finally:
+            assert active.pop() is candidate
+
+    branch_module = _branch_lifecycle_stub(
+        "ENABLED",
+        settings={"prefix": "isolated", "on_conflict": "fail"},
+        create=MagicMock(return_value=branch),
+        merge=MagicMock(return_value=(True, "Branch merged.", None)),
+        activate=activate,
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        branch_module,
+    )
+
+    @contextmanager
+    def capture_wire_endpoint_ids():
+        yield {"5": "14"}
+
+    def run_stages(*args, **kwargs):
+        del args, kwargs
+        return []
+
+    summary = SimpleNamespace(
+        as_dict=lambda: {
+            "rows_bound_by_model": {"ProxboxVirtualMachineSyncState": 1},
+            "skipped_backend_ids": {},
+            "total_rows_bound": 1,
+        },
+        one_line=lambda: (
+            "Sync-state endpoint backfill: "
+            "automatic_corroboration=locked_relations_only bound 1 row(s)"
+        ),
+    )
+
+    def backfill(mapping):
+        assert mapping == {"5": "14"}
+        assert active == [branch], "endpoint backfill would have written on main"
+        return summary
+
+    monkeypatch.setattr(
+        module.sync_stages,
+        "capture_wire_endpoint_ids",
+        capture_wire_endpoint_ids,
+    )
+    monkeypatch.setattr(module, "_run_all_stages_sync", run_stages)
+    monkeypatch.setattr(
+        sys.modules["netbox_proxbox.services.sync_state_endpoint_backfill"],
+        "backfill_sync_state_endpoints",
+        backfill,
+    )
+    monkeypatch.setattr(module, "_sync_cluster_phase", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "sync_firewall", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "sync_datacenter", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "sync_vm_templates", lambda *args, **kwargs: [])
+    job = module.ProxboxSyncJob()
+    job.logger = MagicMock()
+    job.job = MagicMock(pk=479, user=None, data=None)
+
+    module.ProxboxSyncJob.run(
+        job,
+        sync_type=module.SyncTypeChoices.DEVICES,
+        proxmox_endpoint_ids=["5"],
+    )
+
+    assert active == []
 
 
 def test_no_change_merge_records_left_open_branch_disposition(

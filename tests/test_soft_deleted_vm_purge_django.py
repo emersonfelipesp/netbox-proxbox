@@ -41,7 +41,6 @@ except Exception as exc:  # pragma: no cover - external test harness availabilit
         allow_module_level=True,
     )
 
-from django.contrib.auth import get_user_model  # noqa: E402
 from django.test import Client, TestCase  # noqa: E402
 from django.urls import reverse  # noqa: E402
 from extras.models import Tag  # noqa: E402
@@ -51,6 +50,7 @@ from netbox_proxbox.constants import (  # noqa: E402
     SOFT_DELETE_TAG_SLUG,
     SOFT_DELETE_VM_STATUS,
 )
+from tests.django_support import make_user  # noqa: E402
 
 
 class SoftDeletedVirtualMachinePurgeTest(TestCase):
@@ -78,10 +78,12 @@ class SoftDeletedVirtualMachinePurgeTest(TestCase):
         return VirtualMachine.objects.create(name=name, status=status)
 
     def setUp(self) -> None:
-        self.user = get_user_model().objects.create_superuser(
+        self.user = make_user(
             username=f"purge-{self._testMethodName}",
             email="purge@example.invalid",
             password="test-password",
+            is_staff=True,
+            is_superuser=True,
         )
         self.client = Client()
         self.client.force_login(self.user)
@@ -98,7 +100,7 @@ class SoftDeletedVirtualMachinePurgeTest(TestCase):
         self.assertNotContains(response, "unmarked-decommissioned")
 
     def test_permission_denial_prevents_page_access(self) -> None:
-        user = get_user_model().objects.create_user(
+        user = make_user(
             username="purge-without-delete",
             password="test-password",
         )
@@ -128,6 +130,7 @@ class SoftDeletedVirtualMachinePurgeTest(TestCase):
                     str(self.marked_qemu.pk),
                     str(self.active_with_marker.pk),
                 ],
+                "confirm": "on",
                 "_confirm": "on",
             },
         )
@@ -147,7 +150,11 @@ class SoftDeletedVirtualMachinePurgeTest(TestCase):
 
         response = self.client.post(
             self.delete_url,
-            {"_all": "on", "_confirm": "on"},
+            {
+                "pk": [str(self.marked_qemu.pk), str(self.marked_lxc.pk)],
+                "confirm": "on",
+                "_confirm": "on",
+            },
         )
 
         self.assertIn(response.status_code, (200, 302))

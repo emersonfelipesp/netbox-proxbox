@@ -59,14 +59,13 @@ except Exception as exc:  # pragma: no cover - external test harness availabilit
         allow_module_level=True,
     )
 
-from django.contrib.auth import get_user_model  # noqa: E402
-from django.contrib.auth.models import Permission  # noqa: E402
 from django.contrib.contenttypes.models import ContentType  # noqa: E402
 from django.test import RequestFactory, TestCase  # noqa: E402
 from users.models import ObjectPermission  # noqa: E402
 
 from netbox_proxbox.models import PDMEndpoint, PDMRemote  # noqa: E402
 from netbox_proxbox.views.endpoints.pdm import PDMEndpointView  # noqa: E402
+from tests.django_support import make_user  # noqa: E402
 
 
 class PDMEndpointRemotePermissionTest(TestCase):
@@ -92,22 +91,25 @@ class PDMEndpointRemotePermissionTest(TestCase):
             hostname="hidden.example.test",
         )
         endpoint_content_type = ContentType.objects.get_for_model(PDMEndpoint)
-        endpoint_permission = Permission.objects.get(
-            content_type=endpoint_content_type,
-            codename="view_pdmendpoint",
+        endpoint_permission = ObjectPermission.objects.create(
+            name="View PDM endpoints",
+            actions=["view"],
         )
+        endpoint_permission.object_types.add(endpoint_content_type)
 
-        cls.endpoint_only_user = get_user_model().objects.create_user(
+        cls.endpoint_only_user = make_user(
             username="pdm-endpoint-only-viewer",
             is_staff=True,
         )
-        cls.endpoint_only_user.user_permissions.add(endpoint_permission)
 
-        cls.restricted_remote_user = get_user_model().objects.create_user(
+        cls.restricted_remote_user = make_user(
             username="pdm-object-restricted-viewer",
             is_staff=True,
         )
-        cls.restricted_remote_user.user_permissions.add(endpoint_permission)
+        endpoint_permission.users.add(
+            cls.endpoint_only_user,
+            cls.restricted_remote_user,
+        )
         remote_permission = ObjectPermission.objects.create(
             name="View only the allowed PDM remote",
             actions=["view"],

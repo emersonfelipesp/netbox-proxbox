@@ -105,6 +105,7 @@ def test_forward_migration_preserves_explicit_storage_choices(pytestconfig, save
     _require_harness(pytestconfig)
     from django.db import connection
     from django.db.migrations.executor import MigrationExecutor
+    from netbox_proxbox.choices import CredentialStorageBackendChoices
 
     before = ("netbox_proxbox", "0093_proxmox_metrics_source_mode")
     after = ("netbox_proxbox", "0094_automatic_credential_storage_default")
@@ -132,7 +133,8 @@ def test_forward_migration_preserves_explicit_storage_choices(pytestconfig, save
             "netbox_proxbox", "ProxboxPluginSettings"
         )
         assert (
-            fresh_settings._meta.get_field("credential_storage_backend").default == ""
+            fresh_settings._meta.get_field("credential_storage_backend").default
+            == CredentialStorageBackendChoices.OPENBAO
         )
     finally:
         MigrationExecutor(connection).migrate(latest)
@@ -467,7 +469,7 @@ def test_ssh_reuse_response_contains_expected_openbao_failure(
 ):
     from netbox_proxbox.api import ssh_credentials
     from netbox_proxbox.integrations import openbao
-    from users.models import User
+    from tests.django_support import make_user
 
     _, Endpoint = optionality_models
     endpoint = _saved_openbao_endpoint(
@@ -480,7 +482,7 @@ def test_ssh_reuse_response_contains_expected_openbao_failure(
         else None,
         ssh_known_host_fingerprint="SHA256:" + "A" * 43 if mode == "healthy" else "",
     )
-    user = User.objects.create(username="ssh-reader", is_superuser=True, is_active=True)
+    user = make_user("ssh-reader", is_staff=True, is_superuser=True)
     request = SimpleNamespace(user=user, is_secure=lambda: True)
     with (
         patch.object(

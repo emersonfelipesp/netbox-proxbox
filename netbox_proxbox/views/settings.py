@@ -20,6 +20,7 @@ from netbox_proxbox.integrations.bgp import netbox_bgp_status
 from netbox_proxbox.models import ProxboxPluginSettings
 from netbox_proxbox.views.proxbox_access import (
     permission_change_proxbox_plugin_settings,
+    permission_reset_encrypted_secrets,
 )
 from utilities.views import (
     ContentTypePermissionRequiredMixin,
@@ -62,7 +63,7 @@ def _settings_template_context(
         "encryption_rotation_form": rotation_form,
         "encrypted_secret_reset_form": reset_form,
         "can_reset_encrypted_secrets": request.user.has_perm(
-            "netbox_proxbox.reset_encrypted_secrets"
+            permission_reset_encrypted_secrets()
         ),
     }
 
@@ -102,7 +103,6 @@ class SettingsView(
         encryption_statuses = _encrypted_family_statuses(settings_obj)
         initial = {
             "use_guest_agent_interface_name": settings_obj.use_guest_agent_interface_name,
-            "console_url": getattr(settings_obj, "console_url", ""),
             "vm_interface_sync_strategy": getattr(
                 settings_obj,
                 "vm_interface_sync_strategy",
@@ -272,7 +272,6 @@ class SettingsView(
             settings_obj.use_guest_agent_interface_name = form.cleaned_data[
                 "use_guest_agent_interface_name"
             ]
-            settings_obj.console_url = form.cleaned_data.get("console_url", "").strip()
             settings_obj.vm_interface_sync_strategy = form.cleaned_data.get(
                 "vm_interface_sync_strategy",
                 "guest_os_model",
@@ -473,7 +472,6 @@ class SettingsView(
             settings_obj.save(
                 update_fields=[
                     "use_guest_agent_interface_name",
-                    "console_url",
                     "vm_interface_sync_strategy",
                     "proxbox_fetch_max_concurrency",
                     "ignore_ipv6_link_local_addresses",
@@ -642,10 +640,6 @@ class EncryptedSecretResetView(
 
     def get_required_permission(self) -> str:
         """Require the dedicated destructive-recovery permission."""
-
-        from netbox_proxbox.views.proxbox_access import (
-            permission_reset_encrypted_secrets,
-        )
 
         return permission_reset_encrypted_secrets()
 

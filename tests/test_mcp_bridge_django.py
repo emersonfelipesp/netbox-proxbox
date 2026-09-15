@@ -49,7 +49,6 @@ except Exception as exc:  # pragma: no cover - depends on external test services
         f"NetBox test environment is not available: {exc}", allow_module_level=True
     )
 
-from django.contrib.auth import get_user_model  # noqa: E402
 from django.test import TestCase, override_settings  # noqa: E402
 
 from netbox_proxbox.api.mcp_bridge import (  # noqa: E402
@@ -71,6 +70,7 @@ from netbox_proxbox.api.serializers import (  # noqa: E402
     ScheduleSyncRequestSerializer,
     ScheduledJobSerializer,
 )
+from tests.django_support import make_user  # noqa: E402
 from tests.mcp_bridge_examples import load_mcp_guide_examples  # noqa: E402
 
 ROOT_URL = "/api/plugins/proxbox/"
@@ -83,12 +83,12 @@ class MCPBridgeRuntimeTest(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
-        cls.operator = get_user_model().objects.create_user(
+        cls.operator = make_user(
             username="mcp-bridge-operator",
             is_staff=True,
             is_superuser=True,
         )
-        cls.bystander = get_user_model().objects.create_user(
+        cls.bystander = make_user(
             username="mcp-bridge-bystander",
             is_staff=True,
         )

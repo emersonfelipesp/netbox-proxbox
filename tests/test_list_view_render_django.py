@@ -70,13 +70,13 @@ except Exception as exc:  # pragma: no cover - depends on external test services
         f"NetBox test environment is not available: {exc}", allow_module_level=True
     )
 
-from django.contrib.auth import get_user_model  # noqa: E402
 from django.test import Client, TestCase  # noqa: E402
 from django.urls import NoReverseMatch, reverse  # noqa: E402
 from django.utils.module_loading import import_string  # noqa: E402
 
 from netbox.registry import registry  # noqa: E402
 from netbox.views.generic import ObjectListView  # noqa: E402
+from tests.django_support import make_user  # noqa: E402
 
 _PLUGIN_MODULE_PREFIX = "netbox_proxbox"
 
@@ -116,8 +116,7 @@ class PluginListViewRenderTest(TestCase):
 
     @classmethod
     def setUpTestData(cls) -> None:
-        user_model = get_user_model()
-        cls.user = user_model.objects.create_user(
+        cls.user = make_user(
             username="list-view-render-probe",
             password="probe",  # noqa: S106 — throwaway test credential
             is_superuser=True,

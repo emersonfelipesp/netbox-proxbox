@@ -105,6 +105,7 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
   and 85% real-Django branch-coverage gate are documented in
   [`docs/developer/endpoint-autoconfiguration.md`](../../docs/developer/endpoint-autoconfiguration.md).
 - [`backend_context.py`](./backend_context.py): defines `get_fastapi_request_context()` — resolves the active FastAPIEndpoint and builds the URL/header context used by all backend HTTP helpers.
+- [`vm_console.py`](./vm_console.py): fail-closed identity and backend resolution for the standalone VM console. It requires complete typed synchronization state, exact endpoint/node affinity, exactly one matching browser-capable proxbox-api, an HTTPS NetBox origin, and an exact opaque `/proxmox/console/browser-stream?token=...` relay path under the configured WSS authority.
 - [`metrics_influx.py`](./metrics_influx.py): server-side Proxmox metrics orchestrator. It enforces the mapping's persisted `influx`, `pull`, or `reconciled` policy, decrypts an InfluxDB token only when required, calls fixed proxbox-api routes, canonicalizes official Proxmox field/tag formats, and applies deterministic Influx-wins reconciliation with partial-source metadata.
 - [`backend_proxy.py`](./backend_proxy.py): HTTP client helpers for proxbox-api,
   including SSE streaming (`run_sync_stream`, `iter_backend_sse_lines`), JSON
@@ -132,6 +133,28 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
   **`proxmox_endpoint_ids` travels the same way, and dropping it is worse.** `sync_individual()` merges an optional `proxmox_endpoint_ids: str | None` into its outgoing `query_params`, and `sync_individual_with_dependencies()` / `_sync_dependency()` forward it recursively — again because `_CONTEXT_KEYS` omits it. The failure mode is not a *narrower* dependency sync, it is a **wider** one: proxbox-api resolves every `sync/individual/*` route's Proxmox sessions through `ProxmoxSessionsDep`, which reads a missing `proxmox_endpoint_ids` as "use every endpoint I hold" — including endpoints disabled in this NetBox. So a scope that reached the selected object but not its dependencies would resolve those dependencies against the *whole* backend estate. `sync_stages.py::_run_batch_selected_sync()` takes the resolved scope as keyword-only `proxmox_wire_endpoint_ids=` and sets both the query param and the argument; `jobs.py` resolves it with `sync_stages._batch_wire_endpoint_scope()` and refuses the run when nothing resolves. Pinned by `test_run_batch_selected_sync_passes_the_proxmox_scope_to_dependency_syncs`.
 - [`openapi_schema.py`](./openapi_schema.py): OpenAPI schema caching and retrieval from the backend.
 - [`service_status.py`](./service_status.py): `ServiceStatus` class and helpers for keepalive/health checks against FastAPI, NetBox, and Proxmox endpoints. Lightweight backend reachability and `/version` probes use `request_timeout`; Proxmox keepalive synchronization, backend endpoint resolution, and version reads use the `backend_status_timeout` aggregate deadline because proxbox-api may initialize an upstream Proxmox session before returning. Each backend request receives only the remaining deadline, including retry sleeps. Do not reduce those backend-operation calls to the five-second lightweight budget or remove their aggregate bound.
+- [`sync_state_endpoint_backfill.py`](./sync_state_endpoint_backfill.py): pure
+  ORM repair that binds a null sync-state `endpoint` foreign key from the
+  proxbox-api ID stored in `proxmox_endpoint_raw_id` only when the VM row's own
+  cluster and node relations include at least one present relation and all
+  present relations belong to that endpoint. Two present relations never vote
+  independently: either ownership mismatch leaves the row unbound under
+  `relations_disagree`. A row with both relations null remains unbound under
+  `no_relation_evidence`; its recorded cluster name is retained in the bounded
+  sample for operator review but is never automatic ownership evidence. A
+  backend integer is not
+  historical ownership evidence because restores and endpoint recreation can
+  reuse it. Uncorroborated rows remain null and are reported by count, bounded
+  primary-key sample, and reason. Apply locks candidate sync-state rows and the
+  cluster/node evidence they reference, recomputes corroboration in the same
+  transaction, and updates only the still-corroborated PKs with null-endpoint,
+  raw-ID, and exact-PK guards. Only the management command can pass an explicit
+  operator-confirmed backend-ID/plugin-pk pair; the sync job never does. A
+  confirmed preview lists every affected unverified row and emits a deterministic
+  review token bound to that complete PK set and the full endpoint mapping. The
+  token is only a checksummed receipt for the reviewed set, not a secret or an
+  authentication proof. Apply requires the token and refuses a changed set with
+  exact added/removed PK diagnostics. The preview never calls `update()`.
 - [`sync_cluster.py`](./sync_cluster.py): sync coordination for cluster and node inventory.
 
 ## Dependencies

@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 from decimal import Decimal
-from urllib.parse import urlsplit
-
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models, router, transaction
@@ -51,29 +49,6 @@ def parse_cidr_list(text: str) -> list[str]:
     return [line.strip() for line in text.split("\n") if line.strip()]
 
 
-def validate_console_url(value: str) -> None:
-    """Require an optional HTTPS origin for browser console handoffs."""
-    if not value:
-        return
-    if any(character.isspace() for character in value):
-        raise ValidationError(_("Console URL must be an HTTPS origin."))
-    try:
-        parsed = urlsplit(value)
-        parsed.port
-    except ValueError as exc:
-        raise ValidationError(_("Console URL must be an HTTPS origin.")) from exc
-    if (
-        parsed.scheme != "https"
-        or not parsed.hostname
-        or parsed.username is not None
-        or parsed.password is not None
-        or parsed.path not in {"", "/"}
-        or parsed.query
-        or parsed.fragment
-    ):
-        raise ValidationError(_("Console URL must be an HTTPS origin."))
-
-
 class ProxboxPluginSettings(NetBoxModel):
     """Singleton-style settings row used by plugin UI and sync jobs."""
 
@@ -82,15 +57,6 @@ class ProxboxPluginSettings(NetBoxModel):
         unique=True,
         default="default",
         editable=False,
-    )
-    console_url = models.URLField(
-        blank=True,
-        default="",
-        verbose_name=_("Browser console URL"),
-        help_text=_(
-            "HTTPS management origin used for browser console handoffs. "
-            "Leave empty to hide console actions."
-        ),
     )
     use_guest_agent_interface_name = models.BooleanField(
         default=True,
@@ -1012,7 +978,6 @@ class ProxboxPluginSettings(NetBoxModel):
         """Reject timing combinations that cannot perform another status poll."""
 
         super().clean()
-        validate_console_url(str(self.console_url or "").strip().rstrip("/"))
         timeout = self.ceph_task_timeout
         poll_interval = self.ceph_task_poll_interval
         if timeout is None or poll_interval is None:
