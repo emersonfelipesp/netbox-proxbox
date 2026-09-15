@@ -937,8 +937,12 @@ remain reproducible: pin the checkout by full commit, verify its
 `netbox/release.yaml` identity and upstream `requirements.txt` checksum, and
 install the matching reviewed Python 3.12/Linux lock from
 `ci/netbox-requirements/` with artifact hashes, an explicit PyPI first-index
-policy, and the repository-pinned uv version. Update the `.in` snapshot, lock,
-matrix metadata, source-contract tests, and compatibility docs together.
+policy, and the repository-pinned uv version. The `.in` file starts from that
+upstream requirements file but must replace every advisory-covered version
+with the floor enforced by `tests/test_dependency_security_floors.py`; verify
+the upstream checksum and reviewed input checksum independently. Update the
+`.in` input, lock, matrix metadata, source-contract tests, and compatibility
+docs together whenever either the source commit or a security floor changes.
 
 ### Gitea-to-GitHub mirror (`.gitea/workflows/mirror-github.yml`)
 

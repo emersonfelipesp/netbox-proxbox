@@ -51,6 +51,7 @@ from packaging.version import InvalidVersion, Version
 ROOT = Path(__file__).resolve().parents[1]
 PYPROJECT = ROOT / "pyproject.toml"
 REQUIREMENTS_DOCS = ROOT / "requirements-docs.txt"
+NETBOX_REQUIREMENTS_DIR = ROOT / "ci" / "netbox-requirements"
 
 # Location keys. Each names one manifest position a floor can be required in;
 # _SPEC_SOURCES maps them to the accessor that reads that position.
@@ -80,7 +81,7 @@ class SecurityFloor:
         self.declared_in = declared_in
 
 
-# Transcribed from the published advisories on 2026-08-10. Do not regenerate any
+# Transcribed from the published advisories through 2026-09-14. Do not regenerate any
 # of this from the manifests -- that would make the tests assert only that the
 # code agrees with itself.
 SECURITY_FLOORS: dict[str, SecurityFloor] = {
@@ -113,6 +114,118 @@ SECURITY_FLOORS: dict[str, SecurityFloor] = {
         # the floor has to be declared explicitly in both docs manifests.
         declared_in=(DEV_GROUP, DOCS_REQUIREMENTS),
     ),
+    "mkdocs-material": SecurityFloor(
+        name="mkdocs-material",
+        floor="9.7.7",
+        # GHSA-xvg9-69gf-fjrf covers >= 7.2.0, < 9.7.7.
+        affected=("9.7.6",),
+        advisories=("GHSA-xvg9-69gf-fjrf",),
+        declared_in=(DEV_GROUP, DOCS_REQUIREMENTS),
+    ),
+}
+
+
+# The matrix inputs begin with the exact requirements from each immutable
+# NetBox commit, then apply reviewed security overrides. These floors are kept
+# separate from SECURITY_FLOORS because the matrix files are CI fixtures, not
+# install manifests shipped to users.
+_COMMON_NETBOX_MATRIX_FLOORS = {
+    "djangorestframework": "3.17.2",
+    "mkdocs-material": "9.7.7",
+    "pillow": "12.3.0",
+    "pyjwt": "2.13.0",
+    "strawberry-graphql": "0.315.7",
+    "tablib": "3.10.0",
+}
+NETBOX_MATRIX_SECURITY_FLOORS = {
+    "v4.5.8-py312-linux-x86_64.in": {
+        "django": "5.2.17",
+        **_COMMON_NETBOX_MATRIX_FLOORS,
+    },
+    "v4.5.10-py312-linux-x86_64.in": {
+        "django": "5.2.17",
+        **_COMMON_NETBOX_MATRIX_FLOORS,
+    },
+    "v4.6.0-py312-linux-x86_64.in": {
+        "django": "6.0.8",
+        **_COMMON_NETBOX_MATRIX_FLOORS,
+    },
+    "v4.6.6-py312-linux-x86_64.in": {
+        "django": "6.0.8",
+        **_COMMON_NETBOX_MATRIX_FLOORS,
+    },
+}
+NETBOX_MATRIX_AUTH_CHAINS = {
+    "v4.5.8-py312-linux-x86_64.in": {
+        "pyjwt": "2.13.0",
+        "requests": "2.33.1",
+        "social-auth-app-django": "5.7.0",
+        "social-auth-core": "4.8.5",
+    },
+    "v4.5.10-py312-linux-x86_64.in": {
+        "pyjwt": "2.13.0",
+        "requests": "2.34.2",
+        "social-auth-app-django": "6.0.1",
+        "social-auth-core": "5.1.0",
+    },
+    "v4.6.0-py312-linux-x86_64.in": {
+        "pyjwt": "2.13.0",
+        "requests": "2.34.2",
+        "social-auth-app-django": "6.0.1",
+        "social-auth-core": "5.1.0",
+    },
+    "v4.6.6-py312-linux-x86_64.in": {
+        "pyjwt": "2.13.0",
+        "requests": "2.34.2",
+        "social-auth-app-django": "6.0.1",
+        "social-auth-core": "5.1.0",
+    },
+}
+NETBOX_MATRIX_SECURITY_ADVISORIES = {
+    "django": (
+        "PYSEC-2026-3717",
+        "GHSA-3h9f-r86x-qvjx",
+        "GHSA-5hrc-gvxj-w55p",
+        "GHSA-7h2m-m8vj-598h",
+        "GHSA-8cjm-8mp7-r2xf",
+        "GHSA-8qcx-xf44-272x",
+        "GHSA-923m-gv2p-w5qp",
+        "GHSA-crhf-3pfg-w68w",
+        "GHSA-h7pc-vwp9-298g",
+        "GHSA-mm6v-q8q9-pgcf",
+        "GHSA-qpc8-7fxc-cm4p",
+        "GHSA-w26r-rmm8-9c29",
+    ),
+    "djangorestframework": ("GHSA-2m8g-3cmr-wg3w", "GHSA-g47c-3xmw-q6m2"),
+    "mkdocs-material": ("GHSA-xvg9-69gf-fjrf",),
+    "pillow": (
+        "GHSA-45hq-cxwh-f6vc",
+        "GHSA-4x4j-2g7c-83w6",
+        "GHSA-5x94-69rx-g8h2",
+        "GHSA-62p4-gmf7-7g93",
+        "GHSA-6r8x-57c9-28j4",
+        "GHSA-8v84-f9pq-wr9x",
+        "GHSA-9hw9-ch79-4vh6",
+        "GHSA-fj7v-r99m-22gq",
+        "GHSA-jjj6-mw9f-p565",
+        "GHSA-pg7v-jwj7-p798",
+        "GHSA-phj9-mv4w-65pm",
+        "GHSA-vjc4-5qp5-m44j",
+        "GHSA-xj96-63gp-2gmr",
+    ),
+    "pyjwt": (
+        "GHSA-993g-76c3-p5m4",
+        "GHSA-fhv5-28vv-h8m8",
+        "GHSA-jq35-7prp-9v3f",
+        "GHSA-w7vc-732c-9m39",
+        "GHSA-xgmm-8j9v-c9wx",
+    ),
+    "strawberry-graphql": (
+        "GHSA-fr49-mhgj-crfc",
+        "GHSA-qfwv-87qj-98xq",
+        "GHSA-x97m-qp5c-w9xj",
+    ),
+    "tablib": ("GHSA-gqgw-jghv-mxwx",),
 }
 
 # ``cryptography`` is deliberately absent. Its advisory (GHSA-g6cj-pr64-35w5)
@@ -449,6 +562,200 @@ def test_locked_versions_satisfy_the_declared_floors() -> None:
             f"uv.lock pins {package} {locked[key]}, below the required security "
             f"floor {floor.floor} ({', '.join(floor.advisories)})."
         )
+
+
+def _matrix_input_specs(path: Path) -> list[str]:
+    """Read a matrix input whose lines must all be visible requirements."""
+    if not path.is_file():
+        pytest.fail(f"NetBox matrix input is missing at {path}")
+    specs = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        stripped = line.split("#", 1)[0].strip()
+        if not stripped:
+            continue
+        if stripped.startswith("-"):
+            pytest.fail(
+                f"{path}: install directive {stripped!r} hides dependencies "
+                "from the matrix security-floor guard"
+            )
+        specs.append(stripped)
+    if not specs:
+        pytest.fail(f"NetBox matrix input contains no requirements: {path}")
+    return specs
+
+
+def _matrix_lock_versions(path: Path) -> dict[str, Version]:
+    """Read exact top-level pins from one generated, hash-locked matrix file."""
+    if not path.is_file():
+        pytest.fail(f"NetBox matrix lock is missing at {path}")
+    text = path.read_text(encoding="utf-8")
+    if "--hash=sha256:" not in text:
+        pytest.fail(f"NetBox matrix lock has no artifact hashes: {path}")
+
+    versions: dict[str, Version] = {}
+    for line_number, line in enumerate(text.splitlines(), start=1):
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#") or line[:1].isspace():
+            continue
+        match = re.fullmatch(r"([A-Za-z0-9][A-Za-z0-9._-]*)==([^ ]+) \\", line)
+        if match is None:
+            pytest.fail(
+                f"{path}:{line_number}: unsupported top-level install line "
+                f"{line!r}; locks may contain only exact index pins"
+            )
+        package = _canonical(match.group(1))
+        if package in versions:
+            pytest.fail(f"{path}: duplicate locked package {package!r}")
+        versions[package] = Version(match.group(2))
+    if not versions:
+        pytest.fail(f"NetBox matrix lock contains no exact package pins: {path}")
+    return versions
+
+
+def _assert_matrix_input_matches_lock(
+    input_path: Path,
+    input_specs: list[str],
+    lock_versions: dict[str, Version],
+) -> None:
+    """Require every direct matrix input declaration to govern its lock pin."""
+    seen: set[str] = set()
+    for raw in input_specs:
+        requirement = Requirement(raw)
+        package = _canonical(requirement.name)
+        assert requirement.url is None, (
+            f"{input_path}: direct URLs are not permitted for {package}; "
+            "the reviewed index lock must select the artifact"
+        )
+        assert requirement.marker is None, (
+            f"{input_path}: environment markers are not permitted for {package}; "
+            "each fixed Python 3.12/Linux matrix input must apply unconditionally"
+        )
+        assert package not in seen, f"{input_path}: duplicate input package {package!r}"
+        seen.add(package)
+        assert package in lock_versions, (
+            f"{input_path.with_suffix('.txt')}: missing direct input package {package}"
+        )
+        locked = lock_versions[package]
+        assert not locked.is_prerelease, (
+            f"{input_path.with_suffix('.txt')} pins prerelease {package} {locked}"
+        )
+        assert requirement.specifier.contains(locked, prereleases=False), (
+            f"{input_path.with_suffix('.txt')} pins {package} {locked}, which "
+            f"does not satisfy its reviewed input declaration {requirement}"
+        )
+
+
+@pytest.mark.parametrize("filename", sorted(NETBOX_MATRIX_SECURITY_FLOORS))
+def test_netbox_matrix_inputs_and_locks_enforce_security_floors(
+    filename: str,
+) -> None:
+    """Every reviewed matrix input and generated lock must clear its advisories."""
+    input_path = NETBOX_REQUIREMENTS_DIR / filename
+    input_specs = _matrix_input_specs(input_path)
+    lock_versions = _matrix_lock_versions(input_path.with_suffix(".txt"))
+    _assert_matrix_input_matches_lock(input_path, input_specs, lock_versions)
+
+    for package, floor_raw in NETBOX_MATRIX_SECURITY_FLOORS[filename].items():
+        floor = Version(floor_raw)
+        advisories = ", ".join(NETBOX_MATRIX_SECURITY_ADVISORIES[package])
+        requirement = _requirement_from(input_specs, package, str(input_path))
+        lower = _effective_lower_bound(requirement.specifier)
+        assert lower is not None and lower >= floor, (
+            f"{input_path}: {requirement} does not establish the {floor} "
+            f"security floor required by {advisories}"
+        )
+        assert not lower.is_prerelease, (
+            f"{input_path}: {requirement} uses a prerelease security floor"
+        )
+
+        key = _canonical(package)
+        assert key in lock_versions, (
+            f"{input_path.with_suffix('.txt')}: missing {package}"
+        )
+        locked = lock_versions[key]
+        assert not locked.is_prerelease, (
+            f"{input_path.with_suffix('.txt')} pins prerelease {package} {locked}"
+        )
+        assert locked >= floor, (
+            f"{input_path.with_suffix('.txt')} pins {package} {locked}, below "
+            f"the {floor} security floor required by {advisories}"
+        )
+        assert requirement.specifier.contains(locked, prereleases=False), (
+            f"{input_path.with_suffix('.txt')} pins {package} {locked}, which "
+            f"does not satisfy its reviewed input declaration {requirement}"
+        )
+
+    for package, expected_raw in NETBOX_MATRIX_AUTH_CHAINS[filename].items():
+        expected = Version(expected_raw)
+        requirement = _requirement_from(input_specs, package, str(input_path))
+        assert str(requirement.specifier) == f"=={expected}", (
+            f"{input_path}: expected the reviewed authentication-chain pin "
+            f"{package}=={expected}, found {requirement}"
+        )
+        assert lock_versions[_canonical(package)] == expected, (
+            f"{input_path.with_suffix('.txt')}: expected the reviewed "
+            f"authentication-chain pin {package}=={expected}"
+        )
+
+
+@pytest.mark.parametrize(
+    ("original", "replacement", "message"),
+    [
+        (
+            "social-auth-core==5.1.0",
+            "social-auth-core==4.8.7",
+            "does not satisfy",
+        ),
+        (
+            "requests==2.34.2",
+            'requests==2.34.2; python_version < "3"',
+            "environment markers are not permitted",
+        ),
+        (
+            "django-filter==25.2",
+            "django-filter @ https://example.invalid/django-filter-0.0.1.tar.gz",
+            "direct URLs are not permitted",
+        ),
+    ],
+)
+def test_netbox_matrix_input_provenance_bypasses_are_rejected(
+    original: str,
+    replacement: str,
+    message: str,
+) -> None:
+    """Prove that stale locks, inactive markers, and direct URLs fail closed."""
+    input_path = NETBOX_REQUIREMENTS_DIR / "v4.5.10-py312-linux-x86_64.in"
+    input_specs = _matrix_input_specs(input_path)
+    mutated_specs = [replacement if spec == original else spec for spec in input_specs]
+    lock_versions = _matrix_lock_versions(input_path.with_suffix(".txt"))
+
+    with pytest.raises(AssertionError, match=message):
+        _assert_matrix_input_matches_lock(input_path, mutated_specs, lock_versions)
+
+
+@pytest.mark.parametrize("mutation", ["direct-url", "alternate-index"])
+def test_netbox_matrix_lock_provenance_bypasses_are_rejected(
+    tmp_path: Path, mutation: str
+) -> None:
+    """Reject non-index artifacts and unreviewed indexes in generated locks."""
+    source = NETBOX_REQUIREMENTS_DIR / "v4.5.10-py312-linux-x86_64.txt"
+    lock_text = source.read_text(encoding="utf-8")
+    if mutation == "direct-url":
+        lock_text = lock_text.replace(
+            "asgiref==3.12.1 \\",
+            "asgiref @ https://example.invalid/asgiref-3.12.1.tar.gz \\",
+            1,
+        )
+    else:
+        lock_text = "--extra-index-url https://example.invalid/simple\n" + lock_text
+
+    mutated = tmp_path / "mutated.txt"
+    mutated.write_text(lock_text, encoding="utf-8")
+
+    with pytest.raises(
+        pytest.fail.Exception, match="unsupported top-level install line"
+    ):
+        _matrix_lock_versions(mutated)
 
 
 @pytest.mark.parametrize(

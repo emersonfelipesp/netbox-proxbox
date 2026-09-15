@@ -375,7 +375,9 @@ cryptography==50.0.1 \
     --hash=sha256:fc3ed7ebd2a8c96f5b166de0ab9b624996bef3b07bbeb19364dfb78222c22c80 \
     --hash=sha256:fd3718b960d0b5dd213cdf03f3bcb7000e69dda0de8b956061947ff6bcff5558 \
     --hash=sha256:ff838d62ec1bfce4f9ba7fa16f4a7b554cd8d0c299e6be37502161a660c84eef
-    # via pyjwt
+    # via
+    #   pyjwt
+    #   social-auth-core
 deepmerge==3.0 \
     --hash=sha256:14ed69f063de64b7743985c732ccff5d6c34ff4560946e7fbfd99086b853b9ce \
     --hash=sha256:c8541c3e186dc88d19a5513ad3a0b2d0b22beaa780969fc0c13b995a64265365
@@ -386,9 +388,9 @@ defusedxml==0.7.1 \
     # via
     #   python3-openid
     #   social-auth-core
-django==6.0.7 \
-    --hash=sha256:2998503fc083124fb58037084bfa00de323c7c743f05f1b4284e77bff0ab8890 \
-    --hash=sha256:a037427c2288443a8c02a1b02295a31c239663aa682bc50b1976afb7cf6a769e
+django==6.0.8 \
+    --hash=sha256:9b98b7e1902e0e575ea4f42c175fc9512784f7f2580898286aee3388b322219d \
+    --hash=sha256:cb0bd962d27fc866f3c514b20aae6a7df56ec80b488f9899da46d675cd051526
     # via
     #   -r ci/netbox-requirements/v4.6.6-py312-linux-x86_64.in
     #   django-cors-headers
@@ -475,9 +477,9 @@ django-timezone-field==7.2.2 \
     --hash=sha256:30354d0f37462a0b9b5c289e271580a6be9b58dea30e7bf88435372882c8fa7a \
     --hash=sha256:a004d0b19fe10bf5964cb21a65b36324b16a61879e4711c0dafdf8d6253e8ebc
     # via -r ci/netbox-requirements/v4.6.6-py312-linux-x86_64.in
-djangorestframework==3.17.1 \
-    --hash=sha256:a6def5f447fe78ff853bff1d47a3c59bf38f5434b031780b351b0c73a62db1a5 \
-    --hash=sha256:c3c74dd3e83a5a3efc37b3c18d92bd6f86a6791c7b7d4dff62bb068500e76457
+djangorestframework==3.17.2 \
+    --hash=sha256:89ed713b6dc83e1539f214b7d10808ae19bb8511004beba886225da6d5c9dafa \
+    --hash=sha256:cb0546a7415d5b46c04e0f4fe0a54b2109f4fdd5e83ca773c8c6183a6493d042
     # via
     #   -r ci/netbox-requirements/v4.6.6-py312-linux-x86_64.in
     #   drf-spectacular
@@ -890,10 +892,12 @@ pygments==2.21.0 \
     #   mkdocs-material
     #   rich
     #   zensical
-pyjwt==2.12.1 \
-    --hash=sha256:28ca37c070cad8ba8cd9790cd940535d40274d22f80ab87f3ac6a713e6e8454c \
-    --hash=sha256:c74a7a2adf861c04d002db713dd85f84beb242228e671280bf709d765b03672b
-    # via social-auth-core
+pyjwt==2.13.0 \
+    --hash=sha256:41571c89ca91598c79e8ef18a2d07367d4810fbbd6f637794879baf1b7703423 \
+    --hash=sha256:66adcc2aff09b3f1bbd95fc1e1577df8ac8723c978552fd43304c8a290ac5728
+    # via
+    #   -r ci/netbox-requirements/v4.6.6-py312-linux-x86_64.in
+    #   social-auth-core
 pymdown-extensions==11.0.2 \
     --hash=sha256:259910762019732caa1dfd76f3faa62c59f191d46573e80bcb1d13c0f675bbe5 \
     --hash=sha256:9506fcbe66fa355a775b768084334238dd6805020ac4b92bea0c0dda6f8f223d
@@ -1162,13 +1166,13 @@ six==1.17.0 \
     #   django-pglocks
     #   promise
     #   python-dateutil
-social-auth-app-django==5.9.0 \
-    --hash=sha256:5b79c53321f9528334d53ddb154452a3b7e598b7ff4c2c1302be9a76b1349e8d \
-    --hash=sha256:80edf5c207d871f2225a0fc6bb414004c0342c30deb3a217eb38a63b66e749bb
+social-auth-app-django==6.0.1 \
+    --hash=sha256:43002de0530e2ad13ef067f54aba7185a05fc8527310006c5328dc0b5e7a4cfd \
+    --hash=sha256:652ec21105ef58a34ffd223a02c338bc03e5f56d357ee69c33283afd08442065
     # via -r ci/netbox-requirements/v4.6.6-py312-linux-x86_64.in
-social-auth-core==4.8.7 \
-    --hash=sha256:30f88822d5c72e07a3dd080daff81464e262b83794c75cf636fc81241d2a253c \
-    --hash=sha256:c06d528bde0cf3d21e9e17af31c824c953985732123b005f54b20e67c9d0d8d8
+social-auth-core==5.1.0 \
+    --hash=sha256:1e8b678473fef38a972d3e4c5f6fa898558abe7ba46bd56b8429cc484483bf7b \
+    --hash=sha256:7a622ceeab857c8310e358b4ad7727e410b735052ab90cc408835c16304b18e8
     # via
     #   -r ci/netbox-requirements/v4.6.6-py312-linux-x86_64.in
     #   social-auth-app-django
@@ -1196,9 +1200,9 @@ svgwrite==1.4.3 \
     --hash=sha256:a8fbdfd4443302a6619a7f76bc937fc683daf2628d9b737c891ec08b8ce524c3 \
     --hash=sha256:bb6b2b5450f1edbfa597d924f9ac2dd099e625562e492021d7dd614f65f8a22d
     # via -r ci/netbox-requirements/v4.6.6-py312-linux-x86_64.in
-tablib==3.9.0 \
-    --hash=sha256:1b6abd8edb0f35601e04c6161d79660fdcde4abb4a54f66cc9f9054bd55d5fe2 \
-    --hash=sha256:eda17cd0d4dda614efc0e710227654c60ddbeb1ca92cdcfc5c3bd1fc5f5a6e4a
+tablib==3.10.0 \
+    --hash=sha256:5721bf3a52d491f8f843628a3a3200db164f6ad9e92fb6eaa64dc3f945f30ad9 \
+    --hash=sha256:781cfa9a42de8f33c52aff857fd0a04e483de4fd1c53eaaa9a6aeac62bad11de
     # via -r ci/netbox-requirements/v4.6.6-py312-linux-x86_64.in
 text-unidecode==1.3 \
     --hash=sha256:1311f10e8b895935241623731c2ba64f4c455287888b18189350b67134a822e8 \

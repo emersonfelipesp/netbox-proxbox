@@ -143,8 +143,9 @@ DJANGO_TESTED_NETBOX_ROWS = (
         "netbox_requirements_sha256": (
             "646c5bb635d5b9b126c6af4d56664dfde461608bdcaa8a65c1735ac5d8ddde9b"
         ),
+        "netbox_input_sha256": "eaa1232512302fd9eaf7c3ca1cee1ea959ba9c7001eb276025b4f4612c9593c3",
         "netbox_lock": "ci/netbox-requirements/v4.5.8-py312-linux-x86_64.txt",
-        "netbox_lock_sha256": "1599f33b950138366b73a480ea9c8ffc9380a0593a2cc1aa8caaf9838cc17ebc",
+        "netbox_lock_sha256": "5f0e6ab7c61bad67006d819918b7c4fb8c0f88dd67250e4c64127bc86e9e008a",
     },
     {
         "netbox": "v4.5.10",
@@ -155,8 +156,9 @@ DJANGO_TESTED_NETBOX_ROWS = (
         "netbox_requirements_sha256": (
             "d68f08fb6167317174be89cda3045ee0e2fa34dd6e18ce19db2a31cf31a26e6f"
         ),
+        "netbox_input_sha256": "bdfd166f32c07d4223fe2f105a4b57873923c55b13c76946cb7b56c667fb12b5",
         "netbox_lock": "ci/netbox-requirements/v4.5.10-py312-linux-x86_64.txt",
-        "netbox_lock_sha256": "0fb15f4a3185f73b64cc9c863dac04a74039474689ceb40b381401b310dc4cb5",
+        "netbox_lock_sha256": "3c4745890047b8b96e7c3461cd5ec0ecdc483edbe4054d63f370dbca3f74ceb7",
     },
     {
         "netbox": "v4.6.0",
@@ -167,8 +169,9 @@ DJANGO_TESTED_NETBOX_ROWS = (
         "netbox_requirements_sha256": (
             "0d88cea37b413f22953ead2c2c341c82fe7a5e5d8a01f42632288676db8d66b6"
         ),
+        "netbox_input_sha256": "d948640804f4d6f45fa42bd7b5192bd583c08cf3ac5156c2969dc87a6063857d",
         "netbox_lock": "ci/netbox-requirements/v4.6.0-py312-linux-x86_64.txt",
-        "netbox_lock_sha256": "f4cf90759f388a3af2451e0c7565371bdcc1151c427bfb4c8259ce81190022b7",
+        "netbox_lock_sha256": "9ea5a21bd89890c43ae6163b9dd00f4dbb62db99b28c8cb5021edfb1d191cce4",
     },
     {
         "netbox": "v4.6.6",
@@ -179,8 +182,9 @@ DJANGO_TESTED_NETBOX_ROWS = (
         "netbox_requirements_sha256": (
             "25eb62e54362568599c7701a528a7ac24dbe0400d5311fc496eab866bd6174b9"
         ),
+        "netbox_input_sha256": "2413106d8fd6e3e9023c73071059f7784add9c12309d70c6b349c83819cd37b1",
         "netbox_lock": "ci/netbox-requirements/v4.6.6-py312-linux-x86_64.txt",
-        "netbox_lock_sha256": "dc280f54674a422d9ccec9d1be8771e4bc8c261e8a5d3a3eb0b0f0197ece389a",
+        "netbox_lock_sha256": "509991af7910f91578f6f7ff2cc74a048eb5ce2c5f793e9f7d6479c59ac0396d",
     },
     {
         "netbox": "v4.7.0",
@@ -191,6 +195,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
         "netbox_requirements_sha256": (
             "61589a94b25149765d230d3f33597326c3987faae7cbc20aae4c49e825c2b582"
         ),
+        "netbox_input_sha256": "61589a94b25149765d230d3f33597326c3987faae7cbc20aae4c49e825c2b582",
         "netbox_lock": "ci/netbox-requirements/v4.7.0-py312-linux-x86_64.txt",
         "netbox_lock_sha256": "3e5b77507f4490ddf38c72fdabd57e5a55bc1178097ebbac848cb1e1fb165678",
     },
@@ -203,8 +208,9 @@ DJANGO_TESTED_NETBOX_ROWS = (
         "netbox_requirements_sha256": (
             "25eb62e54362568599c7701a528a7ac24dbe0400d5311fc496eab866bd6174b9"
         ),
+        "netbox_input_sha256": "2413106d8fd6e3e9023c73071059f7784add9c12309d70c6b349c83819cd37b1",
         "netbox_lock": "ci/netbox-requirements/v4.6.6-py312-linux-x86_64.txt",
-        "netbox_lock_sha256": "dc280f54674a422d9ccec9d1be8771e4bc8c261e8a5d3a3eb0b0f0197ece389a",
+        "netbox_lock_sha256": "509991af7910f91578f6f7ff2cc74a048eb5ce2c5f793e9f7d6479c59ac0396d",
     },
 )
 PREVIOUS_PLUGIN_VERSION = "0.0.22"
@@ -497,16 +503,16 @@ def test_django_tests_pin_expected_netbox_matrix():
     assert "ref: ${{ matrix.netbox_ref }}" in workflow
 
 
-def test_django_netbox_locks_match_reviewed_upstream_inputs():
+def test_django_netbox_locks_match_reviewed_security_inputs():
     unique_rows = {row["netbox_ref"]: row for row in DJANGO_TESTED_NETBOX_ROWS}
     for row in unique_rows.values():
         lock_path = REPO_ROOT / row["netbox_lock"]
         input_path = lock_path.with_suffix(".in")
-        assert input_path.is_file(), f"missing upstream input snapshot: {input_path}"
+        assert input_path.is_file(), f"missing reviewed matrix input: {input_path}"
         assert lock_path.is_file(), f"missing generated dependency lock: {lock_path}"
         assert (
             hashlib.sha256(input_path.read_bytes()).hexdigest()
-            == (row["netbox_requirements_sha256"])
+            == row["netbox_input_sha256"]
         )
         assert (
             hashlib.sha256(lock_path.read_bytes()).hexdigest()
@@ -562,6 +568,47 @@ def test_django_tests_pin_reviewed_execution_inputs():
     assert "--index-strategy first-index" in workflow
     assert '-r "${{ matrix.netbox_lock }}"' in workflow
     assert "../netbox/requirements.txt" not in workflow
+
+
+def test_django_tests_verify_three_distinct_dependency_artifact_checksums():
+    """Pin every binding, consumption, and target in the checksum gate."""
+    parsed = yaml.safe_load(_read(DJANGO_TESTS_WORKFLOW_PATH))
+    [verify_step] = [
+        step
+        for step in parsed["jobs"]["django-tests"]["steps"]
+        if step.get("name") == "Verify exact NetBox source identity"
+    ]
+    verify_env = verify_step["env"]
+    verify_run = verify_step["run"]
+    observed_contract = {
+        "bindings": (
+            verify_env.get("EXPECTED_REQUIREMENTS_SHA256"),
+            verify_env.get("EXPECTED_INPUT_SHA256"),
+            verify_env.get("EXPECTED_LOCK_SHA256"),
+        ),
+        "consumption_counts": (
+            verify_run.count("$EXPECTED_REQUIREMENTS_SHA256"),
+            verify_run.count("$EXPECTED_INPUT_SHA256"),
+            verify_run.count("$EXPECTED_LOCK_SHA256"),
+            verify_run.count("sha256sum --check --strict"),
+        ),
+        "targets_present": (
+            '"$EXPECTED_REQUIREMENTS_SHA256" netbox/requirements.txt' in verify_run,
+            'input_path="${EXPECTED_NETBOX_LOCK%.txt}.in"' in verify_run,
+            '"$EXPECTED_INPUT_SHA256" "netbox-proxbox/$input_path"' in verify_run,
+            '"$EXPECTED_LOCK_SHA256" "netbox-proxbox/$EXPECTED_NETBOX_LOCK"'
+            in verify_run,
+        ),
+    }
+    assert observed_contract == {
+        "bindings": (
+            "${{ matrix.netbox_requirements_sha256 }}",
+            "${{ matrix.netbox_input_sha256 }}",
+            "${{ matrix.netbox_lock_sha256 }}",
+        ),
+        "consumption_counts": (1, 1, 1, 3),
+        "targets_present": (True, True, True, True),
+    }
 
 
 def test_page_coverage_pins_latest_certified_netbox():

@@ -42,38 +42,43 @@ jobs:
             netbox_version: "4.5.8"
             netbox_designation: ""
             netbox_requirements_sha256: 646c5bb635d5b9b126c6af4d56664dfde461608bdcaa8a65c1735ac5d8ddde9b
+            netbox_input_sha256: eaa1232512302fd9eaf7c3ca1cee1ea959ba9c7001eb276025b4f4612c9593c3
             netbox_lock: ci/netbox-requirements/v4.5.8-py312-linux-x86_64.txt
-            netbox_lock_sha256: 1599f33b950138366b73a480ea9c8ffc9380a0593a2cc1aa8caaf9838cc17ebc
+            netbox_lock_sha256: 5f0e6ab7c61bad67006d819918b7c4fb8c0f88dd67250e4c64127bc86e9e008a
           - netbox: "v4.5.10"
             pdm: false
             netbox_ref: b78bd713294564e0421c36c936a909e64da04b8d
             netbox_version: "4.5.10"
             netbox_designation: ""
             netbox_requirements_sha256: d68f08fb6167317174be89cda3045ee0e2fa34dd6e18ce19db2a31cf31a26e6f
+            netbox_input_sha256: bdfd166f32c07d4223fe2f105a4b57873923c55b13c76946cb7b56c667fb12b5
             netbox_lock: ci/netbox-requirements/v4.5.10-py312-linux-x86_64.txt
-            netbox_lock_sha256: 0fb15f4a3185f73b64cc9c863dac04a74039474689ceb40b381401b310dc4cb5
+            netbox_lock_sha256: 3c4745890047b8b96e7c3461cd5ec0ecdc483edbe4054d63f370dbca3f74ceb7
           - netbox: "v4.6.0"
             pdm: false
             netbox_ref: 00791344e68213bde942218283dce03cc3941c30
             netbox_version: "4.6.0"
             netbox_designation: ""
             netbox_requirements_sha256: 0d88cea37b413f22953ead2c2c341c82fe7a5e5d8a01f42632288676db8d66b6
+            netbox_input_sha256: d948640804f4d6f45fa42bd7b5192bd583c08cf3ac5156c2969dc87a6063857d
             netbox_lock: ci/netbox-requirements/v4.6.0-py312-linux-x86_64.txt
-            netbox_lock_sha256: f4cf90759f388a3af2451e0c7565371bdcc1151c427bfb4c8259ce81190022b7
+            netbox_lock_sha256: 9ea5a21bd89890c43ae6163b9dd00f4dbb62db99b28c8cb5021edfb1d191cce4
           - netbox: "v4.6.6"
             pdm: false
             netbox_ref: fb8c455ba61b57119a70670612dfdd05e8438b10
             netbox_version: "4.6.6"
             netbox_designation: ""
             netbox_requirements_sha256: 25eb62e54362568599c7701a528a7ac24dbe0400d5311fc496eab866bd6174b9
+            netbox_input_sha256: 2413106d8fd6e3e9023c73071059f7784add9c12309d70c6b349c83819cd37b1
             netbox_lock: ci/netbox-requirements/v4.6.6-py312-linux-x86_64.txt
-            netbox_lock_sha256: dc280f54674a422d9ccec9d1be8771e4bc8c261e8a5d3a3eb0b0f0197ece389a
+            netbox_lock_sha256: 509991af7910f91578f6f7ff2cc74a048eb5ce2c5f793e9f7d6479c59ac0396d
           - netbox: "v4.7.0"
             pdm: false
             netbox_ref: 5f06007e4c9bacc93ce17c1e645fc1143d60df3d
             netbox_version: "4.7.0"
             netbox_designation: ""
             netbox_requirements_sha256: 61589a94b25149765d230d3f33597326c3987faae7cbc20aae4c49e825c2b582
+            netbox_input_sha256: 61589a94b25149765d230d3f33597326c3987faae7cbc20aae4c49e825c2b582
             netbox_lock: ci/netbox-requirements/v4.7.0-py312-linux-x86_64.txt
             netbox_lock_sha256: 3e5b77507f4490ddf38c72fdabd57e5a55bc1178097ebbac848cb1e1fb165678
           - netbox: "v4.6.6"
@@ -82,8 +87,9 @@ jobs:
             netbox_version: "4.6.6"
             netbox_designation: ""
             netbox_requirements_sha256: 25eb62e54362568599c7701a528a7ac24dbe0400d5311fc496eab866bd6174b9
+            netbox_input_sha256: 2413106d8fd6e3e9023c73071059f7784add9c12309d70c6b349c83819cd37b1
             netbox_lock: ci/netbox-requirements/v4.6.6-py312-linux-x86_64.txt
-            netbox_lock_sha256: dc280f54674a422d9ccec9d1be8771e4bc8c261e8a5d3a3eb0b0f0197ece389a
+            netbox_lock_sha256: 509991af7910f91578f6f7ff2cc74a048eb5ce2c5f793e9f7d6479c59ac0396d
 
     services:
       postgres:
@@ -142,6 +148,7 @@ jobs:
           EXPECTED_NETBOX_VERSION: ${{ matrix.netbox_version }}
           EXPECTED_NETBOX_DESIGNATION: ${{ matrix.netbox_designation }}
           EXPECTED_REQUIREMENTS_SHA256: ${{ matrix.netbox_requirements_sha256 }}
+          EXPECTED_INPUT_SHA256: ${{ matrix.netbox_input_sha256 }}
           EXPECTED_NETBOX_LOCK: ${{ matrix.netbox_lock }}
           EXPECTED_LOCK_SHA256: ${{ matrix.netbox_lock_sha256 }}
         run: |
@@ -152,6 +159,9 @@ jobs:
           tagged_ref="$(git -C netbox rev-parse "$EXPECTED_NETBOX_TAG^{commit}")"
           test "$tagged_ref" = "$EXPECTED_NETBOX_REF"
           printf '%s  %s\n' "$EXPECTED_REQUIREMENTS_SHA256" netbox/requirements.txt \
+            | sha256sum --check --strict
+          input_path="${EXPECTED_NETBOX_LOCK%.txt}.in"
+          printf '%s  %s\n' "$EXPECTED_INPUT_SHA256" "netbox-proxbox/$input_path" \
             | sha256sum --check --strict
           printf '%s  %s\n' "$EXPECTED_LOCK_SHA256" "netbox-proxbox/$EXPECTED_NETBOX_LOCK" \
             | sha256sum --check --strict
