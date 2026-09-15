@@ -229,22 +229,15 @@ def restore_vm_reflection_custom_fields(apps, schema_editor) -> None:
         return
 
     manager = CustomField.objects.using(db_alias)
-    object_types_field = CustomField._meta.get_field("object_types")
-    through_model = object_types_field.remote_field.through
-    source_id_field = f"{object_types_field.m2m_field_name()}_id"
-    target_id_field = f"{object_types_field.m2m_reverse_field_name()}_id"
     for definition in VM_REFLECTION_CUSTOM_FIELD_DEFINITIONS:
-        defaults = {key: value for key, value in definition.items() if key != "name"}
+        defaults = {
+            key: value for key, value in definition.items() if key != "name"
+        }
         custom_field, _created = manager.update_or_create(
             name=definition["name"],
             defaults=defaults,
         )
-        through_model.objects.using(db_alias).get_or_create(
-            **{
-                source_id_field: custom_field.pk,
-                target_id_field: vm_content_type.pk,
-            }
-        )
+        custom_field.object_types.add(vm_content_type)
 
 
 class Migration(migrations.Migration):

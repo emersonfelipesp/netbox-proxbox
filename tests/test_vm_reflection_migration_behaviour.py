@@ -103,6 +103,15 @@ class _FakeCustomField:
         self.name = name
         self.pk = pk
         self.__dict__.update(fields)
+        self.object_types = _FakeM2M()
+
+
+class _FakeM2M:
+    def __init__(self) -> None:
+        self.added: list[Any] = []
+
+    def add(self, value: Any) -> None:
+        self.added.append(value)
 
 
 class _ThroughManager:
@@ -364,10 +373,7 @@ def test_reverse_restores_every_definition_and_binds_the_vm_content_type(migrati
     )
     sentinel = apps.content_type_manager.sentinel
     for name, field in store.items():
-        assert {
-            "customfield_id": field.pk,
-            "contenttype_id": sentinel.pk,
-        } in apps.through_manager.rows, (
+        assert field.object_types.added == [sentinel], (
             f"{name} was recreated without its VirtualMachine binding, which "
             "leaves a definition that renders nowhere"
         )
