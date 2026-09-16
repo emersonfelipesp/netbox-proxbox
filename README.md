@@ -240,16 +240,16 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
-## What's New in v0.0.26.post7
+## What's New in v0.0.26.post8
 
-Current backend-runtime pairing: netbox-proxbox 0.0.26.post7 <-> proxbox-api 0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.26.post8 <-> proxbox-api 0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 Paired with backend: `proxbox-api 0.0.21.post7`.
 
-- **Virtual machines list search and filtering.** The Proxbox virtual machines page now uses NetBox's `VirtualMachineFilterSet`, exposes Results and Filters tabs, and keeps sync actions and pagination aligned with the API list view.
-- **Feature retention.** Retains the browser-console handoff, Proxmox metrics, and human-only soft-deleted VM purge surface from earlier `0.0.26.post` releases.
+- **Public release validation lane restored.** The end-to-end validation harness pins the plugin setting to legacy encrypted credential storage before it creates its mock Proxmox endpoint, so the release gates run without `netbox-openbao` and the 0.0.26 line can be published to PyPI. No plugin runtime changes.
+- **Feature retention.** Retains the virtual machines list search and filtering, the browser-console handoff, Proxmox metrics, and human-only soft-deleted VM purge surface from earlier `0.0.26.post` releases.
 
-Full notes: [Release Notes - v0.0.26.post7](docs/release-notes/version-0.0.26.post7.md).
+Full notes: [Release Notes - v0.0.26.post8](docs/release-notes/version-0.0.26.post8.md).
 
 ## What's New in v0.0.26.post2
 
@@ -373,7 +373,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
-| 4.5.8-4.7.0 GA | v0.0.26.post7 | v0.0.21.post7 | v0.0.10 | v0.0.13 |
+| 4.5.8-4.7.0 GA | v0.0.26.post8 | v0.0.21.post7 | v0.0.10 | v0.0.13 |
 | >=4.5.8 | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |

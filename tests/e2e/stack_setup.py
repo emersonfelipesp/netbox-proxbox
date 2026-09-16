@@ -436,6 +436,41 @@ def ensure_proxbox_backend_endpoints(
     # causes the same Proxmox host to be synced twice in E2E.
 
 
+def pin_legacy_credential_storage(netbox_base_url: str, headers: dict) -> None:
+    """Select legacy encrypted credential storage in the plugin settings.
+
+    The settings singleton is created before migration 0083 adds the
+    ``credential_storage_backend`` column, so it keeps that migration's
+    ``openbao`` default. The validation stack never installs netbox-openbao,
+    and an endpoint whose secrets resolve to OpenBao fails closed on create.
+    An explicit selection never falls back, so pin the legacy backend before
+    any endpoint stores a token.
+    """
+    settings_rows = list_records(
+        f"{netbox_base_url}/api/plugins/proxbox/settings/",
+        headers,
+        context="list plugin settings",
+    )
+    if not settings_rows:
+        raise AssertionError("plugin settings singleton is missing")
+    settings_id = settings_rows[0].get("id")
+    if not isinstance(settings_id, int):
+        raise AssertionError(
+            f"plugin settings row has no integer id: {settings_rows[0]}"
+        )
+    response = requests.patch(
+        f"{netbox_base_url}/api/plugins/proxbox/settings/{settings_id}/",
+        json={"credential_storage_backend": "legacy_encrypted"},
+        headers=headers,
+        timeout=30,
+    )
+    payload = assert_ok(response, context="pin legacy credential storage")
+    if payload.get("credential_storage_backend") != "legacy_encrypted":
+        raise AssertionError(
+            f"plugin settings did not accept legacy credential storage: {payload}"
+        )
+
+
 def ensure_netbox_plugin_endpoints(
     netbox_base_url: str,
     netbox_token: str,
@@ -456,6 +491,8 @@ def ensure_netbox_plugin_endpoints(
 
     proxmox_ip = os.environ.get("PROXMOX_MOCK_IP", "127.0.0.1")
     proxbox_api_ip = os.environ.get("PROXBOX_API_IP", "127.0.0.1")
+
+    pin_legacy_credential_storage(netbox_base_url, headers)
 
     # ip_address fields are FKs to ipam.IPAddress — create the IPAM records first
     netbox_ip_obj = post_json(

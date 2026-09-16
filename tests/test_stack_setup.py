@@ -156,3 +156,53 @@ def test_sensitive_assertion_omits_response_body(monkeypatch):
 
     assert "HTTP 401" in str(captured.value)
     assert secret not in str(captured.value)
+
+
+def test_pin_legacy_credential_storage_patches_settings_singleton(monkeypatch):
+    stack_setup = _load_stack_setup()
+
+    calls: list[tuple[str, str, dict | None]] = []
+
+    def fake_get(url: str, **kwargs):
+        calls.append(("GET", url, kwargs.get("params")))
+        assert url.endswith("/api/plugins/proxbox/settings/")
+        payload = {"results": [{"id": 7, "credential_storage_backend": "openbao"}]}
+        return _Response(status_code=200, payload=payload, text="{}")
+
+    def fake_patch(url: str, **kwargs):
+        calls.append(("PATCH", url, kwargs.get("json")))
+        assert url.endswith("/api/plugins/proxbox/settings/7/")
+        assert kwargs.get("json") == {"credential_storage_backend": "legacy_encrypted"}
+        payload = {"id": 7, "credential_storage_backend": "legacy_encrypted"}
+        return _Response(status_code=200, payload=payload, text="{}")
+
+    monkeypatch.setattr(stack_setup.requests, "get", fake_get)
+    monkeypatch.setattr(stack_setup.requests, "patch", fake_patch)
+    monkeypatch.setattr(sys.modules["stack_common"].requests, "get", fake_get)
+
+    stack_setup.pin_legacy_credential_storage(
+        "http://netbox", {"Authorization": "Token x"}
+    )
+
+    assert [c[0] for c in calls] == ["GET", "PATCH"]
+
+
+def test_pin_legacy_credential_storage_fails_closed_when_not_applied(monkeypatch):
+    stack_setup = _load_stack_setup()
+
+    def fake_get(url: str, **_kwargs):
+        payload = {"results": [{"id": 7}]}
+        return _Response(status_code=200, payload=payload, text="{}")
+
+    def fake_patch(url: str, **_kwargs):
+        payload = {"id": 7, "credential_storage_backend": "openbao"}
+        return _Response(status_code=200, payload=payload, text="{}")
+
+    monkeypatch.setattr(stack_setup.requests, "get", fake_get)
+    monkeypatch.setattr(stack_setup.requests, "patch", fake_patch)
+    monkeypatch.setattr(sys.modules["stack_common"].requests, "get", fake_get)
+
+    with pytest.raises(AssertionError, match="legacy credential storage"):
+        stack_setup.pin_legacy_credential_storage(
+            "http://netbox", {"Authorization": "Token x"}
+        )
