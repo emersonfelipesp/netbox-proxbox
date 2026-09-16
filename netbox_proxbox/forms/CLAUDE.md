@@ -46,6 +46,9 @@ field errors or false readiness, never uncaught form-validation exceptions.
   setting; the standalone console uses the configured FastAPI endpoint and the
   server-side trust boundary documented in
   `../../docs/features/browser-console.md`.
+  The constant-driven overwrite fields include the default-off
+  `overwrite_vm_platform` opt-in; per-endpoint forms render the same field as a
+  nullable boolean so blank continues to mean inherit.
 - [`storage.py`](./storage.py): create/edit and filter forms for `ProxmoxStorage`.
 - [`vm_backup.py`](./vm_backup.py): create/edit and filter forms for `VMBackup`.
 - [`vm_snapshot.py`](./vm_snapshot.py): create/edit and filter forms for `VMSnapshot`.

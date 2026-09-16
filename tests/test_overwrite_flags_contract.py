@@ -1,7 +1,7 @@
 """Cross-repo drift detector for the overwrite_* flag set.
 
 The plugin (`netbox-proxbox`) and the backend (`proxbox-api`) each carry the
-same canonical 25-flag list as a single source of truth:
+same canonical 26-flag list as a single source of truth:
 
 - Plugin: `netbox_proxbox.constants.OVERWRITE_FIELDS`
 - Backend: `proxbox_api.schemas.sync.SyncOverwriteFlags.model_fields`
@@ -57,12 +57,42 @@ def test_manifest_matches_constants_overwrite_fields() -> None:
     )
 
 
-def test_manifest_field_count_is_canonical_25() -> None:
+def test_manifest_field_count_is_canonical_26() -> None:
     """Sanity check: any change to flag count is intentional and reviewed."""
     manifest_fields = _load_manifest_fields()
-    assert len(manifest_fields) == 25
+    assert len(manifest_fields) == 26
 
 
 def test_manifest_has_no_duplicate_fields() -> None:
     manifest_fields = _load_manifest_fields()
     assert len(manifest_fields) == len(set(manifest_fields))
+
+
+def test_overwrite_defaults_keep_vm_platform_opt_in() -> None:
+    constants = _load_overwrite_fields()
+    spec = importlib.util.spec_from_file_location(
+        "_netbox_proxbox_constants_defaults_contract",
+        REPO_ROOT / "netbox_proxbox" / "constants.py",
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+
+    assert tuple(module.OVERWRITE_DEFAULTS) == constants
+    assert module.OVERWRITE_DEFAULTS["overwrite_vm_platform"] is False
+    assert all(
+        enabled
+        for name, enabled in module.OVERWRITE_DEFAULTS.items()
+        if name != "overwrite_vm_platform"
+    )
+
+
+def test_operator_documentation_lists_every_overwrite_flag() -> None:
+    documented = (
+        REPO_ROOT / "docs" / "configuration" / "sync-overwrite-flags.md"
+    ).read_text(encoding="utf-8")
+
+    for name in _load_overwrite_fields():
+        assert f"`{name}`" in documented, f"operator documentation omits {name}"
+    assert "26 boolean **overwrite** flags" in documented
+    assert "`overwrite_vm_platform`, which\ndefaults to `False`" in documented

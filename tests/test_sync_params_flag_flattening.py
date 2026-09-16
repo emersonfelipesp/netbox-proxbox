@@ -1,4 +1,4 @@
-"""Tests that ``sync_stages._build_base_query_params`` flattens 24 overwrite flags.
+"""Tests that ``sync_stages._build_base_query_params`` flattens all overwrite flags.
 
 The plugin sends overwrite flags to the FastAPI backend as flat query string
 keys (one ``overwrite_*`` key per field, value ``"true"`` / ``"false"``). The
@@ -45,6 +45,9 @@ def sync_stages_module(monkeypatch):
 
     constants_mod = types.ModuleType("netbox_proxbox.constants")
     constants_mod.OVERWRITE_FIELDS = fields
+    constants_mod.OVERWRITE_DEFAULTS = {
+        name: name != "overwrite_vm_platform" for name in fields
+    }
     monkeypatch.setitem(sys.modules, "netbox_proxbox.constants", constants_mod)
 
     choices_mod = types.ModuleType("netbox_proxbox.choices")
@@ -144,7 +147,7 @@ def sync_stages_module(monkeypatch):
     return module
 
 
-def test_build_base_query_params_includes_all_25_overwrite_keys(sync_stages_module):
+def test_build_base_query_params_includes_all_26_overwrite_keys(sync_stages_module):
     fields = _load_overwrite_fields()
 
     base_query = sync_stages_module._build_base_query_params(
@@ -155,7 +158,7 @@ def test_build_base_query_params_includes_all_25_overwrite_keys(sync_stages_modu
     for name in fields:
         assert name in base_query, f"missing flag {name} in flattened query"
     overwrite_keys = [k for k in base_query if k.startswith("overwrite_")]
-    assert len(overwrite_keys) == 25
+    assert len(overwrite_keys) == 26
 
 
 def test_build_base_query_params_serializes_true_false_strings(sync_stages_module):

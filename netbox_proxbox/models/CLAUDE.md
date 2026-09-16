@@ -205,6 +205,11 @@ credential selector to avoid resolving an absent, unselected authentication meth
 - Proxmox connection defaults are `proxmox_timeout=5`,
   `proxmox_max_retries=0`, and `proxmox_retry_backoff=0.50`. Keep operator docs,
   model defaults, and backend registration payloads aligned with those values.
+- `overwrite_vm_platform` is default-off on `ProxboxPluginSettings` and nullable
+  on `ProxmoxEndpoint`. Endpoint `None` inherits the global value. Keep this
+  field in the same canonical position in `OVERWRITE_FIELDS`, both contract
+  manifests, proxbox-api's `SyncOverwriteFlags`, and the Settings UI; enabling
+  it opts the sync into reconciling platform on existing VMs.
 - Ceph control-plane defaults are `ceph_task_timeout=300.00`,
   `ceph_task_poll_interval=1.00`, and `ceph_run_lease_seconds=360.00`.
   All three are bounded DecimalFields exposed to proxbox-api through the

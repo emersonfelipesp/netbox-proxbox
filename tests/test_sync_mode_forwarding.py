@@ -38,6 +38,7 @@ def sync_stages_module(monkeypatch):
 
     constants_mod = types.ModuleType("netbox_proxbox.constants")
     constants_mod.OVERWRITE_FIELDS = constants.OVERWRITE_FIELDS
+    constants_mod.OVERWRITE_DEFAULTS = constants.OVERWRITE_DEFAULTS
     constants_mod.SYNC_MODE_FIELDS = constants.SYNC_MODE_FIELDS
     constants_mod.SYNC_MODE_RESOURCE_TYPES = constants.SYNC_MODE_RESOURCE_TYPES
     constants_mod.SYNC_MODE_HIERARCHY = constants.SYNC_MODE_HIERARCHY

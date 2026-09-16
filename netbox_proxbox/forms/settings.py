@@ -14,7 +14,11 @@ from netbox_proxbox.choices import (
     SyncModeChoices,
     VMInterfaceSyncStrategyChoices,
 )
-from netbox_proxbox.constants import OVERWRITE_FIELDS, SYNC_MODE_FIELDS
+from netbox_proxbox.constants import (
+    OVERWRITE_DEFAULTS,
+    OVERWRITE_FIELDS,
+    SYNC_MODE_FIELDS,
+)
 from netbox_proxbox.models.plugin_settings import (
     BRANCH_ON_CONFLICT_CHOICES,
     CEPH_POLL_INTERVAL_TIMEOUT_ERROR,
@@ -808,7 +812,7 @@ class ProxboxPluginSettingsForm(forms.Form):
                 label = "Sync Proxmox tags"
             self.fields[name] = forms.BooleanField(
                 required=False,
-                initial=True,
+                initial=OVERWRITE_DEFAULTS[name],
                 label=label,
                 help_text=(
                     "When disabled, sync never changes this field on existing records. "

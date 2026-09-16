@@ -10,6 +10,7 @@ from django.views import View
 from django.views.decorators.debug import sensitive_post_parameters, sensitive_variables
 
 from netbox_proxbox.constants import (
+    OVERWRITE_DEFAULTS,
     OVERWRITE_FIELD_GROUPS,
     OVERWRITE_FIELDS,
     SYNC_MODE_FIELD_GROUPS,
@@ -238,7 +239,11 @@ class SettingsView(
         for name in SYNC_MODE_FIELDS:
             initial[name] = getattr(settings_obj, name, "always")
         for name in OVERWRITE_FIELDS:
-            initial[name] = getattr(settings_obj, name)
+            initial[name] = getattr(
+                settings_obj,
+                name,
+                OVERWRITE_DEFAULTS[name],
+            )
         form = ProxboxPluginSettingsForm(
             initial=initial,
             encryption_key_configured=bool(settings_obj.encryption_key),

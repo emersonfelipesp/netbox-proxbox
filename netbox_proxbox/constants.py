@@ -68,6 +68,7 @@ OVERWRITE_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
         (
             "overwrite_vm_role",
             "overwrite_vm_type",
+            "overwrite_vm_platform",
             "overwrite_vm_tags",
             "overwrite_vm_proxmox_tags",
             "overwrite_vm_description",
@@ -115,6 +116,10 @@ OVERWRITE_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
 OVERWRITE_FIELDS: tuple[str, ...] = tuple(
     field for _, fields in OVERWRITE_FIELD_GROUPS for field in fields
 )
+
+OVERWRITE_DEFAULTS: dict[str, bool] = {
+    field: field != "overwrite_vm_platform" for field in OVERWRITE_FIELDS
+}
 
 # Per-endpoint netbox-rpc override fields, grouped for the Settings-tab UI.
 RPC_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (

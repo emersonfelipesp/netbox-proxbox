@@ -88,6 +88,9 @@ def sync_stages_module(monkeypatch):
 
     constants_mod = types.ModuleType("netbox_proxbox.constants")
     constants_mod.OVERWRITE_FIELDS = fields
+    constants_mod.OVERWRITE_DEFAULTS = {
+        name: name != "overwrite_vm_platform" for name in fields
+    }
     monkeypatch.setitem(sys.modules, "netbox_proxbox.constants", constants_mod)
 
     choices_mod = types.ModuleType("netbox_proxbox.choices")
