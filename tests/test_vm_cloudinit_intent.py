@@ -1,12 +1,12 @@
 """Create-time cloud-init intent fields on ``ProxmoxVMCloudInit`` (issue #210).
 
 Source contracts pinning the intent extension: model fields + encrypted SSH
-accessors + soft ``nms_credential_id`` reference, serializer write-only
+accessors + soft ``credential_reference_id`` reference, serializer write-only
 ``sshkeys_intent`` (encrypted) + read-only ``has_sshkeys``, migration 0064
 idempotent field adds, and the form/table/template wiring.
 
-netbox-proxbox stores only a soft integer reference to the netbox-nms
-``CloudVMCredential`` PK and **must never import netbox-nms**; the plaintext
+netbox-proxbox stores only a soft integer reference to an external credential
+record and never imports a credential provider; the plaintext
 ``sshkeys`` reflection column stays untouched so proxbox-api reflection sync
 keeps round-tripping it.
 """
@@ -40,7 +40,7 @@ INTENT_FIELDS = (
     "ip_cidr",
     "ssh_pwauth",
     "enable_agent",
-    "nms_credential_id",
+    "credential_reference_id",
 )
 
 
@@ -53,12 +53,15 @@ def test_model_declares_all_intent_fields() -> None:
         assert f"{field} = models." in model, field
 
 
-def test_model_nms_credential_ref_is_soft_int_not_fk() -> None:
+def test_model_credential_reference_is_soft_int_not_fk() -> None:
     model = _read(MODEL)
-    assert "nms_credential_id = models.PositiveIntegerField(" in model
-    # Never a ForeignKey and never a python import of the private plugin.
-    assert "netbox_nms" not in model.replace("netbox-nms", "")
-    assert "import netbox_nms" not in model
+    assert "credential_reference_id = models.PositiveIntegerField(" in model
+    assert (
+        "ForeignKey("
+        not in model.split("credential_reference_id =", 1)[1].split("sshkeys_enc =", 1)[
+            0
+        ]
+    )
 
 
 def test_model_has_encrypted_sshkeys_accessors() -> None:
@@ -125,5 +128,5 @@ def test_table_and_template_reference_intent() -> None:
     assert "is_intent" in table
     assert "has_sshkeys" in table
     assert "object.is_intent" in template
-    assert "object.nms_credential_id" in template
+    assert "object.credential_reference_id" in template
     assert "object.has_sshkeys" in template

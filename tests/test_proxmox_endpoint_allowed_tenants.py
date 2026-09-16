@@ -25,7 +25,7 @@ def test_proxmox_endpoint_model_exposes_allowed_tenants() -> None:
     src = _read("netbox_proxbox/models/proxmox_endpoint.py")
     assert "allowed_tenants = models.ManyToManyField(" in src
     assert 'related_name="proxbox_proxmox_endpoints"' in src
-    assert "NMS Cloud callers with any explicit endpoint grant" in src
+    assert "API callers with any explicit endpoint grant" in src
 
 
 def test_proxmox_endpoint_form_and_detail_surface_allowed_tenants() -> None:

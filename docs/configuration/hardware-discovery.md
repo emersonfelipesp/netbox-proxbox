@@ -173,8 +173,16 @@ Copy the `SHA256:<base64>` segment.
 
 The Proxmox endpoint detail page also has a browser **SSH Terminal** tab. Node
 targets use the per-node `NodeSSHCredential` rows described above. The endpoint
-target uses proxbox-native fields on `ProxmoxEndpoint`; it does not use the
-`netbox-nms` `ProxmoxEndpointSSHBinding`.
+target uses Proxbox-native fields on `ProxmoxEndpoint`; it does not use an
+unrelated companion plugin's SSH binding.
+
+Before upgrading an installation that previously sourced node credentials from
+another plugin, run `python manage.py audit_node_ssh_credentials --fail-on-missing`.
+Create a local `NodeSSHCredential` for every enabled API + SSH node listed as
+`blocking`, rerun the command, and continue only after it reports
+`blocking_missing_local_credentials=0`. Disabled and API-only nodes are listed
+separately as `informational`; they do not block the upgrade because the plugin
+must not open SSH sessions to them.
 
 On the Proxmox endpoint add/edit form, operators can configure **SSH credential
 source**:

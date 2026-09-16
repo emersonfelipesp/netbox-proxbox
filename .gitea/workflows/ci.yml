@@ -102,6 +102,10 @@ jobs:
           set -euo pipefail
           .venv/bin/python -m compileall -q netbox_proxbox proxbox_cli tests
 
+      - name: Enforce public repository boundary
+        shell: bash
+        run: .venv/bin/python scripts/check_public_boundary.py
+
       - name: Run mocked suite
         shell: bash
         run: |

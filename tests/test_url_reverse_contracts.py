@@ -37,7 +37,7 @@ MODELS_DIR = PLUGIN_ROOT / "models"
 # expected to degrade to "" via the NoReverseMatch guard.
 #
 # * PBSEndpoint     -- interim state, full scaffolding tracked separately (#449).
-# * Firecracker*    -- API/automation-managed for NMS Cloud; no NetBox UI surface
+# * Firecracker*    -- API/automation-managed; no NetBox UI surface
 #                      (no tables, no templates, no registered views).
 # Anything NOT listed here must have its reversed name mounted in urls.py.
 UNMOUNTED_BY_DESIGN = frozenset(

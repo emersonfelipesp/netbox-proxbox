@@ -15,10 +15,10 @@ class ProxmoxVMCloudInitSerializer(NetBoxModelSerializer):
     """Full representation of a Proxmox VM cloud-init row stored in NetBox.
 
     proxbox-api writes the reflection fields (``ciuser``/``sshkeys``/
-    ``ipconfig0``/``sshkeys_truncated``) from ``qm config``; the NMS stack
-    writes the create-time *intent* fields (``hostname``/``search_domain``/
+    ``ipconfig0``/``sshkeys_truncated``) from ``qm config``; API clients
+    write the create-time *intent* fields (``hostname``/``search_domain``/
     ``dns_servers``/``bridge``/``vlan_tag``/``gateway``/``ip_cidr``/
-    ``ssh_pwauth``/``enable_agent``/``is_intent``/``nms_credential_id`` and the
+    ``ssh_pwauth``/``enable_agent``/``is_intent``/``credential_reference_id`` and the
     encrypted SSH key bundle).
 
     ``sshkeys`` is delivered already decoded (newlines as ``\\n``); proxbox-api
@@ -60,7 +60,7 @@ class ProxmoxVMCloudInitSerializer(NetBoxModelSerializer):
             "ip_cidr",
             "ssh_pwauth",
             "enable_agent",
-            "nms_credential_id",
+            "credential_reference_id",
             "sshkeys_intent",
             "has_sshkeys",
             "last_synced",

@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import ast
-import base64
 import hashlib
 import importlib.util
 import json
@@ -17,16 +16,14 @@ from pathlib import Path
 import pytest
 import yaml
 
+from scripts.check_public_boundary import _contains_private_name
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 GITEA_PUBLISH_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "publish-gitea.yml"
 GITEA_ARTIFACT_WORKFLOW = (
     REPO_ROOT / ".gitea" / "workflows" / "artifact-v3-compatibility.yml"
 )
 GITHUB_PUBLISH_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "publish-testpypi.yml"
-GITEA_DEPLOY_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "deploy-production.yml"
-GITEA_CONSOLE_STACK_DEPLOY_WORKFLOW = (
-    REPO_ROOT / ".gitea" / "workflows" / "deploy-console-stack.yml"
-)
 GITEA_PROMOTE_WORKFLOW = REPO_ROOT / ".gitea" / "workflows" / "promote-final-tag.yml"
 RELEASE_ARTIFACTS_PATH = REPO_ROOT / "scripts" / "release_artifacts.py"
 # Read back from the module's own pinned origin check rather than written
@@ -97,7 +94,7 @@ def _step(job: dict[str, object], name: str) -> dict[str, object]:
 
 @pytest.mark.parametrize(
     "workflow_path",
-    [GITEA_PUBLISH_WORKFLOW, GITEA_PROMOTE_WORKFLOW, GITEA_DEPLOY_WORKFLOW],
+    [GITEA_PUBLISH_WORKFLOW, GITEA_PROMOTE_WORKFLOW],
 )
 def test_release_workflow_shell_blocks_parse(workflow_path: Path) -> None:
     workflow = yaml.safe_load(_read(workflow_path))
@@ -542,165 +539,7 @@ def test_github_publish_accepts_rc_pushes_and_final_release_events_only() -> Non
     assert dispatch_inputs["source_ref"]["type"] == "string"
 
 
-def test_repository_deploy_workflow_is_source_aware() -> None:
-    workflow = _read(GITEA_DEPLOY_WORKFLOW)
-
-    assert "deploy_source:" in workflow
-    assert "default: latest_package" in workflow
-    assert "- latest_package" in workflow
-    assert "- main_branch" in workflow
-    assert "package_version:" in workflow
-    assert "deploy-netbox-plugin-staging" in workflow
-    assert "deploy-netbox-plugin netbox-proxbox" not in workflow
-    assert (
-        "proxbox-package-deploy deploy-main \\\n            netbox-proxbox" in workflow
-    )
-    assert (
-        'deploy-netbox-plugin-package \\\n            netbox-proxbox "$PACKAGE_VERSION" "$DEPLOY_REQUEST_ID" "$PROOF_PATH"'
-        in workflow
-    )
-    assert '"$DEPLOY_REQUEST_SHA256" "$GITHUB_RUN_ID"' in workflow
-    assert "Reject a package deploy" not in workflow
-
-
-def test_package_deploy_binds_the_claimed_registry_artifacts() -> None:
-    workflow = yaml.safe_load(_read(GITEA_DEPLOY_WORKFLOW))
-    production = workflow["jobs"]["production"]
-    bind = _step(production, "Bind exact package artifacts before deployment")
-    deploy = _step(production, "Deploy the exact package the request authorizes")
-
-    assert bind["if"] == "${{ env.RESOLVED_SOURCE == 'latest_package' }}"
-    assert bind["env"]["GITEA_PACKAGE_TOKEN"]
-    assert "scripts/release_artifacts.py fetch-gitea" in bind["run"]
-    assert 'json.load(open(sys.argv[1]))["request"]' in bind["run"]
-    assert '"package_version": os.environ["PACKAGE_VERSION"]' in bind["run"]
-    assert "release_manifest_sha256" in bind["run"]
-    assert 'request["artifacts"]' in bind["run"]
-    assert deploy["if"] == "${{ env.RESOLVED_SOURCE == 'latest_package' }}"
-    assert 'echo "DEPLOY_COMPLETED=true"' in deploy["run"]
-    receipt = _step(production, "Publish host-issued successful-deployment attestation")
-    assert 'netbox-proxbox "$PACKAGE_VERSION" "$DEPLOY_REQUEST_ID"' in receipt["run"]
-    assert '"$DEPLOY_REQUEST_SHA256" "$GITHUB_RUN_ID"' in receipt["run"]
-
-
-def test_production_deploy_claims_a_signed_authorization() -> None:
-    workflow = _read(GITEA_DEPLOY_WORKFLOW)
-
-    # The management backend injects these on every authorized dispatch; a
-    # workflow that does not declare them cannot be dispatched through the
-    # proof path. A declared input that is not sent resolves to its default
-    # rather than staying empty, so both keep an empty default and are shape
-    # checked below.
-    assert "deploy_request_id:" in workflow
-    assert "deploy_request_sha256:" in workflow
-    assert "/git/deployment-proofs/${DEPLOY_REQUEST_ID}/claim" in workflow
-
-    # A re-run keeps GITHUB_RUN_ID and only bumps the attempt, so without this
-    # it would present the first attempt's binding as its own.
-    assert 'test "${GITHUB_RUN_ATTEMPT:-1}" = "1"' in workflow
-
-    # The endpoint is operator-overridable, and the request id plus digest are
-    # the whole capability -- pin the transport before sending them.
-    assert "--noproxy '*'" in workflow
-    assert "--proto '=http,https'" in workflow
-    assert "127\\.0\\.0\\.1|localhost" in workflow
-
-
-def test_production_deploy_cannot_report_success_without_deploying() -> None:
-    workflow = _read(GITEA_DEPLOY_WORKFLOW)
-
-    # The health check passes against the NetBox already running, so a job that
-    # deployed nothing would otherwise look green. Both guards matter: the
-    # source is resolved by a checked command rather than inside `echo`, where
-    # a KeyError's exit status would vanish, and a completion marker is
-    # asserted before the run may pass.
-    assert 'resolved_source="$(python3 - "$proof_path"' in workflow
-    assert 'test -n "$resolved_source"' in workflow
-    assert "unsupported deploy source" in workflow
-    assert 'echo "DEPLOY_COMPLETED=true"' in workflow
-    assert 'test "${DEPLOY_COMPLETED:-}" = "true"' in workflow
-
-
-def test_production_health_gate_actually_asserts_service_state() -> None:
-    workflow = _read(GITEA_DEPLOY_WORKFLOW)
-
-    # healthcheck-app is the deploy script gate; status-app is diagnostic only.
-    # Proxbox sync runs on netbox-rq, so the gate also asserts the Compose worker.
-    start = workflow.index("- name: Require healthy production status")
-    gate = workflow[start : workflow.index("- name:", start + 1)]
-    assert "run: /opt/nmulticloud/deploy/bin/status-app netbox\n" not in gate
-    assert "/opt/nmulticloud/deploy/bin/healthcheck-app netbox" in gate
-    assert "source /opt/nmulticloud/deploy/bin/nmc-deploy-lib" in gate
-    assert "compose_cmd netbox ps --status running --services" in gate
-    assert "grep -qx 'netbox-rq'" in gate
-    assert "/opt/nmulticloud/deploy/bin/status-app netbox || true" in gate
-    assert "[=,]netbox\\.service:active" not in gate
-    assert "[=,]netbox-rq\\.service:active" not in gate
-
-
-def test_console_stack_recovery_deploy_is_fixed_and_input_free() -> None:
-    workflow = _read(GITEA_CONSOLE_STACK_DEPLOY_WORKFLOW)
-    parsed = yaml.safe_load(workflow)
-
-    assert parsed["on"] == {"workflow_dispatch": None}
-    job = parsed["jobs"]["deploy"]
-    assert job["runs-on"] == "prod-deploy"
-    assert set(job["env"]) == {
-        "BACKEND_COMMIT",
-        "DEPLOY_APP_COMMAND",
-        "NMS_COMMIT",
-        "NMS_MCP_COMMIT",
-        "STATUS_APP_COMMAND",
-    }
-    assert all(
-        re.fullmatch(r"[a-f0-9]{40}", job["env"][name])
-        for name in ("BACKEND_COMMIT", "NMS_MCP_COMMIT", "NMS_COMMIT")
-    )
-    assert 'test "$GITHUB_REPOSITORY" = emersonfelipesp/netbox-proxbox' in workflow
-    assert 'test "$GITHUB_REF" = refs/heads/main' in workflow
-    assert 'test "$GITHUB_ACTOR" = emersonfelipesp' in workflow
-    assert (
-        workflow.index('nms-backend "$BACKEND_COMMIT"')
-        < workflow.index('nms-mcp "$NMS_MCP_COMMIT"')
-        < workflow.index('nms "$NMS_COMMIT"')
-    )
-    assert "workflow_dispatch:\n    inputs:" not in workflow
-    assert "--network=none --read-only" in workflow
-    assert "--cap-drop=ALL --security-opt=no-new-privileges:true" in workflow
-    assert "--user=65534:65534" in workflow
-    assert "--env=PYTHONPATH=/app" in workflow
-    assert "--env=XDG_CONFIG_HOME=/tmp" in workflow
-    assert "trap 'docker rm -f" in workflow
-
-
-def test_claim_ignores_ambient_curl_configuration() -> None:
-    workflow = _read(GITEA_DEPLOY_WORKFLOW)
-
-    # A .curlrc on this shared root runner can carry --connect-to/--resolve,
-    # which redirect a loopback-looking URL despite --noproxy and would hand
-    # over the request id in the path and its digest in the body. --disable
-    # only works as the first argument.
-    assert "curl --disable" in workflow
-
-
-def test_claimed_proof_is_destroyed_on_every_exit_path() -> None:
-    workflow = _read(GITEA_DEPLOY_WORKFLOW)
-
-    # Traps do not survive across step shells, so cleanup cannot live in the
-    # deploy step: a signed authorization left in RUNNER_TEMP on a root
-    # self-hosted runner is readable by any later root job.
-    assert "name: Destroy the claimed proof" in workflow
-    assert "if: always()" in workflow
-    assert 'rm -rf -- "$proof_root"' in workflow
-    assert "create-attestation" not in workflow
-    assert "export-package-deploy-receipt" in workflow
-    assert "GITEA_PACKAGE_TOKEN: ${{ secrets.PKG_TOKEN }}" in workflow
-    assert "GITEA_PACKAGE_TOKEN: ${{ github.token }}" not in workflow
-    assert "packages: write" not in workflow
-    assert "publish-attestation" in workflow
-
-
-def test_final_tag_promotion_requires_main_package_and_deploy_evidence() -> None:
+def test_final_tag_promotion_requires_main_package_provenance() -> None:
     workflow = _read(GITEA_PROMOTE_WORKFLOW)
 
     assert "github.repository == 'emersonfelipesp/netbox-proxbox'" in workflow
@@ -710,12 +549,11 @@ def test_final_tag_promotion_requires_main_package_and_deploy_evidence() -> None
     assert "refs/remotes/gitea/release-main" in workflow
     assert "refs/remotes/gitea/release-develop" in workflow
     assert "scripts/release_artifacts.py fetch-gitea" in workflow
-    assert "scripts/release_artifacts.py fetch-attestation" in workflow
     assert "https://github.com/emersonfelipesp/netbox-proxbox.git" in workflow
     assert "GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}" in workflow
     assert 'GIT_ASKPASS="$SECRET_ROOT/askpass"' in workflow
     assert "http.https://github.com/.extraheader" not in workflow
-    assert workflow.index("fetch-attestation") < workflow.index("GH_TOKEN:")
+    assert workflow.index("fetch-gitea") < workflow.index("GH_TOKEN:")
     assert '"refs/tags/${TAG}"' in workflow
     assert '"refs/tags/${TAG}^{}"' in workflow
     assert 'test "$REMOTE_TAG_OBJECT" = "$LOCAL_TAG_OBJECT"' in workflow
@@ -1042,187 +880,18 @@ def test_registry_fetch_rejects_rebinding_original_artifacts_to_moved_tag(
         )
 
 
-def test_final_release_requires_exact_promotion_evidence(tmp_path: Path) -> None:
-    release_artifacts = _load_release_artifacts()
-    pinned_public_der = subprocess.run(
-        [
-            "/usr/bin/openssl",
-            "pkey",
-            "-pubin",
-            "-in",
-            str(release_artifacts.RECEIPT_PUBLIC_KEY),
-            "-outform",
-            "DER",
-        ],
-        check=True,
-        capture_output=True,
-    ).stdout
-    assert (
-        hashlib.sha256(pinned_public_der).hexdigest()
-        == release_artifacts.RECEIPT_PUBLIC_KEY_SHA256
-    )
-    private_key = tmp_path / "receipt-private.pem"
-    public_key = tmp_path / "receipt-public.pem"
-    subprocess.run(
-        [
-            "/usr/bin/openssl",
-            "genpkey",
-            "-algorithm",
-            "ED25519",
-            "-out",
-            str(private_key),
-        ],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    subprocess.run(
-        [
-            "/usr/bin/openssl",
-            "pkey",
-            "-in",
-            str(private_key),
-            "-pubout",
-            "-out",
-            str(public_key),
-        ],
-        check=True,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
-    )
-    public_der = subprocess.run(
-        [
-            "/usr/bin/openssl",
-            "pkey",
-            "-pubin",
-            "-in",
-            str(public_key),
-            "-outform",
-            "DER",
-        ],
-        check=True,
-        capture_output=True,
-    ).stdout
-    release_artifacts.RECEIPT_PUBLIC_KEY = public_key
-    release_artifacts.RECEIPT_PUBLIC_KEY_SHA256 = hashlib.sha256(public_der).hexdigest()
-    dist = tmp_path / "dist"
-    dist.mkdir()
-    (dist / "netbox_proxbox-0.0.24-py3-none-any.whl").write_bytes(b"wheel")
-    (dist / "netbox_proxbox-0.0.24.tar.gz").write_bytes(b"sdist")
-    manifest = release_artifacts.create_manifest(
-        dist=dist,
-        package="netbox-proxbox",
-        version="0.0.24",
-        source_sha="b" * 40,
-    )
-    manifest_digest = release_artifacts.manifest_sha256(manifest)
-    receipt_prefix = "".join(("n", "m", "s"))
-    request_id_field = receipt_prefix + "_request_id"
-    request_digest_field = receipt_prefix + "_request_sha256"
-    workflow_sha_field = receipt_prefix + "_workflow_sha"
-    assert (request_id_field, request_digest_field, workflow_sha_field) == (
-        "".join(("n", "m", "s", "_request_id")),
-        "".join(("n", "m", "s", "_request_sha256")),
-        "".join(("n", "m", "s", "_workflow_sha")),
-    )
-    evidence = {
-        "artifacts": manifest["artifacts"],
-        "deploy_source": "latest_package",
-        "deployment_generation": "c" * 64,
-        "deployment_run_id": 123,
-        "deployment_status": "success",
-        "environment": "production",
-        "manifest_sha256": manifest_digest,
-        request_id_field: "d" * 32,
-        request_digest_field: "e" * 64,
-        workflow_sha_field: "f" * 40,
-        "observed_runtime_identity": (
-            "netbox_proxbox==0.0.24@/opt/netbox/plugin-releases/"
-            f"netbox-proxbox/{manifest_digest}/site-packages"
-        ),
-        "package": "netbox-proxbox",
-        "repository": "emersonfelipesp/netbox-proxbox",
-        "schema": 2,
-        "signature": "",
-        "signing_key_sha256": release_artifacts.RECEIPT_PUBLIC_KEY_SHA256,
-        "source_sha": "b" * 40,
-        "target": "netbox-proxbox",
-        "version": "0.0.24",
-    }
-    unsigned = dict(evidence)
-    del unsigned["signature"]
-    payload_path = tmp_path / "receipt-unsigned.json"
-    payload_path.write_bytes(release_artifacts._manifest_bytes(unsigned))
-    signature = subprocess.run(
-        [
-            "/usr/bin/openssl",
-            "pkeyutl",
-            "-sign",
-            "-rawin",
-            "-inkey",
-            str(private_key),
-            "-in",
-            str(payload_path),
-        ],
-        check=True,
-        capture_output=True,
-    ).stdout
-    evidence["signature"] = base64.b64encode(signature).decode("ascii")
-    assert (
-        release_artifacts.validate_release_attestation(
-            evidence=evidence,
-            manifest=manifest,
-            repository="emersonfelipesp/netbox-proxbox",
-        )
-        == evidence
-    )
-
-    evidence["deploy_source"] = "main_branch"
-    with pytest.raises(release_artifacts.ReleaseArtifactError):
-        release_artifacts.validate_release_attestation(
-            evidence=evidence,
-            manifest=manifest,
-            repository="emersonfelipesp/netbox-proxbox",
-        )
-
-    evidence["deploy_source"] = "latest_package"
-    evidence["observed_runtime_identity"] = "netbox_proxbox==0.0.24@/tmp/forged"
-    with pytest.raises(release_artifacts.ReleaseArtifactError):
-        release_artifacts.validate_release_attestation(
-            evidence=evidence,
-            manifest=manifest,
-            repository="emersonfelipesp/netbox-proxbox",
-        )
-
-    evidence["observed_runtime_identity"] = (
-        "netbox_proxbox==0.0.24@/opt/netbox/plugin-releases/"
-        f"netbox-proxbox/{manifest_digest}/site-packages"
-    )
-    evidence["signature"] = "A" * 86 + "=="
-    with pytest.raises(
-        release_artifacts.ReleaseArtifactError,
-        match="signature is invalid",
-    ):
-        release_artifacts.validate_release_attestation(
-            evidence=evidence,
-            manifest=manifest,
-            repository="emersonfelipesp/netbox-proxbox",
-        )
-
-
-# This repository is published publicly. The deployment workflow named the
-# internal management stack in eight places, and those names were reintroduced
-# once already by copying the workflow between repositories -- so the rename is
-# only durable with a guard behind it.
 # This repository is published publicly. The deployment workflow named the
 # internal management stack in eight places, and those names were reintroduced
 # once already by copying the workflow between repositories -- so the rename is
 # only durable with a guard behind it.
 #
-# The needles are assembled rather than written out, and the self-test's
-# examples use reserved documentation values. A guard whose own fixtures spell
-# the forbidden strings publishes them while reporting the file clean.
-_PRIVATE_STACK_TOKEN = "".join(("n", "m", "s"))
+# The self-test uses a reserved synthetic value and injects its digest. A guard
+# whose own fixtures contain a prohibited identifier publishes it while
+# reporting the file clean.
+_DISCLOSURE_TEST_TOKEN = "qvx"
+_DISCLOSURE_TEST_DIGEST = hashlib.sha256(
+    _DISCLOSURE_TEST_TOKEN.encode("ascii")
+).hexdigest()
 _PRIVATE_FORGE_HOST = ".".join(("git", "nmulti", "cloud"))
 _LOOPBACK_ADDRESS = ".".join(("127", "0", "0", "1"))
 
@@ -1232,10 +901,6 @@ _LOOPBACK_ADDRESS = ".".join(("127", "0", "0", "1"))
 _CAMEL_BOUNDARIES = (
     re.compile(r"(?<=[a-z0-9])(?=[A-Z])"),
     re.compile(r"(?<=[A-Z])(?=[A-Z][a-z])"),
-)
-_STACK_PATTERN = re.compile(
-    rf"(?<![A-Za-z]){_PRIVATE_STACK_TOKEN}(?![A-Za-z])",
-    re.IGNORECASE,
 )
 _INTERNAL_HOST_PATTERN = re.compile(
     r"\b[a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:cloud|ai|local)\b", re.IGNORECASE
@@ -1259,10 +924,18 @@ def _split_camel(text: str) -> str:
     return text
 
 
-def _disclosures(text: str) -> list[str]:
+def _disclosures(
+    text: str,
+    private_name_digest: str | None = None,
+) -> list[str]:
     """Return the offending fragments in one line of a public file."""
     found: list[str] = []
-    if _STACK_PATTERN.search(_split_camel(text)):
+    candidate = _split_camel(text)
+    if (
+        _contains_private_name(candidate)
+        if private_name_digest is None
+        else _contains_private_name(candidate, private_name_digest)
+    ):
         found.append("internal stack name")
     found.extend(_INTERNAL_HOST_PATTERN.findall(text))
     # Addresses are extracted whole, then compared exactly. Removing permitted
@@ -1712,7 +1385,7 @@ def test_text_filename_with_a_tab_is_still_scanned(
     """Git C-quotes such names in patch headers; the NUL listing carries them verbatim."""
     monkeypatch.setattr(sys.modules[__name__], "_review_base", lambda: "base")
     odd_name = "docs/odd\tname.md"
-    diff = f'+++ "b/docs/odd\\tname.md"\n@@ -0,0 +1 @@\n+{_PRIVATE_STACK_TOKEN}\n'
+    diff = f'+++ "b/docs/odd\\tname.md"\n@@ -0,0 +1 @@\n+{_DISCLOSURE_TEST_TOKEN}\n'
     calls = _fake_git(
         monkeypatch,
         {"diff --numstat": (0, f"1\t0\t{odd_name}\0"), "diff -U0": (0, diff)},
@@ -1724,8 +1397,10 @@ def test_text_filename_with_a_tab_is_still_scanned(
         odd_name
     ]
     assert any(call[-2:] == ["--", odd_name] for call in calls)
-    with pytest.raises(AssertionError, match=re.escape(_PRIVATE_STACK_TOKEN)):
-        test_public_files_name_no_private_infrastructure()
+    assert all(
+        _disclosures(line, _DISCLOSURE_TEST_DIGEST)
+        for _path, _number, line in additions
+    )
 
 
 def test_only_digest_pinned_vendored_runtime_files_skip_disclosure_scan(
@@ -1741,7 +1416,7 @@ def test_only_digest_pinned_vendored_runtime_files_skip_disclosure_scan(
     )
     changed_paths = (runtime_path, *scanned_paths)
     numstat = "".join(f"1\t0\t{path}\0" for path in changed_paths)
-    diff = f"@@ -0,0 +1 @@\n+{_PRIVATE_STACK_TOKEN}\n"
+    diff = f"@@ -0,0 +1 @@\n+{_DISCLOSURE_TEST_TOKEN}\n"
     calls = _fake_git(
         monkeypatch,
         {"diff --numstat": (0, numstat), "diff -U0": (0, diff)},
@@ -1753,12 +1428,15 @@ def test_only_digest_pinned_vendored_runtime_files_skip_disclosure_scan(
         *scanned_paths
     ]
     assert not any(call[-2:] == ["--", runtime_path] for call in calls)
-    assert all(_disclosures(line) for _path, _number, line in additions)
+    assert all(
+        _disclosures(line, _DISCLOSURE_TEST_DIGEST)
+        for _path, _number, line in additions
+    )
 
 
 def test_the_disclosure_guard_catches_what_it_is_for() -> None:
     """Self-test. A guard that cannot see the thing certifies the wrong result."""
-    token = _PRIVATE_STACK_TOKEN
+    token = _DISCLOSURE_TEST_TOKEN
     # RFC 5737 documentation range: safe to write down, still an address.
     documentation_address = ".".join(("192", "0", "2", "207"))
     prefix_shadowed = _LOOPBACK_ADDRESS + "0"
@@ -1778,7 +1456,9 @@ def test_the_disclosure_guard_catches_what_it_is_for() -> None:
         prefix_shadowed,
         f"the host at {_LOOPBACK_ADDRESS} and also {documentation_address}",
     ):
-        assert _disclosures(disclosing), f"guard missed {disclosing!r}"
+        assert _disclosures(disclosing, _DISCLOSURE_TEST_DIGEST), (
+            f"guard missed {disclosing!r}"
+        )
 
     for permitted in (
         f"http://{_LOOPBACK_ADDRESS}:16001",
@@ -1787,7 +1467,9 @@ def test_the_disclosure_guard_catches_what_it_is_for() -> None:
         "transforms and normalizes",
         "https://forge.example.invalid/owner/repo",
     ):
-        assert not _disclosures(permitted), f"guard false-positived on {permitted!r}"
+        assert not _disclosures(permitted, _DISCLOSURE_TEST_DIGEST), (
+            f"guard false-positived on {permitted!r}"
+        )
 
 
 def test_public_files_name_no_private_infrastructure() -> None:
@@ -1802,12 +1484,11 @@ def test_public_files_name_no_private_infrastructure() -> None:
 def test_publish_workflow_produces_the_manifest_its_consumers_require() -> None:
     """The publish workflow must build and publish the release manifest.
 
-    `deploy-production.yml`'s `latest_package` source and
-    `promote-final-tag.yml` both call `release_artifacts.py fetch-gitea`,
+    `promote-final-tag.yml` calls `release_artifacts.py fetch-gitea`,
     which fetches a `<package>-release-manifest` generic package for the
     version being deployed or promoted. The script has always been able to
     build and publish that manifest, but the publish workflow called neither
-    subcommand, so no published version had one and both consumers were
+    subcommand, so no published version had one and the consumer was
     unreachable for every version.
 
     The assertions below are on the parsed step list rather than on substrings
@@ -2634,64 +2315,6 @@ def test_manifest_publication_tolerates_only_a_byte_identical_republish(
             manifest=manifest,
             token="t",
         )
-
-
-def test_attestation_publication_verifies_after_an_idempotent_package_link(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    """A registry conflict on an already-created link must not make deploy red."""
-    release_artifacts = _load_release_artifacts()
-    manifest = {"package": "netbox-proxbox", "version": "0.0.27rc4"}
-    evidence = {"state": "completed"}
-    calls: list[tuple[str, object]] = []
-
-    monkeypatch.setattr(
-        release_artifacts,
-        "validate_release_attestation",
-        lambda **kwargs: calls.append(("validate", kwargs)),
-    )
-    monkeypatch.setattr(
-        release_artifacts,
-        "_request",
-        lambda *_args, **kwargs: calls.append(("upload", kwargs)) or b"",
-    )
-    monkeypatch.setattr(
-        release_artifacts,
-        "link_gitea_package",
-        lambda **kwargs: calls.append(("link", kwargs)),
-    )
-    monkeypatch.setattr(
-        release_artifacts,
-        "fetch_gitea_attestation",
-        lambda **kwargs: calls.append(("fetch", kwargs)) or evidence,
-    )
-
-    assert (
-        release_artifacts.publish_gitea_attestation(
-            owner="emersonfelipesp",
-            repository="netbox-proxbox",
-            manifest=manifest,
-            evidence=evidence,
-            token="t",
-        )
-        == evidence
-    )
-    assert [name for name, _kwargs in calls] == [
-        "validate",
-        "upload",
-        "link",
-        "fetch",
-    ]
-    link_kwargs = calls[2][1]
-    assert isinstance(link_kwargs, dict)
-    assert link_kwargs == {
-        "registry": _TEST_REGISTRY,
-        "owner": "emersonfelipesp",
-        "repository": "netbox-proxbox",
-        "package_type": "generic",
-        "package": f"{manifest['package']}-{''.join(('n', 'm', 's'))}-attestation",
-        "token": "t",
-    }
 
 
 def test_manifest_publication_uses_the_idempotent_package_link(

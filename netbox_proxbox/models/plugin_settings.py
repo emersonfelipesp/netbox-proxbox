@@ -848,7 +848,7 @@ class ProxboxPluginSettings(NetBoxModel):
         verbose_name=_("Cloud customer gateway"),
         help_text=_(
             "Gateway address for the cloud customer network. Stored as operator "
-            "configuration so proxbox-api and nms-backend can discover it without "
+            "configuration so proxbox-api and other clients can discover it without "
             "hardcoded estate values."
         ),
     )

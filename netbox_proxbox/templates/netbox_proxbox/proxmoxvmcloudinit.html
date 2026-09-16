@@ -97,10 +97,10 @@
 					</td>
 				</tr>
 				<tr>
-					<th scope="row">{% trans "NMS credential (secret store)" %}</th>
+					<th scope="row">{% trans "Credential reference" %}</th>
 					<td>
-						{% if object.nms_credential_id %}
-							<code>netbox-nms CloudVMCredential #{{ object.nms_credential_id }}</code>
+						{% if object.credential_reference_id %}
+							<code>#{{ object.credential_reference_id }}</code>
 						{% else %}
 							{{ ''|placeholder }}
 						{% endif %}

@@ -242,7 +242,7 @@ def test_create_view_uses_direct_proxbox_api_boundary(view_src):
     assert "resolve_backend_endpoint_id" in view_src
     assert "/cloud/vm/provision" in view_src
     assert "/cloud/lxc/provision" in view_src
-    assert "nms-backend" not in view_src.lower()
+    assert "external control plane" not in view_src.lower()
 
 
 def test_create_view_enforces_write_gate_before_backend_resolution(view_src):

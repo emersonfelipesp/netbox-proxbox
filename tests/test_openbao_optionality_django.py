@@ -2,8 +2,10 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+import sys
+import types
 from types import SimpleNamespace
+from unittest.mock import patch
 
 from cryptography.fernet import Fernet
 import pytest
@@ -452,6 +454,144 @@ def test_monitoring_failure_does_not_skip_next_healthy_endpoint(
     broken.refresh_from_db()
     assert broken.service_monitoring_last_status == "failed"
     assert broken.service_monitoring_last_error
+
+
+def _install_rpc_backend_selection_stubs(monkeypatch, *, selected: bool):
+    """Install an optional-companion surface with two public RPC backends."""
+    execution_creates = []
+    enqueue_calls = []
+
+    class _Rows(list):
+        def first(self):
+            return self[0] if self else None
+
+    class _ProcedureManager:
+        def filter(self, **kwargs):
+            assert kwargs == {
+                "name": "os.linux.proxmox.show_systemctl_services",
+                "enabled": True,
+            }
+            return _Rows([SimpleNamespace(pk=701)])
+
+    class _ExecutionManager:
+        def create(self, **kwargs):
+            execution_creates.append(kwargs)
+            return SimpleNamespace(pk=702)
+
+    class _BackendManager:
+        def values_list(self, *args, **kwargs):
+            assert args == ("pk",)
+            assert kwargs == {"flat": True}
+            return _Rows([111, 222])
+
+    class _RpcPluginSettings:
+        @classmethod
+        def get_solo(cls):
+            backend = SimpleNamespace(pk=222) if selected else None
+            return SimpleNamespace(backend=backend)
+
+    class _RPCExecutionJob:
+        @classmethod
+        def enqueue(cls, **kwargs):
+            enqueue_calls.append(kwargs)
+
+    rpc_package = types.ModuleType("netbox_rpc")
+    rpc_package.__path__ = []
+    rpc_jobs = types.ModuleType("netbox_rpc.jobs")
+    rpc_jobs.RPCExecutionJob = _RPCExecutionJob
+    rpc_models = types.ModuleType("netbox_rpc.models")
+    rpc_models.RPCProcedure = type("RPCProcedure", (), {"objects": _ProcedureManager()})
+    rpc_models.RPCExecution = type("RPCExecution", (), {"objects": _ExecutionManager()})
+    rpc_models.RPCBackend = type("RPCBackend", (), {"objects": _BackendManager()})
+    rpc_models.RpcPluginSettings = _RpcPluginSettings
+    monkeypatch.setitem(sys.modules, "netbox_rpc", rpc_package)
+    monkeypatch.setitem(sys.modules, "netbox_rpc.jobs", rpc_jobs)
+    monkeypatch.setitem(sys.modules, "netbox_rpc.models", rpc_models)
+    return execution_creates, enqueue_calls
+
+
+@pytest.mark.parametrize("entrypoint", ["api", "ui", "scheduled"])
+@pytest.mark.parametrize("selected", [True, False])
+def test_service_monitoring_entrypoints_resolve_selected_backend_and_fail_ambiguity(
+    optionality_models,
+    monkeypatch,
+    entrypoint,
+    selected,
+):
+    """Exercise all production callers through selected and ambiguous backends."""
+    from django.test import RequestFactory
+    from netbox_proxbox.api.views import ProxmoxServiceMonitoringRefreshAPIView
+    from netbox_proxbox.integrations import rpc
+    from netbox_proxbox.jobs import ProxmoxServiceMonitoringJob
+    from netbox_proxbox.models import ProxmoxServiceCollection
+    from netbox_proxbox.views.endpoints import proxmox as endpoint_views
+    from tests.django_support import make_user
+
+    _, Endpoint = optionality_models
+    endpoint = _saved_openbao_endpoint(
+        Endpoint,
+        f"rpc-selection-{entrypoint}-{selected}",
+        enabled=True,
+        allow_writes=True,
+        access_methods="api_ssh",
+        service_monitoring_enabled=True,
+    )
+    user = make_user(
+        username=f"rpc-selection-{entrypoint}-{selected}",
+        is_staff=True,
+        is_superuser=True,
+    )
+    execution_creates, enqueue_calls = _install_rpc_backend_selection_stubs(
+        monkeypatch,
+        selected=selected,
+    )
+    before = ProxmoxServiceCollection.objects.count()
+
+    with (
+        patch.object(
+            Endpoint, "service_monitoring_eligible", property(lambda _e: True)
+        ),
+        patch.object(rpc, "project_completed_collections", return_value=0),
+    ):
+        if entrypoint == "api":
+            request = RequestFactory().post("/api/services/refresh/")
+            request.user = user
+            response = ProxmoxServiceMonitoringRefreshAPIView().post(
+                request,
+                endpoint.pk,
+            )
+            assert response.status_code == (202 if selected else 503)
+        elif entrypoint == "ui":
+            request = RequestFactory().post("/services/refresh/")
+            request.user = user
+            with (
+                patch.object(endpoint_views.messages, "success") as success,
+                patch.object(endpoint_views.messages, "error") as error,
+                patch.object(
+                    endpoint_views.ProxmoxEndpointServicesView,
+                    "_services_url",
+                    return_value="/services/",
+                ),
+            ):
+                response = endpoint_views.ProxmoxEndpointServicesView().post(
+                    request,
+                    endpoint.pk,
+                )
+            assert response.status_code == 302
+            assert success.called is selected
+            assert error.called is not selected
+        else:
+            job = ProxmoxServiceMonitoringJob.__new__(ProxmoxServiceMonitoringJob)
+            job.job = SimpleNamespace(user=user)
+            job.run()
+
+    created = ProxmoxServiceCollection.objects.count() - before
+    assert created == (1 if selected else 0)
+    assert len(execution_creates) == (1 if selected else 0)
+    assert len(enqueue_calls) == (1 if selected else 0)
+    if selected:
+        assert execution_creates[0]["backend_id"] == 222
+        assert enqueue_calls[0]["backend_pk"] == 222
 
 
 @pytest.mark.parametrize(

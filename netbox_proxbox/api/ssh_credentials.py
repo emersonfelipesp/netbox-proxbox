@@ -45,11 +45,6 @@ from netbox_proxbox.models.ssh_credential import (
 )
 from netbox_proxbox.utils import encryption as enc_helpers
 
-try:
-    from netbox_proxbox.api.nms_ssh_resolver import resolve_node_ssh_from_nms
-except ImportError:  # pragma: no cover - defensive for partial checkouts
-    resolve_node_ssh_from_nms = None
-
 _HOST_KEY_SCAN_TIMEOUT = 25
 
 
@@ -225,22 +220,15 @@ class NodeSSHCredentialSecretsAPIView(APIView):
         try:
             cred = _credential_for_node_identifier(node_id)
         except NodeSSHCredential.DoesNotExist:
-            if resolve_node_ssh_from_nms is None:
-                raise
-            from netbox_proxbox.models import ProxmoxNode
-
-            node = get_object_or_404(
-                ProxmoxNode.objects.select_related("netbox_device"),
-                pk=node_id,
+            return Response(
+                {
+                    "detail": (
+                        "No local NodeSSHCredential is registered for this node. "
+                        "Create one in Proxbox before requesting SSH access."
+                    )
+                },
+                status=status.HTTP_404_NOT_FOUND,
             )
-            payload = resolve_node_ssh_from_nms(
-                node,
-                user=request.user,
-                request=request,
-            )
-            if payload is None:
-                raise
-            return Response(payload)
 
         # Gate node-target SSH on the owning endpoint's access method.
         if _node_ssh_access_disabled(cred):

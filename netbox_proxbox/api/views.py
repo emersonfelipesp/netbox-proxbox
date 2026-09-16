@@ -1593,7 +1593,7 @@ class LXCContainersAPIView(_ProxboxVMListAPIView):
 
 
 class FirecrackerMicroVMsAPIView(APIView):
-    """API mirror for Firecracker micro-VM resources exposed to NMS Cloud."""
+    """API mirror for Firecracker micro-VM resources exposed to API clients."""
 
     permission_classes = [IsAuthenticatedOrLoginNotRequired]
 

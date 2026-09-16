@@ -15,7 +15,7 @@ class Migration(migrations.Migration):
                 blank=True,
                 help_text=(
                     "Tenants explicitly granted access to this endpoint. Leave empty "
-                    "for default visibility; NMS Cloud callers with any explicit "
+                    "for default visibility; API callers with any explicit "
                     "endpoint grant see only their granted endpoints."
                 ),
                 related_name="proxbox_proxmox_endpoints",

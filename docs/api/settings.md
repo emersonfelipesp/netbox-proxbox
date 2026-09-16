@@ -181,7 +181,7 @@ than the task timeout are rejected by the model, form, and API serializer.
 | `cloud_customer_gateway` | string | Gateway IP address for the designated cloud customer network |
 
 Populate these fields with `python manage.py ensure_cloud_customer_network ...`
-so proxbox-api and nms-backend can resolve the cloud customer network without
+so proxbox-api and other API consumers can resolve the cloud customer network without
 hardcoded estate values.
 
 ### SSRF Protection

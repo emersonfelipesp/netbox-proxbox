@@ -1149,7 +1149,7 @@ class ProxmoxEndpointSyncJobsTabView(generic.ObjectView):
     routine (validated + hard-scoped to this endpoint) and, on validation error,
     re-renders this same tab with the modal reopened so field errors are visible.
     Scheduling is entirely NetBox-native (``core.Job`` + ``ProxboxSyncJob`` +
-    django_rq); there is no dependency on the NMS stack.
+    django_rq); there is no dependency on an external control plane.
     """
 
     queryset = ProxmoxEndpoint.objects.all()

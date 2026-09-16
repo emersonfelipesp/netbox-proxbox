@@ -266,7 +266,7 @@ Two models perform an **upsert** on POST — if a matching record already exists
 | `/api/plugins/proxbox/sdn-prefix-lists/{id}/` | GET PUT PATCH DELETE | ProxmoxSdnPrefixList CRUD |
 | `/api/plugins/proxbox/datacenter-cpu-models/` | GET POST | ProxmoxDatacenterCpuModel CRUD |
 | `/api/plugins/proxbox/datacenter-cpu-models/{id}/` | GET PUT PATCH DELETE | ProxmoxDatacenterCpuModel CRUD |
-| `/api/plugins/proxbox/resources/firecracker-microvms/` | GET | NMS-compatible Firecracker micro-VM list (non-model view) |
+| `/api/plugins/proxbox/resources/firecracker-microvms/` | GET | Consumer-facing Firecracker micro-VM list (non-model view) |
 | `/api/plugins/proxbox/resources/interfaces/` | GET | Aggregated VM interface list (non-model view) |
 | `/api/plugins/proxbox/resources/ip-addresses/` | GET | Aggregated IP address list (non-model view) |
 | `/api/plugins/proxbox/resources/virtual-disks/` | GET | Aggregated virtual disk list (non-model view) |

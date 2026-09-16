@@ -1,6 +1,6 @@
 # Proxbox
 
-Proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data into NetBox. It keeps your DCIM up-to-date with real Proxmox clusters, nodes, virtual machines, containers, backups, and Firecracker micro-VM inventory used by the NMS Cloud runtime.
+Proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data into NetBox. It keeps your DCIM up-to-date with real Proxmox clusters, nodes, virtual machines, containers, backups, and Firecracker micro-VM inventory.
 
 ![netbox-proxbox architecture](docs/assets/netbox-proxbox-architecture.svg)
 
@@ -12,7 +12,7 @@ Proxbox discovers and syncs the following from Proxmox into NetBox:
 - **Virtual Machines** — VM status, resources, and configuration
 - **Standalone browser console** — a permission-gated Console tab on synchronized NetBox virtual machines, with QEMU noVNC/terminal and LXC terminal access relayed through proxbox-api without another management UI or browser-visible Proxmox credentials
 - **Containers (LXC)** — Container details and settings
-- **Firecracker Cloud inventory** — Host pools, host-agent VMs, image templates, and provisioned micro-VMs exposed separately from QEMU/LXC for NMS Cloud provisioning
+- **Firecracker Cloud inventory** — Host pools, host-agent VMs, image templates, and provisioned micro-VMs exposed separately from QEMU/LXC
 - **VM Snapshots** — Point-in-time snapshots for recovery
 - **VM Backups** — Backup jobs and restore points
 - **Storage** — Datastores and storage content
@@ -189,11 +189,11 @@ as an unreachable node outcome, not as a projection error.
 ### Cloud Portal Endpoint Allowlists
 
 `ProxmoxEndpoint.allowed_tenants` controls which Proxmox endpoint rows are
-eligible for tenant-scoped NMS Cloud callers. An empty allow-list means the
+eligible for tenant-scoped API callers. An empty allow-list means the
 endpoint stays in the default/global pool. A non-empty allow-list pins that
 endpoint to the listed tenants.
 
-The paired `nms-backend` contract is intentionally asymmetric: if a tenant has
+The paired API consumer contract is intentionally asymmetric: if a tenant has
 no explicit endpoint grants, it may still see global/default endpoints; once
 that tenant matches any explicitly granted endpoint, the backend hides the
 global pool and returns only the explicit matches. Use this to pin a tenant
@@ -264,7 +264,7 @@ Paired with backend: `proxbox-api 0.0.21.post6`.
 
 - **Production browser console handoff.** NetBox virtual-machine detail pages
   now compose the console extension through NetBox's supported `buttons()`
-  hook and open the corresponding NMS QEMU or LXC guest detail in a new tab;
+  hook and open the corresponding QEMU or LXC guest detail in a new tab;
   the operator then selects the Console tab. See the complete configuration,
   visibility, URL-construction, security, and test guide in
   [`docs/features/browser-console.md`](docs/features/browser-console.md).

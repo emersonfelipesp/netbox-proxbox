@@ -1,119 +1,15 @@
-# `netbox_proxbox.views.endpoints`
+# Endpoint View Guide
 
-> **Repository destination guardrail:** This guide inherits the hard rule in
-> the repository-root `CLAUDE.md`. EdgeUno and the local EdgeUno vendor
-> submodule are read-only reference sources, never change destinations. All
-> development writes must target exactly
-> `https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox.git`; approved
-> public promotion may target only
-> `https://github.com/emersonfelipesp/netbox-proxbox.git`. Never mutate EdgeUno
-> issues, PRs, branches, commits, tags, releases, packages, mirrors, or
-> deployments, and never configure EdgeUno as a writable remote, upstream,
-> fallback, or PR base.
+Endpoint views manage connection configuration and operational actions for
+Proxmox and companion public APIs. Preserve object permissions, enabled-state
+checks, endpoint scoping, and explicit failure messages.
 
-This directory contains NetBox generic model views for the three endpoint models.
+Sync actions must remain scoped server-side; never trust endpoint identifiers or
+scope supplied only by a browser form. Credential updates must use the model's
+encryption helpers and must not echo secret values. Network actions use the
+shared request helpers so destination validation, redirect refusal, timeouts,
+and TLS policy stay consistent.
 
-## Files And Ownership
-
-- [`proxmox.py`](./proxmox.py): list/detail/edit/delete, bulk enable/disable, bulk import, export, quick-add-token, and tab views for `ProxmoxEndpoint`. Includes `ProxmoxEndpointSyncJobsTabView` (weight 875, path `sync-jobs`) which lists Proxbox sync jobs scoped to the viewed endpoint — jobs whose `proxbox_sync.params.proxmox_endpoint_ids` contains the endpoint PK, or jobs with an empty endpoint list (all-endpoint jobs). The shared module-level helper `endpoint_sync_jobs_for(request, instance)` builds that list. This `ObjectView` also **handles POST** (the tab's "Create Sync Job" modal): it delegates gating + enqueue to `schedule_sync.handle_endpoint_sync_routine_post()` and maps the outcome to a response — `403` when the user lacks `core.add_job`, a redirect back to the tab on success/disabled-refusal/enqueue-error (flash message already posted), or a re-render of the tab with the bound `ScheduleSyncForm` + `show_create_modal=True` so the modal reopens showing field errors. The routine is **hard-scoped server-side to the viewed endpoint** — both `proxmox_endpoint_ids=[endpoint.pk]` (passed to `ProxboxSyncJob.enqueue` **directly**, so an empty list can never fall through to an all-endpoints sync — fail-closed) and `netbox_endpoint_ids=[]` (the tab never exposes the NetBox-endpoint picker) — so a crafted POST cannot retarget either side. Scheduling is entirely NetBox-native (`core.Job` + `ProxboxSyncJob` + django_rq) — **no NMS dependency**. Contracts in `tests/test_sync_jobs_create_contracts.py`; handler behavior in `tests/test_endpoint_sync_job_create.py`. Also includes `ProxmoxEndpointOverwriteBehaviorView` (weight 905, path `overwrite-behavior`), a read-only **Overwrite Behavior** tab that moved the former detail-page "Sync Overwrite Behavior" card onto its own tab and splits the `overwrite_*` flags into per-category Bootstrap sub-tabs (`_build_overwrite_row_groups()` over `OVERWRITE_FIELD_GROUPS`).
-- `ProxmoxEndpointServicesView` (weight 930, path `services`) renders latest
-  projected systemd service status and recent collection history. GET calls
-  `project_completed_collections()` to reconcile already-finished netbox-rpc
-  executions. POST is the **Refresh now** action and only queues
-  `collect_systemctl_services()` when the requester can change the endpoint and
-  `service_monitoring_eligible` is true.
-- [`proxmox_sync_now.py`](./proxmox_sync_now.py): POST-only `ProxmoxEndpoint` action that queues an immediate full `ProxboxSyncJob` scoped to the endpoint being viewed.
-- [`proxmox_export.py`](./proxmox_export.py): CSV/JSON/YAML export fieldname and serializer helpers for `ProxmoxEndpoint`.
-- [`netbox.py`](./netbox.py): list/detail/edit/delete, bulk import, export, and quick-add-token views for `NetBoxEndpoint`.
-- [`netbox_export.py`](./netbox_export.py): CSV/JSON/YAML export fieldname and serializer helpers for `NetBoxEndpoint`.
-- [`fastapi.py`](./fastapi.py): list/detail/edit/delete, bulk import, export, quick-add-token views for `FastAPIEndpoint`, plus the OpenAPI tab that renders cached schema metadata. The backend token is optional for bounded creation/enable/target auto-configuration; views/forms/serializers must continue to converge on the model persistence gate rather than implementing an alternate discovery path.
-- [`fastapi_export.py`](./fastapi_export.py): CSV/JSON/YAML export fieldname and serializer helpers for `FastAPIEndpoint`.
-- [`pdm.py`](./pdm.py): the local `PDMEndpoint` detail override plus its Sync
-  Now action. The discovered-remotes table must start from
-  `PDMRemote.objects.restrict(request.user, "view")`; permission to view the
-  parent endpoint never implies permission to view all child remotes, and
-  object-level remote constraints must remain effective.
-- [`ssh_terminal_credential.py`](./ssh_terminal_credential.py): pure, NetBox-free helpers for the Terminal-tab SSH credential modal — `validate_terminal_credential()` (normalizes the operator-entered credential: username/port/auth-method/secret/fingerprint, with a mandatory host-key fingerprint) and `one_shot_payload()` (builds the proxbox-api `one_shot_credential` body). `proxmox.py`'s `ProxmoxEndpointSSHTerminalSessionView` imports these; its POST and stored-credential helper mark all reporter locals sensitive, convert expected encryption failures into a secret-free 503, and let unexpected database failures propagate only through redacted frames. The pure helpers are unit-tested in `tests/test_ssh_terminal_credential.py`; the reporter boundary is covered by the real-Django encryption-recovery suite.
-- [`__init__.py`](./__init__.py): re-exports endpoint view classes.
-
-## Export Views
-
-Proxmox sensitive export uses `resolve_endpoint_api_credentials`: an absent,
-unselected password or token is omitted, but required or referenced OpenBao
-material must resolve successfully. Provider failure never produces an apparently
-successful export containing an empty required secret.
-
-All three endpoint types expose an `ExportView` at `{model}_export` that supports CSV, JSON, and YAML output in two modes:
-
-- **Safe export** (GET or POST without `include_sensitive=true`): Excludes all credential fields. Anyone with `view` permission on the model can download.
-- **Sensitive export** (POST with `include_sensitive=true`): Includes credential fields in plain text. The requester must POST a valid NetBox API token to prove identity.
-
-### Sensitive export token validation
-
-`_validate_sensitive_export_token()` supports three input modes, selected by the `token_version` POST field:
-
-| Mode | POST fields | Header constructed |
-|---|---|---|
-| `v1` (dropdown) | `token_id` (integer PK) | `Token <plaintext from DB>` |
-| `v1` (manual) | `v1_manual_token` (raw value) | `Token <value>` |
-| `v2` | `token_key` + `token_secret` | `Bearer <key>.<secret>` |
-| Fallback (empty) | `netbox_token` | `Token <value>` or `Bearer <value>` |
-
-The constructed header is placed into `request.META["HTTP_AUTHORIZATION"]` and authenticated with `TokenAuthentication`. The token user must also hold `view` permission on the exported model.
-
-### Quick-add token views
-
-Each endpoint type registers a `QuickAddTokenView` at `{model}_quick_add_token`. A POST to this endpoint creates a temporary v1 `Token` object under the current user's account and returns its PK, display string, and plaintext once in JSON. The export modal UI uses this to create a throwaway token when the user has no existing v1 token handy.
-
-### Export helper modules
-
-Each `*_export.py` file provides two functions used by the `ExportView`:
-
-- `_*_export_fieldnames(include_sensitive)` — returns the ordered tuple of column names; credential columns appear only when `include_sensitive=True`.
-- `_serialize_*_endpoint(endpoint, include_sensitive)` — serializes one model instance to a `dict[str, str]` row for CSV, JSON, or YAML output.
-
-**Sensitive columns by model:**
-
-| Model | Sensitive fields |
-|---|---|
-| `ProxmoxEndpoint` | `password`, `token_value` |
-| `NetBoxEndpoint` | `token_key`, `token_secret` |
-| `FastAPIEndpoint` | `token` |
-
-## Bulk Import Views
-
-All three endpoint types override `create_and_update_objects()` to strip any `id` column before NetBox processes the records. This makes CSV exports from one NetBox instance importable into another without "Object with ID N does not exist" errors; PKs are auto-assigned on create.
-
-### Singleton import confirmation
-
-`NetBoxEndpoint` and `FastAPIEndpoint` are singletons — the backend and dashboard always use the first row of each. Their `BulkImportView` subclasses enforce this constraint:
-
-1. On the initial import POST, if a record already exists and `confirm_override` is not set, the view renders `singleton_import_confirm.html` with the raw POST data preserved in hidden fields.
-2. The user reviews the existing record summary and clicks **Override existing** (adds `confirm_override=true` and re-submits) or **Cancel**.
-3. On the confirmed POST, `create_and_update_objects()` deletes the existing singleton, then calls `super()` to create the replacement.
-
-`ProxmoxEndpoint` allows multiple rows and has no confirmation step.
-
-## IP Address Auto-Creation on Import
-
-All three import forms use a plain `forms.CharField` for `ip_address` backed by a `clean_ip_address()` method that calls `IPAddress.objects.get_or_create(address=raw)`. This means a CIDR string that does not yet exist in IPAM is silently created at import time rather than causing a validation error — the same behavior Proxmox endpoints have had since an earlier fix.
-
-## Dependencies
-
-- Inbound: `views/__init__.py` imports and re-exports these classes, and `urls.py` mounts them via `get_model_urls(...)`.
-- Outbound: matching models, tables, filtersets, forms, and the `*_export.py` helpers in this directory.
-
-## Notes
-
-- The export JS (token version toggle, dropdown population, quick-add, copy-to-clipboard) is inlined as an IIFE in each `*endpoint_list.html` template rather than loaded as an external `.js` file. This avoids requiring `collectstatic` for the modal to work.
-- The ProxmoxEndpoint detail page exposes **Sync Now** through `proxmox_sync_now.py`; it requires the shared Proxbox sync enqueue permission, uses a CSRF-protected POST, refuses disabled endpoints, and passes the viewed endpoint PK in `proxmox_endpoint_ids`.
-- The ProxmoxEndpoint list/detail/dashboard status badge is a static gray `Disabled` badge when `enabled=False`; do not emit `data-service-status-url` for disabled Proxmox rows, otherwise the browser will poll keepalive and can repaint the inventory state as an error.
-- The ProxmoxEndpoint list page exposes **Enable Selected** and **Disable Selected** through `ProxmoxEndpointBulkEnableView` / `ProxmoxEndpointBulkDisableView`. These are change-permission list actions that update only `enabled` with `queryset.update()`; do not switch them to per-object `save()` because the ProxmoxEndpoint `post_save` signal can register/sync endpoints with proxbox-api.
-- Changes to list columns, validation, or field presentation typically happen outside this directory unless the view wiring itself changes.
-- The complete endpoint allowlist, pending-state, and requirements-to-tests
-  contract lives in
-  [`docs/developer/endpoint-autoconfiguration.md`](../../../docs/developer/endpoint-autoconfiguration.md).
-
-## Links
-
-- Parent: [`../CLAUDE.md`](../CLAUDE.md)
+Endpoint tabs may display reflected state but must not perform hidden writes on
+GET. POST actions require focused permission, scope, disabled-state, and failure
+tests.

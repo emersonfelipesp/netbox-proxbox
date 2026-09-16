@@ -58,7 +58,7 @@ class ProxmoxVMCloudInit(NetBoxModel):
     )
 
     # -- Create-time cloud-init intent -------------------------------------
-    # The fields below capture the cloud-init request the NMS stack sent at
+    # The fields below capture the cloud-init request an API client sent at
     # VM-create time. They are NOT part of proxbox-api's reflection
     # ``CLOUDINIT_PATCHABLE_FIELDS`` set, so a later ``qm config`` reflection
     # sync never overwrites them. ``is_intent`` marks rows that carry this
@@ -68,7 +68,7 @@ class ProxmoxVMCloudInit(NetBoxModel):
         default=False,
         help_text=_(
             "True when this row carries the create-time cloud-init intent "
-            "written by the NMS stack (not a pure Proxmox reflection)."
+            "written by an API client (not a pure Proxmox reflection)."
         ),
     )
 
@@ -137,14 +137,13 @@ class ProxmoxVMCloudInit(NetBoxModel):
         ),
     )
 
-    nms_credential_id = models.PositiveIntegerField(
+    credential_reference_id = models.PositiveIntegerField(
         null=True,
         blank=True,
         db_index=True,
         help_text=_(
-            "Soft reference to the netbox-nms CloudVMCredential PK holding the "
-            "encrypted cloud-init password / SSH private key for this VM. "
-            "Integer id only — netbox-proxbox never imports netbox-nms."
+            "Soft reference to an external credential record holding the "
+            "encrypted cloud-init password or SSH private key for this VM."
         ),
     )
 

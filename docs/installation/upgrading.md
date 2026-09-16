@@ -10,8 +10,18 @@ source /opt/netbox/venv/bin/activate
 pip install -U netbox-proxbox
 python3 manage.py migrate netbox_proxbox
 python3 manage.py collectstatic --no-input
+python3 manage.py audit_node_ssh_credentials --fail-on-missing
 sudo systemctl restart netbox
 ```
+
+The SSH credential audit is a mandatory `0.0.27` upgrade gate because the
+retired external credential fallback no longer exists. Create a local
+`NodeSSHCredential` for every enabled API + SSH node reported as blocking, then
+rerun the command and proceed only after it exits successfully with zero
+blockers. Disabled nodes and API-only nodes are reported separately and do not
+block restart. After the upgrade, a request for a node without a local
+credential returns HTTP 404 with an actionable provisioning message; it never
+falls back to another credential service.
 
 If you install from a Git checkout instead of PyPI, replace the install step with:
 
@@ -99,9 +109,8 @@ key is recoverable because the backend can now authenticate it. Do not create a
 replacement hidden key or delete the accepted remote key as a rollback tactic.
 
 - Proxbox `0.0.27rc4` is the current backward-compatible release for NetBox `4.5.8` through `4.7.0`, including official v4.7.0 GA. It is validated against `v4.5.8` through `v4.5.10`, `v4.6.0` through `v4.6.6`, and exact v4.7.0 source commit `5f06007e4c9bacc93ce17c1e645fc1143d60df3d`. It pairs with `proxbox-api 0.0.22`, `proxmox-sdk 0.0.13`, and `netbox-sdk 0.0.13`. The previous stable `0.0.23.post2` release introduced bounded endpoint auto-configuration.
-- Upgrading to `0.0.26.post2` retains the `0075_fastapi_backend_key_target_fingerprint` trust boundary, the exact NetBox 4.7.0 GA compatibility ceiling, and adds the NMS browser-console handoff. Run the normal `manage.py migrate` and `collectstatic` steps. Existing backend rows trust only their exact stored URL/IP, port, and TLS policy; startup discovery without a row is limited to configured or same-site targets derived from NetBox's trusted public origin.
-  The operational state machine and verification matrix are maintained in
-  [Endpoint Auto-Configuration](../developer/endpoint-autoconfiguration.md).
+- Upgrading to `0.0.26.post2` retains the `0075_fastapi_backend_key_target_fingerprint` trust boundary, the exact NetBox 4.7.0 GA compatibility ceiling, and adds the browser-console handoff. Run the normal `manage.py migrate` and `collectstatic` steps. Existing backend rows trust only their exact stored URL/IP, port, and TLS policy; startup discovery without a row is limited to configured or same-site targets derived from NetBox's trusted public origin. The operational state machine and verification matrix are maintained in [Endpoint Auto-Configuration](../developer/endpoint-autoconfiguration.md).
+- The vendor-neutral cloud-init credential transition is additive. Migration `0064_proxmoxvmcloudinit_intent` is the sanitized fresh-install source for `credential_reference_id`; migration `0097_add_cloudinit_credential_reference` adds that generic column on existing schemas, copies populated values from the one structurally identified historical credential column, and retains the historical column unchanged for downgrade compatibility. Upgrade producers first so they dual-write their currently deployed field and `credential_reference_id`, then upgrade every consumer and run the plugin migration. Verify a serialized cloud-init row preserves the reference before stopping writes to the retired field. If more than one historical `*_credential_id` column exists, the migration fails closed and requires an operator to resolve the schema ambiguity.
 - Upgrading to `0.0.23.post1` switches existing installs from `vm_interface_sync_strategy=legacy_rename` to `vm_interface_sync_strategy=guest_os_model`. Proxmox `netX` interfaces stay named `netX` as core `VMInterface` rows, and guest OS names such as `ens18` are stored in `GuestVMInterface` rows. Operators who want the old core-interface renaming behavior can re-select `vm_interface_sync_strategy=legacy_rename` in plugin settings after the upgrade.
 - Disabled endpoint-like rows with `enabled=False` are inventory-only in `0.0.20.post3`: they remain visible in UI/API output, but status, keepalive, backend registration, OpenAPI, startup/signal, sync, PBS, PDM, and companion endpoint paths return before any backend or remote-service connection attempt.
 - This release includes the PVE 9.2 schema migration plus `0045_repair_pbs_pdm_endpoint_enabled`, a database-only repair for affected `0.0.18` installs where `PBSEndpoint` and `PDMEndpoint` were missing the shared endpoint `enabled` column. Run `python manage.py migrate netbox_proxbox` after upgrade.

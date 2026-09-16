@@ -1,8 +1,8 @@
 """Add create-time cloud-init intent fields to ProxmoxVMCloudInit.
 
-These fields capture the cloud-init request the NMS stack sent at VM-create
+These fields capture the cloud-init request an API client sent at VM-create
 time (hostname, network, DNS, agent, encrypted SSH public keys) plus a soft
-integer reference to the netbox-nms ``CloudVMCredential`` PK. They are additive
+integer reference to an external credential record. They are additive
 and idempotent (see ``_idempotent_ops``) so the migration is safe against
 clean, partial-legacy, and fully-applied databases.
 """
@@ -74,7 +74,7 @@ class Migration(migrations.Migration):
         ),
         add_field_idempotent(
             model_name=MODEL,
-            field_name="nms_credential_id",
+            field_name="credential_reference_id",
             field=models.PositiveIntegerField(blank=True, db_index=True, null=True),
         ),
         add_field_idempotent(

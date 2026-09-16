@@ -32,7 +32,15 @@ def _load_rpc_module():
     return mod
 
 
-def _install_netbox_rpc_stubs(monkeypatch, *, procedure, execution, executions=None):
+def _install_netbox_rpc_stubs(
+    monkeypatch,
+    *,
+    procedure,
+    execution,
+    executions=None,
+    backend_pks=(456,),
+    selected_backend_pk=None,
+):
     class _ProcedureManager:
         def filter(self, **kwargs):
             assert kwargs == {
@@ -63,6 +71,25 @@ def _install_netbox_rpc_stubs(monkeypatch, *, procedure, execution, executions=N
     class _RPCExecution:
         objects = execution_manager
 
+    class _BackendManager:
+        def values_list(self, *args, **kwargs):
+            assert args == ("pk",)
+            assert kwargs == {"flat": True}
+            return _QuerySet(backend_pks)
+
+    class _RPCBackend:
+        objects = _BackendManager()
+
+    class _RpcPluginSettings:
+        @classmethod
+        def get_solo(cls):
+            backend = (
+                SimpleNamespace(pk=selected_backend_pk)
+                if selected_backend_pk is not None
+                else None
+            )
+            return SimpleNamespace(backend=backend)
+
     enqueue_calls = []
 
     class _RPCExecutionJob:
@@ -77,6 +104,8 @@ def _install_netbox_rpc_stubs(monkeypatch, *, procedure, execution, executions=N
     models = types.ModuleType("netbox_rpc.models")
     models.RPCExecution = _RPCExecution
     models.RPCProcedure = _RPCProcedure
+    models.RPCBackend = _RPCBackend
+    models.RpcPluginSettings = _RpcPluginSettings
 
     monkeypatch.setitem(sys.modules, "netbox_rpc", package)
     monkeypatch.setitem(sys.modules, "netbox_rpc.jobs", jobs)
@@ -255,7 +284,6 @@ def test_collect_systemctl_services_creates_execution_collection_and_enqueue(
     mod = _load_rpc_module()
     procedure = SimpleNamespace(pk=7)
     execution = SimpleNamespace(pk=123)
-    backend = SimpleNamespace(pk=456)
     endpoint = SimpleNamespace(
         pk=42,
         service_monitoring_enabled=True,
@@ -272,13 +300,6 @@ def test_collect_systemctl_services_creates_execution_collection_and_enqueue(
         monkeypatch
     )
 
-    nms_pkg = types.ModuleType("netbox_nms")
-    nms_pkg.__path__ = []
-    nms_backend = types.ModuleType("netbox_nms.backend")
-    nms_backend.get_backend = lambda: backend
-    monkeypatch.setitem(sys.modules, "netbox_nms", nms_pkg)
-    monkeypatch.setitem(sys.modules, "netbox_nms.backend", nms_backend)
-
     result = mod.collect_systemctl_services(
         endpoint,
         requested_by=user,
@@ -290,7 +311,7 @@ def test_collect_systemctl_services_creates_execution_collection_and_enqueue(
         {
             "procedure": procedure,
             "assigned_object": endpoint,
-            "backend": backend,
+            "backend_id": 456,
             "requested_by": user,
             "params": {
                 "proxmox_endpoint_id": 42,
@@ -313,6 +334,62 @@ def test_collect_systemctl_services_creates_execution_collection_and_enqueue(
             "backend_pk": 456,
         }
     ]
+
+
+def test_collect_systemctl_services_prefers_selected_backend_among_many(
+    monkeypatch,
+):
+    mod = _load_rpc_module()
+    procedure = SimpleNamespace(pk=7)
+    execution = SimpleNamespace(pk=123)
+    endpoint = SimpleNamespace(
+        pk=42,
+        service_monitoring_enabled=True,
+        service_monitoring_eligible=True,
+        service_monitoring_units=[],
+    )
+    execution_manager, enqueue_calls = _install_netbox_rpc_stubs(
+        monkeypatch,
+        procedure=procedure,
+        execution=execution,
+        backend_pks=(111, 222),
+        selected_backend_pk=222,
+    )
+    created_collections, _sample_calls, _status_calls = _install_model_stubs(
+        monkeypatch
+    )
+
+    assert mod.collect_systemctl_services(endpoint, trigger="scheduled") is execution
+    assert execution_manager.created[0]["backend_id"] == 222
+    assert enqueue_calls[0]["backend_pk"] == 222
+    assert len(created_collections) == 1
+
+
+def test_collect_systemctl_services_fails_before_rows_on_ambiguous_backends(
+    monkeypatch,
+):
+    mod = _load_rpc_module()
+    execution_manager, enqueue_calls = _install_netbox_rpc_stubs(
+        monkeypatch,
+        procedure=SimpleNamespace(pk=7),
+        execution=SimpleNamespace(pk=123),
+        backend_pks=(111, 222),
+    )
+    created_collections, _sample_calls, _status_calls = _install_model_stubs(
+        monkeypatch
+    )
+    endpoint = SimpleNamespace(
+        pk=42,
+        service_monitoring_enabled=True,
+        service_monitoring_eligible=True,
+        service_monitoring_units=[],
+    )
+
+    assert mod.collect_systemctl_services(endpoint, trigger="on_demand") is None
+    assert execution_manager.created == []
+    assert enqueue_calls == []
+    assert created_collections == []
+    assert endpoint.service_monitoring_last_status == "unavailable"
 
 
 def test_collect_systemctl_services_skips_disabled_endpoint(monkeypatch):

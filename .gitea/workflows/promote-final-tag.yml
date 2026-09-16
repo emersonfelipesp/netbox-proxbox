@@ -1,10 +1,10 @@
-name: Promote production-validated final tag to GitHub
+name: Promote verified final tag to GitHub
 
 on:
   workflow_dispatch:
     inputs:
       tag:
-        description: Exact final or post-release tag already deployed from Gitea
+        description: Exact final or post-release tag already published in Gitea
         required: true
         type: string
 
@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   promote-final-tag:
-    name: Verify production evidence and promote exact tag
+    name: Verify package provenance and promote exact tag
     if: ${{ github.repository == 'emersonfelipesp/netbox-proxbox' && github.ref == 'refs/heads/main' }}
     runs-on: mirror-host
     steps:
@@ -28,7 +28,7 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
-      - name: Validate canonical release source and production evidence
+      - name: Validate canonical release source and package provenance
         env:
           TAG: ${{ inputs.tag }}
         run: |
@@ -82,10 +82,6 @@ jobs:
             --owner emersonfelipesp --repository netbox-proxbox \
             --package netbox-proxbox --version "$VERSION" --source-sha "$SOURCE_SHA" \
             --dist verified-dist --manifest release-manifest.json
-          python3 scripts/release_artifacts.py fetch-attestation \
-            --owner emersonfelipesp --repository netbox-proxbox \
-            --manifest release-manifest.json
-
       - name: Push exact verified tag to authorized GitHub destination
         env:
           GH_TOKEN: ${{ secrets.GH_MIRROR_TOKEN }}

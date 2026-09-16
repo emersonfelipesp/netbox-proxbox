@@ -1,17 +1,13 @@
-# `netbox_proxbox.models`
+# Model Guide
 
-> **Repository destination guardrail:** This guide inherits the hard rule in
-> the repository-root `CLAUDE.md`. EdgeUno and the local EdgeUno vendor
-> submodule are read-only reference sources, never change destinations. All
-> development writes must target exactly
-> `https://git.nmulti.cloud/emersonfelipesp/netbox-proxbox.git`; approved
-> public promotion may target only
-> `https://github.com/emersonfelipesp/netbox-proxbox.git`. Never mutate EdgeUno
-> issues, PRs, branches, commits, tags, releases, packages, mirrors, or
-> deployments, and never configure EdgeUno as a writable remote, upstream,
-> fallback, or PR base.
+Models own persisted invariants. Validate security-sensitive combinations both
+at the model boundary and in the API or form accepting them. Keep help text
+public, vendor-neutral, and free of deployment-specific assumptions.
 
-This directory defines the plugin's persisted data model.
+Never store plaintext credentials. Use the established encrypted-field helpers,
+mark encrypted fields before writes, and preserve recovery-state behavior.
+References to records outside this plugin must be opaque identifiers unless the
+target is a declared public dependency with a stable Django model contract.
 
 Required OpenBao secret resolvers remain fail-loud. SSH reuse readiness catches
 expected `ValidationError` and `EncryptionError` and reports false; model clean
@@ -247,10 +243,14 @@ credential selector to avoid resolving an absent, unselected authentication meth
   `cloud_network_lock_enabled`, `cloud_customer_prefix_id`,
   `cloud_customer_bridge`, `cloud_customer_vlan_tag`, and
   `cloud_customer_gateway`. They are populated by the
-  `ensure_cloud_customer_network` management command so proxbox-api and
-  nms-backend discover the designated customer network from NetBox instead of
-  hardcoded estate constants.
+  `ensure_cloud_customer_network` management command so proxbox-api and other
+  external automation discover the designated customer network from NetBox
+  instead of hardcoded estate constants.
 
 ## Links
 
 - Parent: [`../CLAUDE.md`](../CLAUDE.md)
+
+Do not rewrite released schema history. Add migrations for field renames,
+constraints, indexes, and retirement. Migration tests must cover upgrades as
+well as fresh database construction.

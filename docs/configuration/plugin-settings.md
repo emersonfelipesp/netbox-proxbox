@@ -197,7 +197,7 @@ See [Tenant Mapping operations](../operations/tenant-mapping.md) for runbook-lev
 
 ## Cloud-customer network
 
-These fields designate the NetBox IPAM objects that proxbox-api and nms-backend
+These fields designate the NetBox IPAM objects that proxbox-api and other API consumers
 use to discover the customer-facing cloud network. Prefix, VLAN, and gateway
 values are operator-provided; they are not hardcoded as plugin defaults or seeded
 by data migration.

@@ -755,7 +755,7 @@ class ProxmoxEndpoint(EndpointBase):
         verbose_name=_("Allowed tenants"),
         help_text=_(
             "Tenants explicitly granted access to this endpoint. Leave empty for "
-            "default visibility; NMS Cloud callers with any explicit endpoint grant "
+            "default visibility; API callers with any explicit endpoint grant "
             "see only their granted endpoints."
         ),
     )
@@ -1005,7 +1005,7 @@ class ProxmoxEndpoint(EndpointBase):
         """Return whether this endpoint can run systemctl service monitoring.
 
         Service monitoring dispatches an ``RPCExecution`` on every scheduler
-        tick, and the nms-backend RPC dispatch gate fails closed on RPC-disabled
+        tick, and the RPC dispatch gate fails closed on RPC-disabled
         endpoints (403 ``RPC_ENDPOINT_DISABLED``). An endpoint whose effective
         netbox-rpc state is disabled can therefore never succeed, so it is not
         eligible — this keeps ``clean()`` from accepting an enable that would
@@ -1235,7 +1235,7 @@ class ProxmoxEndpoint(EndpointBase):
         netbox-rpc is an *optional* companion of netbox-proxbox: it is imported
         function-locally and guarded, so this returns ``False`` when netbox-rpc
         is not installed. This module never imports netbox-rpc at load time and
-        must never depend on the NMS stack.
+        must never depend on an external control plane.
         """
         try:
             from netbox_rpc.models import RpcPluginSettings

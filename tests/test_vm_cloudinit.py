@@ -166,7 +166,7 @@ class ProxmoxVMCloudInitAPITest(TestCase):
                     "ip_cidr": "168.0.98.10/25",
                     "ssh_pwauth": True,
                     "enable_agent": True,
-                    "nms_credential_id": 901,
+                    "credential_reference_id": 901,
                     "sshkeys_intent": "ssh-ed25519 AAAAC3Intent user@host\n",
                 }
             ),
@@ -180,7 +180,7 @@ class ProxmoxVMCloudInitAPITest(TestCase):
         self.assertNotIn("sshkeys_intent", body)
         self.assertTrue(body["has_sshkeys"])
         self.assertTrue(body["is_intent"])
-        self.assertEqual(body["nms_credential_id"], 901)
+        self.assertEqual(body["credential_reference_id"], 901)
 
         row = ProxmoxVMCloudInit.objects.get(virtual_machine=self.vm)
         # Encrypted at rest and decryptable back to the original bundle.
@@ -190,7 +190,7 @@ class ProxmoxVMCloudInitAPITest(TestCase):
         self.assertTrue(row.has_sshkeys)
         self.assertEqual(row.hostname, "tenant-vm")
         self.assertEqual(row.vlan_tag, 111)
-        self.assertEqual(row.nms_credential_id, 901)
+        self.assertEqual(row.credential_reference_id, 901)
         # The plaintext reflection column stays owned by proxbox-api sync.
         self.assertEqual(row.sshkeys, "")
 
