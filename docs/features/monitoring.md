@@ -39,7 +39,7 @@ endpoint, and the endpoint is eligible only when all of these are true:
   `rpc_enabled` override when set, otherwise the global netbox-rpc opt-in
 
 The last condition matters because each collection tick dispatches a netbox-rpc
-`RPCExecution`, and the nms-backend RPC dispatch gate fails closed on an
+`RPCExecution`, and the RPC dispatch gate fails closed on an
 RPC-disabled endpoint (403 `RPC_ENDPOINT_DISABLED`). Without this gate an
 operator could enable monitoring on an RPC-disabled endpoint and accumulate
 `failed`/`last_error` state every tick with no upfront signal; the strict
@@ -98,7 +98,7 @@ The trust boundary is deliberate:
 - Reconciled mode returns the available source with `partial=true` if one source
   fails. Exact duplicates collapse, and InfluxDB wins conflicting identities.
 
-`netbox-monitoring`, `netbox-nms`, and `netbox-rpc` are not runtime
+Other monitoring and credential plugins, including `netbox-rpc`, are not runtime
 dependencies of this integration. They can consume or complement the metrics
 surface, but the InfluxDB request path belongs to netbox-proxbox and
 proxbox-api. The full component contract is in

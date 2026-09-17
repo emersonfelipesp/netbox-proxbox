@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
+import uuid
 from typing import Any
 
 import requests
@@ -38,38 +39,71 @@ except Exception:  # pragma: no cover - import-safe for lightweight test stubs
 
 # Module-level throttle for the keepalive NetBox endpoint push.
 # Prevents spamming the backend on every dashboard keepalive poll.
-_last_netbox_endpoint_push: float = 0.0
+_last_netbox_endpoint_push: dict[int, float] = {}
 _NETBOX_PUSH_THROTTLE_SECONDS: float = 300.0  # 5 minutes
 
 # Per-endpoint throttle for the keepalive Proxmox mode detection.
 _last_proxmox_mode_check: dict[int, float] = {}
 _PROXMOX_MODE_CHECK_THROTTLE_SECONDS: float = 300.0  # 5 minutes
 _PROXMOX_MODE_CHECK_CACHE_PREFIX = "netbox_proxbox:keepalive:proxmox_mode_check"
+_NETBOX_PUSH_CACHE_PREFIX = "netbox_proxbox:keepalive:netbox_endpoint_push"
 
 
 def _proxmox_mode_check_cache_key(pk: int) -> str:
     return f"{_PROXMOX_MODE_CHECK_CACHE_PREFIX}:{pk}"
 
 
+def _cache_throttle_allows(cache_key: str, throttle_seconds: float) -> str | None:
+    """Claim ``cache_key`` for ``throttle_seconds`` across workers.
+
+    Uses the cache backend's atomic ``add`` so concurrent workers racing on the
+    same key cannot all win the slot. Returns the ownership token stored in
+    the cache when the caller won, ``""`` when another worker holds the slot,
+    and ``None`` when no shared cache is available so the caller falls back to
+    its process-local throttle.
+    """
+    if _django_cache is None:
+        return None
+    token = uuid.uuid4().hex
+    try:
+        if _django_cache.add(cache_key, token, timeout=int(throttle_seconds)):
+            return token
+        return ""
+    except Exception:  # noqa: BLE001
+        logger.debug(
+            "Keepalive throttle: cache unavailable for %s; "
+            "falling back to process-local throttle",
+            cache_key,
+            exc_info=True,
+        )
+        return None
+
+
+def _cache_throttle_release(cache_key: str, token: str) -> None:
+    """Release ``cache_key`` only while it still carries ``token``.
+
+    A worker whose lease expired must not delete the fresh claim another
+    worker has since taken, so the release is a compare-and-delete on the
+    ownership token rather than an unconditional delete.
+    """
+    if _django_cache is None or not token:
+        return
+    try:
+        if _django_cache.get(cache_key) == token:
+            _django_cache.delete(cache_key)
+    except Exception:  # noqa: BLE001
+        logger.debug(
+            "Keepalive throttle: could not release %s", cache_key, exc_info=True
+        )
+
+
 def _should_run_proxmox_mode_check(pk: int) -> bool:
     """Throttle Proxmox mode detection across workers when cache is available."""
-    if _django_cache is not None:
-        try:
-            cache_key = _proxmox_mode_check_cache_key(pk)
-            if _django_cache.get(cache_key):
-                return False
-            _django_cache.set(
-                cache_key,
-                True,
-                timeout=int(_PROXMOX_MODE_CHECK_THROTTLE_SECONDS),
-            )
-            return True
-        except Exception:  # noqa: BLE001
-            logger.debug(
-                "Keepalive mode update: cache throttle unavailable; "
-                "falling back to process-local throttle",
-                exc_info=True,
-            )
+    shared = _cache_throttle_allows(
+        _proxmox_mode_check_cache_key(pk), _PROXMOX_MODE_CHECK_THROTTLE_SECONDS
+    )
+    if shared is not None:
+        return bool(shared)
 
     now = time.monotonic()
     if (
@@ -79,6 +113,46 @@ def _should_run_proxmox_mode_check(pk: int) -> bool:
         return False
     _last_proxmox_mode_check[pk] = now
     return True
+
+
+def _netbox_push_cache_key(endpoint_id: int) -> str:
+    return f"{_NETBOX_PUSH_CACHE_PREFIX}:{endpoint_id}"
+
+
+_LOCAL_PUSH_TOKEN = "local"
+
+
+def _should_push_netbox_endpoints(endpoint_id: int) -> str | None:
+    """Claim the keepalive NetBox endpoint push slot for one backend.
+
+    Returns the lease token when this call should perform the push (a cache
+    ownership token, or ``"local"`` for the process-local fallback) and
+    ``None`` when the slot is held. The key is scoped by the FastAPI endpoint
+    so every configured backend receives its own push instead of the first
+    backend suppressing the rest.
+    """
+    shared = _cache_throttle_allows(
+        _netbox_push_cache_key(endpoint_id), _NETBOX_PUSH_THROTTLE_SECONDS
+    )
+    if shared is not None:
+        return shared or None
+
+    now = time.monotonic()
+    if (
+        now - _last_netbox_endpoint_push.get(endpoint_id, float("-inf"))
+        < _NETBOX_PUSH_THROTTLE_SECONDS
+    ):
+        return None
+    _last_netbox_endpoint_push[endpoint_id] = now
+    return _LOCAL_PUSH_TOKEN
+
+
+def _release_netbox_push_slot(endpoint_id: int, token: str) -> None:
+    """Give back a claimed push slot so a failed push is retried on the next poll."""
+    if token == _LOCAL_PUSH_TOKEN:
+        _last_netbox_endpoint_push.pop(endpoint_id, None)
+        return
+    _cache_throttle_release(_netbox_push_cache_key(endpoint_id), token)
 
 
 def _maybe_push_netbox_endpoints_to_backend(
@@ -93,8 +167,6 @@ def _maybe_push_netbox_endpoints_to_backend(
     request is allowed. Push failures after successful verification remain
     best-effort and return ``True`` so they aren't misreported as auth failures.
     """
-    global _last_netbox_endpoint_push
-
     try:
         from netbox_proxbox.services.backend_auth import (  # noqa: PLC0415
             ensure_backend_key_registered,
@@ -118,10 +190,11 @@ def _maybe_push_netbox_endpoints_to_backend(
         return False
     logger.info("Keepalive push: API key verified — %s", key_msg)
 
-    now = time.monotonic()
-    if now - _last_netbox_endpoint_push < _NETBOX_PUSH_THROTTLE_SECONDS:
+    lease = _should_push_netbox_endpoints(endpoint_id)
+    if lease is None:
         return True
 
+    push_failed = False
     try:
         from netbox_proxbox.models import NetBoxEndpoint as _NB  # noqa: PLC0415
         from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
@@ -133,7 +206,6 @@ def _maybe_push_netbox_endpoints_to_backend(
             logger.debug(
                 "Keepalive push: no enabled NetBoxEndpoint configured, skipping"
             )
-            _last_netbox_endpoint_push = now
             return True
 
         for nb_ep in endpoints:
@@ -149,18 +221,20 @@ def _maybe_push_netbox_endpoints_to_backend(
                     getattr(nb_ep, "name", nb_ep.pk),
                 )
             else:
+                push_failed = True
                 logger.warning(
                     "Keepalive push: could not sync NetBox endpoint '%s' to proxbox-api: %s",
                     getattr(nb_ep, "name", nb_ep.pk),
                     err,
                 )
-
-        _last_netbox_endpoint_push = now
     except Exception:  # noqa: BLE001
+        push_failed = True
         logger.warning(
             "Keepalive push: failed to push NetBox endpoints to proxbox-api backend",
             exc_info=True,
         )
+    if push_failed:
+        _release_netbox_push_slot(endpoint_id, lease)
     return True
 
 

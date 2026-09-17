@@ -1191,3 +1191,26 @@ def test_settings_tabs_honor_url_hash_for_deep_linking():
     assert "has-errors" in tpl
     assert "DOMContentLoaded" in tpl
     assert ".click()" in tpl
+
+
+def test_endpoint_status_script_polls_sequentially_and_pauses_when_hidden():
+    """Keepalive polling must never stack rounds or poll a hidden tab.
+
+    Every keepalive request can land on a freshly spawned WSGI worker thread
+    with its own persistent database connection, so the poller is bounded:
+    one self-rescheduling loop, badges refreshed one at a time, and no timer
+    while the page is hidden.
+    """
+    contents = _read("netbox_proxbox/static/netbox_proxbox/js/endpoint-status.js")
+
+    assert "setInterval(" not in contents
+    assert "Promise.all" not in contents
+    assert "window.setTimeout(runRefreshCycle, REFRESH_INTERVAL_MS)" in contents
+    assert (
+        'document.addEventListener("visibilitychange", handleVisibilityChange)'
+        in contents
+    )
+    assert "document.hidden" in contents
+    assert "for (const element of badges)" in contents
+    assert "await refreshBadge(element)" in contents
+    assert "refreshInFlight" in contents

@@ -1,6 +1,6 @@
 # Firecracker API
 
-Firecracker inventory is exposed under the NetBox plugin API so NMS Cloud can discover available runtime capacity and show provisioned micro-VMs beside existing QEMU and LXC instances.
+Firecracker inventory is exposed under the NetBox plugin API so API consumers can discover available runtime capacity and show provisioned micro-VMs beside existing QEMU and LXC instances.
 
 For common authentication, pagination, and nested serializer behavior, see [API Overview](index.md).
 
@@ -14,7 +14,7 @@ All paths are relative to `/api/plugins/proxbox/`.
 | Hosts | `firecracker-hosts/` | Host-agent VM records with agent URL, capacity, status, and KVM/network capability fields |
 | Image templates | `firecracker-image-templates/` | Kernel/rootfs image bundles available to Cloud users |
 | Micro-VMs | `firecracker-microvms/` | Provisioned Firecracker instances tracked in NetBox |
-| Cloud resource list | `resources/firecracker-microvms/` | NMS-compatible list shape used by `/cloud/instances` |
+| Cloud resource list | `resources/firecracker-microvms/` | Stable list shape for cloud API consumers |
 
 The CRUD viewsets support the normal NetBox REST verbs:
 
@@ -31,7 +31,7 @@ Use the same verb pattern for `firecracker-hosts`, `firecracker-image-templates`
 
 ## Cloud List Shape
 
-`GET /api/plugins/proxbox/resources/firecracker-microvms/` returns micro-VMs in the shape consumed by `nms-backend`:
+`GET /api/plugins/proxbox/resources/firecracker-microvms/` returns micro-VMs in a stable consumer-facing shape:
 
 ```json
 {

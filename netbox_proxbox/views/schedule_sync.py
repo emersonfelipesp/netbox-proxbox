@@ -178,7 +178,7 @@ def handle_endpoint_sync_routine_post(
     response.
 
     Scheduling is entirely NetBox-native (``core.Job`` + ``ProxboxSyncJob`` +
-    django_rq); there is no dependency on the NMS stack.
+    django_rq); there is no dependency on an external control plane.
 
     Returns ``(outcome, form)`` where ``outcome`` is one of:
 

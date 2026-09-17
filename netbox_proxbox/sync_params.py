@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from netbox_proxbox.choices import SyncTypeChoices
-from netbox_proxbox.constants import OVERWRITE_FIELDS
+from netbox_proxbox.constants import OVERWRITE_DEFAULTS, OVERWRITE_FIELDS
 
 try:
     from netbox_proxbox.constants import SYNC_MODE_FIELDS
@@ -195,9 +195,12 @@ def _global_overwrites() -> dict[str, bool]:
         from netbox_proxbox.models import ProxboxPluginSettings
 
         settings = ProxboxPluginSettings.get_solo()
-        return {name: bool(getattr(settings, name)) for name in OVERWRITE_FIELDS}
+        return {
+            name: bool(getattr(settings, name, OVERWRITE_DEFAULTS[name]))
+            for name in OVERWRITE_FIELDS
+        }
     except (ImportError, RuntimeError, AttributeError):
-        return {name: True for name in OVERWRITE_FIELDS}
+        return dict(OVERWRITE_DEFAULTS)
 
 
 def _global_sync_modes() -> dict[str, str]:

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import logging
+import time
 
+from django.db import connection
 from django.http import HttpRequest, JsonResponse
 from django.shortcuts import get_object_or_404
 from django.views import View
@@ -42,48 +44,157 @@ class GetServiceStatusView(TokenConditionalLoginRequiredMixin, View):
         return get_service_status_impl(request, service, pk)
 
 
+def release_request_db_connection() -> None:
+    """Retire the current thread's persistent Django database connection.
+
+    Keepalive polls are the most frequent request the plugin generates, and
+    WSGI servers with on-demand worker threads (Granian in netbox-docker) hand
+    each poll to a thread that may be reaped 30 seconds later. Django keeps one
+    persistent connection per thread for ``CONN_MAX_AGE`` seconds, so a reaped
+    thread leaves an idle PostgreSQL connection behind until that age expires.
+
+    The connection is not closed here: closing inside an ``ATOMIC_REQUESTS``
+    block marks the transaction broken, and response middleware may still need
+    the database. Instead the connection's ``close_at`` deadline is moved to
+    now, so Django's own ``request_finished`` handler
+    (``close_old_connections``) closes it after the response is complete.
+    """
+    try:
+        if getattr(connection, "in_atomic_block", False):
+            logger.debug("Keepalive: inside atomic block; leaving connection open")
+            return
+        if hasattr(connection, "close_at"):
+            connection.close_at = time.monotonic()
+            return
+        connection.close()
+    except Exception:  # noqa: BLE001
+        logger.debug("Keepalive: could not retire database connection", exc_info=True)
+
+
 def get_service_status_impl(
+    request: HttpRequest, service: str, pk: int
+) -> JsonResponse:
+    """Build JSON status for a service and release the DB connection afterwards."""
+    try:
+        return _build_service_status_response(request, service, pk)
+    finally:
+        release_request_db_connection()
+
+
+def _fastapi_status_response(
+    request: HttpRequest, pk: int, service_status: ServiceStatus
+) -> JsonResponse:
+    """Build the keepalive payload for a FastAPI endpoint."""
+    fastapi_endpoint = get_object_or_404(
+        FastAPIEndpoint.objects.restrict(request.user, "view"),
+        pk=pk,
+    )
+    disabled_detail = disabled_endpoint_detail(
+        fastapi_endpoint,
+        kind="FastAPI endpoint",
+        action="skipping status check",
+    )
+    if disabled_detail:
+        return JsonResponse({"status": "error", "detail": disabled_detail})
+
+    fastapi_response = service_status.fastapi_status(pk)
+    status = (
+        "success"
+        if fastapi_response.connected and fastapi_response.api_access != "error"
+        else "error"
+    )
+    payload = {
+        "status": status,
+        "backend_version": fastapi_response.backend_version,
+        "target_address": fastapi_response.target_address,
+        "target_port": fastapi_response.target_port,
+        "authentication": fastapi_response.authentication,
+        "api_access": fastapi_response.api_access,
+    }
+    if fastapi_response.warnings:
+        payload["warnings"] = fastapi_response.warnings
+        if not fastapi_response.detail:
+            payload["detail"] = " ".join(fastapi_response.warnings)
+    if fastapi_response.detail:
+        payload["detail"] = fastapi_response.detail
+    return JsonResponse(payload)
+
+
+def _resolve_dependent_target(
+    request: HttpRequest, service: str, pk: int
+) -> tuple[JsonResponse | None, object | None]:
+    """Resolve the target object for netbox/proxmox/pbs checks.
+
+    Returns an early ``JsonResponse`` when the target is missing or disabled,
+    otherwise ``(None, pbs_server)`` where ``pbs_server`` is set only for PBS.
+    """
+    if service == "netbox":
+        netbox_endpoint = get_object_or_404(
+            NetBoxEndpoint.objects.restrict(request.user, "view"),
+            pk=pk,
+        )
+        disabled_detail = disabled_endpoint_detail(
+            netbox_endpoint, kind="NetBox endpoint", action="skipping status check"
+        )
+        if disabled_detail:
+            return JsonResponse({"status": "error", "detail": disabled_detail}), None
+        return None, None
+
+    if service == "proxmox":
+        proxmox_endpoint = get_object_or_404(
+            ProxmoxEndpoint.objects.restrict(request.user, "view"),
+            pk=pk,
+        )
+        disabled_detail = disabled_endpoint_detail(
+            proxmox_endpoint,
+            kind="Proxmox endpoint",
+            action="skipping status check",
+        )
+        if disabled_detail:
+            return (
+                JsonResponse(
+                    {
+                        "status": "disabled",
+                        "detail": disabled_detail,
+                        "target_address": getattr(proxmox_endpoint, "domain", None)
+                        or get_ip_address_host(
+                            getattr(proxmox_endpoint, "ip_address", None)
+                        ),
+                        "target_port": getattr(proxmox_endpoint, "port", None) or 8006,
+                        "authentication": "disabled",
+                        "api_access": "disabled",
+                    }
+                ),
+                None,
+            )
+        return None, None
+
+    pbs_server = _visible_pbs_server(request, pk)
+    if pbs_server is None:
+        return (
+            JsonResponse(
+                {"status": "error", "detail": "netbox-pbs is not installed."},
+                status=404,
+            ),
+            None,
+        )
+    disabled_detail = disabled_endpoint_detail(
+        pbs_server, kind="PBS endpoint", action="skipping status check"
+    )
+    if disabled_detail:
+        return JsonResponse({"status": "error", "detail": disabled_detail}), None
+    return None, pbs_server
+
+
+def _build_service_status_response(
     request: HttpRequest, service: str, pk: int
 ) -> JsonResponse:
     """Build JSON status for fastapi, netbox, proxmox, or pbs service checks."""
     status = "unknown"
     service_status = ServiceStatus()
-    pbs_server = None
 
     if service == "fastapi":
-        fastapi_endpoint = get_object_or_404(
-            FastAPIEndpoint.objects.restrict(request.user, "view"),
-            pk=pk,
-        )
-        disabled_detail = disabled_endpoint_detail(
-            fastapi_endpoint,
-            kind="FastAPI endpoint",
-            action="skipping status check",
-        )
-        if disabled_detail:
-            return JsonResponse({"status": "error", "detail": disabled_detail})
-
-        fastapi_response = service_status.fastapi_status(pk)
-        status = (
-            "success"
-            if fastapi_response.connected and fastapi_response.api_access != "error"
-            else "error"
-        )
-        payload = {
-            "status": status,
-            "backend_version": fastapi_response.backend_version,
-            "target_address": fastapi_response.target_address,
-            "target_port": fastapi_response.target_port,
-            "authentication": fastapi_response.authentication,
-            "api_access": fastapi_response.api_access,
-        }
-        if fastapi_response.warnings:
-            payload["warnings"] = fastapi_response.warnings
-            if not fastapi_response.detail:
-                payload["detail"] = " ".join(fastapi_response.warnings)
-        if fastapi_response.detail:
-            payload["detail"] = fastapi_response.detail
-        return JsonResponse(payload)
+        return _fastapi_status_response(request, pk, service_status)
 
     if service not in DEPENDENT_SERVICES:
         return JsonResponse(
@@ -97,55 +208,9 @@ def get_service_status_impl(
             status=400,
         )
 
-    if service == "netbox":
-        netbox_endpoint = get_object_or_404(
-            NetBoxEndpoint.objects.restrict(request.user, "view"),
-            pk=pk,
-        )
-        disabled_detail = disabled_endpoint_detail(
-            netbox_endpoint, kind="NetBox endpoint", action="skipping status check"
-        )
-        if disabled_detail:
-            return JsonResponse({"status": "error", "detail": disabled_detail})
-    elif service == "proxmox":
-        proxmox_endpoint = get_object_or_404(
-            ProxmoxEndpoint.objects.restrict(request.user, "view"),
-            pk=pk,
-        )
-        disabled_detail = disabled_endpoint_detail(
-            proxmox_endpoint,
-            kind="Proxmox endpoint",
-            action="skipping status check",
-        )
-        if disabled_detail:
-            return JsonResponse(
-                {
-                    "status": "disabled",
-                    "detail": disabled_detail,
-                    "target_address": getattr(proxmox_endpoint, "domain", None)
-                    or get_ip_address_host(
-                        getattr(proxmox_endpoint, "ip_address", None)
-                    ),
-                    "target_port": getattr(proxmox_endpoint, "port", None) or 8006,
-                    "authentication": "disabled",
-                    "api_access": "disabled",
-                }
-            )
-    elif service == "pbs":
-        pbs_server = _visible_pbs_server(request, pk)
-        if pbs_server is None:
-            return JsonResponse(
-                {
-                    "status": "error",
-                    "detail": "netbox-pbs is not installed.",
-                },
-                status=404,
-            )
-        disabled_detail = disabled_endpoint_detail(
-            pbs_server, kind="PBS endpoint", action="skipping status check"
-        )
-        if disabled_detail:
-            return JsonResponse({"status": "error", "detail": disabled_detail})
+    early_response, pbs_server = _resolve_dependent_target(request, service, pk)
+    if early_response is not None:
+        return early_response
 
     fastapi_object = (
         FastAPIEndpoint.objects.restrict(request.user, "view")

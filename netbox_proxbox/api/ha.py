@@ -4,7 +4,7 @@
 (`netbox_proxbox/views/vm_ha.py`) render Django HTML pages by calling
 proxbox-api 0.0.12+ at `/proxmox/cluster/ha/summary` and
 `/proxmox/cluster/ha/resources/by-vm/{vmid}`. The frontend (and any other
-JSON consumer routed through the existing nms-backend
+JSON consumer routed through an external API service
 `/netbox/netbox-proxbox/plugin/{path}` proxy) needs the same data without
 parsing HTML, so we expose the two upstream calls as plain DRF
 `APIView`s under `/api/plugins/proxbox/ha/`.

@@ -145,7 +145,7 @@ def test_row_groups_cover_all_overwrite_fields_in_order():
         field for _label, fields in mod.OVERWRITE_FIELD_GROUPS for field in fields
     )
     assert flat == mod.OVERWRITE_FIELDS
-    assert len(flat) == 25
+    assert len(flat) == 26
 
 
 # ── Templates ────────────────────────────────────────────────────────────────

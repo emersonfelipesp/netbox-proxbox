@@ -74,7 +74,7 @@ class Migration(migrations.Migration):
                 default="",
                 help_text=(
                     "Gateway address for the cloud customer network. Stored as "
-                    "operator configuration so proxbox-api and nms-backend can "
+                    "operator configuration so proxbox-api and other clients can "
                     "discover it without hardcoded estate values."
                 ),
                 max_length=64,

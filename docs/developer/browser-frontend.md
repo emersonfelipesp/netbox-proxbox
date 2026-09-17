@@ -98,7 +98,15 @@ The plugin home page (`home/index.html`) loads with skeleton card elements and t
 2. The Django view returns a JSON payload with cluster metadata, node counts, VM counts, and any warnings
 3. `home.js` updates the DOM card with the received data
 
-The **keepalive badges** for each endpoint (Proxmox, NetBox, FastAPI) are refreshed by `endpoint-status.js` on a configurable interval. The keepalive JSON views are protected by the normal login requirement and use restricted querysets.
+The **keepalive badges** for each endpoint (Proxmox, NetBox, FastAPI) are refreshed by `endpoint-status.js`. The keepalive JSON views are protected by the normal login requirement and use restricted querysets.
+
+The poller is deliberately bounded, because every keepalive request can land on a freshly spawned WSGI worker thread (Granian in netbox-docker spawns blocking threads on demand and reaps them after 30 s idle) and Django keeps one persistent database connection per thread for `CONN_MAX_AGE` seconds. An unbounded poller therefore turns into a PostgreSQL connection leak on any long-lived endpoint page:
+
+- One self-rescheduling loop per page (a `setTimeout` armed only after the previous round settles), never a fixed `setInterval`, so a slow backend cannot stack overlapping rounds.
+- Badges are refreshed sequentially, one request at a time, instead of fanning out one request per badge.
+- Polling pauses while the tab is hidden (`document.hidden` via the Page Visibility API) and resumes with one immediate refresh when it becomes visible again.
+- The keepalive view (`views/keepalive_status.py`) retires the request thread's Django database connection once the JSON payload is built: it moves the connection's `close_at` deadline to now so Django's own `request_finished` handler (`close_old_connections`) closes it after response middleware has run. It never closes inside an atomic block, so `ATOMIC_REQUESTS` deployments keep their transaction intact. A reaped worker thread therefore cannot leave an idle connection behind.
+- The NetBox endpoint push and the Proxmox mode detection that piggyback on keepalive are throttled through the shared Django cache with an atomic `cache.add` claim (5 minutes), keyed per FastAPI endpoint or per Proxmox endpoint so every configured backend still gets its own push, and fall back to a process-local throttle only when no cache is available.
 
 ---
 

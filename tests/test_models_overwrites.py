@@ -97,6 +97,27 @@ def test_effective_overwrites_endpoint_true_overrides_global_false(overwrite_fie
         assert resolved[name] is False
 
 
+def test_vm_platform_overwrite_inherits_and_allows_endpoint_override(overwrite_fields):
+    settings = SimpleNamespace(**{name: False for name in overwrite_fields})
+    inherited = SimpleNamespace(**{name: None for name in overwrite_fields})
+    overrides = {name: None for name in overwrite_fields}
+    overrides["overwrite_vm_platform"] = True
+    opted_in = SimpleNamespace(**overrides)
+
+    assert (
+        _resolve_overwrites_like_model(inherited, settings, overwrite_fields)[
+            "overwrite_vm_platform"
+        ]
+        is False
+    )
+    assert (
+        _resolve_overwrites_like_model(opted_in, settings, overwrite_fields)[
+            "overwrite_vm_platform"
+        ]
+        is True
+    )
+
+
 def test_effective_sync_mode_uses_disabled_default_for_sdn_family():
     source = (
         REPO_ROOT / "netbox_proxbox" / "models" / "proxmox_endpoint.py"
@@ -153,6 +174,7 @@ def sync_params_module(monkeypatch):
 
     constants_mod = types.ModuleType("netbox_proxbox.constants")
     constants_mod.OVERWRITE_FIELDS = fields
+    constants_mod.OVERWRITE_DEFAULTS = constants.OVERWRITE_DEFAULTS
     monkeypatch.setitem(sys.modules, "netbox_proxbox.constants", constants_mod)
 
     choices_mod = types.ModuleType("netbox_proxbox.choices")
@@ -261,14 +283,17 @@ def test_effective_overwrites_uses_endpoint_when_loaded(
         assert result[name] is True
 
 
-def test_effective_overwrites_falls_back_when_get_solo_raises(
-    sync_params_module, overwrite_fields
+@pytest.mark.parametrize("error_type", [ImportError, RuntimeError, AttributeError])
+def test_effective_overwrites_falls_back_to_safe_defaults_when_settings_fail(
+    sync_params_module, overwrite_fields, error_type
 ):
-    sync_params_module._stubs["raise_on_get_solo"] = RuntimeError("no settings")
+    sync_params_module._stubs["raise_on_get_solo"] = error_type("no settings")
 
     result = sync_params_module.effective_overwrites_for_endpoint(None)
 
-    assert result == {name: True for name in overwrite_fields}
+    assert result == {
+        name: name != "overwrite_vm_platform" for name in overwrite_fields
+    }
 
 
 def test_effective_overwrites_keys_match_canonical_field_set(
@@ -276,4 +301,4 @@ def test_effective_overwrites_keys_match_canonical_field_set(
 ):
     result = sync_params_module.effective_overwrites_for_endpoint(None)
     assert tuple(result.keys()) == tuple(overwrite_fields)
-    assert len(result) == 25
+    assert len(result) == 26

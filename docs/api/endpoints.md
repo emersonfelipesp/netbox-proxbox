@@ -115,7 +115,7 @@ curl -H "Authorization: Token <token>" \
 | `token_value` | string (write-only) | Proxmox API token secret |
 | `verify_ssl` | boolean | Whether to verify the Proxmox TLS certificate (default `false`) |
 | `enabled` | boolean | Local inventory toggle. Disabled endpoints remain visible but are excluded from operational reads, registration, keepalive, status, and sync paths. |
-| `allowed_tenants` | nested Tenant list | Tenant allow-list for NMS Cloud endpoint visibility. Empty means default/global visibility. |
+| `allowed_tenants` | nested Tenant list | Tenant allow-list for endpoint visibility. Empty means default/global visibility. |
 | `allow_writes` | boolean | Gate for the operational verb routes on the paired `proxbox-api` (start/stop/snapshot/migrate). Defaults to `false`. When `false`, `proxbox-api` returns `403 {"reason": "writes_disabled_for_endpoint"}` for verb POSTs against this endpoint even with a valid API key and `X-Proxbox-Actor` header. Flip to `true` per-endpoint to opt that Proxmox cluster into write access. |
 | `allow_packer_template_builds` | boolean | Separate, default-off capability for netbox-packer Cloud-Init template-image creation. It is effective only when the endpoint is enabled and `allow_writes` is also true, authorizes no other Proxmox mutation, and is propagated to proxbox-api so the backend can recheck it at the final write boundary. |
 | `packer_template_builds_backend_authorized` | boolean (read-only) | Last effective Packer template-build grant successfully confirmed on proxbox-api. Endpoint deletion remains blocked while this is true, including after a local revocation whose backend update failed. |
@@ -167,10 +167,10 @@ curl -H "Authorization: Token <token>" \
 
 - `allowed_tenants=[]` means the endpoint remains in the default/global pool.
 - Supplying one or more tenants makes the endpoint visible only to those
-  tenants in tenant-scoped NMS Cloud flows.
+  tenants in tenant-scoped API flows.
 - `PATCH {"allowed_tenants": []}` clears explicit grants and returns the
   endpoint to default/global visibility.
-- When `nms-backend` resolves `X-Cloud-Tenant`, it keeps global/default
+- When an API consumer resolves `X-Cloud-Tenant`, it keeps global/default
   endpoints visible only if the tenant has no explicit endpoint grants. As soon
   as one explicit match exists, the backend hides the global pool and returns
   only explicit matches.

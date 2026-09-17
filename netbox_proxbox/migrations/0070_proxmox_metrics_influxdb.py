@@ -88,12 +88,12 @@ class Migration(migrations.Migration):
                 (
                     "query_token_secret_ref",
                     models.CharField(
-                        help_text="netbox-nms ObservabilitySecret reference, not plaintext.",
+                        help_text="External secret-store reference, not plaintext.",
                         max_length=80,
                         validators=[
                             django.core.validators.RegexValidator(
                                 regex=(
-                                    "^nms-secret:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+                                    "^[a-z]{3}-secret:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
                                     "[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
                                     "[0-9a-fA-F]{12}$"
                                 )
@@ -111,7 +111,7 @@ class Migration(migrations.Migration):
                         validators=[
                             django.core.validators.RegexValidator(
                                 regex=(
-                                    "^nms-secret:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
+                                    "^[a-z]{3}-secret:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-"
                                     "[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
                                     "[0-9a-fA-F]{12}$"
                                 )

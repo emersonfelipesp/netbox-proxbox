@@ -10,6 +10,7 @@ from typing import Literal
 import requests
 from pydantic import ValidationError
 
+from netbox_proxbox.backend_errors import combine_backend_message_and_detail
 from netbox_proxbox.schemas.backend_proxy import (
     BackendRequestContext,
     SseCompletePayload,
@@ -852,10 +853,16 @@ def _try_sync_stream_url(
 
 
 def _json_error_detail(payload: object) -> str | None:
-    """The human-readable detail of a JSON error body of any shape."""
+    """The human-readable detail of a JSON error body of any shape.
+
+    A dict body is proxbox-api's own ``{"message", "detail"}`` shape: both
+    fields are reported (``"<message>: <detail>"``) so neither an empty
+    ``detail`` nor a populated one hides the other half of the diagnosis.
+    """
     if isinstance(payload, dict):
-        value = payload.get("detail") or payload.get("message")
-        return str(value) if value else None
+        # Structured detail is kept here: this text is redacted by the caller and
+        # never reaches the retry classifier's cause scan.
+        return combine_backend_message_and_detail(payload, render_structured=True)
     if isinstance(payload, list) and payload:
         first = payload[0]
         if isinstance(first, dict):

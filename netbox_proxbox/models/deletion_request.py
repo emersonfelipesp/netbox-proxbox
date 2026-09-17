@@ -31,7 +31,7 @@ class DeletionRequest(NetBoxModel):
         FAILED = "failed", _("Failed")
 
     # Override inherited ``tags`` to avoid a ``Tag.deletionrequest_set`` reverse
-    # accessor clash with ``netbox_nms.DeletionRequest`` (Django fields.E304).
+    # accessor clash with deletion models supplied by optional companion plugins.
     tags = TaggableManager(
         through="extras.TaggedItem",
         ordering=("weight", "name"),

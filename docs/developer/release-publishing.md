@@ -84,7 +84,7 @@ sequenceDiagram
   validation.
 - Official releases (`vX.Y.Z`, `vX.Y.Z.postN`) are triggered **only** by GitHub
   release creation (`release: published`) cut from the `develop` branch after
-  the final Gitea package and the production deployment gates. Plain non-rc tag pushes do
+  the final Gitea package provenance gates. Plain non-rc tag pushes do
   **not** trigger public publishing. Manual workflow dispatch is TestPyPI-only
   and requires an RC version.
 - Package uploads intentionally omit `twine --skip-existing`; a consumed version
@@ -238,13 +238,10 @@ sequenceDiagram
 - GitHub never rebuilds release artifacts. It downloads that exact linked
   Gitea wheel/sdist, installs both artifact forms on Python 3.12 and 3.13, and
   uploads the same bytes to TestPyPI or PyPI.
-- A final package-first production workflow asks the root-owned fixed deploy
-  helper to emit a schema-2 receipt only after the exact versioned wheel import
-  and NetBox health checks succeed. Workflow code exports and publishes those
-  host-issued bytes; it cannot create a successful-production receipt. The
-  final GitHub release event must match the receipt's source SHA, version,
-  artifact hashes, manifest digest, observed runtime path, production
-  environment, and Gitea run ID.
+- Public release automation stops at repository-linked package verification and
+  exact-tag promotion. Deployment authorization, runtime rollout, health
+  evidence, and host-issued records belong to the deployment system and are not
+  implemented or published by this repository.
 - TestPyPI and PyPI candidate validation run the mocked suite with
   `-p no:django`; the separate real-NetBox matrix keeps pytest-django enabled.
 - Release E2E runs with `proxbox_api_runtime: both`. The Python backend and the
@@ -273,52 +270,17 @@ sequenceDiagram
 4. Publish and validate `proxbox-api` on TestPyPI first.
 5. Publish and validate `netbox-proxbox` on TestPyPI using that TestPyPI
    `proxbox-api` version.
-6. Publish each final package in Gitea, link/verify it, and deploy the exact pair
-   through the management backend using `latest_package` by default.
-
-   > **Dispatch through the management backend, not Gitea.** A production
-   > deploy must be started with
-   > `POST /git/deployments/{target_id}/dispatch-source`, which mints the
-   > signed authorization the deploy host requires and injects
-   > `deploy_request_id`/`deploy_request_sha256` into the workflow. Those input
-   > names are deliberately neutral: this repository is published publicly and
-   > must not name the internal stack, so do not reintroduce the old names by
-   > copying a workflow from elsewhere. Firing
-   > `deploy-production.yml` straight from Gitea produces a run with no
-   > authorization, and it fails closed before touching anything.
-   >
-   > The workflow reads the deploy source from the **claimed request**, not from
-   > the `deploy_source` input: for a canonical-main dispatch the backend sends
-   > no `deploy_source`, so trusting the input would silently fall back to its
-   > default.
-   >
-   > `latest_package` requires the generic
-   > `<package>-release-manifest/<version>` package that
-   > `release_artifacts.py fetch-gitea` verifies. `publish-gitea.yml` now
-   > produces it: the manifest is built from `dist/` before the upload, so its
-   > digests bind the exact published bytes, and it is uploaded only after the
-   > registry upload has been verified, so its presence is a reliable signal
-   > that a version is deployable.
-   >
-   > The package consumer reads identity only from the claimed signed request,
-   > fetches and verifies the exact repository-linked manifest and artifacts,
-   > compares their source, hashes, sizes, and package identity with that claim,
-   > and then passes the claim to the hardened host deployment helper. The host
-   > independently verifies the signature and package bytes before changing the
-   > runtime. The mutable workflow inputs cannot select different package bytes.
-   >
-   > Versions published before that producer landed have no manifest at all; a
-   > manifest cannot be back-filled for an already-published version in a way
-   > that proves provenance.
-7. After production integration and health checks pass, dispatch each
+6. Publish each final package in Gitea and verify its repository link, source
+   commit, manifest, filenames, sizes, and hashes. Versions published before the
+   manifest producer landed have no manifest; do not back-fill provenance for an
+   already-consumed version.
+7. After the separately administered deployment and health gates pass, dispatch each
    repository's `promote-final-tag.yml` from canonical Gitea `main`. The
    workflow checks out the immutable dispatch SHA, requires it to remain current
-   canonical `main`, and verifies the exact package and the host-issued
-   deployment receipt against the repository-pinned public key before pushing
-   only that tag to the authorized GitHub repository. Then create the
+   canonical `main`, and verifies the exact repository-linked package before
+   pushing only that tag to the authorized GitHub repository. Then create the
    proxbox-api and netbox-proxbox GitHub Releases with `--verify-tag`; those
-   final tags and protected Gitea deployment receipts authorize
-   PyPI/Docker Hub publication.
+   verified final tags authorize PyPI/Docker Hub publication.
 8. If any published validation fails, bump to the next `.postN` or `rcN`; never
    retry the same artifact version.
 

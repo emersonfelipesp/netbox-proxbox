@@ -4196,7 +4196,7 @@ def test_proxbox_sync_job_full_update_uses_single_endpoint_overrides(
     overwrite_fields = tuple(
         proxbox_sync_job_module.sync_stages.effective_overwrites_for_endpoint(None)
     )
-    assert len(overwrite_fields) == 25
+    assert len(overwrite_fields) == 26
     disabled_fields = {
         "overwrite_device_role",
         "overwrite_device_type",
@@ -4236,7 +4236,7 @@ def test_proxbox_sync_job_full_update_uses_single_endpoint_overrides(
     assert {query["proxmox_endpoint_ids"] for query in captured} == {"100"}
     for query in captured:
         overwrite_keys = [key for key in query if key.startswith("overwrite_")]
-        assert len(overwrite_keys) == 25
+        assert len(overwrite_keys) == 26
         assert set(overwrite_fields).issubset(query)
         for name in disabled_fields:
             assert query[name] == "false"
@@ -4259,7 +4259,7 @@ def test_proxbox_sync_job_loops_multiple_endpoint_scopes_with_distinct_overrides
     overwrite_fields = tuple(
         proxbox_sync_job_module.sync_stages.effective_overwrites_for_endpoint(None)
     )
-    assert len(overwrite_fields) == 25
+    assert len(overwrite_fields) == 26
 
     def effective_overwrites_for_endpoint(endpoint_id):
         disabled_fields = (
@@ -4297,7 +4297,7 @@ def test_proxbox_sync_job_loops_multiple_endpoint_scopes_with_distinct_overrides
     assert [query["proxmox_endpoint_ids"] for query in captured] == ["100", "200"]
     for query in captured:
         overwrite_keys = [key for key in query if key.startswith("overwrite_")]
-        assert len(overwrite_keys) == 25
+        assert len(overwrite_keys) == 26
         assert set(overwrite_fields).issubset(query)
     device_identity_flags = (
         "overwrite_device_role",

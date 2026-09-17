@@ -93,6 +93,50 @@ def test_dist_inventory_refuses_removed_modules(tmp_path):
     assert check_dist_inventory.main([str(wheel), str(sdist)]) == 1
 
 
+def test_dist_inventory_refuses_generated_documentation(tmp_path):
+    wheel = _wheel(
+        tmp_path,
+        ["netbox_proxbox/__init__.py", ".ci-site/index.html"],
+    )
+    sdist = _sdist(
+        tmp_path,
+        [
+            "netbox_proxbox-0.0.0/netbox_proxbox/__init__.py",
+            "netbox_proxbox-0.0.0/.ci-site",
+            "netbox_proxbox-0.0.0/.ci-site/index.html",
+            "netbox_proxbox-0.0.0/.ci-site/assets/bundle.js",
+        ],
+    )
+
+    assert check_dist_inventory.forbidden_members(
+        check_dist_inventory.artifact_members(wheel)
+    ) == [".ci-site/index.html"]
+    assert check_dist_inventory.forbidden_members(
+        check_dist_inventory.artifact_members(sdist)
+    ) == [
+        "netbox_proxbox-0.0.0/.ci-site",
+        "netbox_proxbox-0.0.0/.ci-site/index.html",
+        "netbox_proxbox-0.0.0/.ci-site/assets/bundle.js",
+    ]
+    assert check_dist_inventory.main([str(wheel), str(sdist)]) == 1
+
+    assert check_dist_inventory.forbidden_members(
+        [r"netbox_proxbox-0.0.0\.ci-site\index.html"]
+    ) == [r"netbox_proxbox-0.0.0\.ci-site\index.html"]
+
+
+def test_dist_inventory_accepts_generated_documentation_near_misses():
+    assert (
+        check_dist_inventory.forbidden_members(
+            [
+                "netbox_proxbox-0.0.0/.ci-site-backup/index.html",
+                "netbox_proxbox-0.0.0/docs/my.ci-site/index.html",
+            ]
+        )
+        == []
+    )
+
+
 def test_dist_inventory_accepts_a_clean_artifact(tmp_path):
     wheel = _wheel(
         tmp_path,

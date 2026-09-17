@@ -371,7 +371,7 @@ companion-plugin network attempt. Use
 `netbox_proxbox.services.endpoint_enabled.disabled_endpoint_detail()` at the
 start of new endpoint operational paths.
 
-`ProxmoxEndpoint.allowed_tenants` is a tenant allow-list consumed by NMS Cloud.
+`ProxmoxEndpoint.allowed_tenants` is a tenant allow-list consumed by external API clients.
 An empty relation means the endpoint stays in the default/global pool. A
 non-empty relation pins the endpoint to the listed tenants. The paired backend
 uses explicit grants as an override: if a tenant matches any explicitly granted
@@ -496,13 +496,13 @@ erDiagram
 
 ### Firecracker Cloud Models
 
-Firecracker inventory is separate from NetBox core `VirtualMachine` rows. The NMS Cloud UI uses these models when the user chooses the Firecracker runtime, while the existing QEMU path continues to use `CloudImageTemplate` and NetBox virtualization objects.
+Firecracker inventory is separate from NetBox core `VirtualMachine` rows. API clients use these models when a user chooses the Firecracker runtime, while the existing QEMU path continues to use `CloudImageTemplate` and NetBox virtualization objects.
 
 | Model | FK to | Purpose |
 |---|---|---|
 | `FirecrackerHostPool` | `Tenant` M2M | Tenant-visible capacity pool for Firecracker host-agent VMs |
 | `FirecrackerHost` | `FirecrackerHostPool`, optional `VirtualMachine`, optional `ProxmoxNode` | A host-agent VM capable of launching Firecracker micro-VMs |
-| `FirecrackerImageTemplate` | `Tenant` M2M | Kernel/rootfs image bundle shown in the NMS Cloud runtime selector |
+| `FirecrackerImageTemplate` | `Tenant` M2M | Kernel/rootfs image bundle shown in a cloud runtime selector |
 | `FirecrackerMicroVM` | `FirecrackerHost`, `FirecrackerImageTemplate`, optional `Tenant` | Provisioned Firecracker instance tracked with `instance_ref="firecracker:<id>"` |
 
 !!! info "Two NetBoxEndpoint concepts"

@@ -24,7 +24,8 @@ def test_overwrite_vm_type_order_matches_backend_contract():
     fields = _load_constants().OVERWRITE_FIELDS
 
     assert fields[fields.index("overwrite_vm_role") + 1] == "overwrite_vm_type"
-    assert fields[fields.index("overwrite_vm_type") + 1] == "overwrite_vm_tags"
+    assert fields[fields.index("overwrite_vm_type") + 1] == "overwrite_vm_platform"
+    assert fields[fields.index("overwrite_vm_platform") + 1] == "overwrite_vm_tags"
 
 
 def test_overwrite_vm_type_model_fields_exist():

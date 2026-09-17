@@ -70,6 +70,7 @@ def sync_params_module(monkeypatch):
 
     constants_mod = types.ModuleType("netbox_proxbox.constants")
     constants_mod.OVERWRITE_FIELDS = ()
+    constants_mod.OVERWRITE_DEFAULTS = {}
     monkeypatch.setitem(sys.modules, "netbox_proxbox.constants", constants_mod)
 
     choices_mod = types.ModuleType("netbox_proxbox.choices")
@@ -801,6 +802,7 @@ def parser_module(monkeypatch):
     # Stub the relative imports that forms/settings.py performs.
     constants_mod = types.ModuleType("netbox_proxbox.constants")
     constants_mod.OVERWRITE_FIELDS = ()
+    constants_mod.OVERWRITE_DEFAULTS = {}
     constants_mod.SYNC_MODE_FIELDS = ()
     monkeypatch.setitem(sys.modules, "netbox_proxbox.constants", constants_mod)
 

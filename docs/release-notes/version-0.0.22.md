@@ -20,7 +20,7 @@ Current pairing: netbox-proxbox 0.0.22 <-> proxbox-api 0.0.19.post5 <-> proxmox-
   that asks the backend to scan the endpoint host key and fill the pinned
   SHA-256 fingerprint field.
 - **Tenant and endpoint operations.** Proxmox endpoints support tenant
-  allowlists for NMS Cloud endpoint visibility, cluster-tenant inheritance for
+  allowlists for tenant-scoped endpoint visibility, cluster-tenant inheritance for
   synced VMs, and bulk enable/disable actions that update only the local
   `enabled` flag without triggering backend or Proxmox calls.
 - **PDM, SDN, and certification refresh.** PDM endpoint detail pages and Sync

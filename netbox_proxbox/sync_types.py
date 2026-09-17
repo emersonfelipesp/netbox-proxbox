@@ -8,6 +8,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Literal
 
+from netbox_proxbox.backend_errors import combine_backend_message_and_detail
 from netbox_proxbox.choices import SyncTypeChoices
 
 _SDN_SYNC_TYPE = getattr(SyncTypeChoices, "SDN", "sdn")
@@ -108,10 +109,17 @@ def _coerce_backend_error_payload(value: object) -> dict[str, object] | None:
 
 
 def _extract_backend_error_text(payload: dict[str, object]) -> str | None:
-    """Extract the most useful human-facing error text from backend payloads."""
-    detail = payload.get("detail") or payload.get("message") or payload.get("error")
-    if isinstance(detail, str) and detail.strip():
-        return detail.strip()
+    """Extract the most useful human-facing error text from backend payloads.
+
+    ``message`` and ``detail`` are combined rather than treated as alternatives;
+    see :func:`combine_backend_message_and_detail`.
+    """
+    combined = combine_backend_message_and_detail(payload)
+    if combined:
+        return combined
+    error = payload.get("error")
+    if isinstance(error, str) and error.strip():
+        return error.strip()
     errors = payload.get("errors")
     if isinstance(errors, list):
         for item in errors:

@@ -67,6 +67,18 @@ def salted_hmac(key_salt, value, secret=None, *, algorithm="sha1"):
     return hmac.new(key, msg=value, digestmod=hasher)
 
 
+class _StubConnection:
+    """Stand-in for ``django.db.connection`` that records ``close()`` calls."""
+
+    def __init__(self) -> None:
+        self.close_calls = 0
+        self.in_atomic_block = False
+        self.close_at = None
+
+    def close(self) -> None:
+        self.close_calls += 1
+
+
 def django_stub_modules(*, models_module=None) -> dict[str, types.ModuleType]:
     """Build the ``django.db`` / ``django.utils.crypto`` stub pair.
 
@@ -76,6 +88,7 @@ def django_stub_modules(*, models_module=None) -> dict[str, types.ModuleType]:
     """
     django_db = types.ModuleType("django.db")
     django_db.DatabaseError = DatabaseError
+    django_db.connection = _StubConnection()
     if models_module is not None:
         django_db.models = models_module
 

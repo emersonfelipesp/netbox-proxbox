@@ -1,8 +1,8 @@
 """REST endpoint to cancel a Proxbox Sync core Job.
 
 JSON mirror of the UI ``proxbox-cancel`` action (``views/job_cancel.py``) so a
-stuck/zombie Proxbox sync job can be cleared through the nms-backend
-``/netbox/netbox-proxbox/plugin/*`` proxy (e.g. ``nms virt cancel-job``) without
+stuck/zombie Proxbox sync job can be cleared through the
+``/netbox/netbox-proxbox/plugin/*`` proxy without
 the NetBox UI. It reuses the exact cancel helper the UI uses — no duplicated
 RQ/termination logic — and gates on the same ``core.delete_job`` permission.
 """

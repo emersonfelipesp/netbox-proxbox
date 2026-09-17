@@ -392,6 +392,10 @@ fake historical models for both generations.
   Branch definitions using 0089's complete three-stage emptiness and locking
   boundary. Forward and reverse are both no-ops when the Branch content type is
   absent. Migrations 0085-0089 remain immutable.
+- Migration `0096_overwrite_vm_platform` adds the default-off global VM
+  platform overwrite gate and nullable per-endpoint override. It uses the
+  idempotent additive-field helper so partial legacy schemas converge safely;
+  `None` on an endpoint continues to mean inherit the global setting.
 
 ## Links
 

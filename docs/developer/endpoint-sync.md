@@ -685,6 +685,24 @@ NetBox credentials would report `Error ensuring Proxbox tag` on the `devices` st
 minutes and several wasted stages later, sending operators to debug tags instead of
 connectivity.
 
+**Backend `message` and `detail` are both reported.** proxbox-api answers every handled
+failure as `{"message", "detail", "python_exception"}`. The plugin used to read
+`detail or message`, so a populated `detail` hid the message and an empty `detail` (which is
+what a NetBox timeout produced before the backend fix — every aiohttp timeout class
+stringifies to `""`) hid the cause, leaving only `Error ensuring Proxbox tag`. Both extraction
+points — `_json_error_detail()` in `services/backend_proxy.py` for the pre-stream HTTP error
+and `_extract_backend_error_text()` in `sync_types.py` for stream payloads — now go through
+`backend_errors.combine_backend_message_and_detail()`: distinct message and detail render as
+`<message>: <detail>`; a `detail` holding JSON text is returned without the prefix so the
+composer can still parse it. A dict or list `detail` (FastAPI validation errors) is rendered as
+JSON only on the HTTP-error path, whose output is redacted before use; on the stream path it is
+left out so the retry classifier never scans a FastAPI `input` echo for cause words; `python_exception`
+is never read because it can echo request content. A tag-ensure timeout therefore reads
+`Stage 'devices' failed (HTTP 504): Error ensuring Proxbox tag: NetBox did not answer
+'list /api/extras/tags/' within the configured NetBox timeout of 120s (ServerTimeoutError).
+Verify that the NetBox URL … is reachable from the proxbox-api host …` — the actionable
+part is NetBox reachability **from the proxbox-api container**, not tag permissions.
+
 **An endpoint that never resolved to a wire id fails the job.** If a Proxmox endpoint cannot
 be mapped to a backend endpoint id, no stage runs for it. The job does not report success:
 it fails with `No sync stage ran` when *nothing* resolved, or names how many endpoints were
@@ -1018,6 +1036,7 @@ key as their backend encryption source.
 | `netbox_proxbox/signals.py` | Read-only FastAPI stored-key checks plus best-effort NetBox/Proxmox endpoint-delivery handlers |
 | `netbox_proxbox/views/backend_sync.py` | Shared `sync_netbox_endpoint_to_backend()` and `sync_proxmox_endpoint_to_backend()`; `list_backend_netbox_endpoints()` (verification read); `backend_holds_netbox_endpoint()` + `_netbox_row_is_current()` (identity **and** currency) / `backend_holds_proxmox_endpoint()` (held **and** current); `netbox_credential_fingerprint()` / `netbox_push_credentials_unchanged()` / `_record_pushed_credential_fingerprint()` (local secret-rotation check, migration `0073`); `resolve_backend_endpoint_id()` / `resolve_backend_endpoint_ids()` (wire-id resolution, target-confirmed) |
 | `netbox_proxbox/jobs.py` | `_ensure_backend_endpoints()` preflight; `PreflightResult`; `ProxboxPreflightError`; `ProxboxSyncJob.run()` (staged **and** selected-object batch branches) |
+| `netbox_proxbox/backend_errors.py` | `combine_backend_message_and_detail()` — the single rule for reading a proxbox-api `{message, detail}` error body, shared by `services/backend_proxy._json_error_detail()` and `sync_types._extract_backend_error_text()`; NetBox/Django-free on purpose |
 | `netbox_proxbox/sync_stages.py` / `netbox_proxbox/sync_types.py` | `_is_retryable_stage_failure()`; typed per-attempt stage failure records and deterministic primary-cause composition; `preflight_hint` attribution on stage errors; `_no_endpoint_scope_reason()` / `_batch_wire_endpoint_scope()` (shared fail-loud endpoint-scope resolution, plus the plugin-pk → wire-id map); `_batch_object_core_cluster_id()` / `_batch_object_owner_endpoint_pks()` / `_owner_endpoint_pks_by_cluster_id()` (per-object owner resolution, tri-state: unknown / pinned / ambiguous); `_run_batch_selected_sync()` backend **and** per-object Proxmox-endpoint pinning |
 | `netbox_proxbox/services/individual_sync.py` | `sync_individual()` / `sync_individual_with_dependencies()` — `fastapi_endpoint_id` and `proxmox_endpoint_ids` pinned through recursive dependency syncs |
 | `netbox_proxbox/services/backend_auth.py` | Read-only stored-key verification, `wait_for_backend_ready()`, and cold-start timeout budgets |

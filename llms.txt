@@ -534,7 +534,7 @@ class ProxmoxSdnPrefixList(NetBoxModel): ...
 
 ### Firecracker Models (4)
 
-NMS Cloud micro-VM inventory. Firecracker instances are not NetBox core `VirtualMachine` rows; they use `kind="firecracker"` and `instance_ref="firecracker:<id>"`.
+Firecracker micro-VM inventory. Firecracker instances are not NetBox core `VirtualMachine` rows; they use `kind="firecracker"` and `instance_ref="firecracker:<id>"`.
 
 ```python
 # Location: netbox_proxbox/models/firecracker.py

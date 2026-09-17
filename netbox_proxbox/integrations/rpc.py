@@ -76,7 +76,7 @@ def install_ssh_key_via_rpc(
             ``virtualization.VirtualMachine``) — usually the Proxmox host.
         public_key: OpenSSH public key string to append to the host's
             ``authorized_keys`` (e.g. the proxbox-api cloud-image-build key).
-        backend: the ``netbox_nms.NMSBackend`` record that executes the procedure.
+        backend: the companion RPC plugin backend that executes the procedure.
         requested_by: the NetBox user requesting the execution (optional).
         username: POSIX user on the host; defaults to the SSH credential's user.
 
@@ -157,19 +157,22 @@ def _coerce_units(value: object) -> list[str]:
     return []
 
 
-def _resolve_rpc_backend(backend: Any | None) -> Any | None:
-    """Return an active netbox-nms backend when that optional plugin is present."""
+def _resolve_rpc_backend(backend: Any | None) -> int | None:
+    """Return an explicit, selected, or sole companion backend primary key."""
     if backend is not None:
-        return backend
+        value = getattr(backend, "pk", backend)
+        return value if isinstance(value, int) and not isinstance(value, bool) else None
     try:
-        from netbox_nms.backend import get_backend
+        from netbox_rpc.models import RPCBackend, RpcPluginSettings
     except ImportError:
         return None
-    try:
-        return get_backend()
-    except Exception:  # noqa: BLE001 - backend lookup is best-effort
-        logger.exception("Failed to resolve a netbox-nms backend for netbox-rpc.")
-        return None
+    settings = RpcPluginSettings.get_solo()
+    selected_backend = getattr(settings, "backend", None)
+    selected_value = getattr(selected_backend, "pk", selected_backend)
+    if isinstance(selected_value, int) and not isinstance(selected_value, bool):
+        return selected_value
+    rows = list(RPCBackend.objects.values_list("pk", flat=True)[:2])
+    return rows[0] if len(rows) == 1 else None
 
 
 def _update_endpoint_service_monitoring_heartbeat(
@@ -295,7 +298,17 @@ def collect_systemctl_services(
         if trigger == SERVICE_COLLECTION_TRIGGER_ON_DEMAND
         else SERVICE_COLLECTION_TRIGGER_SCHEDULED
     )
-    backend_obj = _resolve_rpc_backend(backend)
+    backend_pk = _resolve_rpc_backend(backend)
+    if backend_pk is None:
+        _update_endpoint_service_monitoring_heartbeat(
+            endpoint,
+            status="unavailable",
+            error=(
+                "Select an RPC backend in the companion plugin settings, or "
+                "configure exactly one backend."
+            ),
+        )
+        return None
     params = {
         "proxmox_endpoint_id": getattr(endpoint, "pk", None),
         "units": _coerce_units(
@@ -307,7 +320,7 @@ def collect_systemctl_services(
     execution = RPCExecution.objects.create(
         procedure=procedure,
         assigned_object=endpoint,
-        backend=backend_obj,
+        backend_id=backend_pk,
         requested_by=requested_by,
         params=params,
         status="queued",
@@ -324,7 +337,7 @@ def collect_systemctl_services(
             execution_pk=execution.pk,
             instance=None,
             user=requested_by,
-            backend_pk=getattr(backend_obj, "pk", None),
+            backend_pk=backend_pk,
         )
     except Exception as exc:  # noqa: BLE001 - enqueue failures should be visible locally
         logger.exception(

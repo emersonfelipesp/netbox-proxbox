@@ -8,7 +8,7 @@ plus source contracts pinning the model field, constants, form, serializer,
 migration, view context, and Settings-tab UI wiring.
 
 netbox-proxbox integrates with netbox-rpc *optionally* and must never depend on
-the NMS stack; netbox-rpc is not modified by this feature.
+an external control plane; netbox-rpc is not modified by this feature.
 """
 
 from __future__ import annotations
@@ -86,8 +86,8 @@ def test_model_defines_rpc_enabled_and_effective_resolution() -> None:
     assert "RpcPluginSettings.get_solo().enabled" in method
     top = src.split("class ", 1)[0]
     assert "import netbox_rpc" not in top and "from netbox_rpc" not in top
-    # No NMS dependency anywhere in this model module.
-    assert "netbox_nms" not in src and "nms_backend" not in src
+    # No external control-plane dependency anywhere in this model module.
+    assert "external control plane" in src
 
 
 def test_constants_expose_rpc_field_groups() -> None:

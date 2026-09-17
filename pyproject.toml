@@ -94,6 +94,9 @@ build-backend = "hatchling.build"
 [tool.hatch.build.targets.wheel]
 packages = ["netbox_proxbox", "proxbox_cli"]
 
+[tool.hatch.build.targets.sdist]
+exclude = ["/.ci-site"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = ["test_*.py"]

@@ -591,6 +591,15 @@ class ProxboxPluginSettings(NetBoxModel):
             "that already have a type assigned. The type is still set when the VM is first created."
         ),
     )
+    overwrite_vm_platform = models.BooleanField(
+        default=False,
+        verbose_name=_("Overwrite VM platform"),
+        help_text=_(
+            "When enabled, sync reconciles the platform on existing NetBox virtual "
+            "machines from the Proxmox guest operating system. Disabled by default "
+            "to preserve operator-managed platform assignments."
+        ),
+    )
     default_role_qemu = models.ForeignKey(
         to="dcim.DeviceRole",
         on_delete=models.SET_NULL,
@@ -848,7 +857,7 @@ class ProxboxPluginSettings(NetBoxModel):
         verbose_name=_("Cloud customer gateway"),
         help_text=_(
             "Gateway address for the cloud customer network. Stored as operator "
-            "configuration so proxbox-api and nms-backend can discover it without "
+            "configuration so proxbox-api and other clients can discover it without "
             "hardcoded estate values."
         ),
     )

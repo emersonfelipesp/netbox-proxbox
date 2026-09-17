@@ -18,7 +18,7 @@ class ProxmoxVMCloudInitTable(NetBoxTable):
     sshkeys_truncated = BooleanColumn(verbose_name=_("SSH Keys Truncated"))
     is_intent = BooleanColumn(verbose_name=_("Intent"))
     hostname = tables.Column(verbose_name=_("Hostname"))
-    nms_credential_id = tables.Column(verbose_name=_("NMS Credential"))
+    credential_reference_id = tables.Column(verbose_name=_("Credential reference"))
     has_sshkeys = BooleanColumn(verbose_name=_("Intent SSH Keys"))
     credential_state = tables.Column(
         accessor="credential_encryption_state",
@@ -38,7 +38,7 @@ class ProxmoxVMCloudInitTable(NetBoxTable):
             "sshkeys_truncated",
             "is_intent",
             "hostname",
-            "nms_credential_id",
+            "credential_reference_id",
             "has_sshkeys",
             "credential_state",
             "last_synced",

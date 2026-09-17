@@ -1,7 +1,7 @@
 """Scrub unsafe InfluxDB metadata and constrain token reference columns.
 
 ``ProxmoxMetricsInfluxDB.query_token_secret_ref`` and
-``writer_token_secret_ref`` are documented to hold a netbox-nms
+``writer_token_secret_ref`` are documented to hold an external
 ``ObservabilitySecret`` *reference*, never a credential. Until now that was
 enforced only by ``RegexValidator`` and ``Model.clean()``, neither of which runs
 on ``objects.create()``, ``bulk_create()``, ``queryset.update()``, a loaded
@@ -41,11 +41,11 @@ from django.db import migrations, models
 
 logger = logging.getLogger("netbox_proxbox.migrations")
 
-# Frozen copy of ``netbox_proxbox.models.proxmox_metrics.NMS_SECRET_REF_RE``.
+# Frozen legacy secret-reference expression.
 # Migrations must not import from the live model module: a later grammar change
 # there would silently rewrite what this already-applied migration did.
-_NMS_SECRET_REF_RE = (
-    r"^nms-secret:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
+_LEGACY_SECRET_REF_RE = (
+    r"^[a-z]{3}-secret:[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-"
     r"[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$"
 )
 
@@ -61,7 +61,7 @@ _MASKED_VALUE = "********"
 _QUARANTINE_MARKER = (
     "[Security quarantine] This mapping was disabled during upgrade after unsafe "
     "or missing InfluxDB URL/query-token metadata was removed. Enter a "
-    "credential-free HTTP(S) base URL and an exact nms-secret:<uuid> query-token "
+    "credential-free HTTP(S) base URL and an exact external query-token "
     "reference, then explicitly re-enable the mapping."
 )
 _CHANGELOG_BATCH_SIZE = 500
@@ -132,7 +132,7 @@ def _sanitize_objectchange_snapshots(apps, schema_editor) -> None:
     if content_type is None:
         return
 
-    pattern = re.compile(_NMS_SECRET_REF_RE)
+    pattern = re.compile(_LEGACY_SECRET_REF_RE)
     manager = object_change_model.objects.using(alias)
     pending = []
     sanitized_count = 0
@@ -181,7 +181,7 @@ def _sanitize_objectchange_snapshots(apps, schema_editor) -> None:
 def _scrub_non_conforming_values(apps, schema_editor) -> None:
     """Blank unsafe values and quarantine mappings that cannot be queried."""
     model = apps.get_model("netbox_proxbox", "ProxmoxMetricsInfluxDB")
-    pattern = re.compile(_NMS_SECRET_REF_RE)
+    pattern = re.compile(_LEGACY_SECRET_REF_RE)
     manager = model.objects.using(schema_editor.connection.alias)
 
     for row in manager.only("pk", "influx_url", *_TOKEN_FIELDS, "enabled", "comments"):
@@ -237,7 +237,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="proxmoxmetricsinfluxdb",
             constraint=models.CheckConstraint(
-                condition=models.Q(query_token_secret_ref__regex=_NMS_SECRET_REF_RE)
+                condition=models.Q(query_token_secret_ref__regex=_LEGACY_SECRET_REF_RE)
                 | models.Q(enabled=False, query_token_secret_ref=""),
                 name="netbox_proxbox_metrics_influxdb_query_token_is_ref",
             ),
@@ -245,7 +245,7 @@ class Migration(migrations.Migration):
         migrations.AddConstraint(
             model_name="proxmoxmetricsinfluxdb",
             constraint=models.CheckConstraint(
-                condition=models.Q(writer_token_secret_ref__regex=_NMS_SECRET_REF_RE)
+                condition=models.Q(writer_token_secret_ref__regex=_LEGACY_SECRET_REF_RE)
                 | models.Q(writer_token_secret_ref=""),
                 name="netbox_proxbox_metrics_influxdb_writer_token_is_ref",
             ),

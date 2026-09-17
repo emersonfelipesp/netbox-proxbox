@@ -105,15 +105,14 @@ def test_publish_workflow_reserves_only_rc_tags() -> None:
     assert "gh release create" not in WORKFLOW.read_text(encoding="utf-8")
 
 
-def test_final_tags_use_the_production_evidence_promotion_path() -> None:
-    """Final tags remain private until the production evidence gate passes."""
+def test_final_tags_use_the_package_provenance_promotion_path() -> None:
+    """Final tags remain private until package provenance is verified."""
     text = PROMOTION_WORKFLOW.read_text(encoding="utf-8")
     assert "scripts/release_artifacts.py fetch-gitea" in text
-    assert "scripts/release_artifacts.py fetch-attestation" in text
     assert "refs/remotes/gitea/release-main" in text
     assert "refs/remotes/gitea/release-develop" in text
     assert "https://github.com/emersonfelipesp/netbox-proxbox.git" in text
-    assert text.index("fetch-attestation") < text.index("git push github")
+    assert text.index("fetch-gitea") < text.index("git push github")
     assert '"refs/tags/${TAG}"' in text
     assert '"refs/tags/${TAG}^{}"' in text
     assert 'test "$REMOTE_TAG_OBJECT" = "$LOCAL_TAG_OBJECT"' in text

@@ -1188,7 +1188,7 @@ def test_pbs_status_disabled_endpoint_does_not_request_backend(monkeypatch):
 
     status, details = ss.ServiceStatus().pbs_status(
         endpoint=pbs_server,
-        base_url="https://proxbox.local:8800",
+        base_url="https://backend.example.invalid:8800",
         auth_headers={"Authorization": "Bearer backend-token"},
     )
 
@@ -1671,3 +1671,293 @@ def test_proxmox_mode_detection_throttle_skips_fresh_detected_mode(
     assert details["api_access"] == "success"
     assert proxmox_endpoint.mode == "cluster"
     assert saved_calls == []
+
+
+def test_keepalive_view_retires_db_connection_after_success(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    ss = _service_status_module()
+    monkeypatch.setattr(
+        ss.requests, "get", lambda *a, **k: ResponseStub({"version": "0.0.15"})
+    )
+    monkeypatch.setattr(module.connection, "close_at", None)
+    monkeypatch.setattr(module.connection, "in_atomic_block", False)
+    monkeypatch.setattr(module.time, "monotonic", lambda: 1234.5)
+
+    response = module.get_service_status_impl(_keepalive_request(), "fastapi", 1)
+
+    assert response.payload["status"] == "success"
+    # Django's request_finished handler closes any connection whose close_at
+    # deadline has passed, so the connection is retired after middleware runs.
+    assert module.connection.close_at == 1234.5
+
+
+def test_keepalive_view_retires_db_connection_after_error(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    monkeypatch.setattr(module.connection, "close_at", None)
+    monkeypatch.setattr(module.connection, "in_atomic_block", False)
+
+    response = module.get_service_status_impl(_keepalive_request(), "bogus", 1)
+
+    assert response.status_code == 400
+    assert module.connection.close_at is not None
+
+
+def test_keepalive_view_leaves_connection_alone_inside_atomic_block(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    monkeypatch.setattr(module.connection, "close_at", None)
+    monkeypatch.setattr(module.connection, "in_atomic_block", True)
+    before = module.connection.close_calls
+
+    response = module.get_service_status_impl(_keepalive_request(), "bogus", 1)
+
+    assert response.status_code == 400
+    assert module.connection.close_at is None
+    assert module.connection.close_calls == before
+
+
+def test_keepalive_view_closes_directly_when_close_at_unsupported(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    monkeypatch.setattr(module.connection, "in_atomic_block", False)
+    monkeypatch.delattr(module.connection, "close_at", raising=False)
+    before = module.connection.close_calls
+
+    response = module.get_service_status_impl(_keepalive_request(), "bogus", 1)
+
+    assert response.status_code == 400
+    assert module.connection.close_calls == before + 1
+
+
+def test_keepalive_view_survives_connection_release_failure(
+    monkeypatch,
+    fastapi_endpoint,
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    monkeypatch.setattr(module.connection, "in_atomic_block", False)
+    monkeypatch.delattr(module.connection, "close_at", raising=False)
+
+    def boom():
+        raise RuntimeError("connection already closed")
+
+    monkeypatch.setattr(module.connection, "close", boom)
+
+    response = module.get_service_status_impl(_keepalive_request(), "bogus", 1)
+
+    assert response.status_code == 400
+
+
+class _FakeCache:
+    """Dict-backed cache exposing the atomic ``add`` contract the throttle uses."""
+
+    def __init__(self, *, fail=False):
+        self.store = {}
+        self.adds = []
+        self.fail = fail
+
+    def add(self, key, value, timeout=None):
+        if self.fail:
+            raise RuntimeError("cache down")
+        self.adds.append((key, timeout))
+        if key in self.store:
+            return False
+        self.store[key] = value
+        return True
+
+    def get(self, key):
+        return self.store.get(key)
+
+    def delete(self, key):
+        self.store.pop(key, None)
+
+
+_PUSH_KEY = "netbox_proxbox:keepalive:netbox_endpoint_push"
+
+
+def test_netbox_endpoint_push_throttle_uses_atomic_add_per_backend(monkeypatch):
+    ss = _service_status_module()
+    cache = _FakeCache()
+    monkeypatch.setattr(ss, "_django_cache", cache)
+    monkeypatch.setattr(ss, "_last_netbox_endpoint_push", {})
+
+    first = ss._should_push_netbox_endpoints(1)
+    assert first and first == cache.store[f"{_PUSH_KEY}:1"]
+    # Another worker racing on the same backend loses the atomic add.
+    assert ss._should_push_netbox_endpoints(1) is None
+    # A second configured backend gets its own independent slot.
+    assert ss._should_push_netbox_endpoints(2)
+    assert [k for k, _ in cache.adds] == [
+        f"{_PUSH_KEY}:1",
+        f"{_PUSH_KEY}:1",
+        f"{_PUSH_KEY}:2",
+    ]
+    assert {t for _, t in cache.adds} == {int(ss._NETBOX_PUSH_THROTTLE_SECONDS)}
+    # No process-local fallback state is written when the cache decides.
+    assert ss._last_netbox_endpoint_push == {}
+
+
+def test_netbox_endpoint_push_throttle_falls_back_without_cache(monkeypatch):
+    ss = _service_status_module()
+    monkeypatch.setattr(ss, "_django_cache", None)
+    monkeypatch.setattr(ss, "_last_netbox_endpoint_push", {})
+
+    assert ss._should_push_netbox_endpoints(1) == "local"
+    assert ss._should_push_netbox_endpoints(1) is None
+    assert ss._should_push_netbox_endpoints(2) == "local"
+
+
+def test_netbox_endpoint_push_throttle_falls_back_when_cache_errors(monkeypatch):
+    ss = _service_status_module()
+    monkeypatch.setattr(ss, "_django_cache", _FakeCache(fail=True))
+    monkeypatch.setattr(ss, "_last_netbox_endpoint_push", {})
+
+    assert ss._should_push_netbox_endpoints(1) == "local"
+    assert ss._should_push_netbox_endpoints(1) is None
+
+
+def test_proxmox_mode_check_throttle_uses_atomic_add(monkeypatch):
+    ss = _service_status_module()
+    cache = _FakeCache()
+    monkeypatch.setattr(ss, "_django_cache", cache)
+    monkeypatch.setattr(ss, "_last_proxmox_mode_check", {})
+
+    assert ss._should_run_proxmox_mode_check(9) is True
+    assert ss._should_run_proxmox_mode_check(9) is False
+    assert cache.adds[0][0] == "netbox_proxbox:keepalive:proxmox_mode_check:9"
+
+
+def test_release_only_deletes_own_claim(monkeypatch):
+    ss = _service_status_module()
+    cache = _FakeCache()
+    monkeypatch.setattr(ss, "_django_cache", cache)
+
+    stale_owner = ss._should_push_netbox_endpoints(4)
+    # The stale owner's lease expired and another worker claimed a fresh slot.
+    cache.store.pop(f"{_PUSH_KEY}:4")
+    successor = ss._should_push_netbox_endpoints(4)
+    assert successor and successor != stale_owner
+
+    ss._release_netbox_push_slot(4, stale_owner)
+
+    assert cache.store[f"{_PUSH_KEY}:4"] == successor
+    ss._release_netbox_push_slot(4, successor)
+    assert f"{_PUSH_KEY}:4" not in cache.store
+
+
+def _install_push_stubs(monkeypatch, *, endpoints, push):
+    backend_auth = types.ModuleType("netbox_proxbox.services.backend_auth")
+    backend_auth.ensure_backend_key_registered = lambda endpoint_id=None: (
+        True,
+        "verified",
+    )
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.services.backend_auth", backend_auth
+    )
+    models_module = types.ModuleType("netbox_proxbox.models")
+    models_module.NetBoxEndpoint = SimpleNamespace(
+        objects=SimpleNamespace(filter=lambda **kwargs: endpoints())
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_module)
+    backend_sync = types.ModuleType("netbox_proxbox.views.backend_sync")
+    backend_sync.sync_netbox_endpoint_to_backend = push
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.views.backend_sync", backend_sync)
+
+
+_PUSH_KWARGS = dict(
+    base_url="https://backend.example.invalid:8800",
+    auth_headers={},
+    backend_verify_ssl=True,
+    endpoint_id=3,
+)
+
+
+def test_failed_netbox_endpoint_push_releases_throttle_slot(monkeypatch):
+    ss = _service_status_module()
+    cache = _FakeCache()
+    monkeypatch.setattr(ss, "_django_cache", cache)
+    monkeypatch.setattr(ss, "_last_netbox_endpoint_push", {})
+    attempts = []
+
+    def broken_endpoints():
+        attempts.append("orm")
+        raise RuntimeError("database unavailable")
+
+    _install_push_stubs(monkeypatch, endpoints=broken_endpoints, push=None)
+
+    assert ss._maybe_push_netbox_endpoints_to_backend(**_PUSH_KWARGS) is True
+    assert len(attempts) == 1
+    # The failed push handed its slot back, so the very next poll retries
+    # instead of waiting out the five-minute cooldown.
+    assert ss._maybe_push_netbox_endpoints_to_backend(**_PUSH_KWARGS) is True
+    assert len(attempts) == 2
+    assert f"{_PUSH_KEY}:3" not in cache.store
+
+
+def test_backend_rejected_push_releases_throttle_slot(monkeypatch):
+    ss = _service_status_module()
+    cache = _FakeCache()
+    monkeypatch.setattr(ss, "_django_cache", cache)
+    monkeypatch.setattr(ss, "_last_netbox_endpoint_push", {})
+    pushes = []
+
+    def rejected_push(nb_ep, **kwargs):
+        pushes.append(nb_ep.name)
+        return False, "backend unavailable", 503
+
+    endpoint = SimpleNamespace(pk=1, name="nb-main")
+    _install_push_stubs(monkeypatch, endpoints=lambda: [endpoint], push=rejected_push)
+
+    assert ss._maybe_push_netbox_endpoints_to_backend(**_PUSH_KWARGS) is True
+    assert ss._maybe_push_netbox_endpoints_to_backend(**_PUSH_KWARGS) is True
+    assert pushes == ["nb-main", "nb-main"]
+    assert f"{_PUSH_KEY}:3" not in cache.store
+
+
+def test_successful_push_keeps_throttle_slot(monkeypatch):
+    ss = _service_status_module()
+    cache = _FakeCache()
+    monkeypatch.setattr(ss, "_django_cache", cache)
+    monkeypatch.setattr(ss, "_last_netbox_endpoint_push", {})
+    pushes = []
+
+    def good_push(nb_ep, **kwargs):
+        pushes.append(nb_ep.name)
+        return True, None, 200
+
+    endpoint = SimpleNamespace(pk=1, name="nb-main")
+    _install_push_stubs(monkeypatch, endpoints=lambda: [endpoint], push=good_push)
+
+    assert ss._maybe_push_netbox_endpoints_to_backend(**_PUSH_KWARGS) is True
+    assert ss._maybe_push_netbox_endpoints_to_backend(**_PUSH_KWARGS) is True
+    assert pushes == ["nb-main"]
+    assert f"{_PUSH_KEY}:3" in cache.store
