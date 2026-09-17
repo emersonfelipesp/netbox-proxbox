@@ -23,7 +23,7 @@ NetBox warns, omits the plugin, and continues startup.
 
 | NetBox   | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
-| 4.5.8-4.7.0 GA | v0.0.26.post8 | v0.0.21.post7 | v0.0.10 | v0.0.13 |
+| 4.5.8-4.7.0 GA | v0.0.26.post9 | v0.0.21.post7 | v0.0.10 | v0.0.13 |
 | >=4.5.8  | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8  | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8  | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |
@@ -54,7 +54,7 @@ and WebSocket.
 The current repository code declares support for:
 
 - NetBox `4.5.8` through `4.7.0`, including official `v4.7.0` GA
-- Plugin version `0.0.26.post8` in source
+- Plugin version `0.0.26.post9` in source
 
 That support comes directly from the plugin config in this repository:
 
@@ -72,9 +72,9 @@ methods, tenant-scoped endpoint allowlists, bulk endpoint enablement, PDM
 endpoint sync, SDN inventory, Firecracker serializer hardening, dual VM
 interface sync, and the all-endpoint `enabled=False` no-connection guard.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.26.post8 <-> proxbox-api 0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.26.post9 <-> proxbox-api 0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
-The `0.0.26.post8` release restores the public release validation lane (the validation harness pins legacy encrypted credential storage before creating its mock endpoint) with no plugin runtime changes, retaining the virtual machines list search and filtering, the production console handoff, Proxmox metrics, soft-deleted VM purge surface, and the official NetBox 4.7.0 GA compatibility contract. The historical rows remain documented below.
+The `0.0.26.post9` release runs the release-validation page-coverage gate on NetBox 4.6.6, the last release its pinned validation backend is certified for, with no plugin runtime changes, retaining the virtual machines list search and filtering, the production console handoff, Proxmox metrics, soft-deleted VM purge surface, and the official NetBox 4.7.0 GA compatibility contract. The historical rows remain documented below.
 
 ## Important Packaging Note
 

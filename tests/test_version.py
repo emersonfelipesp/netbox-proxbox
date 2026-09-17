@@ -78,6 +78,9 @@ RELEASE_NOTES_026_POST7_PATH = (
 RELEASE_NOTES_026_POST8_PATH = (
     REPO_ROOT / "docs" / "release-notes" / "version-0.0.26.post8.md"
 )
+RELEASE_NOTES_026_POST9_PATH = (
+    REPO_ROOT / "docs" / "release-notes" / "version-0.0.26.post9.md"
+)
 E2E_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "e2e-docker.yml"
 PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "publish-testpypi.yml"
 NIGHTLY_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "nightly-contracts.yml"
@@ -90,12 +93,12 @@ CERTIFICATION_PATH = REPO_ROOT / "CERTIFICATION.md"
 DOCS_CERTIFICATION_PATH = REPO_ROOT / "docs" / "certification.md"
 APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
-CURRENT_PLUGIN_VERSION = "0.0.26.post8"
-CURRENT_RELEASE_VERSION = "0.0.26.post8"
-CURRENT_PACKAGE_VERSION = "0.0.26.post8"
+CURRENT_PLUGIN_VERSION = "0.0.26.post9"
+CURRENT_RELEASE_VERSION = "0.0.26.post9"
+CURRENT_PACKAGE_VERSION = "0.0.26.post9"
 CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.21.post7"
 CURRENT_PAIRING_LINE = (
-    "Current backend-runtime pairing: netbox-proxbox 0.0.26.post8 <-> proxbox-api "
+    "Current backend-runtime pairing: netbox-proxbox 0.0.26.post9 <-> proxbox-api "
     "0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST "
     "dependency only and does not provide the semantic MCP bridge."
 )
@@ -114,6 +117,13 @@ LATEST_CERTIFIED_NETBOX_IMAGE = (
 )
 LATEST_CANDIDATE_NETBOX_VERSION = "4.7.0"
 LATEST_CANDIDATE_NETBOX_IMAGE = LATEST_CERTIFIED_NETBOX_IMAGE
+# The release-validation page-coverage gate runs the last NetBox release its
+# pinned PyPI backend (proxbox-api 0.0.18.post5) is certified for. NetBox 4.7.0
+# certification is carried by the Django matrix and the E2E matrix instead.
+PAGE_COVERAGE_NETBOX_IMAGE = (
+    "netboxcommunity/netbox:v4.6.6@"
+    "sha256:9d89ab99d6c45b6b24f6f18f6a0c0eb173f65b630b16814577858a58d51cdb94"
+)
 SUPPORTED_NETBOX_IMAGE_TAGS = (
     "netboxcommunity/netbox:v4.5.8",
     "netboxcommunity/netbox:v4.5.9",
@@ -212,7 +222,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
 )
 PREVIOUS_PLUGIN_VERSION = "0.0.22"
 PREVIOUS_PROXBOX_API_VERSION = "0.0.19.post5"
-CURRENT_RELEASE_NOTES_PATH = RELEASE_NOTES_026_POST8_PATH
+CURRENT_RELEASE_NOTES_PATH = RELEASE_NOTES_026_POST9_PATH
 
 
 def _class_constants(class_name: str) -> dict[str, str]:
@@ -567,13 +577,16 @@ def test_django_tests_pin_reviewed_execution_inputs():
     assert "../netbox/requirements.txt" not in workflow
 
 
-def test_page_coverage_pins_latest_certified_netbox():
+def test_page_coverage_pins_backend_certified_netbox():
     workflow = _read(PAGE_COVERAGE_WORKFLOW_PATH)
-    assert workflow.count(f"NETBOX_IMAGE: {LATEST_CANDIDATE_NETBOX_IMAGE}") == 1
+    tag, _, digest = PAGE_COVERAGE_NETBOX_IMAGE.partition("@")
+    assert tag in SUPPORTED_NETBOX_IMAGE_TAGS
+    assert digest.startswith("sha256:") and len(digest) == len("sha256:") + 64
+    assert workflow.count(f"NETBOX_IMAGE: {PAGE_COVERAGE_NETBOX_IMAGE}") == 1
     assert (
-        f"name: Page Coverage / {LATEST_CANDIDATE_NETBOX_IMAGE} / local / pve"
-        in workflow
+        f"name: Page Coverage / {PAGE_COVERAGE_NETBOX_IMAGE} / local / pve" in workflow
     )
+    assert "PROXBOX_API_VERSION: 0.0.18.post5" in workflow
 
 
 def _contains_exact_version(text, version):
