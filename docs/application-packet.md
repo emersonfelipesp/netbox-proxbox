@@ -4,7 +4,7 @@ This packet covers the Proxbox plugin family.
 
 | Plugin | Repository | PyPI | Certification release |
 | --- | --- | --- | --- |
-| netbox-proxbox | <https://github.com/emersonfelipesp/netbox-proxbox> | <https://pypi.org/project/netbox-proxbox/> | 0.0.26.post9 (local source) |
+| netbox-proxbox | <https://github.com/emersonfelipesp/netbox-proxbox> | <https://pypi.org/project/netbox-proxbox/> | 0.0.26.post10 (local source) |
 | netbox-pbs | <https://github.com/emersonfelipesp/netbox-pbs> | <https://pypi.org/project/netbox-pbs/> | 0.0.1.post1 |
 | netbox-pdm | <https://github.com/emersonfelipesp/netbox-pdm> | <https://pypi.org/project/netbox-pdm/> | 0.0.1.post1 |
 | netbox-ceph | <https://github.com/emersonfelipesp/netbox-ceph> | <https://pypi.org/project/netbox-ceph/> | 0.0.1.post1 |
@@ -29,6 +29,8 @@ The reviewed GA source is NetBox `v4.7.0` at commit
 the checked-out commit and NetBox release metadata, checksums that commit's
 upstream requirements, and enforces a reviewed Python 3.12/Linux dependency
 lock with artifact hashes.
+
+Limitation: end-to-end PVE synchronization on NetBox 4.7.0 through the published backend this line pairs with (proxbox-api 0.0.19.post5 through 0.0.21.post7) is known-broken and excluded from the release-validation matrix; the NetBox 4.7.0 entry covers plugin/Django compatibility only.
 
 **This statement is scoped to `netbox-proxbox` alone.** The companion plugins
 (`netbox-ceph`, `netbox-packer`, `netbox-pbs`, `netbox-pdm`) carry the same

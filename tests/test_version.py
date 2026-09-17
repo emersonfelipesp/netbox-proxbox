@@ -81,6 +81,9 @@ RELEASE_NOTES_026_POST8_PATH = (
 RELEASE_NOTES_026_POST9_PATH = (
     REPO_ROOT / "docs" / "release-notes" / "version-0.0.26.post9.md"
 )
+RELEASE_NOTES_026_POST10_PATH = (
+    REPO_ROOT / "docs" / "release-notes" / "version-0.0.26.post10.md"
+)
 E2E_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "e2e-docker.yml"
 PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "publish-testpypi.yml"
 NIGHTLY_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "nightly-contracts.yml"
@@ -93,12 +96,12 @@ CERTIFICATION_PATH = REPO_ROOT / "CERTIFICATION.md"
 DOCS_CERTIFICATION_PATH = REPO_ROOT / "docs" / "certification.md"
 APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
-CURRENT_PLUGIN_VERSION = "0.0.26.post9"
-CURRENT_RELEASE_VERSION = "0.0.26.post9"
-CURRENT_PACKAGE_VERSION = "0.0.26.post9"
+CURRENT_PLUGIN_VERSION = "0.0.26.post10"
+CURRENT_RELEASE_VERSION = "0.0.26.post10"
+CURRENT_PACKAGE_VERSION = "0.0.26.post10"
 CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.21.post7"
 CURRENT_PAIRING_LINE = (
-    "Current backend-runtime pairing: netbox-proxbox 0.0.26.post9 <-> proxbox-api "
+    "Current backend-runtime pairing: netbox-proxbox 0.0.26.post10 <-> proxbox-api "
     "0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST "
     "dependency only and does not provide the semantic MCP bridge."
 )
@@ -222,7 +225,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
 )
 PREVIOUS_PLUGIN_VERSION = "0.0.22"
 PREVIOUS_PROXBOX_API_VERSION = "0.0.19.post5"
-CURRENT_RELEASE_NOTES_PATH = RELEASE_NOTES_026_POST9_PATH
+CURRENT_RELEASE_NOTES_PATH = RELEASE_NOTES_026_POST10_PATH
 
 
 def _class_constants(class_name: str) -> dict[str, str]:
@@ -459,6 +462,36 @@ def test_certified_netbox_versions_are_in_e2e_matrix():
         _workflow_matrix_json_fallback(workflow, "netbox_image")
         == SUPPORTED_NETBOX_IMAGE_TAGS
     )
+
+
+def test_e2e_matrix_excludes_pve_on_latest_certified_netbox_for_published_backends():
+    """Published proxbox-api builds cannot synchronize PVE on NetBox 4.7.0.
+
+    The exclusion applies only to the release-validation dependency modes that
+    install a published backend; dev-backend, pull-request, and scheduled runs
+    keep every NetBox 4.7.0 cell.
+    """
+    workflow = E2E_WORKFLOW_PATH.read_text(encoding="utf-8")
+    expression = _workflow_matrix_expression(workflow, "exclude")
+    match = re.fullmatch(
+        r"\$\{\{ fromJSON\((?P<condition>\(.*\)) && '(?P<cells>\[.*\])' \|\| '\[\]'\) \}\}",
+        expression,
+    )
+    assert match is not None, expression
+    condition = match.group("condition")
+    for mode in ("pypi-package", "testpypi-package", "published"):
+        assert f"inputs.dependency_mode == '{mode}'" in condition
+    assert "'dev'" not in condition
+    cells = json.loads(match.group("cells"))
+    assert cells == [
+        {"netbox_image": LATEST_CERTIFIED_NETBOX_IMAGE, "proxmox_service": "pve"}
+    ]
+    retained = [
+        image
+        for image in SUPPORTED_NETBOX_IMAGE_TAGS
+        if image != LATEST_CERTIFIED_NETBOX_IMAGE
+    ]
+    assert retained and all("4.7.0" not in image for image in retained)
 
 
 def test_e2e_scheduled_runs_expand_the_full_install_source_matrix():
@@ -781,6 +814,25 @@ def test_release_index_declares_current_release_exactly():
     )
     versions = {v for pair in stale for v in pair if v}
     assert versions == {CURRENT_RELEASE_VERSION}, versions
+
+
+def test_netbox_47_pve_limitation_is_stated_in_every_compatibility_authority():
+    """Every page that claims NetBox 4.7.0 support must state the known-broken path."""
+    for path in (
+        README_PATH,
+        DOCS_INDEX_PATH,
+        CURRENT_RELEASE_NOTES_PATH,
+        CERTIFICATION_PATH,
+        DOCS_CERTIFICATION_PATH,
+        APPLICATION_PACKET_PATH,
+        COMPATIBILITY_PATH,
+        REPO_ROOT / "llms.txt",
+    ):
+        text = _read(path)
+        assert "known-broken" in text, f"{path} missing the known-broken limitation"
+        assert "plugin/Django compatibility only" in text, (
+            f"{path} does not scope the NetBox 4.7.0 certification"
+        )
 
 
 def test_current_release_pairing_is_documented_in_primary_docs():

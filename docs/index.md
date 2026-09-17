@@ -9,7 +9,7 @@ Proxbox is a NetBox plugin that integrates Proxmox with NetBox through a separat
 
 | Tier | NetBox range | Behaviour |
 |---|---|---|
-| Stable | `4.5.8` - `4.7.0` | Admitted silently. Exercised in CI at v4.5.8, v4.5.10, v4.6.0, v4.6.6, and v4.7.0 GA. |
+| Stable | `4.5.8` - `4.7.0` | Admitted silently. Exercised in CI at v4.5.8, v4.5.10, v4.6.0, v4.6.6, and v4.7.0 GA (v4.7.0: plugin/Django compatibility only; published-backend PVE synchronization known-broken). |
 | Experimental | NetBox 4.7.x pre-release builds within the declared loader range | Loads for evaluation and warns via system check `netbox_proxbox.W001`; not a GA support promise. |
 
 GA support requires no setting, opt-in flag, or install step. NetBox 4.7.x
@@ -23,7 +23,10 @@ NetBox warns, omits the plugin, and continues startup.
 
 | NetBox   | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
-| 4.5.8-4.7.0 GA | v0.0.26.post9 | v0.0.21.post7 | v0.0.10 | v0.0.13 |
+| 4.5.8-4.7.0 GA | v0.0.26.post10 | v0.0.21.post7 | v0.0.10 | v0.0.13 |
+
+Limitation: end-to-end PVE synchronization on NetBox 4.7.0 through the published backend this line pairs with (proxbox-api 0.0.19.post5 through 0.0.21.post7) is known-broken and excluded from the release-validation matrix; the NetBox 4.7.0 entry covers plugin/Django compatibility only.
+
 | >=4.5.8  | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8  | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8  | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |
@@ -54,7 +57,7 @@ and WebSocket.
 The current repository code declares support for:
 
 - NetBox `4.5.8` through `4.7.0`, including official `v4.7.0` GA
-- Plugin version `0.0.26.post9` in source
+- Plugin version `0.0.26.post10` in source
 
 That support comes directly from the plugin config in this repository:
 
@@ -63,7 +66,7 @@ That support comes directly from the plugin config in this repository:
 
 This compatibility line is validated against NetBox `v4.5.8` through `v4.5.10`
 and `v4.6.0` through `v4.6.6` in the stable tier, plus official `v4.7.0` GA at
-exact commit `5f06007e4c9bacc93ce17c1e645fc1143d60df3d`.
+exact commit `5f06007e4c9bacc93ce17c1e645fc1143d60df3d` (plugin/Django compatibility only on v4.7.0; see the limitation above).
 The source matrix verifies each checkout's commit and release metadata before
 installing its checksum-bound, artifact-hashed Python 3.12/Linux dependency
 lock.
@@ -72,9 +75,9 @@ methods, tenant-scoped endpoint allowlists, bulk endpoint enablement, PDM
 endpoint sync, SDN inventory, Firecracker serializer hardening, dual VM
 interface sync, and the all-endpoint `enabled=False` no-connection guard.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.26.post9 <-> proxbox-api 0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.26.post10 <-> proxbox-api 0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
-The `0.0.26.post9` release runs the release-validation page-coverage gate on NetBox 4.6.6, the last release its pinned validation backend is certified for, with no plugin runtime changes, retaining the virtual machines list search and filtering, the production console handoff, Proxmox metrics, soft-deleted VM purge surface, and the official NetBox 4.7.0 GA compatibility contract. The historical rows remain documented below.
+The `0.0.26.post10` release excludes the PVE cells on NetBox 4.7.0 from the release-validation end-to-end matrix only when a published backend is installed (that backend cannot synchronize PVE there; that path is known-broken and the 4.7.0 certification covers plugin/Django compatibility only), with no plugin runtime changes, retaining the virtual machines list search and filtering, the production console handoff, Proxmox metrics, soft-deleted VM purge surface, and the official NetBox 4.7.0 GA compatibility contract. The historical rows remain documented below.
 
 ## Important Packaging Note
 

@@ -11,7 +11,7 @@ vendored byte-identically across the whole Proxbox plugin stack
 
 | Tier | NetBox range | Constant | Behaviour |
 |---|---|---|---|
-| Stable | `4.5.8` – `4.7.0` | `STABLE_MIN_NETBOX_VERSION` / `STABLE_MAX_NETBOX_VERSION` | Admitted silently. CI exercises NetBox 4.5.8, 4.5.10, 4.6.0, 4.6.6, and 4.7.0. |
+| Stable | `4.5.8` – `4.7.0` | `STABLE_MIN_NETBOX_VERSION` / `STABLE_MAX_NETBOX_VERSION` | Admitted silently. CI exercises NetBox 4.5.8, 4.5.10, 4.6.0, 4.6.6, and 4.7.0. End-to-end PVE synchronization on NetBox 4.7.0 through the published backend this line pairs with (proxbox-api 0.0.19.post5 through 0.0.21.post7) is known-broken and excluded from the release-validation matrix; the 4.7.0 entry covers plugin/Django compatibility only. |
 | Experimental | NetBox 4.7.0 pre-release builds within the declared loader range | Advisory warning via system check `netbox_proxbox.W001`; not a GA support promise. |
 
 `PluginConfig.min_version` is `4.5.8` and `PluginConfig.max_version` is
@@ -77,11 +77,14 @@ commit, final `release.yaml` metadata, and upstream requirements checksum before
 installing a reviewed Python 3.12/Linux lock with artifact hashes and an
 explicit PyPI first-index policy.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.26.post9 <-> proxbox-api 0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.26.post10 <-> proxbox-api 0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 | netbox-proxbox | NetBox | Python | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |---|---|---|---|---|---|
-| v0.0.26.post9 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.21.post7 | v0.0.10 | v0.0.13 |
+| v0.0.26.post10 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.21.post7 | v0.0.10 | v0.0.13 |
+
+Limitation: end-to-end PVE synchronization on NetBox 4.7.0 through the published backend this line pairs with (proxbox-api 0.0.19.post5 through 0.0.21.post7) is known-broken and excluded from the release-validation matrix; the NetBox 4.7.0 entry covers plugin/Django compatibility only.
+
 | v0.0.26.post1 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.20 | v0.0.10 | v0.0.13 |
 | v0.0.23.post2 | >=4.5.8 | >=3.12 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | v0.0.23.post1 | >=4.5.8 | >=3.12 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |

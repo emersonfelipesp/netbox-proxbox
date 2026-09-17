@@ -240,16 +240,16 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
-## What's New in v0.0.26.post9
+## What's New in v0.0.26.post10
 
-Current backend-runtime pairing: netbox-proxbox 0.0.26.post9 <-> proxbox-api 0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.26.post10 <-> proxbox-api 0.0.21.post7 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.10. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 Paired with backend: `proxbox-api 0.0.21.post7`.
 
-- **Release-validation page-coverage gate aligned with its backend.** The gate runs NetBox 4.6.6, the last release its pinned validation backend is certified for, so the 0.0.26 line can be published to PyPI. NetBox 4.7.0 GA certification stays with the Django and end-to-end matrices. No plugin runtime changes.
+- **Release-validation end-to-end matrix scoped to its backend.** The two PVE cells on NetBox 4.7.0 are excluded only when the matrix installs a published backend, which cannot synchronize PVE there; source-built runs keep full 4.7.0 coverage. End-to-end PVE synchronization on NetBox 4.7.0 with the published backend is known-broken; the 4.7.0 certification covers plugin/Django compatibility only. No plugin runtime changes.
 - **Feature retention.** Retains the virtual machines list search and filtering, the browser-console handoff, Proxmox metrics, and human-only soft-deleted VM purge surface from earlier `0.0.26.post` releases.
 
-Full notes: [Release Notes - v0.0.26.post9](docs/release-notes/version-0.0.26.post9.md).
+Full notes: [Release Notes - v0.0.26.post10](docs/release-notes/version-0.0.26.post10.md).
 
 ## What's New in v0.0.26.post2
 
@@ -373,7 +373,10 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
-| 4.5.8-4.7.0 GA | v0.0.26.post9 | v0.0.21.post7 | v0.0.10 | v0.0.13 |
+| 4.5.8-4.7.0 GA | v0.0.26.post10 | v0.0.21.post7 | v0.0.10 | v0.0.13 |
+
+Limitation: end-to-end PVE synchronization on NetBox 4.7.0 through the published backend this line pairs with (proxbox-api 0.0.19.post5 through 0.0.21.post7) is known-broken and excluded from the release-validation matrix; the NetBox 4.7.0 entry covers plugin/Django compatibility only.
+
 | >=4.5.8 | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.22 | v0.0.19.post5 | v0.0.10 | v0.0.12 |
@@ -397,7 +400,7 @@ across the whole Proxbox plugin stack:
 
 | Tier | NetBox range | What it means |
 |---|---|---|
-| **Stable** | `4.5.8` – `4.7.0` | Admitted silently. CI exercises v4.5.8, v4.5.10, v4.6.0, v4.6.6, and v4.7.0 GA. |
+| **Stable** | `4.5.8` – `4.7.0` | Admitted silently. CI exercises v4.5.8, v4.5.10, v4.6.0, v4.6.6, and v4.7.0 GA (v4.7.0: plugin/Django compatibility only; published-backend PVE synchronization known-broken). |
 | **Experimental** | NetBox 4.7.x pre-release builds within the declared loader range | Loads for evaluation and warns once at startup; this is not a GA support promise. |
 
 The GA support needs **no configuration at all** — no setting, opt-in flag, or
