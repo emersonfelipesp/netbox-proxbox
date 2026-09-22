@@ -176,12 +176,51 @@ def assert_settings_endpoint_reachable(netbox_base_url: str, netbox_token: str) 
             f"{netbox_base_url}/api/plugins/proxbox/settings/runtime/",
             headers=headers,
             timeout=30,
+            allow_redirects=False,
         ),
         context="plugin settings runtime",
     )
     for key in ("bulk_batch_size", "netbox_timeout", "encryption_key_configured"):
         if key not in payload:
             raise AssertionError(f"Settings runtime payload missing {key!r}: {payload}")
+
+
+def select_fixture_credential_storage(netbox_base_url: str, netbox_token: str) -> None:
+    """Select local credential storage for the disposable E2E stack."""
+    headers = {
+        "Authorization": f"Token {netbox_token}",
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+    }
+    settings = assert_ok(
+        requests.get(
+            f"{netbox_base_url}/api/plugins/proxbox/settings/runtime/",
+            headers=headers,
+            timeout=30,
+            allow_redirects=False,
+        ),
+        context="read plugin settings before E2E storage selection",
+    )
+    settings_id = settings.get("id")
+    if not isinstance(settings_id, int):
+        raise AssertionError(
+            f"Plugin settings runtime returned invalid id: {settings_id!r}"
+        )
+
+    updated = assert_ok(
+        requests.patch(
+            f"{netbox_base_url}/api/plugins/proxbox/settings/{settings_id}/",
+            headers=headers,
+            json={"credential_storage_backend": "legacy_encrypted"},
+            timeout=30,
+            allow_redirects=False,
+        ),
+        context="select legacy credential storage for disposable E2E stack",
+    )
+    if updated.get("credential_storage_backend") != "legacy_encrypted":
+        raise AssertionError(
+            "Plugin settings did not retain legacy_encrypted credential storage"
+        )
 
 
 def assert_rq_default_queue_contract() -> None:
@@ -449,6 +488,7 @@ def ensure_netbox_plugin_endpoints(
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
+    select_fixture_credential_storage(netbox_base_url, netbox_token)
 
     parsed_netbox = urlparse(netbox_public_url) if netbox_public_url else None
     netbox_host = (parsed_netbox.hostname if parsed_netbox else None) or "netbox"

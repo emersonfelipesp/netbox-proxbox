@@ -66,12 +66,25 @@ def test_ensure_proxbox_backend_endpoints_skips_direct_proxmox_seed(monkeypatch)
 
 def test_netbox_e2e_endpoint_explicitly_uses_local_credential_storage(monkeypatch):
     stack_setup = _load_stack_setup()
-    requests: list[tuple[str, dict]] = []
+    calls: list[tuple[str, str, dict]] = []
+
+    def fake_get(url: str, **kwargs):
+        calls.append(("GET", url, kwargs))
+        return _Response(status_code=200, payload={"id": 23})
+
+    def fake_patch(url: str, **kwargs):
+        calls.append(("PATCH", url, kwargs))
+        return _Response(
+            status_code=200,
+            payload={"credential_storage_backend": "legacy_encrypted"},
+        )
 
     def fake_post_json(url: str, payload: dict, *_args, **_kwargs) -> dict:
-        requests.append((url, payload))
-        return {"id": len(requests)}
+        calls.append(("POST", url, payload))
+        return {"id": len(calls)}
 
+    monkeypatch.setattr(stack_setup.requests, "get", fake_get)
+    monkeypatch.setattr(stack_setup.requests, "patch", fake_patch)
     monkeypatch.setattr(stack_setup, "post_json", fake_post_json)
 
     stack_setup.ensure_netbox_plugin_endpoints(
@@ -81,9 +94,39 @@ def test_netbox_e2e_endpoint_explicitly_uses_local_credential_storage(monkeypatc
         proxbox_api_key="proxbox-key",
     )
 
+    assert calls[:2] == [
+        (
+            "GET",
+            "http://netbox.test/api/plugins/proxbox/settings/runtime/",
+            {
+                "headers": {
+                    "Authorization": "Token token-value",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                "timeout": 30,
+                "allow_redirects": False,
+            },
+        ),
+        (
+            "PATCH",
+            "http://netbox.test/api/plugins/proxbox/settings/23/",
+            {
+                "headers": {
+                    "Authorization": "Token token-value",
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                "json": {"credential_storage_backend": "legacy_encrypted"},
+                "timeout": 30,
+                "allow_redirects": False,
+            },
+        ),
+    ]
     proxmox_payload = next(
         payload
-        for url, payload in requests
+        for method, url, payload in calls
+        if method == "POST"
         if url.endswith("/api/plugins/proxbox/endpoints/proxmox/")
     )
     assert proxmox_payload["credential_storage_backend"] == "legacy_encrypted"
