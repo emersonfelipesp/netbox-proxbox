@@ -663,6 +663,13 @@ def test_public_publish_workflow_uses_immutable_locked_tooling() -> None:
         "twine==6.2.0",
         "wheel==0.46.2",
     ]
+    prepare_steps = parsed["jobs"]["prepare-release"]["steps"]
+    metadata_step = next(
+        step
+        for step in prepare_steps
+        if step.get("name") == "Validate package metadata and tag"
+    )
+    assert metadata_step["run"].startswith(".venv/bin/python - <<'PY'\n")
     assert workflow.count("uv sync --only-group publish --locked") == 3
     assert "uv run --with twine python -m twine upload" not in workflow
     assert workflow.count(".venv/bin/python -m twine upload") == 2

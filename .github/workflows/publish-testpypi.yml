@@ -88,7 +88,7 @@ jobs:
           EXPECTED_VERSION: ${{ github.event_name == 'workflow_dispatch' && inputs.expected_version || '' }}
           PROXBOX_API_VERSION_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.proxbox_api_version || '' }}
         run: |
-          python - <<'PY'
+          .venv/bin/python - <<'PY'
           import ast
           import os
           import pathlib
