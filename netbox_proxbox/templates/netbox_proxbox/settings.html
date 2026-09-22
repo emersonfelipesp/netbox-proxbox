@@ -310,6 +310,30 @@
                 </div>
             </div>
             {# Encryption Card #}
+            <div class="card mb-3" data-openbao-readiness>
+                <h5 class="card-header">
+                    <i class="mdi mdi-shield-key"></i>
+                    {% trans "OpenBao readiness" %}
+                </h5>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {% trans "This secret-free status is shared with proxbox_openbao_setup. It checks structure and configuration, never credential material." %}
+                    </p>
+                    <ul class="list-group list-group-flush">
+                        {% for item in openbao_readiness.items %}
+                            <li class="list-group-item" data-openbao-check="{{ item.key }}">
+                                {% if item.ready %}
+                                    <span class="badge text-bg-success">{% trans "Ready" %}</span>
+                                {% else %}
+                                    <span class="badge text-bg-warning">{% trans "Missing" %}</span>
+                                {% endif %}
+                                <strong>{{ item.label }}</strong> — {{ item.detail }}
+                                {% if not item.ready %}<div class="text-muted">{{ item.remedy }}</div>{% endif %}
+                            </li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
             <div class="card mb-3">
                 <h5 class="card-header">
                     <i class="mdi mdi-lock"></i>

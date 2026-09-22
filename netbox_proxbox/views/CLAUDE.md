@@ -50,6 +50,12 @@ per node, or issuing an authenticated request for every membership entry.
   restricted `self.queryset`; it never derives events from the paginated table.
   The combined view independently restricts every source queryset and checks
   the corresponding model view permission before producing events.
+  Scheduled routines and replications interpret exact wall-clock times in the
+  source endpoint's persisted IANA timezone, then convert to NetBox's active
+  timezone before day bucketing. Missing/invalid zones, variable clock syntax,
+  and DST gaps/folds remain visible as approximate events. Combined node
+  selection is capped at 50 before the endpoint-qualified fallback `Q` tree is
+  built.
 - [`jobs.py`](./jobs.py): `ProxboxJobListView` / `ProxboxJobTable` — the
   Proxbox-only view of core `Job`, mounted at `/plugins/proxbox/jobs/` and
   targeted by the **Sync Jobs** menu entry. It subclasses core's `JobListView`
@@ -266,7 +272,14 @@ per node, or issuing an authenticated request for every membership entry.
   `tests/test_detail_view_templates_django.py`: it walks the populated runtime
   registry, asks each actual `ObjectView` for its template, compiles that name
   through Django's loader, and authenticated-GET smokes the 17 routes repaired
-  by this bug across the supported NetBox matrix.
+  by this bug across the supported NetBox matrix. Its registry oracle is fixed
+  for plugin-owned views and conditionally extends only when the corresponding
+  companion Django app is installed; optional companion absence must not look
+  like registry drift, while an installed companion with a missing or changed
+  override must fail. Detail fixtures must populate encrypted model fields
+  through their production `set_*()` helpers with a disposable Fernet key;
+  writing plaintext marker strings directly into ciphertext columns bypasses
+  the recovery boundary and is not valid fixture setup.
 - **URL namespace for tabs registered on core models.** When `register_model_view`
   attaches a tab/view to a NetBox **core** model (e.g. `virtualization.Cluster`,
   `virtualization.VirtualMachine`, `core.Job`), NetBox names that URL under the

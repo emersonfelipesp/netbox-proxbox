@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.db.models import Q
+from django.views.decorators.debug import sensitive_variables
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from netbox.api.authentication import IsAuthenticatedOrLoginNotRequired
@@ -111,6 +112,176 @@ from netbox_proxbox.api.mcp_bridge import (
     mcp_bridge_is_active,
 )
 from netbox_proxbox.services.metrics_influx import MetricsProxyError, query_metrics
+
+
+class _SingleSecretOwnerViewSetMixin:
+    """Own provider compensation outside NetBox's REST atomic wrappers."""
+
+    material_field: str
+
+    def _material_payloads(self, data: object) -> list[dict]:
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)]
+        return [data] if isinstance(data, dict) else []
+
+    def _material_owners(self, payloads: list[dict]) -> list[object]:
+        from netbox_proxbox.integrations.openbao_node_request import request_pk
+
+        ids = {
+            object_id
+            for payload in payloads
+            if (object_id := request_pk(payload.get("id"))) is not None
+        }
+        return list(self.get_queryset().filter(pk__in=ids).order_by("pk"))
+
+    def _material_boundary(
+        self,
+        request: Request,
+        owners: list[object],
+        payloads: list[dict],
+        *,
+        allow_new: bool = False,
+    ) -> object:
+        from netbox_proxbox.integrations.openbao_single_request import (
+            single_secret_mutation_boundary,
+        )
+
+        return single_secret_mutation_boundary(
+            owners,
+            payloads,
+            model=self.queryset.model,
+            material_field=self.material_field,
+            actor=request.user,
+            request=request,
+            allow_new=allow_new,
+        )
+
+    @sensitive_variables()
+    def create(self, request: Request, *args: object, **kwargs: object) -> Response:
+        payloads = self._material_payloads(request.data)
+        with self._material_boundary(request, [], payloads, allow_new=True):
+            return super().create(request, *args, **kwargs)
+
+    @sensitive_variables()
+    def update(self, request: Request, *args: object, **kwargs: object) -> Response:
+        owner = self.get_object()
+        payloads = self._material_payloads(request.data)
+        with self._material_boundary(request, [owner], payloads):
+            return super().update(request, *args, **kwargs)
+
+    @sensitive_variables()
+    def destroy(self, request: Request, *args: object, **kwargs: object) -> Response:
+        owner = self.get_object()
+        with self._material_boundary(request, [owner], []):
+            return super().destroy(request, *args, **kwargs)
+
+    @sensitive_variables()
+    def bulk_update(
+        self, request: Request, *args: object, **kwargs: object
+    ) -> Response:
+        payloads = self._material_payloads(request.data)
+        owners = self._material_owners(payloads)
+        with self._material_boundary(request, owners, payloads):
+            return super().bulk_update(request, *args, **kwargs)
+
+    @sensitive_variables()
+    def bulk_partial_update(
+        self, request: Request, *args: object, **kwargs: object
+    ) -> Response:
+        kwargs["partial"] = True
+        return self.bulk_update(request, *args, **kwargs)
+
+    @sensitive_variables()
+    def bulk_destroy(
+        self, request: Request, *args: object, **kwargs: object
+    ) -> Response:
+        payloads = self._material_payloads(request.data)
+        owners = self._material_owners(payloads)
+        with self._material_boundary(request, owners, []):
+            return super().bulk_destroy(request, *args, **kwargs)
+
+
+class _CloudInitSecretOwnerViewSetMixin:
+    """Own cloud-init provider compensation outside REST atomic wrappers."""
+
+    def _cloudinit_payloads(self, data: object) -> list[dict]:
+        if isinstance(data, list):
+            return [item for item in data if isinstance(item, dict)]
+        return [data] if isinstance(data, dict) else []
+
+    def _cloudinit_owners(self, payloads: list[dict]) -> list[object]:
+        from netbox_proxbox.integrations.openbao_node_request import request_pk
+
+        ids = {
+            object_id
+            for payload in payloads
+            if (object_id := request_pk(payload.get("id"))) is not None
+        }
+        return list(self.get_queryset().filter(pk__in=ids).order_by("pk"))
+
+    def _cloudinit_boundary(
+        self,
+        request: Request,
+        owners: list[object],
+        payloads: list[dict],
+        *,
+        allow_new: bool = False,
+    ) -> object:
+        from netbox_proxbox.integrations.openbao_cloudinit import (
+            cloudinit_mutation_boundary,
+        )
+
+        return cloudinit_mutation_boundary(
+            owners,
+            payloads,
+            actor=request.user,
+            request=request,
+            allow_new=allow_new,
+        )
+
+    @sensitive_variables()
+    def create(self, request: Request, *args: object, **kwargs: object) -> Response:
+        payloads = self._cloudinit_payloads(request.data)
+        with self._cloudinit_boundary(request, [], payloads, allow_new=True):
+            return super().create(request, *args, **kwargs)
+
+    @sensitive_variables()
+    def update(self, request: Request, *args: object, **kwargs: object) -> Response:
+        owner = self.get_object()
+        payloads = self._cloudinit_payloads(request.data)
+        with self._cloudinit_boundary(request, [owner], payloads):
+            return super().update(request, *args, **kwargs)
+
+    @sensitive_variables()
+    def destroy(self, request: Request, *args: object, **kwargs: object) -> Response:
+        owner = self.get_object()
+        with self._cloudinit_boundary(request, [owner], []):
+            return super().destroy(request, *args, **kwargs)
+
+    @sensitive_variables()
+    def bulk_update(
+        self, request: Request, *args: object, **kwargs: object
+    ) -> Response:
+        payloads = self._cloudinit_payloads(request.data)
+        owners = self._cloudinit_owners(payloads)
+        with self._cloudinit_boundary(request, owners, payloads):
+            return super().bulk_update(request, *args, **kwargs)
+
+    @sensitive_variables()
+    def bulk_partial_update(
+        self, request: Request, *args: object, **kwargs: object
+    ) -> Response:
+        kwargs["partial"] = True
+        return self.bulk_update(request, *args, **kwargs)
+
+    @sensitive_variables()
+    def bulk_destroy(
+        self, request: Request, *args: object, **kwargs: object
+    ) -> Response:
+        payloads = self._cloudinit_payloads(request.data)
+        owners = self._cloudinit_owners(payloads)
+        with self._cloudinit_boundary(request, owners, []):
+            return super().bulk_destroy(request, *args, **kwargs)
 
 
 class ProxBoxRootView(APIRootView):
@@ -275,7 +446,7 @@ class FirecrackerHostPoolViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.FirecrackerHostPoolFilterSet
 
 
-class FirecrackerHostViewSet(NetBoxModelViewSet):
+class FirecrackerHostViewSet(_SingleSecretOwnerViewSetMixin, NetBoxModelViewSet):
     """REST API for Firecracker host-agent VMs."""
 
     queryset = models.FirecrackerHost.objects.select_related(
@@ -285,6 +456,7 @@ class FirecrackerHostViewSet(NetBoxModelViewSet):
     ).prefetch_related("tags")
     serializer_class = FirecrackerHostSerializer
     filterset_class = filtersets.FirecrackerHostFilterSet
+    material_field = "agent_token"
 
 
 class FirecrackerImageTemplateViewSet(NetBoxModelViewSet):
@@ -329,7 +501,7 @@ class VMTaskHistoryViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.VMTaskHistoryFilterSet
 
 
-class ProxmoxVMCloudInitViewSet(NetBoxModelViewSet):
+class ProxmoxVMCloudInitViewSet(_CloudInitSecretOwnerViewSetMixin, NetBoxModelViewSet):
     """REST API for Proxmox VM cloud-init rows (issue #363).
 
     proxbox-api writes ciuser/sshkeys/ipconfig0 here after each per-VM sync.
@@ -933,12 +1105,13 @@ class NetBoxEndpointViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.NetBoxEndpointFilterSet
 
 
-class FastAPIEndpointViewSet(NetBoxModelViewSet):
+class FastAPIEndpointViewSet(_SingleSecretOwnerViewSetMixin, NetBoxModelViewSet):
     """REST API for ProxBox FastAPI backend (HTTP/WebSocket) endpoints."""
 
     queryset = models.FastAPIEndpoint.objects.select_related("ip_address")
     serializer_class = FastAPIEndpointSerializer
     filterset_class = filtersets.FastAPIEndpointFilterSet
+    material_field = "token"
 
 
 class ProxmoxClusterViewSet(NetBoxModelViewSet):
@@ -951,6 +1124,25 @@ class ProxmoxClusterViewSet(NetBoxModelViewSet):
     filterset_class = filtersets.ProxmoxClusterFilterSet
 
 
+@sensitive_variables()
+def _mutation_payloads(data: object) -> list[dict]:
+    """Normalize one or many DRF mutation payloads for boundary declaration."""
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)]
+    return [data] if isinstance(data, dict) else []
+
+
+@sensitive_variables()
+def _payload_ids(payloads: list[dict]) -> set[int]:
+    from netbox_proxbox.integrations.openbao_node_request import request_pk
+
+    return {
+        object_id
+        for payload in payloads
+        if (object_id := request_pk(payload.get("id"))) is not None
+    }
+
+
 class ProxmoxNodeViewSet(NetBoxModelViewSet):
     """REST API for Proxmox node tracking linked to NetBox devices."""
 
@@ -959,6 +1151,40 @@ class ProxmoxNodeViewSet(NetBoxModelViewSet):
     )
     serializer_class = ProxmoxNodeSerializer
     filterset_class = filtersets.ProxmoxNodeFilterSet
+
+    def update(self, request: Request, *args: object, **kwargs: object) -> Response:
+        """Own link reconciliation outside NetBox's REST atomic block."""
+        from netbox_proxbox.integrations.openbao_node_request import (
+            node_link_request_boundary,
+        )
+
+        node = self.get_object()
+        payloads = _mutation_payloads(request.data)
+        with node_link_request_boundary(
+            [node], payloads, actor=request.user, request=request
+        ):
+            return super().update(request, *args, **kwargs)
+
+    def bulk_update(
+        self, request: Request, *args: object, **kwargs: object
+    ) -> Response:
+        """Own all REST link changes in one outer provider transaction."""
+        from netbox_proxbox.integrations.openbao_node_request import (
+            node_link_request_boundary,
+        )
+
+        payloads = _mutation_payloads(request.data)
+        nodes = list(self.get_queryset().filter(pk__in=_payload_ids(payloads)))
+        with node_link_request_boundary(
+            nodes, payloads, actor=request.user, request=request
+        ):
+            return super().bulk_update(request, *args, **kwargs)
+
+    def bulk_partial_update(
+        self, request: Request, *args: object, **kwargs: object
+    ) -> Response:
+        kwargs["partial"] = True
+        return self.bulk_update(request, *args, **kwargs)
 
 
 class BackupRoutineViewSet(NetBoxModelViewSet):
@@ -997,6 +1223,85 @@ class NodeSSHCredentialViewSet(NetBoxModelViewSet):
     queryset = models.NodeSSHCredential.objects.select_related("node")
     serializer_class = NodeSSHCredentialSerializer
     filterset_class = filtersets.NodeSSHCredentialFilterSet
+
+    @sensitive_variables()
+    def create(self, request: Request, *args: object, **kwargs: object) -> Response:
+        """Own material compensation outside NetBox's create atomic block."""
+        from netbox_proxbox.integrations.openbao_node_request import (
+            node_credential_request_boundary,
+        )
+
+        payloads = _mutation_payloads(request.data)
+        with node_credential_request_boundary(
+            [], payloads, actor=request.user, request=request, allow_new=True
+        ):
+            return super().create(request, *args, **kwargs)
+
+    @sensitive_variables()
+    def update(self, request: Request, *args: object, **kwargs: object) -> Response:
+        """Own material compensation outside NetBox's update atomic block."""
+        from netbox_proxbox.integrations.openbao_node_request import (
+            node_credential_request_boundary,
+        )
+
+        owner = self.get_object()
+        payloads = _mutation_payloads(request.data)
+        with node_credential_request_boundary(
+            [owner], payloads, actor=request.user, request=request
+        ):
+            return super().update(request, *args, **kwargs)
+
+    @sensitive_variables()
+    def destroy(self, request: Request, *args: object, **kwargs: object) -> Response:
+        """Own assignment cleanup outside NetBox's destroy atomic block."""
+        from netbox_proxbox.integrations.openbao_node_request import (
+            node_credential_request_boundary,
+        )
+
+        owner = self.get_object()
+        with node_credential_request_boundary(
+            [owner], [], actor=request.user, request=request
+        ):
+            return super().destroy(request, *args, **kwargs)
+
+    @sensitive_variables()
+    def bulk_update(
+        self, request: Request, *args: object, **kwargs: object
+    ) -> Response:
+        """Own all bulk rotations in one outer provider transaction."""
+        from netbox_proxbox.integrations.openbao_node_request import (
+            node_credential_request_boundary,
+        )
+
+        payloads = _mutation_payloads(request.data)
+        owners = list(self.get_queryset().filter(pk__in=_payload_ids(payloads)))
+        with node_credential_request_boundary(
+            owners, payloads, actor=request.user, request=request
+        ):
+            return super().bulk_update(request, *args, **kwargs)
+
+    @sensitive_variables()
+    def bulk_partial_update(
+        self, request: Request, *args: object, **kwargs: object
+    ) -> Response:
+        kwargs["partial"] = True
+        return self.bulk_update(request, *args, **kwargs)
+
+    @sensitive_variables()
+    def bulk_destroy(
+        self, request: Request, *args: object, **kwargs: object
+    ) -> Response:
+        """Own all bulk assignment cleanup in one provider transaction."""
+        from netbox_proxbox.integrations.openbao_node_request import (
+            node_credential_request_boundary,
+        )
+
+        payloads = _mutation_payloads(request.data)
+        owners = list(self.get_queryset().filter(pk__in=_payload_ids(payloads)))
+        with node_credential_request_boundary(
+            owners, [], actor=request.user, request=request
+        ):
+            return super().bulk_destroy(request, *args, **kwargs)
 
 
 class _ProxboxDashboardPermission(BasePermission):
@@ -2297,7 +2602,7 @@ class ProxmoxDatacenterCpuModelViewSet(NetBoxModelViewSet):
 # ── PBS / PDM / Intent ViewSets ───────────────────────────────────────────────
 
 
-class PBSEndpointViewSet(NetBoxModelViewSet):
+class PBSEndpointViewSet(_SingleSecretOwnerViewSetMixin, NetBoxModelViewSet):
     """REST API for Proxmox Backup Server endpoint inventory."""
 
     queryset = models.PBSEndpoint.objects.select_related(
@@ -2306,9 +2611,10 @@ class PBSEndpointViewSet(NetBoxModelViewSet):
         "tenant",
     )
     serializer_class = PBSEndpointSerializer
+    material_field = "token_secret"
 
 
-class PDMEndpointViewSet(NetBoxModelViewSet):
+class PDMEndpointViewSet(_SingleSecretOwnerViewSetMixin, NetBoxModelViewSet):
     """REST API for Proxmox Datacenter Manager endpoint inventory."""
 
     queryset = models.PDMEndpoint.objects.select_related(
@@ -2320,6 +2626,7 @@ class PDMEndpointViewSet(NetBoxModelViewSet):
         "pbs_endpoints",
     )
     serializer_class = PDMEndpointSerializer
+    material_field = "token_secret"
 
 
 class PDMRemoteViewSet(NetBoxModelViewSet):

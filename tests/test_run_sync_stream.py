@@ -9,6 +9,7 @@ import types
 from pathlib import Path
 
 import pytest
+import requests
 
 
 @pytest.fixture
@@ -97,6 +98,17 @@ class _ErrorBodyResponse:
 
     def json(self):
         return self._payload
+
+
+class _FailingStreamResponse(_StreamResponse):
+    """A 200 stream that fails before or after its first complete SSE frame."""
+
+    def __init__(self, *, lines_before_failure: list[str]):
+        super().__init__(lines_before_failure)
+
+    def iter_lines(self, decode_unicode: bool = True):
+        yield from self._lines
+        raise requests.exceptions.ReadTimeout("stream read timed out")
 
 
 def _sse_complete_ok() -> list[str]:
@@ -269,6 +281,232 @@ def test_run_sync_stream_no_fastapi_url(backend_proxy_module, monkeypatch):
     payload, status = bp.run_sync_stream("full-update/stream")
     assert status == 404
     assert "No FastAPI URL" in payload["detail"]
+
+
+def test_connection_failure_after_selection_never_reissues_mutating_stream(
+    backend_proxy_module, monkeypatch
+):
+    bp = backend_proxy_module
+    context = _stream_context(bp)
+    calls: list[tuple[str, dict]] = []
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/health"):
+            return _HealthResponse()
+        calls.append((url, kwargs))
+        raise requests.exceptions.ConnectionError("connection refused")
+
+    monkeypatch.setattr(bp.requests, "get", fake_get)
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: context)
+    frames: list[tuple[str, dict]] = []
+    params = {"proxmox_endpoint_ids": "1,2"}
+
+    payload, status = bp.run_sync_stream(
+        "dcim/devices/create/stream",
+        query_params=params,
+        on_frame=lambda event, data: frames.append((event, data)),
+    )
+
+    assert status == 503
+    assert len(calls) == 1
+    assert calls[0][0].startswith(context.http_url + "/")
+    for _url, kwargs in calls:
+        assert kwargs == {
+            "params": params,
+            "headers": context.headers,
+            "verify": True,
+            "timeout": bp._SYNC_STREAM_READ_TIMEOUT,
+            "stream": True,
+            "allow_redirects": False,
+        }
+    assert frames == []
+    assert len(payload["requested_urls"]) == 1
+
+
+def test_readiness_is_checked_against_each_exact_candidate(
+    backend_proxy_module, monkeypatch
+):
+    bp = backend_proxy_module
+    context = _stream_context(bp)
+    readiness_contexts = []
+    stream_urls: list[str] = []
+
+    def fake_ready(candidate_context):
+        readiness_contexts.append(candidate_context)
+        if candidate_context.http_url == context.http_url:
+            return False, "Backend not reachable after bounded attempts"
+        return True, "Backend is reachable"
+
+    def fake_get(url, **kwargs):
+        stream_urls.append(url)
+        return _StreamResponse(_sse_complete_ok())
+
+    monkeypatch.setattr(bp, "wait_for_backend_ready", fake_ready)
+    monkeypatch.setattr(bp.requests, "get", fake_get)
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: context)
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status == 200
+    assert [candidate.http_url for candidate in readiness_contexts] == [
+        context.http_url,
+        context.ip_address_url,
+    ]
+    assert all(candidate.ip_address_url is None for candidate in readiness_contexts)
+    assert all(candidate.verify_ssl is True for candidate in readiness_contexts)
+    assert len(stream_urls) == 1
+    assert stream_urls[0].startswith(context.ip_address_url + "/")
+    assert len(payload["requested_urls"]) == 2
+
+
+def test_oserror_after_selection_never_reissues_mutating_stream(
+    backend_proxy_module, monkeypatch
+):
+    bp = backend_proxy_module
+    context = _stream_context(bp)
+    stream_urls: list[str] = []
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/health"):
+            return _HealthResponse()
+        stream_urls.append(url)
+        raise OSError("temporary resolver failure")
+
+    monkeypatch.setattr(bp.requests, "get", fake_get)
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: context)
+
+    _payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status == 503
+    assert len(stream_urls) == 1
+
+
+def test_read_timeout_before_first_frame_never_reissues_mutating_stream(
+    backend_proxy_module, monkeypatch
+):
+    bp = backend_proxy_module
+    context = _stream_context(bp)
+    stream_urls: list[str] = []
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/health"):
+            return _HealthResponse()
+        stream_urls.append(url)
+        return _FailingStreamResponse(lines_before_failure=[])
+
+    monkeypatch.setattr(bp.requests, "get", fake_get)
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: context)
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status == 502
+    assert len(stream_urls) == 1
+    assert len(payload["requested_urls"]) == 1
+
+
+def test_read_timeout_after_first_frame_never_reissues_mutating_stream(
+    backend_proxy_module, monkeypatch
+):
+    bp = backend_proxy_module
+    context = _stream_context(bp)
+    stream_urls: list[str] = []
+    lines = [
+        "event: step",
+        f"data: {json.dumps({'step': 'devices', 'status': 'started'})}",
+        "",
+    ]
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/health"):
+            return _HealthResponse()
+        stream_urls.append(url)
+        return _FailingStreamResponse(lines_before_failure=lines)
+
+    monkeypatch.setattr(bp.requests, "get", fake_get)
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: context)
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status == 502
+    assert len(stream_urls) == 1
+    assert len(payload["requested_urls"]) == 1
+    assert payload["failure_kind"] == bp.STAGE_FAILURE_TRANSPORT
+
+
+@pytest.mark.parametrize("status_code", [400, 401, 403, 429])
+def test_http_client_failures_never_try_ip_candidate(
+    backend_proxy_module, monkeypatch, status_code
+):
+    bp = backend_proxy_module
+    context = _stream_context(bp)
+    stream_urls: list[str] = []
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/health"):
+            return _HealthResponse()
+        stream_urls.append(url)
+        return _ErrorBodyResponse(status_code, {"detail": "request rejected"})
+
+    monkeypatch.setattr(bp.requests, "get", fake_get)
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: context)
+
+    _payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status == status_code
+    assert len(stream_urls) == 1
+
+
+def test_semantic_complete_failure_never_tries_ip_candidate(
+    backend_proxy_module, monkeypatch
+):
+    bp = backend_proxy_module
+    context = _stream_context(bp)
+    stream_urls: list[str] = []
+    lines = [
+        "event: complete",
+        f"data: {json.dumps({'ok': False, 'message': 'sync refused'})}",
+        "",
+    ]
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/health"):
+            return _HealthResponse()
+        stream_urls.append(url)
+        return _StreamResponse(lines)
+
+    monkeypatch.setattr(bp.requests, "get", fake_get)
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: context)
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status == 503
+    assert len(stream_urls) == 1
+    assert payload["failure_kind"] == bp.STAGE_FAILURE_APPLICATION
+
+
+def test_duplicate_primary_and_ip_candidates_are_requested_once(
+    backend_proxy_module, monkeypatch
+):
+    bp = backend_proxy_module
+    context = _stream_context(bp).model_copy(
+        update={"ip_address_url": _stream_context(bp).http_url}
+    )
+    stream_urls: list[str] = []
+
+    def fake_get(url, **kwargs):
+        if url.endswith("/health"):
+            return _HealthResponse()
+        stream_urls.append(url)
+        raise requests.exceptions.ConnectionError("connection refused")
+
+    monkeypatch.setattr(bp.requests, "get", fake_get)
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: context)
+
+    payload, status = bp.run_sync_stream("dcim/devices/create/stream")
+
+    assert status == 503
+    assert len(stream_urls) == 1
+    assert len(payload["requested_urls"]) == 1
 
 
 # --------------------------------------------------------------------------- #
@@ -656,14 +894,10 @@ def test_run_sync_stream_stamps_failure_kind_on_transport_failure(
     assert payload["failure_kind"] == bp.STAGE_FAILURE_TRANSPORT
 
 
-def test_run_sync_stream_keeps_the_application_cause_across_ip_fallback(
+def test_run_sync_stream_treats_backend_answer_as_terminal(
     backend_proxy_module, monkeypatch
 ):
-    """Hostname answers with a backend-authored 503; the IP fallback fails TLS.
-
-    The real two-candidate builder is used. The returned cause must be the
-    backend's answer, not the later transport failure on the fallback URL.
-    """
+    """A backend-authored 503 is terminal after candidate selection."""
     bp = backend_proxy_module
     import requests as _req
 
@@ -674,8 +908,6 @@ def test_run_sync_stream_keeps_the_application_cause_across_ip_fallback(
         urls.append(url)
         if url.endswith("/health"):
             return _HealthResponse()
-        if url.startswith(_stream_context(bp).ip_address_url + "/"):
-            raise _req.exceptions.SSLError("TLS error connecting to ProxBox backend")
         return _ErrorBodyResponse(503, {"detail": application_detail})
 
     monkeypatch.setattr(bp.requests, "get", fake_get)
@@ -683,13 +915,13 @@ def test_run_sync_stream_keeps_the_application_cause_across_ip_fallback(
 
     payload, status = bp.run_sync_stream("dcim/devices/create/stream")
 
-    assert len(payload["requested_urls"]) == 2, "the IP fallback must have been tried"
+    assert len(payload["requested_urls"]) == 1
     assert status == 503
     assert payload["failure_kind"] == bp.STAGE_FAILURE_APPLICATION
     assert payload["detail"] == application_detail
 
 
-def test_run_sync_stream_reports_last_transport_failure_when_no_candidate_answers(
+def test_run_sync_stream_reports_selected_candidate_transport_failure(
     backend_proxy_module, monkeypatch
 ):
     bp = backend_proxy_module
@@ -698,10 +930,6 @@ def test_run_sync_stream_reports_last_transport_failure_when_no_candidate_answer
     def fake_get(url, **kwargs):
         if url.endswith("/health"):
             return _HealthResponse()
-        if url.startswith(_stream_context(bp).ip_address_url + "/"):
-            raise _req.exceptions.SSLError("handshake failed")
-        # A non-JSON 502 page is a transport failure that still allows the
-        # IP fallback to be tried.
         return _NonJsonErrorResponse(502)
 
     monkeypatch.setattr(bp.requests, "get", fake_get)
@@ -709,9 +937,9 @@ def test_run_sync_stream_reports_last_transport_failure_when_no_candidate_answer
 
     payload, status = bp.run_sync_stream("dcim/devices/create/stream")
 
-    assert len(payload["requested_urls"]) == 2
+    assert len(payload["requested_urls"]) == 1
     assert payload["failure_kind"] == bp.STAGE_FAILURE_TRANSPORT
-    assert "TLS" in payload["detail"], "the last transport failure is reported"
+    assert payload["detail"] == "HTTP 502"
 
 
 def test_invalid_complete_event_is_application_provenance(

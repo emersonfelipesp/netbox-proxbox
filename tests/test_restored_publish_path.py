@@ -24,12 +24,11 @@ PROMOTION_WORKFLOW = REPO_ROOT / ".gitea/workflows/promote-final-tag.yml"
 # Labels advertised by runners that exist today. A job pinned outside this set
 # cannot be scheduled, which is exactly the failure that blocked this release.
 AVAILABLE_LABELS = {
-    # Quality lane, 10.0.30.241
+    # Generic quality lanes.
     "ubuntu-latest",
     "ci-untrusted-python312",
-    # Deployment lane. "package-publish" is served by
-    # ci-publish-nmulticloud-org-246 on 10.0.30.246; "mirror-host" and
-    # "prod-deploy" are still on their legacy hosts pending that migration.
+    # Generic deployment lanes; runner identities and addresses are deliberately
+    # outside this public scheduling contract.
     "package-publish",
     "mirror-host",
     "prod-deploy",

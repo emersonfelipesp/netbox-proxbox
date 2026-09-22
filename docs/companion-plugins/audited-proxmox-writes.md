@@ -409,34 +409,33 @@ silently changing approvals. Bind initiating-user and executor permissions
 separately. API-only endpoints must never fall back to SSH. Keep endpoint
 `enabled`, `allow_writes`, transport restrictions and the separate Packer gate.
 
-### 4. Run integration readiness (planned)
+### 4. Run structural readiness
 
-The proposed management commands below are **not implemented commands** and must
-not be run against an installation as though this plan supplied them:
+Proxbox supplies these structural, secret-free commands:
 
 ```text
 manage.py proxbox_openbao_setup --check
 manage.py proxbox_openbao_setup --backfill-assignments
 ```
 
-Implement these commands and a shared UI/API readiness panel before enabling the
-feature; this plan does not establish an available strict-mode setting. The
-`--check` command must perform read-only validation, report all failures in one
-run and exit nonzero when any readiness requirement fails. The panel must use
-the same validation service and show the same failures. It must list
-all missing capabilities, catalog mappings, schema versions, endpoint bindings,
-credential permissions, worker health and migration checkpoints. A second setup
-run must produce no duplicate catalog rows or assignments. The proposed
-`--backfill-assignments` action must support idempotent reference/assignment
-reconciliation, preserve operator-owned choices and report unresolved conflicts;
-it must not copy or reveal secret material or grant broad permissions. Preview must not
-reveal secrets or contact Proxmox for mutations.
+`--check` is read-only, reports every structural failure in one run, and exits
+nonzero when anything is missing. The settings panel consumes the same readiness
+DTO. Assignment backfill creates only missing relations and preserves material,
+references, existing relations, and other owners' primary choices. See
+[Enable OpenBao credential storage](enable-openbao.md) for setup, verification,
+mapping, and rollback instructions.
+
+This surface does **not** implement the broader integration readiness described
+by this protected-write roadmap. RPC catalog mappings, schema versions, backend
+compatibility, endpoint bindings, credential permissions, worker health,
+migration checkpoints, and composed operation tests remain required before
+strict protected writes can be enabled.
 
 Operators using a management CLI should use its supported virtualization,
 RPC procedure and execution-history surfaces, consulting its installed `--help`
 for exact verbs. Do not substitute raw host SSH or direct Proxmox API calls for a missing
-command. Exact acceptance commands must be published with the implementing
-release; the proposed workflow above is not a current executable command.
+command. Exact protected-write acceptance commands remain owned by the broader
+integration release rather than this structural setup command.
 
 ### 5. Migrate legacy credentials
 

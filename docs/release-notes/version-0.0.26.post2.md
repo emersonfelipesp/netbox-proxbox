@@ -6,8 +6,8 @@ Current backend-runtime pairing: netbox-proxbox 0.0.26.post2 <-> proxbox-api 0.0
 
 This post release restores the complete production browser-console path and packages the current reviewed Proxbox operations work.
 
-- NetBox now invokes the VM/LXC console extension through the supported `buttons()` template-extension hook. The generated handoff opens the matching NMS route in a new tab with `noopener noreferrer` protection.
-- The NMS route creates an authenticated, short-lived same-origin console session. QEMU guests use noVNC and LXC guests use the xterm terminal workflow provided by `proxbox-api 0.0.21.post6`.
+- NetBox now invokes the VM/LXC console extension through the supported `buttons()` template-extension hook. The generated handoff opens the matching console-gateway route in a new tab with `noopener noreferrer` protection.
+- The console gateway creates an authenticated, short-lived same-origin session. QEMU guests use noVNC and LXC guests use the xterm terminal workflow provided by `proxbox-api 0.0.21.post6`.
 - Adds independently configured Proxmox InfluxDB metrics models, settings, API endpoints, dashboards, and operating documentation.
 - Adds a human-only review and purge page for soft-deleted Proxbox VM inventory.
 - Documents the audited NetBox-to-Proxmox write path and isolates tenant-related test lanes.

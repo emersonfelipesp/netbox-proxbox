@@ -1,0 +1,40 @@
+#!/bin/bash
+set -euo pipefail
+
+state_dir=/var/lib/proxbox-stack
+secret_dir="${state_dir}/secrets"
+runtime_dir=/run/proxbox-stack
+
+install -d -m 0750 -o netbox -g root "${state_dir}" "${secret_dir}"
+install -d -m 0755 -o netbox -g root "${runtime_dir}"
+install -d -m 0750 -o netbox -g root /var/lib/proxbox-api
+touch /var/lib/proxbox-api/proxbox.log
+chown -R netbox:root /var/lib/proxbox-api
+chmod 0640 /var/lib/proxbox-api/proxbox.log
+install -d -m 0750 -o redis -g redis /var/lib/redis
+rm -f "${runtime_dir}/netbox-initialized"
+
+if [[ ! -s "${secret_dir}/netbox-secret-key" ]]; then
+    /opt/netbox/venv/bin/python /opt/netbox/netbox/generate_secret_key.py \
+        >"${secret_dir}/netbox-secret-key"
+fi
+if [[ ! -s "${secret_dir}/api-token-pepper" ]]; then
+    /opt/netbox/venv/bin/python -c \
+        'import secrets; print(secrets.token_urlsafe(64))' \
+        >"${secret_dir}/api-token-pepper"
+fi
+if [[ ! -s "${secret_dir}/postgres-password" ]]; then
+    /opt/netbox/venv/bin/python -c \
+        'import secrets; print(secrets.token_hex(32))' \
+        >"${secret_dir}/postgres-password"
+fi
+if [[ ! -s "${secret_dir}/proxbox-encryption-key" ]]; then
+    /opt/proxbox-api/bin/python -c \
+        'from cryptography.fernet import Fernet; print(Fernet.generate_key().decode())' \
+        >"${secret_dir}/proxbox-encryption-key"
+fi
+
+chmod 0640 "${secret_dir}"/*
+chown netbox:root "${secret_dir}"/*
+
+exec /usr/bin/supervisord -c /etc/supervisor/supervisord.conf

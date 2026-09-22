@@ -39,7 +39,13 @@ class BackupRoutineListView(DataProtectionCalendarMixin, generic.ObjectListView)
     calendar_kind = "routine"
     calendar_schedule_field = "schedule"
     calendar_order_fields = ROUTINE_ORDER_FIELDS
-    calendar_value_fields = ("job_id", "node__name", "enabled", "status")
+    calendar_value_fields = (
+        "job_id",
+        "node__name",
+        "enabled",
+        "status",
+        "endpoint__iana_timezone",
+    )
     calendar_label_builder = staticmethod(_routine_label)
     calendar_muted_builder = staticmethod(_routine_muted)
     calendar_detail_builder = staticmethod(_routine_details)

@@ -9,10 +9,10 @@ on:
         type: string
         default: both
       dependency_mode:
-        description: "dev = build proxbox-api from GitHub source; published = pull from Docker Hub; testpypi-package/pypi-package = install proxbox-api from that index"
+        description: "published = exact Docker Hub release; dev = explicit GitHub source opt-in; testpypi-package/pypi-package = install from that index"
         required: false
         type: string
-        default: dev
+        default: published
       proxbox_api_version:
         description: "proxbox-api package version for testpypi-package or pypi-package modes. Empty = workflow default."
         required: false
@@ -61,7 +61,7 @@ on:
           - published
           - testpypi-package
           - pypi-package
-        default: dev
+        default: published
       proxbox_api_version:
         description: "proxbox-api package version for testpypi-package or pypi-package modes. Empty = workflow default."
         required: false
@@ -95,7 +95,7 @@ on:
     - cron: "31 2 * * *"
 
 env:
-  PROXBOX_API_RELEASE_VERSION: 0.0.22.post1
+  PROXBOX_API_RELEASE_VERSION: 0.0.23
   PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api
   PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk
   PROXMOX_SDK_TAG_PREFIX: latest
@@ -109,6 +109,8 @@ jobs:
     continue-on-error: ${{ matrix.proxbox_api_runtime == 'pyo3-rust' }}
     env:
       NETBOX_IMAGE: ${{ matrix.netbox_image }}
+      PROXBOX_API_DEPENDENCY_MODE_INPUT: ${{ inputs.dependency_mode }}
+      PROXBOX_API_VERSION_INPUT: ${{ inputs.proxbox_api_version }}
     strategy:
       fail-fast: false
       matrix:
@@ -167,16 +169,16 @@ jobs:
       - name: Resolve proxbox-api runtime source
         run: |
           set -eux
-          PROXBOX_API_VERSION="${{ inputs.proxbox_api_version }}"
-          if [ -z "${PROXBOX_API_VERSION}" ]; then
-            PROXBOX_API_VERSION="${PROXBOX_API_RELEASE_VERSION}"
-          fi
+          PROXBOX_API_DEPENDENCY_MODE="$(python scripts/e2e_backend_selection.py dependency-mode "${PROXBOX_API_DEPENDENCY_MODE_INPUT}")"
+          echo "PROXBOX_API_DEPENDENCY_MODE=${PROXBOX_API_DEPENDENCY_MODE}" >> "$GITHUB_ENV"
+          PROXBOX_API_VERSION="${PROXBOX_API_VERSION_INPUT:-${PROXBOX_API_RELEASE_VERSION}}"
+          PROXBOX_API_VERSION="$(python scripts/e2e_backend_selection.py version "${PROXBOX_API_VERSION}")"
           echo "PROXBOX_API_VERSION=${PROXBOX_API_VERSION}" >> "$GITHUB_ENV"
           echo "PROXBOX_API_RUNTIME=${{ matrix.proxbox_api_runtime }}" >> "$GITHUB_ENV"
           echo "PROXBOX_API_PACKAGE_INDEX=" >> "$GITHUB_ENV"
-          if [ "${{ inputs.dependency_mode }}" = "testpypi-package" ]; then
+          if [ "${PROXBOX_API_DEPENDENCY_MODE}" = "testpypi-package" ]; then
             echo "PROXBOX_API_PACKAGE_INDEX=--index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/" >> "$GITHUB_ENV"
-          elif [ "${{ inputs.dependency_mode }}" = "pypi-package" ]; then
+          elif [ "${PROXBOX_API_DEPENDENCY_MODE}" = "pypi-package" ]; then
             echo "PROXBOX_API_PACKAGE_INDEX=--index-url https://pypi.org/simple/" >> "$GITHUB_ENV"
           fi
           if [ "${{ matrix.proxbox_api_runtime }}" = "pyo3-rust" ]; then
@@ -294,10 +296,10 @@ jobs:
               "${image_ref}"
           }
 
-          if [ "${{ inputs.dependency_mode }}" = "published" ]; then
+          if [ "${PROXBOX_API_DEPENDENCY_MODE}" = "published" ]; then
             docker pull "${PROXBOX_API_IMAGE}:${PROXBOX_API_DOCKER_TAG}"
             start_proxbox_api_container "${PROXBOX_API_IMAGE}:${PROXBOX_API_DOCKER_TAG}"
-          elif [ "${{ inputs.dependency_mode }}" = "testpypi-package" ] || [ "${{ inputs.dependency_mode }}" = "pypi-package" ]; then
+          elif [ "${PROXBOX_API_DEPENDENCY_MODE}" = "testpypi-package" ] || [ "${PROXBOX_API_DEPENDENCY_MODE}" = "pypi-package" ]; then
             cat > /tmp/proxbox-api-package.Dockerfile <<'EOF'
           FROM python:3.13-slim
           RUN python -m pip install --upgrade pip
@@ -320,10 +322,13 @@ jobs:
             else
               exit 1
             fi
-          else
+          elif [ "${PROXBOX_API_DEPENDENCY_MODE}" = "dev" ]; then
             git clone --depth 1 https://github.com/emersonfelipesp/proxbox-api.git /tmp/proxbox-api-src
             docker build --target "${PROXBOX_API_BUILD_TARGET}" -t proxbox-api-e2e:dev /tmp/proxbox-api-src
             start_proxbox_api_container proxbox-api-e2e:dev
+          else
+            echo "Unsupported proxbox-api dependency mode: ${PROXBOX_API_DEPENDENCY_MODE}" >&2
+            exit 1
           fi
 
           if [ -n "${NETBOX_PLUGIN_MOUNT}" ]; then

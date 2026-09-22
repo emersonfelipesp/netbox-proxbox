@@ -1,0 +1,116 @@
+---
+# GitHub expressions and immutable image tags cannot be wrapped safely.
+# yamllint disable rule:line-length
+name: OCI testing appliance
+
+"on":
+  pull_request:
+    paths:
+      - "Dockerfile.oci"
+      - "oci/**"
+      - "scripts/resolve_oci_versions.py"
+      - "tests/test_oci_appliance.py"
+      - ".github/workflows/oci-appliance.yml"
+  workflow_dispatch:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: oci-appliance-publication
+  cancel-in-progress: false
+
+env:
+  IMAGE_NAME: emersonfelipesp/netbox-proxbox
+  NETBOX_IMAGE: netboxcommunity/netbox:v4.7.0-5.1.0@sha256:a2cdf00fab61d2ae37e4f987adaa403fad5c4049a63bc960768b7bbf804e2cb6
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+
+      - uses: actions/setup-python@a309ff8b426b58ec0e2a45f0f869d46889d02405  # v6.2.0
+        with:
+          python-version: "3.13"
+
+      - name: Resolve current stable packages
+        id: versions
+        run: |
+          python -m pip install 'packaging==26.0'
+          python scripts/resolve_oci_versions.py --github-output "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1  # v4.4.0
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+
+      - name: Log in to Docker Hub
+        if: github.event_name == 'release'
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Build local smoke-test image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: .
+          file: Dockerfile.oci
+          load: true
+          tags: netbox-proxbox-oci:test
+          build-args: |
+            NETBOX_IMAGE=${{ env.NETBOX_IMAGE }}
+            NETBOX_PROXBOX_VERSION=${{ steps.versions.outputs.netbox_proxbox_version }}
+            PROXBOX_API_VERSION=${{ steps.versions.outputs.proxbox_api_version }}
+            PROXBOX_API_PYTHON=${{ steps.versions.outputs.proxbox_api_python }}
+
+      - name: Verify the appliance boots
+        run: |
+          set -eu
+          docker run --detach --name proxbox-oci-test --entrypoint /sbin/init netbox-proxbox-oci:test
+          timeout 1200 sh -c 'until [ "$(docker inspect --format={{.State.Health.Status}} proxbox-oci-test)" = healthy ]; do sleep 10; done'
+          docker exec proxbox-oci-test /opt/netbox/netbox/manage.py check
+          docker exec proxbox-oci-test /opt/netbox/netbox/manage.py showmigrations netbox_proxbox > /tmp/proxbox-migrations.txt
+          cat /tmp/proxbox-migrations.txt
+          ! grep -F '[ ]' /tmp/proxbox-migrations.txt
+          docker exec -e DJANGO_SUPERUSER_USERNAME=oci-test-admin -e DJANGO_SUPERUSER_EMAIL=oci-test@example.invalid -e DJANGO_SUPERUSER_PASSWORD=test-only-password proxbox-oci-test /opt/netbox/netbox/manage.py createsuperuser --no-input
+          docker exec proxbox-oci-test /opt/netbox/netbox/manage.py shell --command 'from users.models import User; user = User.objects.get(username="oci-test-admin"); assert user.is_superuser and user.check_password("test-only-password")'
+          docker exec proxbox-oci-test test -s /var/lib/proxbox-api/database.db
+          docker exec proxbox-oci-test test -f /var/lib/postgresql/proxbox-stack/.proxbox-provisioned
+          docker exec proxbox-oci-test test -s /var/lib/proxbox-stack/secrets/api-token-pepper
+          docker exec proxbox-oci-test supervisorctl status > /tmp/proxbox-services-before.txt
+          cat /tmp/proxbox-services-before.txt
+          ! grep -F -v RUNNING /tmp/proxbox-services-before.txt
+          docker exec proxbox-oci-test sh -c 'pid=$(supervisorctl pid proxbox-api); test "$(stat -c %U /proc/$pid)" = netbox'
+          docker exec proxbox-oci-test redis-cli -h 127.0.0.1 SET oci:persistence test
+          docker exec proxbox-oci-test redis-cli -h 127.0.0.1 SAVE
+          docker restart --timeout 60 proxbox-oci-test
+          timeout 180 sh -c 'until [ "$(docker inspect --format={{.State.Health.Status}} proxbox-oci-test)" = healthy ]; do sleep 5; done'
+          docker exec proxbox-oci-test /opt/netbox/netbox/manage.py shell --command 'from users.models import User; assert User.objects.filter(username="oci-test-admin", is_superuser=True).exists()'
+          docker exec proxbox-oci-test test -s /var/lib/proxbox-api/database.db
+          docker exec proxbox-oci-test test -f /var/lib/postgresql/proxbox-stack/.proxbox-provisioned
+          docker exec proxbox-oci-test sh -c 'test "$(redis-cli -h 127.0.0.1 GET oci:persistence)" = test'
+          docker exec proxbox-oci-test supervisorctl status
+
+      - name: Report appliance logs after failure
+        if: failure()
+        run: docker logs proxbox-oci-test
+
+      - name: Publish multi-architecture image
+        if: github.event_name == 'release'
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        with:
+          context: .
+          file: Dockerfile.oci
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ env.IMAGE_NAME }}:oci
+            ${{ env.IMAGE_NAME }}:netbox-4.7.0-proxbox-${{ steps.versions.outputs.netbox_proxbox_version }}-api-${{ steps.versions.outputs.proxbox_api_version }}-${{ github.sha }}
+          build-args: |
+            NETBOX_IMAGE=${{ env.NETBOX_IMAGE }}
+            NETBOX_PROXBOX_VERSION=${{ steps.versions.outputs.netbox_proxbox_version }}
+            PROXBOX_API_VERSION=${{ steps.versions.outputs.proxbox_api_version }}
+            PROXBOX_API_PYTHON=${{ steps.versions.outputs.proxbox_api_python }}

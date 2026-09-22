@@ -26,10 +26,19 @@ def _load_openbao_module(monkeypatch):
     django_utils_translation.gettext_lazy = lambda value: value
     django_utils.translation = django_utils_translation
     django_root.utils = django_utils
+    django_views = types.ModuleType("django.views")
+    django_views_decorators = types.ModuleType("django.views.decorators")
+    django_views_debug = types.ModuleType("django.views.decorators.debug")
+    django_views_debug.sensitive_variables = lambda *_args: lambda func: func
     monkeypatch.setitem(sys.modules, "django", django_root)
     monkeypatch.setitem(sys.modules, "django.utils", django_utils)
     monkeypatch.setitem(
         sys.modules, "django.utils.translation", django_utils_translation
+    )
+    monkeypatch.setitem(sys.modules, "django.views", django_views)
+    monkeypatch.setitem(sys.modules, "django.views.decorators", django_views_decorators)
+    monkeypatch.setitem(
+        sys.modules, "django.views.decorators.debug", django_views_debug
     )
 
     django_core_exceptions = types.ModuleType("django.core.exceptions")

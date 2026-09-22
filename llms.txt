@@ -15,18 +15,49 @@ netbox-proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data 
 - **VM Backups** — Backup jobs and restore points
 - **Storage** — Datastores and storage content
 - **Networking** — VLANs, bridges, and IP assignments
+- **Standalone browser console** — permission-gated QEMU noVNC/terminal and LXC terminal sessions through proxbox-api without browser-visible Proxmox credentials
+- **Data protection and operations** — backup/snapshot/replication calendars, typed sync-state recovery, soft-deleted VM review, and audited intent/apply records
+  Exact replication and backup-routine wall-clock schedules are converted from
+  each endpoint's discovered IANA timezone into NetBox's active timezone before
+  calendar day bucketing. Unresolved timing remains visibly approximate, and
+  combined calendar node selection is capped at 50.
+- **Extended inventory** — guest OS interfaces, SDN, firewall, Firecracker, Proxmox metrics, service-monitoring samples, and PBS/PDM endpoint records
+- **OpenBao endpoint, node, and cloud-init credentials** — exact-policy password, API-token, and SSH material writes with provider-owned transactionality, UUID references, purpose-aware assignments, and shared-credential-safe unlinking. Selected node SSH password/keypair material becomes the primary `login` credential on the linked `dcim.Device`; FastAPI/PBS/PDM tokens use primary `api` assignments and Firecracker agent tokens use a primary `agent` assignment. VM cloud-init password/keypair material is assigned to the parent VM for `login`, with `ssh_pwauth` selecting the primary credential; public SSH keys never enter provider payloads. Required OpenBao reads never downgrade to Fernet, `credential_reference_id`, or an unrelated credential-provider fallback. UI/API mutations begin the provider boundary outside NetBox atomic blocks and carry the request actor; raw/bulk/cascade/downgrade bypasses refuse remaining state. Secret-free readiness and generic assignment selectors support automation while live material remains confined to authenticated consumers.
+- **OpenBao structural setup** — `proxbox_openbao_setup --check` and the settings card share a typed, secret-free composed readiness snapshot. Interactive material writes validate only the provider, default engine, and exact policy; RPC and the automation user remain composed diagnostics. Writable setup creates only an explicitly configured default engine and policy, never users or material, and rolls back every write when final readiness fails. Opt-in assignment backfill adds only missing relations, is concurrency-safe and idempotent, and refuses incomplete node ownership, unresolved references, credential-type mismatches, disabled or primary-state-drifted exact rows, and conflicting shared-owner primaries without rewriting operator-owned state or disclosing UUIDs. This structural check does not certify the broader RPC/backend protected-write rollout.
 
 ### Requirements
 
 - NetBox 4.5.8 through 4.7.0, including official v4.7.0 GA
 - Python 3.12+
+- cryptography 50.0.0 or newer
 - Proxmox VE 7.x, 8.x, or 9.x
 - proxbox-api backend (FastAPI service)
+
+### Proxmox OCI Testing Appliance
+
+`emersonfelipesp/netbox-proxbox:oci` is a testing-only, all-in-one OCI image for
+Proxmox VE's OCI-to-LXC workflow. It includes NetBox, the latest stable
+`netbox-proxbox` and `proxbox-api` PyPI releases, PostgreSQL, Redis, and an RQ
+worker. NetBox listens on port `8080`; proxbox-api listens on loopback port
+`8800` unless external binding is explicitly enabled. The plugin is enabled
+with its backend URL set to `http://127.0.0.1:8800`.
+
+The image supplies `/sbin/init`, stores persistent state under
+`/var/lib/postgresql`, `/var/lib/redis`, `/var/lib/proxbox-api`, and
+`/var/lib/proxbox-stack`, and supports direct administrator creation with
+`/opt/netbox/netbox/manage.py createsuperuser`. See
+`docs/installation/proxmox-oci-appliance.md` for the pull, storage, bootstrap,
+and verification procedure. This appliance is not a production deployment
+topology.
 
 ### Version
 
 - Plugin version: `0.0.27rc4`
 - NetBox compatibility: `4.5.8` through `4.7.0`
+- Current source pairing: `netbox-proxbox 0.0.27rc4`, `proxbox-api 0.0.23`,
+  `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`
+- Last documented released runtime pairing: `netbox-proxbox 0.0.27rc4`,
+  `proxbox-api 0.0.22.post1`, `proxmox-sdk 0.0.13`, and `netbox-sdk 0.0.13`
 
 ---
 
@@ -89,6 +120,17 @@ clients.
 | Tables | `netbox_proxbox/tables/` | NetBox table definitions |
 | Templates | `netbox_proxbox/templates/` | HTML templates |
 | Static | `netbox_proxbox/static/` | JS, CSS assets |
+
+### Current Source Authority
+
+This generated context summary follows the executable source. The authoritative
+inventories are `netbox_proxbox/models/`, `netbox_proxbox/urls.py`,
+`netbox_proxbox/api/urls.py`, `netbox_proxbox/jobs.py`, `proxbox_cli/`, and the
+workflow files. The current schema tip is
+`0102_vm_cloudinit_openbao_references`, which adds opaque OpenBao password and
+keypair references for VM cloud-init intent after the FastAPI, PBS, PDM, and
+Firecracker token references from `0101`. It preserves explicit legacy
+credential references and public SSH-key fields without moving material.
 
 ---
 
@@ -422,7 +464,8 @@ Singleton plugin settings for runtime behavior.
 # Location: netbox_proxbox/models/plugin_settings.py
 class ProxboxPluginSettings(NetBoxModel):
     use_guest_agent_interface_name = models.BooleanField(default=True)
-    proxbox_fetch_max_concurrency = models.PositiveIntegerField(default=8)
+    vm_interface_sync_strategy = models.CharField(default="guest_os_model", ...)
+    proxbox_fetch_max_concurrency = models.PositiveSmallIntegerField(default=8)
     sync_mode_vm_interface = models.CharField(...)  # added in migration 0051
     sync_mode_mac = models.CharField(...)            # added in migration 0051
     interface_batch_size = models.PositiveSmallIntegerField(default=5)
@@ -495,6 +538,14 @@ class DeletionRequest(NetBoxModel): ...
 class ProxmoxStorageVirtualDisk(NetBoxModel): ...  # join table: ProxmoxStorage ↔ VirtualDisk
 ```
 
+### Sync State, Intent, Metrics, and Service Monitoring
+
+Current source also persists typed `Proxbox*SyncState` sidecars,
+`ProxmoxVMIntent`, `ProxboxBranchIntent`, `ProxmoxMetricsInfluxDB`,
+`ProxmoxServiceCollection`, `ProxmoxServiceSample`, and
+`ProxmoxServiceStatus`. These support identity-safe reconciliation, audited
+intent planning, metrics configuration, and asynchronous systemd collection.
+
 ### Firewall Models (6)
 
 Per-datacenter and per-VM Proxmox firewall inventory, read-only synced from proxbox-api.
@@ -517,7 +568,7 @@ class ProxmoxFirewallAlias(NetBoxModel): ...
 class ProxmoxFirewallOptions(NetBoxModel): ...
 ```
 
-### SDN Models (3)
+### SDN Models (8)
 
 Proxmox Software-Defined Networking inventory (PVE 9.2+).
 
@@ -530,6 +581,13 @@ class ProxmoxSdnRouteMap(NetBoxModel): ...
 
 # Location: netbox_proxbox/models/sdn_prefix_list.py
 class ProxmoxSdnPrefixList(NetBoxModel): ...
+
+# Location: netbox_proxbox/models/sdn_inventory.py
+class ProxmoxSdnController(NetBoxModel): ...
+class ProxmoxSdnZone(NetBoxModel): ...
+class ProxmoxSdnVNet(NetBoxModel): ...
+class ProxmoxSdnSubnet(NetBoxModel): ...
+class ProxmoxSdnBinding(NetBoxModel): ...
 ```
 
 ### Firecracker Models (4)
@@ -613,6 +671,11 @@ class ProxboxSyncJob(JobRunner):
     # Job timeout: 7200 seconds (2 hours)
     # Uses NetBox's default RQ queue
 ```
+
+`ProxmoxServiceMonitoringJob` is separately registered as a one-minute NetBox
+system job. It performs per-endpoint due checks and projects completed
+`netbox-rpc` executions into service collection, sample, status, and endpoint
+heartbeat records.
 
 **Job Lifecycle:**
 
@@ -718,21 +781,25 @@ class WebSocketClient:
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/plugins/proxbox/` | API root |
-| GET/POST | `/api/plugins/proxbox/proxmox-endpoints/` | List/create Proxmox endpoints |
-| GET/PUT/PATCH/DELETE | `/api/plugins/proxbox/proxmox-endpoints/{id}/` | CRUD single endpoint |
-| GET/POST | `/api/plugins/proxbox/netbox-endpoints/` | List/create NetBox endpoints |
-| GET/PUT/PATCH/DELETE | `/api/plugins/proxbox/netbox-endpoints/{id}/` | CRUD single endpoint |
-| GET/POST | `/api/plugins/proxbox/fastapi-endpoints/` | List/create FastAPI endpoints |
-| GET/PUT/PATCH/DELETE | `/api/plugins/proxbox/fastapi-endpoints/{id}/` | CRUD single endpoint |
+| GET/POST | `/api/plugins/proxbox/endpoints/proxmox/` | List/create Proxmox endpoints |
+| GET/PUT/PATCH/DELETE | `/api/plugins/proxbox/endpoints/proxmox/{id}/` | CRUD single endpoint subject to safety gates |
+| GET/POST | `/api/plugins/proxbox/endpoints/netbox/` | List/create NetBox endpoints |
+| GET/PUT/PATCH/DELETE | `/api/plugins/proxbox/endpoints/netbox/{id}/` | CRUD single endpoint |
+| GET/POST | `/api/plugins/proxbox/endpoints/fastapi/` | List/create FastAPI endpoints |
+| GET/PUT/PATCH/DELETE | `/api/plugins/proxbox/endpoints/fastapi/{id}/` | CRUD single endpoint |
 
 ### Storage and VM Objects
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/plugins/proxbox/storages/` | List ProxmoxStorage |
-| GET | `/api/plugins/proxbox/vm-backups/` | List VMBackup |
-| GET | `/api/plugins/proxbox/vm-snapshots/` | List VMSnapshot |
-| GET | `/api/plugins/proxbox/vm-task-history/` | List VMTaskHistory |
+| GET | `/api/plugins/proxbox/storage/` | List ProxmoxStorage |
+| GET | `/api/plugins/proxbox/backups/` | List VMBackup |
+| GET | `/api/plugins/proxbox/snapshots/` | List VMSnapshot |
+| GET | `/api/plugins/proxbox/task-history/` | List VMTaskHistory |
+
+The router also exposes typed cluster/node, sync-state, guest-interface,
+Firecracker, firewall, SDN, service-monitoring, settings, job, and semantic MCP
+surfaces. `DeletionRequest` and `ProxmoxApplyJob` remain read-only over REST.
 
 ### Serializers
 
@@ -753,22 +820,25 @@ All plugin routes are under `/plugins/proxbox/`.
 
 | Pattern | View | Description |
 |---------|------|-------------|
-| `/` | `HomeView` | Plugin home dashboard |
-| `/proxmox/` | `ProxmoxEndpointListView` | List Proxmox endpoints |
-| `/proxmox/add/` | `ProxmoxEndpointEditView` | Create Proxmox endpoint |
-| `/proxmox/{id}/` | `ProxmoxEndpointView` | View Proxmox endpoint |
-| `/proxmox/{id}/edit/` | `ProxmoxEndpointEditView` | Edit Proxmox endpoint |
-| `/proxmox/{id}/delete/` | `ProxmoxEndpointDeleteView` | Delete Proxmox endpoint |
-| `/netbox/` | `NetBoxEndpointListView` | List NetBox endpoints |
-| `/netbox/add/` | `NetBoxEndpointEditView` | Create NetBox endpoint |
-| `/netbox/{id}/` | `NetBoxEndpointView` | View NetBox endpoint |
-| `/netbox/{id}/edit/` | `NetBoxEndpointEditView` | Edit NetBox endpoint |
-| `/netbox/{id}/delete/` | `NetBoxEndpointDeleteView` | Delete NetBox endpoint |
-| `/fastapi/` | `FastAPIEndpointListView` | List FastAPI endpoints |
-| `/fastapi/add/` | `FastAPIEndpointEditView` | Create FastAPI endpoint |
-| `/fastapi/{id}/` | `FastAPIEndpointView` | View FastAPI endpoint |
-| `/fastapi/{id}/edit/` | `FastAPIEndpointEditView` | Edit FastAPI endpoint |
-| `/fastapi/{id}/delete/` | `FastAPIEndpointDeleteView` | Delete FastAPI endpoint |
+| `/` | redirect | Redirect to `/home/` |
+| `/home/` | `HomeView` | Plugin home dashboard |
+| `/endpoints/proxmox/` | `ProxmoxEndpointListView` | List Proxmox endpoints |
+| `/endpoints/proxmox/add/` | `ProxmoxEndpointEditView` | Create Proxmox endpoint |
+| `/endpoints/proxmox/{id}/` | `ProxmoxEndpointView` | View Proxmox endpoint |
+| `/endpoints/proxmox/{id}/edit/` | `ProxmoxEndpointEditView` | Edit Proxmox endpoint |
+| `/endpoints/proxmox/{id}/delete/` | `ProxmoxEndpointDeleteView` | Delete Proxmox endpoint |
+| `/endpoints/netbox/` | `NetBoxEndpointListView` | List NetBox endpoints |
+| `/endpoints/netbox/add/` | `NetBoxEndpointEditView` | Create NetBox endpoint |
+| `/endpoints/netbox/{id}/` | `NetBoxEndpointView` | View NetBox endpoint |
+| `/endpoints/netbox/{id}/edit/` | `NetBoxEndpointEditView` | Edit NetBox endpoint |
+| `/endpoints/netbox/{id}/delete/` | `NetBoxEndpointDeleteView` | Delete NetBox endpoint |
+| `/endpoints/fastapi/` | `FastAPIEndpointListView` | List FastAPI endpoints |
+| `/endpoints/fastapi/add/` | `FastAPIEndpointEditView` | Create FastAPI endpoint |
+| `/endpoints/fastapi/{id}/` | `FastAPIEndpointView` | View FastAPI endpoint |
+| `/endpoints/fastapi/{id}/edit/` | `FastAPIEndpointEditView` | Edit FastAPI endpoint |
+| `/endpoints/fastapi/{id}/delete/` | `FastAPIEndpointDeleteView` | Delete FastAPI endpoint |
+| `/data-protection/` | `DataProtectionView` | Combined calendar and event list |
+| `/virtual-machines/{id}/console/session/` | `ProxboxVMConsoleSessionView` | Create an authorized one-use browser-console session |
 | `/storage/` | `ProxmoxStorageListView` | List storage |
 | `/vm-backups/` | `VMBackupListView` | List VM backups |
 | `/vm-snapshots/` | `VMSnapshotListView` | List VM snapshots |

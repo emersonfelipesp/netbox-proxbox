@@ -52,6 +52,10 @@ def _stub_for_ssh_credentials(
 
     django_shortcuts = types.ModuleType("django.shortcuts")
     django_shortcuts.get_object_or_404 = lambda queryset, **kw: queryset.get(**kw)
+    django_views = types.ModuleType("django.views")
+    django_views_decorators = types.ModuleType("django.views.decorators")
+    django_views_debug = types.ModuleType("django.views.decorators.debug")
+    django_views_debug.sensitive_variables = lambda *_args: lambda func: func
 
     netbox = types.ModuleType("netbox")
     netbox.__path__ = []
@@ -153,7 +157,11 @@ def _stub_for_ssh_credentials(
     class EncryptionError(Exception):
         pass
 
+    class EncryptionKeyMissing(EncryptionError):
+        pass
+
     enc_mod.EncryptionError = EncryptionError
+    enc_mod.EncryptionKeyMissing = EncryptionKeyMissing
     enc_mod.encrypt = lambda plaintext, *, key: plaintext
     enc_mod.decrypt = lambda ciphertext, *, key: ciphertext
 
@@ -170,14 +178,26 @@ def _stub_for_ssh_credentials(
     np_integrations.__path__ = [str(REPO_ROOT / "netbox_proxbox" / "integrations")]
     np_openbao = types.ModuleType("netbox_proxbox.integrations.openbao")
     np_openbao.endpoint_uses_openbao_storage = lambda endpoint: False
+    np_openbao.node_uses_openbao_storage = lambda credential: False
+    np_openbao.node_openbao_assignment_lookup = lambda credential: None
+    np_openbao.node_openbao_assignment_readiness = lambda credential: (False, "")
     np_openbao.resolve_endpoint_api_secret = lambda endpoint, field: getattr(
         endpoint, field
+    )
+    np_openbao.resolve_node_ssh_password = lambda credential, *, key, user=None: (
+        credential.get_password(key=key)
+    )
+    np_openbao.resolve_node_ssh_private_key = lambda credential, *, key, user=None: (
+        credential.get_private_key(key=key)
     )
 
     for name, mod in [
         ("django", django),
         ("django.conf", django_conf),
         ("django.shortcuts", django_shortcuts),
+        ("django.views", django_views),
+        ("django.views.decorators", django_views_decorators),
+        ("django.views.decorators.debug", django_views_debug),
         ("netbox", netbox),
         ("netbox.api", netbox_api),
         ("netbox.api.authentication", netbox_api_auth),
@@ -382,6 +402,8 @@ def test_metadata_payload_omits_secrets(monkeypatch):
         sudo_required=True,
         password_enc="ciphertext-password",
         private_key_enc="",
+        has_password=True,
+        has_private_key=False,
     )
     payload = module._metadata_payload(cred)
     assert payload == {
@@ -400,6 +422,93 @@ def test_metadata_payload_omits_secrets(monkeypatch):
     assert "private_key_enc" not in payload
     assert "password" not in payload
     assert "private_key" not in payload
+
+
+def _node_credential_queryset(credential):
+    class _QuerySet:
+        def select_related(self, *_fields):
+            return self
+
+        def get(self, **kwargs):
+            if kwargs == {"node_id": credential.node_id}:
+                return credential
+            raise AssertionError(f"unexpected credential lookup: {kwargs}")
+
+    return _QuerySet()
+
+
+def test_node_secrets_view_resolves_openbao_with_authenticated_actor(monkeypatch):
+    module, stubs = _load_ssh_credentials_view(monkeypatch)
+    actor = SimpleNamespace(username="proxbox-api")
+    credential = SimpleNamespace(
+        pk=7,
+        node_id=42,
+        node=SimpleNamespace(endpoint=SimpleNamespace(ssh_access_enabled=True)),
+        username="proxbox-discovery",
+        port=22,
+        auth_method="password",
+        known_host_fingerprint="SHA256:" + "A" * 43,
+        sudo_required=True,
+        has_password=True,
+        has_private_key=False,
+    )
+    stubs.NodeSSHCredential.objects = _node_credential_queryset(credential)
+    openbao = sys.modules["netbox_proxbox.integrations.openbao"]
+    openbao.node_uses_openbao_storage = lambda _credential: True
+    calls = []
+
+    def _resolve_password(_credential, *, key, user=None):
+        calls.append((key, user))
+        return "openbao-password"
+
+    openbao.resolve_node_ssh_password = _resolve_password
+    request = SimpleNamespace(
+        user=actor,
+        is_secure=lambda: True,
+    )
+
+    response = module.NodeSSHCredentialSecretsAPIView().get(request, 42)
+
+    assert response.status_code == 200
+    assert response.data["password"] == "openbao-password"
+    assert response.data["private_key"] == ""
+    assert calls == [("", actor)]
+
+
+def test_node_secrets_view_sanitizes_openbao_failure(monkeypatch):
+    module, stubs = _load_ssh_credentials_view(monkeypatch)
+    credential = SimpleNamespace(
+        pk=7,
+        node_id=42,
+        node=SimpleNamespace(endpoint=SimpleNamespace(ssh_access_enabled=True)),
+        username="proxbox-discovery",
+        port=22,
+        auth_method="password",
+        known_host_fingerprint="SHA256:" + "A" * 43,
+        sudo_required=True,
+        has_password=True,
+        has_private_key=False,
+    )
+    stubs.NodeSSHCredential.objects = _node_credential_queryset(credential)
+    openbao = sys.modules["netbox_proxbox.integrations.openbao"]
+    openbao.node_uses_openbao_storage = lambda _credential: True
+
+    def _fail(*_args, **_kwargs):
+        raise module.ValidationError("provider-internal-secret-path")
+
+    openbao.resolve_node_ssh_password = _fail
+    request = SimpleNamespace(user=object(), is_secure=lambda: True)
+
+    response = module.NodeSSHCredentialSecretsAPIView().get(request, 42)
+
+    assert response.status_code == 503
+    assert "provider-internal-secret-path" not in str(response.data)
+    assert response.data == {
+        "detail": (
+            "Stored SSH credential cannot be resolved. Credential storage "
+            "recovery is required."
+        )
+    }
 
 
 def test_endpoint_metadata_payload_omits_secrets(monkeypatch):

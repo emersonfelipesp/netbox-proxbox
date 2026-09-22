@@ -91,6 +91,8 @@ jobs:
           python -m build
           python scripts/check_dist_inventory.py dist/*.whl dist/*.tar.gz
           python scripts/verify_vm_console_artifacts.py dist
+          python scripts/check_public_boundary.py \
+            --artifact dist/*.whl --artifact dist/*.tar.gz
           python -m twine check dist/*
 
   test:

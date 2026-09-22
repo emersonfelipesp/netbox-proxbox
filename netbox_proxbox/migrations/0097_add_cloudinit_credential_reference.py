@@ -58,7 +58,7 @@ def add_and_copy_credential_reference(apps, schema_editor) -> None:
     quoted_historical = quote_name(historical_column)
     with schema_editor.connection.cursor() as cursor:
         cursor.execute(
-            f"SELECT COUNT(*) FROM {quoted_table} "
+            f"SELECT COUNT(*) FROM {quoted_table} "  # nosec B608 -- quoted identifiers
             f"WHERE {quoted_target} IS NOT NULL "
             f"AND {quoted_historical} IS NOT NULL "
             f"AND {quoted_target} <> {quoted_historical}"
@@ -69,17 +69,20 @@ def add_and_copy_credential_reference(apps, schema_editor) -> None:
                 "Credential-reference migration found conflicting populated values"
             )
         cursor.execute(
-            f"UPDATE {quoted_table} SET {quoted_target} = {quoted_historical} "
+            f"UPDATE {quoted_table} SET {quoted_target} = {quoted_historical} "  # nosec B608 -- quoted identifiers
             f"WHERE {quoted_target} IS NULL AND {quoted_historical} IS NOT NULL"
         )
 
 
-def remove_generic_credential_reference(apps, schema_editor) -> None:
-    """Drop only the generic field; preserve the downgrade-compatible column."""
-    model = apps.get_model("netbox_proxbox", "ProxmoxVMCloudInit")
-    if TARGET_COLUMN not in _column_names(schema_editor, model._meta.db_table):
-        return
-    schema_editor.remove_field(model, model._meta.get_field(TARGET_COLUMN))
+def preserve_generic_credential_reference(apps, schema_editor) -> None:
+    """Preserve the field owned by migration 0064 when reversing this repair.
+
+    Migration 0097 repairs databases whose legacy lineage omitted the physical
+    column, but it does not add the field to Django's state: migration 0064
+    already did that. Dropping the column while reverting to 0096 therefore
+    leaves the historical state claiming a field that no longer exists.
+    """
+    return
 
 
 class Migration(migrations.Migration):
@@ -88,6 +91,6 @@ class Migration(migrations.Migration):
     operations = [
         migrations.RunPython(
             add_and_copy_credential_reference,
-            remove_generic_credential_reference,
+            preserve_generic_credential_reference,
         )
     ]

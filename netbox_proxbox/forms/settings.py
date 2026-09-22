@@ -467,6 +467,16 @@ class ProxboxPluginSettingsForm(forms.Form):
             "OpenBao is recommended for Write mode."
         ),
     )
+    openbao_policy_slug = forms.SlugField(
+        required=True,
+        max_length=100,
+        initial="proxbox",
+        label="OpenBao policy slug",
+        help_text=(
+            "Exact CredentialPolicy slug on the default OpenBao SecretEngine. "
+            "No other policy is selected when it is missing."
+        ),
+    )
     openbao_service_username = forms.CharField(
         required=False,
         max_length=150,

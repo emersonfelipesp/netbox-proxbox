@@ -114,6 +114,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "environment",
             "version",
             "repoid",
+            "iana_timezone",
             "username",
             "password",
             "token_name",
@@ -160,7 +161,15 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "created",
             "last_updated",
         )
-        brief_fields = ("id", "url", "display", "name", "domain", "port")
+        brief_fields = (
+            "id",
+            "url",
+            "display",
+            "name",
+            "domain",
+            "port",
+            "iana_timezone",
+        )
         extra_kwargs = {
             "password": {"write_only": True, "required": False, "allow_null": True},
             "token_value": {"write_only": True, "required": False, "allow_blank": True},
@@ -240,10 +249,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
         password: object = serializers.empty,
         token_value: object = serializers.empty,
     ) -> None:
-        request = self.context.get("request")
-        user = getattr(request, "user", None) if request is not None else None
-        if user is not None:
-            instance._openbao_actor_user = user
+        self._attach_api_actor(instance)
         update_fields: list[str] = []
         if password is not serializers.empty:
             instance.password = password or ""
@@ -253,6 +259,12 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             update_fields.extend(["token_value_enc", "openbao_token_credential_uuid"])
         if update_fields:
             instance.save(update_fields=list(dict.fromkeys(update_fields)))
+
+    def _attach_api_actor(self, instance: ProxmoxEndpoint) -> None:
+        request = self.context.get("request")
+        user = getattr(request, "user", None) if request is not None else None
+        if user is not None:
+            instance._openbao_actor_user = user
 
     def create(self, validated_data: dict[str, object]) -> ProxmoxEndpoint:
         allowed_tenants = validated_data.pop("allowed_tenants", None)
@@ -275,6 +287,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
         allowed_tenants = validated_data.pop("allowed_tenants", None)
         password = validated_data.pop("password", serializers.empty)
         token_value = validated_data.pop("token_value", serializers.empty)
+        self._attach_api_actor(instance)
         instance = super().update(instance, validated_data)
         self._apply_allowed_tenants(instance, allowed_tenants)
         self._apply_api_secrets(
@@ -451,6 +464,9 @@ class FastAPIEndpointSerializer(
         style={"input_type": "password"},
     )
     ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
+    credential_assignment_ready = serializers.SerializerMethodField()
+    credential_assignment_detail = serializers.SerializerMethodField()
+    credential_assignment_lookup = serializers.SerializerMethodField()
 
     class Meta:
         model = FastAPIEndpoint
@@ -466,6 +482,9 @@ class FastAPIEndpointSerializer(
             "verify_ssl",
             "enabled",
             "token",
+            "credential_assignment_ready",
+            "credential_assignment_detail",
+            "credential_assignment_lookup",
             "use_websocket",
             "websocket_domain",
             "websocket_port",
@@ -476,6 +495,28 @@ class FastAPIEndpointSerializer(
             "last_updated",
         )
         brief_fields = ("id", "url", "display", "name", "domain", "port")
+
+    def _assignment_state(self, obj: FastAPIEndpoint) -> tuple[bool, str]:
+        from netbox_proxbox.integrations.openbao_single import (
+            credential_assignment_readiness,
+        )
+
+        return credential_assignment_readiness(obj)
+
+    def get_credential_assignment_ready(self, obj: FastAPIEndpoint) -> bool:
+        return self._assignment_state(obj)[0]
+
+    def get_credential_assignment_detail(self, obj: FastAPIEndpoint) -> str:
+        return self._assignment_state(obj)[1]
+
+    def get_credential_assignment_lookup(
+        self, obj: FastAPIEndpoint
+    ) -> dict[str, str] | None:
+        from netbox_proxbox.integrations.openbao_single import (
+            credential_assignment_lookup,
+        )
+
+        return credential_assignment_lookup(obj)
 
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """Normalize partial secrets and require a backend host."""

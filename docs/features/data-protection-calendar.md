@@ -40,15 +40,18 @@ marker follows NetBox's configured `TIME_ZONE`, not the host clock.
   A schedule that consists only of a weekday or date selector (for example
   `sat,sun` or `*-*-01`) is treated as running at `00:00`, matching Proxmox.
 - An unknown schedule is deliberately fail-open. It appears on every visible
-  day with its original text and an **unparsed schedule** marker, so malformed
+  day with its original text and an **approximate schedule** marker, so malformed
   or newly introduced Proxmox syntax is visible instead of disappearing.
 - Disabled backup routines, disabled replications, and stale scheduled records
   are shown with muted styling.
 
-Schedule times are displayed as the Proxmox node's local wall-clock time. The
-plugin does not currently persist or resolve a time zone for each endpoint, so
-it cannot convert those times to NetBox's configured time zone. Per-endpoint
-time-zone resolution is deferred to a follow-up change.
+The sync preflight discovers each endpoint's IANA time zone through proxbox-api
+and stores it on `ProxmoxEndpoint`. Exact scheduled wall-clock occurrences are
+converted from that endpoint zone to NetBox's active time zone before calendar
+day bucketing, including occurrences that cross a date boundary. A missing or
+invalid endpoint zone, a variable clock expression, or an ambiguous/nonexistent
+DST wall time remains visible under the original schedule text with the
+approximate marker instead of being assigned a guessed instant.
 
 ## Combined filters and permissions
 
@@ -72,6 +75,10 @@ the selected node's linked NetBox cluster, replication target names also require
 the selected node's endpoint, and standalone nodes do not widen snapshot
 matching across clusters. A routine scoped to all nodes is included when its
 endpoint contains a selected node.
+
+The node filter accepts at most 50 selected nodes. This bounds the paired
+endpoint/cluster-qualified fallback predicates; exceeding the limit returns a
+form validation message instead of building an unbounded SQL expression.
 
 The unified table below the calendar lists at most 500 materialized events for
 the visible range and says so when it truncates. The source-limit notice covers

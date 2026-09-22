@@ -1,0 +1,6 @@
+# Direct runtime metadata input from netbox-pdm commit
+# 3408441672bf849dfaf953d96d6e0ba1561cd576.  The workflow verifies the
+# checked-out pyproject.toml checksum before installing this composed lock.
+setuptools>=77.0.3
+wheel
+proxmox-sdk>=0.0.12

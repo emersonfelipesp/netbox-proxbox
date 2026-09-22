@@ -5,7 +5,7 @@ plugin adds git-like branching to NetBox: each branch is an isolated
 PostgreSQL schema copy of the main database, where users can stage edits
 and then merge or revert them.
 
-Source repository checked out at: `/root/personal-context/netbox-branching/`
+Source repository: `<workspace>/netbox-branching/`
 
 ---
 
@@ -36,7 +36,7 @@ models enrolled into branching.
 
 ## 2. Package Metadata
 
-Source: `/root/personal-context/netbox-branching/pyproject.toml`
+Source: `<workspace>/netbox-branching/pyproject.toml`
 
 | Field | Value |
 |---|---|
@@ -44,7 +44,7 @@ Source: `/root/personal-context/netbox-branching/pyproject.toml`
 | Runtime dependencies | `Django` only (rest comes from NetBox's environment) |
 | Dev extras | `check-manifest`, `mkdocs`, `mkdocs-material`, `ruff==0.15.2` |
 | Test extras | `coverage`, `pytest`, `pytest-cov` (the suite actually uses Django's runner) |
-| Lint config | `/root/personal-context/netbox-branching/ruff.toml` (line length 120, single quotes, `preview = true`) |
+| Lint config | `<workspace>/netbox-branching/ruff.toml` (line length 120, single quotes, `preview = true`) |
 
 `COMPATIBILITY.md` carries the per-release matrix (the 1.0.x line covers
 NetBox 4.4.1–4.6.x; older 0.x lines covered NetBox 4.1.0–4.4.x).
@@ -53,7 +53,7 @@ NetBox 4.4.1–4.6.x; older 0.x lines covered NetBox 4.1.0–4.4.x).
 
 ## 3. Plugin Architecture
 
-Source: `/root/personal-context/netbox-branching/netbox_branching/__init__.py`
+Source: `<workspace>/netbox-branching/netbox_branching/__init__.py`
 
 ```python
 class AppConfig(PluginConfig):
@@ -140,7 +140,7 @@ The plugin's two pillars are `DynamicSchemaDict` and `BranchAwareRouter`.
 
 ### 5.1 `DynamicSchemaDict`
 
-Source: `/root/personal-context/netbox-branching/netbox_branching/utilities.py`
+Source: `<workspace>/netbox-branching/netbox_branching/utilities.py`
 
 ```python
 class DynamicSchemaDict(dict):
@@ -170,7 +170,7 @@ so `close_old_branch_connections()` can sweep stale connections beyond
 
 ### 5.2 `BranchAwareRouter`
 
-Source: `/root/personal-context/netbox-branching/netbox_branching/database.py`
+Source: `<workspace>/netbox-branching/netbox_branching/database.py`
 
 ```python
 class BranchAwareRouter:
@@ -211,7 +211,7 @@ Responsibilities:
 
 ### 6.1 ContextVar
 
-Source: `/root/personal-context/netbox-branching/netbox_branching/contextvars.py`
+Source: `<workspace>/netbox-branching/netbox_branching/contextvars.py`
 
 ```python
 from contextvars import ContextVar
@@ -223,7 +223,7 @@ lifecycle and across `asyncio` chains automatically.
 
 ### 6.2 `BranchMiddleware`
 
-Source: `/root/personal-context/netbox-branching/netbox_branching/middleware.py`
+Source: `<workspace>/netbox-branching/netbox_branching/middleware.py`
 
 For every request not in `EXEMPT_PATHS` (currently just `/api/status/`):
 
@@ -274,7 +274,7 @@ receivers, and tests to switch branch context outside an HTTP request.
 
 ## 7. Models
 
-Source: `/root/personal-context/netbox-branching/netbox_branching/models/`
+Source: `<workspace>/netbox-branching/netbox_branching/models/`
 
 ### 7.1 `Branch` (`models/branches.py`)
 
@@ -353,7 +353,7 @@ already-applied changes from sync.
 
 ## 8. Merge Strategies
 
-Source: `/root/personal-context/netbox-branching/netbox_branching/merge_strategies/`
+Source: `<workspace>/netbox-branching/netbox_branching/merge_strategies/`
 
 ### 8.1 Abstract base — `strategy.py`
 
@@ -401,7 +401,7 @@ Revert applies `undo()` in reverse dependency order.
 
 ## 9. Migrations
 
-Source: `/root/personal-context/netbox-branching/netbox_branching/migrations/`
+Source: `<workspace>/netbox-branching/netbox_branching/migrations/`
 
 | File | Purpose |
 |---|---|
@@ -422,7 +422,7 @@ rows may not exist at migration time.
 
 ## 10. REST API
 
-Source: `/root/personal-context/netbox-branching/netbox_branching/api/urls.py`,
+Source: `<workspace>/netbox-branching/netbox_branching/api/urls.py`,
 `netbox_branching/api/views.py`
 
 Mounted at `/api/plugins/branching/`.
@@ -456,7 +456,7 @@ X-NetBox-Branch: <schema_id>
 
 ## 11. UI Views & Templates
 
-Source: `/root/personal-context/netbox-branching/netbox_branching/views.py`,
+Source: `<workspace>/netbox-branching/netbox_branching/views.py`,
 `netbox_branching/urls.py`,
 `netbox_branching/templates/netbox_branching/`
 
@@ -502,7 +502,7 @@ modification-notice banners into NetBox's base templates.
 
 ### 12.1 Background jobs
 
-Source: `/root/personal-context/netbox-branching/netbox_branching/jobs.py`
+Source: `<workspace>/netbox-branching/netbox_branching/jobs.py`
 
 All inherit NetBox's `JobRunner` base class and run in Redis-backed RQ
 workers.
@@ -523,7 +523,7 @@ the post-action report UI.
 
 ### 12.2 Lifecycle signals
 
-Source: `/root/personal-context/netbox-branching/netbox_branching/signals.py`
+Source: `<workspace>/netbox-branching/netbox_branching/signals.py`
 
 Plain `django.dispatch.Signal` instances for every operation, available
 to third-party plugins:
@@ -534,7 +534,7 @@ to third-party plugins:
 
 ### 12.3 Signal receivers
 
-Source: `/root/personal-context/netbox-branching/netbox_branching/signal_receivers.py`
+Source: `<workspace>/netbox-branching/netbox_branching/signal_receivers.py`
 
 | Receiver | Connected to | Purpose |
 |---|---|---|
@@ -546,7 +546,7 @@ Source: `/root/personal-context/netbox-branching/netbox_branching/signal_receive
 
 ### 12.4 Custom event types
 
-Source: `/root/personal-context/netbox-branching/netbox_branching/events.py`
+Source: `<workspace>/netbox-branching/netbox_branching/events.py`
 
 Registers NetBox `EventType` objects: `BRANCH_PROVISIONED`,
 `BRANCH_DEPROVISIONED`, `BRANCH_SYNCED`, `BRANCH_MERGED`,
@@ -560,7 +560,7 @@ payloads.
 
 Configured in NetBox's `PLUGINS_CONFIG['netbox_branching']`. Defaults
 come from `default_settings` in
-`/root/personal-context/netbox-branching/netbox_branching/__init__.py`.
+`<workspace>/netbox-branching/netbox_branching/__init__.py`.
 
 | Key | Default | Description |
 |---|---|---|
@@ -614,7 +614,7 @@ The plugin entry must be the last item in `PLUGINS`.
 
 ### 14.1 Hard-coded exempt models
 
-Source: `/root/personal-context/netbox-branching/netbox_branching/constants.py`
+Source: `<workspace>/netbox-branching/netbox_branching/constants.py`
 
 Branching is disabled for these models even if they use
 `ChangeLoggingMixin`:
@@ -668,7 +668,7 @@ puts the branch in this state. Recovery options are revert or archive.
 
 ## 15. Tests
 
-Source: `/root/personal-context/netbox-branching/netbox_branching/tests/`
+Source: `<workspace>/netbox-branching/netbox_branching/tests/`
 
 The suite uses Django's `TestCase` (not pytest) and a real PostgreSQL
 database — no mocking. Run from a NetBox checkout that has this plugin
@@ -705,7 +705,7 @@ Test fixtures live in `tests/fixtures/`; shared helpers in `tests/utils.py`.
 
 ## 16. Docs Layout
 
-Source: `/root/personal-context/netbox-branching/docs/`
+Source: `<workspace>/netbox-branching/docs/`
 
 Built with `mkdocs` + `mkdocs-material` (preview with `mkdocs serve`).
 
@@ -731,9 +731,9 @@ Built with `mkdocs` + `mkdocs-material` (preview with `mkdocs serve`).
 
 ## 17. Agent Guidance
 
-`/root/personal-context/netbox-branching/CLAUDE.md` is a single-line shim
+`<workspace>/netbox-branching/CLAUDE.md` is a single-line shim
 (`@./AGENTS.md`). The authoritative agent guide is
-`/root/personal-context/netbox-branching/AGENTS.md`. It covers:
+`<workspace>/netbox-branching/AGENTS.md`. It covers:
 
 - Repository overview, tech stack, full repo map
 - Architecture (database isolation, context management, branch lifecycle,

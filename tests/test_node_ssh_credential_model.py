@@ -62,6 +62,7 @@ def _stub_django(monkeypatch):
     db_models.BooleanField = _Field
     db_models.PositiveIntegerField = _Field
     db_models.OneToOneField = _Field
+    db_models.UUIDField = _Field
     db_models.CASCADE = object()
     db.models = db_models
 
@@ -136,6 +137,28 @@ def _load_ssh_credential(monkeypatch):
     monkeypatch.setitem(
         sys.modules, "netbox_proxbox.services.encryption_recovery", np_recovery
     )
+    np_integrations = types.ModuleType("netbox_proxbox.integrations")
+    np_integrations.__path__ = [str(REPO_ROOT / "netbox_proxbox" / "integrations")]
+    np_openbao = types.ModuleType("netbox_proxbox.integrations.openbao")
+    np_openbao.node_uses_openbao_storage = lambda _credential: False
+    np_openbao.store_node_ssh_password = (
+        lambda credential, plaintext, *, key, user=None, request=None: setattr(
+            credential, "password_enc", enc_mod.encrypt(plaintext, key=key)
+        )
+    )
+    np_openbao.store_node_ssh_keypair = (
+        lambda credential, plaintext, *, key, user=None, request=None, **_kwargs: (
+            setattr(credential, "private_key_enc", enc_mod.encrypt(plaintext, key=key))
+        )
+    )
+    np_openbao.resolve_node_ssh_password = lambda credential, *, key, user=None: (
+        enc_mod.decrypt(credential.password_enc, key=key)
+    )
+    np_openbao.resolve_node_ssh_private_key = lambda credential, *, key, user=None: (
+        enc_mod.decrypt(credential.private_key_enc, key=key)
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.integrations", np_integrations)
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.integrations.openbao", np_openbao)
 
     spec = importlib.util.spec_from_file_location(
         "_ssh_credential_under_test", MODEL_PATH

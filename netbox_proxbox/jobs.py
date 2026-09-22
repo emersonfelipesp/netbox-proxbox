@@ -67,6 +67,7 @@ LEGACY_PROXBOX_RQ_QUEUE = "netbox_proxbox.sync"
 # (often 300s) and the HTTP stream read budget between chunks (3600s in ``run_sync_stream``).
 # Override per enqueue via ``job_timeout=...`` if needed.
 PROXBOX_SYNC_JOB_TIMEOUT = 7200
+PREFLIGHT_ENDPOINT_TIMEZONE_BUDGET = 30.0
 
 __all__ = (
     "LEGACY_PROXBOX_RQ_QUEUE",
@@ -918,6 +919,47 @@ def _push_one_proxmox_endpoint(
     return _proxmox_push_phase(endpoint, started, ok, error)
 
 
+def _refresh_proxmox_endpoint_timezone(
+    state: _BackendPreflightState, endpoint: object, *, timeout: float
+) -> None:
+    """Best-effort refresh of the endpoint timezone through proxbox-api."""
+    try:
+        from netbox_proxbox.services.endpoint_timezone import (  # noqa: PLC0415
+            refresh_endpoint_timezone,
+        )
+
+        refreshed = refresh_endpoint_timezone(
+            endpoint,
+            fastapi_endpoint_id=getattr(state.context, "endpoint_id", None),
+            timeout=timeout,
+        )
+    except Exception as exc:  # noqa: BLE001
+        state.job.logger.warning(
+            "Preflight: endpoint timezone discovery failed for Proxmox endpoint "
+            f"{getattr(endpoint, 'pk', None)}: {type(exc).__name__}"
+        )
+        return
+    if refreshed:
+        state.job.logger.info(
+            "Preflight: refreshed the Proxmox timezone for endpoint "
+            f"'{getattr(endpoint, 'name', endpoint.pk)}'"
+        )
+
+
+def _refresh_timezone_within_budget(
+    state: _BackendPreflightState,
+    endpoint: object,
+    elapsed: float,
+) -> float:
+    """Refresh one timezone while bounding all discovery calls as a group."""
+    remaining = PREFLIGHT_ENDPOINT_TIMEZONE_BUDGET - elapsed
+    if remaining <= 0:
+        return elapsed
+    started = time.monotonic()
+    _refresh_proxmox_endpoint_timezone(state, endpoint, timeout=min(10.0, remaining))
+    return elapsed + (time.monotonic() - started)
+
+
 def _proxmox_push_phase(
     endpoint: object,
     started: float,
@@ -989,6 +1031,7 @@ def _push_proxmox_endpoints(
     phases: list[dict[str, object]] = []
     skipped: list[str] = []
     started = time.monotonic()
+    timezone_elapsed = 0.0
     for endpoint in endpoints:
         elapsed = time.monotonic() - started
         registered = backend_holds_proxmox_endpoint(endpoint, existing)
@@ -1001,11 +1044,20 @@ def _push_proxmox_endpoints(
         if summary is not None:
             skipped.append(str(getattr(endpoint, "name", endpoint.pk)))
             phases.append(_skipped_proxmox_phase(endpoint, summary))
+            if registered and elapsed < PREFLIGHT_ENDPOINT_PUSH_HARD_CEILING:
+                timezone_elapsed = _refresh_timezone_within_budget(
+                    state, endpoint, timezone_elapsed
+                )
             continue
         _log_over_budget_unregistered(
             state, endpoint, elapsed, PREFLIGHT_ENDPOINT_PUSH_BUDGET
         )
-        phases.append(_push_one_proxmox_endpoint(state, endpoint, existing))
+        phase = _push_one_proxmox_endpoint(state, endpoint, existing)
+        phases.append(phase)
+        if phase["status"] == "success":
+            timezone_elapsed = _refresh_timezone_within_budget(
+                state, endpoint, timezone_elapsed
+            )
     _record_skipped_proxmox_pushes(
         state,
         skipped,

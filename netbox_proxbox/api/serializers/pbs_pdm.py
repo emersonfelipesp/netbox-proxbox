@@ -11,6 +11,30 @@ from rest_framework import serializers
 from netbox_proxbox.models import PBSEndpoint, PDMEndpoint, PDMRemote
 
 
+class _CredentialAssignmentMetadataMixin:
+    """Expose only vendor-neutral, secret-free assignment readiness."""
+
+    def _assignment_state(self, obj: object) -> tuple[bool, str]:
+        from netbox_proxbox.integrations.openbao_single import (
+            credential_assignment_readiness,
+        )
+
+        return credential_assignment_readiness(obj)
+
+    def get_credential_assignment_ready(self, obj: object) -> bool:
+        return self._assignment_state(obj)[0]
+
+    def get_credential_assignment_detail(self, obj: object) -> str:
+        return self._assignment_state(obj)[1]
+
+    def get_credential_assignment_lookup(self, obj: object) -> dict[str, str] | None:
+        from netbox_proxbox.integrations.openbao_single import (
+            credential_assignment_lookup,
+        )
+
+        return credential_assignment_lookup(obj)
+
+
 class NestedPBSEndpointSerializer(WritableNestedSerializer):
     """Minimal PBSEndpoint for nested references (e.g. from PDMEndpoint)."""
 
@@ -37,7 +61,7 @@ class NestedPDMEndpointSerializer(WritableNestedSerializer):
         brief_fields = ("id", "url", "display", "name")
 
 
-class PBSEndpointSerializer(NetBoxModelSerializer):
+class PBSEndpointSerializer(_CredentialAssignmentMetadataMixin, NetBoxModelSerializer):
     """Proxmox Backup Server endpoint with credentials as write-only fields."""
 
     url = serializers.HyperlinkedIdentityField(
@@ -49,6 +73,9 @@ class PBSEndpointSerializer(NetBoxModelSerializer):
         allow_blank=True,
         style={"input_type": "password"},
     )
+    credential_assignment_ready = serializers.SerializerMethodField()
+    credential_assignment_detail = serializers.SerializerMethodField()
+    credential_assignment_lookup = serializers.SerializerMethodField()
     ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
     site = SiteSerializer(nested=True, required=False, allow_null=True)
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
@@ -65,6 +92,9 @@ class PBSEndpointSerializer(NetBoxModelSerializer):
             "port",
             "token_id",
             "token_secret",
+            "credential_assignment_ready",
+            "credential_assignment_detail",
+            "credential_assignment_lookup",
             "fingerprint",
             "verify_ssl",
             "allow_writes",
@@ -103,7 +133,7 @@ class PBSEndpointSerializer(NetBoxModelSerializer):
         return attrs
 
 
-class PDMEndpointSerializer(NetBoxModelSerializer):
+class PDMEndpointSerializer(_CredentialAssignmentMetadataMixin, NetBoxModelSerializer):
     """Proxmox Datacenter Manager endpoint with federation M2M links."""
 
     url = serializers.HyperlinkedIdentityField(
@@ -115,6 +145,9 @@ class PDMEndpointSerializer(NetBoxModelSerializer):
         allow_blank=True,
         style={"input_type": "password"},
     )
+    credential_assignment_ready = serializers.SerializerMethodField()
+    credential_assignment_detail = serializers.SerializerMethodField()
+    credential_assignment_lookup = serializers.SerializerMethodField()
     ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
     site = SiteSerializer(nested=True, required=False, allow_null=True)
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
@@ -133,6 +166,9 @@ class PDMEndpointSerializer(NetBoxModelSerializer):
             "port",
             "token_id",
             "token_secret",
+            "credential_assignment_ready",
+            "credential_assignment_detail",
+            "credential_assignment_lookup",
             "fingerprint",
             "verify_ssl",
             "allow_writes",

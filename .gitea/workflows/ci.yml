@@ -165,6 +165,8 @@ jobs:
           .venv/bin/python -m build --no-isolation
           .venv/bin/python scripts/check_dist_inventory.py dist/*.whl dist/*.tar.gz
           .venv/bin/python scripts/verify_vm_console_artifacts.py dist
+          .venv/bin/python scripts/check_public_boundary.py \
+            --artifacts-only --artifact dist/*.whl --artifact dist/*.tar.gz
           .venv/bin/twine check dist/*
 
       - name: Clean docs and package environment

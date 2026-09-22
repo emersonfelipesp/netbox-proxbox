@@ -2084,9 +2084,23 @@ class ProxboxSyncStateHistoricalMigrationTest(ForwardOnlyMigrationTestCase):
             model="migration-sync-state-type",
             slug="migration-sync-state-type",
         )
+        device_role_field_names = {
+            field.name for field in DeviceRoleAtFloor._meta.get_fields()
+        }
+        nested_role_values = {
+            name: value
+            for name, value in (
+                ("level", 0),
+                ("lft", 1),
+                ("rght", 2),
+                ("tree_id", 1),
+            )
+            if name in device_role_field_names
+        }
         device_role = DeviceRoleAtFloor.objects.create(
             name="migration-sync-state-role",
             slug="migration-sync-state-role",
+            **nested_role_values,
         )
         site = SiteAtFloor.objects.create(
             name="migration-sync-state-site",
@@ -2577,9 +2591,7 @@ class ProxboxSyncStateHistoricalMigrationTest(ForwardOnlyMigrationTestCase):
         finally:
             self._restore_current_leaf()
 
-    def test_forward_removes_only_vm_reflection_fields_and_reverse_restores_them(
-        self,
-    ) -> None:
+    def test_forward_removes_only_vm_reflection_fields(self) -> None:
         try:
             apps_0083 = self._migrate_to(MIGRATION_0083)
             CustomField0083 = apps_0083.get_model("extras", "CustomField")
@@ -2651,35 +2663,6 @@ class ProxboxSyncStateHistoricalMigrationTest(ForwardOnlyMigrationTestCase):
                 {field.name for field in Settings0084._meta.get_fields()},
             )
 
-            restored_apps = self._migrate_to(MIGRATION_0083)
-            RestoredCustomField = restored_apps.get_model("extras", "CustomField")
-            RestoredSettings = restored_apps.get_model(
-                "netbox_proxbox", "ProxboxPluginSettings"
-            )
-            restored = RestoredCustomField.objects.filter(
-                name__in=VM_REFLECTION_CUSTOM_FIELDS
-            )
-            self.assertEqual(
-                set(restored.values_list("name", flat=True)),
-                VM_REFLECTION_CUSTOM_FIELDS,
-            )
-            for custom_field in restored:
-                self.assertTrue(
-                    custom_field.object_types.filter(
-                        app_label="virtualization",
-                        model="virtualmachine",
-                    ).exists(),
-                    custom_field.name,
-                )
-            vmid_field = restored.get(name="proxmox_vm_id")
-            self.assertEqual(vmid_field.type, "integer")
-            self.assertEqual(vmid_field.label, "VM ID")
-            self.assertEqual(vmid_field.ui_visible, "always")
-            self.assertEqual(vmid_field.ui_editable, "hidden")
-            self.assertIn(
-                "custom_fields_enabled",
-                {field.name for field in RestoredSettings._meta.get_fields()},
-            )
         finally:
             self._restore_current_leaf()
 

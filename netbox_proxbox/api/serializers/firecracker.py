@@ -128,6 +128,15 @@ class FirecrackerHostSerializer(NetBoxModelSerializer):
     proxmox_node = NestedProxmoxNodeSerializer(required=False, allow_null=True)
     status = ChoiceField(choices=FirecrackerHostStatusChoices)
     token_configured = serializers.BooleanField(read_only=True)
+    agent_token = serializers.CharField(
+        write_only=True,
+        required=False,
+        allow_blank=False,
+        style={"input_type": "password"},
+    )
+    credential_assignment_ready = serializers.SerializerMethodField()
+    credential_assignment_detail = serializers.SerializerMethodField()
+    credential_assignment_lookup = serializers.SerializerMethodField()
     available_vcpus = serializers.IntegerField(read_only=True)
     available_memory_mib = serializers.IntegerField(read_only=True)
     available_disk_mib = serializers.IntegerField(read_only=True)
@@ -144,6 +153,10 @@ class FirecrackerHostSerializer(NetBoxModelSerializer):
             "proxmox_node",
             "agent_base_url",
             "token_configured",
+            "agent_token",
+            "credential_assignment_ready",
+            "credential_assignment_detail",
+            "credential_assignment_lookup",
             "status",
             "firecracker_version",
             "kvm_available",
@@ -173,6 +186,28 @@ class FirecrackerHostSerializer(NetBoxModelSerializer):
             "status",
             "agent_base_url",
         )
+
+    def _assignment_state(self, obj: FirecrackerHost) -> tuple[bool, str]:
+        from netbox_proxbox.integrations.openbao_single import (
+            credential_assignment_readiness,
+        )
+
+        return credential_assignment_readiness(obj)
+
+    def get_credential_assignment_ready(self, obj: FirecrackerHost) -> bool:
+        return self._assignment_state(obj)[0]
+
+    def get_credential_assignment_detail(self, obj: FirecrackerHost) -> str:
+        return self._assignment_state(obj)[1]
+
+    def get_credential_assignment_lookup(
+        self, obj: FirecrackerHost
+    ) -> dict[str, str] | None:
+        from netbox_proxbox.integrations.openbao_single import (
+            credential_assignment_lookup,
+        )
+
+        return credential_assignment_lookup(obj)
 
 
 class FirecrackerImageTemplateSerializer(NetBoxModelSerializer):

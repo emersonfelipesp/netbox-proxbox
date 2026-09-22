@@ -47,6 +47,7 @@ except ModuleNotFoundError as exc:
 
 from django.contrib.auth import get_user_model  # noqa: E402
 from django.contrib.contenttypes.models import ContentType  # noqa: E402
+from django.http import QueryDict  # noqa: E402
 from django.test import Client, TestCase  # noqa: E402
 from django.urls import reverse  # noqa: E402
 from django.utils import timezone  # noqa: E402
@@ -488,6 +489,278 @@ class DataProtectionCalendarRenderTest(TestCase):
         ]
         self.assertIn("budget-newest-active-routine", labels)
         self.assertNotIn("budget-stale-routine", labels)
+
+    def test_active_replications_win_the_event_budget_over_stale_ones(self) -> None:
+        stale = Replication.objects.create(
+            endpoint=self.endpoint,
+            virtual_machine=self.vm,
+            replication_id="budget-stale-replication",
+            guest=801,
+            target="stale-target",
+            jobnum=801,
+            schedule="daily 01:00",
+            status="stale",
+        )
+        active = Replication.objects.create(
+            endpoint=self.endpoint,
+            virtual_machine=self.vm,
+            replication_id="budget-active-replication",
+            guest=802,
+            target="active-target",
+            jobnum=802,
+            schedule="daily 02:00",
+        )
+        self.assertLess(stale.pk, active.pk)
+        with patch("netbox_proxbox.views.data_protection.CALENDAR_SOURCE_LIMIT", 7):
+            response = self.client.get(
+                reverse("plugins:netbox_proxbox:replication_list"),
+                {"cal_view": "week", "cal_date": self.anchor, "q": "budget-"},
+            )
+
+        labels = [
+            event.label
+            for row in response.context["calendar"]["rows"]
+            for cell in row
+            for event in cell.events + cell.overflow
+        ]
+        self.assertTrue(any("budget-active-replication" in label for label in labels))
+        self.assertFalse(any("budget-stale-replication" in label for label in labels))
+
+    def test_endpoint_timezone_conversion_can_move_schedule_to_next_day(self) -> None:
+        ProxmoxEndpoint.objects.filter(pk=self.endpoint.pk).update(
+            iana_timezone="America/Sao_Paulo"
+        )
+        Replication.objects.create(
+            endpoint=self.endpoint,
+            virtual_machine=self.vm,
+            replication_id="timezone-rollover",
+            guest=803,
+            target="rollover-target",
+            jobnum=803,
+            schedule="2026-09-14 23:30:45",
+        )
+        Replication.objects.create(
+            endpoint=self.endpoint,
+            virtual_machine=self.vm,
+            replication_id="timezone-zero-seconds",
+            guest=807,
+            target="zero-seconds-target",
+            jobnum=807,
+            schedule="2026-09-14 22:30:00",
+        )
+        with timezone.override("UTC"):
+            response = self.client.get(
+                reverse("plugins:netbox_proxbox:replication_list"),
+                {"cal_view": "week", "cal_date": "2026-09-15"},
+            )
+
+        events = [
+            event
+            for row in response.context["calendar"]["rows"]
+            for cell in row
+            for event in cell.events + cell.overflow
+            if "timezone-rollover" in event.label
+        ]
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].day.isoformat(), "2026-09-15")
+        self.assertEqual(events[0].time_text, "02:30:45")
+        self.assertFalse(events[0].approximate)
+        zero_seconds = [
+            event
+            for row in response.context["calendar"]["rows"]
+            for cell in row
+            for event in cell.events + cell.overflow
+            if "timezone-zero-seconds" in event.label
+        ]
+        self.assertEqual(len(zero_seconds), 1)
+        self.assertEqual(zero_seconds[0].time_text, "01:30:00")
+        self.assertFalse(zero_seconds[0].approximate)
+
+    def test_timezone_projection_covers_both_two_date_boundary_directions(self) -> None:
+        cases = (
+            (
+                "timezone-two-days-east",
+                "Etc/GMT+12",
+                "Pacific/Kiritimati",
+                "2026-09-13 23:30",
+                "2026-09-15",
+                "01:30",
+            ),
+            (
+                "timezone-two-days-west",
+                "Pacific/Kiritimati",
+                "Etc/GMT+12",
+                "2026-09-17 00:30",
+                "2026-09-15",
+                "22:30",
+            ),
+        )
+        for replication_id, source_zone, target_zone, schedule, day, clock in cases:
+            with self.subTest(replication_id=replication_id):
+                ProxmoxEndpoint.objects.filter(pk=self.endpoint.pk).update(
+                    iana_timezone=source_zone
+                )
+                replication = Replication.objects.create(
+                    endpoint=self.endpoint,
+                    virtual_machine=self.vm,
+                    replication_id=replication_id,
+                    guest=805,
+                    target=f"{replication_id}-target",
+                    jobnum=805,
+                    schedule=schedule,
+                )
+                with timezone.override(target_zone):
+                    response = self.client.get(
+                        reverse("plugins:netbox_proxbox:replication_list"),
+                        {"cal_view": "week", "cal_date": day},
+                    )
+                events = [
+                    event
+                    for row in response.context["calendar"]["rows"]
+                    for cell in row
+                    for event in cell.events + cell.overflow
+                    if replication_id in event.label
+                ]
+                self.assertEqual(len(events), 1)
+                self.assertEqual(events[0].day.isoformat(), day)
+                self.assertEqual(events[0].time_text, clock)
+                self.assertFalse(events[0].approximate)
+                replication.delete()
+
+    def test_exact_midnight_alias_is_timezone_converted(self) -> None:
+        ProxmoxEndpoint.objects.filter(pk=self.endpoint.pk).update(
+            iana_timezone="Pacific/Kiritimati"
+        )
+        Replication.objects.create(
+            endpoint=self.endpoint,
+            virtual_machine=self.vm,
+            replication_id="timezone-daily-alias",
+            guest=806,
+            target="daily-alias-target",
+            jobnum=806,
+            schedule="daily",
+        )
+        with timezone.override("UTC"):
+            response = self.client.get(
+                reverse("plugins:netbox_proxbox:replication_list"),
+                {"cal_view": "week", "cal_date": "2026-09-15"},
+            )
+        events = [
+            event
+            for row in response.context["calendar"]["rows"]
+            for cell in row
+            for event in cell.events + cell.overflow
+            if "timezone-daily-alias" in event.label
+        ]
+
+        self.assertTrue(events)
+        self.assertTrue(all(event.time_text == "10:00" for event in events))
+        self.assertTrue(all(not event.approximate for event in events))
+
+    def test_endpoint_timezone_field_defaults_blank_and_is_not_editable(self) -> None:
+        endpoint = ProxmoxEndpoint.objects.create(name="timezone-field-default")
+        field = ProxmoxEndpoint._meta.get_field("iana_timezone")
+
+        self.assertEqual(endpoint.iana_timezone, "")
+        self.assertEqual(field.max_length, 64)
+        self.assertFalse(field.editable)
+
+    def test_missing_endpoint_timezone_keeps_schedule_visible_as_approximate(
+        self,
+    ) -> None:
+        response = self.client.get(
+            reverse("plugins:netbox_proxbox:replication_list"),
+            {"cal_view": "week", "cal_date": self.anchor},
+        )
+        events = [
+            event
+            for row in response.context["calendar"]["rows"]
+            for cell in row
+            for event in cell.events + cell.overflow
+            if "534-1" in event.label
+        ]
+
+        self.assertTrue(events)
+        self.assertTrue(all(event.approximate for event in events))
+
+    def test_ambiguous_dst_schedule_remains_visible_as_approximate(self) -> None:
+        ProxmoxEndpoint.objects.filter(pk=self.endpoint.pk).update(
+            iana_timezone="America/New_York"
+        )
+        Replication.objects.create(
+            endpoint=self.endpoint,
+            virtual_machine=self.vm,
+            replication_id="timezone-dst-fold",
+            guest=804,
+            target="dst-target",
+            jobnum=804,
+            schedule="2026-11-01 01:30",
+        )
+        with timezone.override("UTC"):
+            response = self.client.get(
+                reverse("plugins:netbox_proxbox:replication_list"),
+                {"cal_view": "week", "cal_date": "2026-11-01"},
+            )
+
+        events = [
+            event
+            for row in response.context["calendar"]["rows"]
+            for cell in row
+            for event in cell.events + cell.overflow
+            if "timezone-dst-fold" in event.label
+        ]
+        self.assertEqual(len(events), 1)
+        self.assertEqual(events[0].day.isoformat(), "2026-11-01")
+        self.assertEqual(events[0].time_text, "01:30")
+        self.assertTrue(events[0].approximate)
+
+    def test_combined_apply_then_navigation_preserves_rendered_filters(self) -> None:
+        submitted = {
+            "cluster": [str(self.first_node.proxmox_cluster_id)],
+            "node": [str(self.first_node.pk)],
+            "date_from": "2026-09-01",
+            "date_to": "2026-10-31",
+            "cal_view": "week",
+            "kinds_submitted": "1",
+            "replications": "on",
+        }
+        applied = self.client.get(
+            reverse("plugins:netbox_proxbox:data_protection"), submitted
+        )
+        next_query = QueryDict(applied.context["calendar"]["next_query"])
+        navigated = self.client.get(
+            reverse("plugins:netbox_proxbox:data_protection"), next_query
+        )
+
+        self.assertEqual(applied.status_code, 200)
+        self.assertEqual(navigated.status_code, 200)
+        self.assertEqual(next_query.getlist("node"), [str(self.first_node.pk)])
+        self.assertEqual(
+            next_query.getlist("cluster"), [str(self.first_node.proxmox_cluster_id)]
+        )
+        self.assertEqual(navigated.context["calendar"]["view"], "week")
+        self.assertNotEqual(
+            navigated.context["calendar"]["anchor"],
+            applied.context["calendar"]["anchor"],
+        )
+
+    def test_combined_node_selection_is_capped_before_query_construction(self) -> None:
+        nodes = [
+            ProxmoxNode(
+                endpoint=self.endpoint,
+                name=f"selection-cap-{index}",
+                ip_address=f"198.51.100.{index + 1}",
+            )
+            for index in range(51)
+        ]
+        ProxmoxNode.objects.bulk_create(nodes)
+        response = self.client.get(
+            reverse("plugins:netbox_proxbox:data_protection"),
+            {"node": [str(node.pk) for node in nodes]},
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Select at most 50 Proxmox nodes.")
 
     def test_timestamp_source_limit_reports_omitted_events(self) -> None:
         VMBackup.objects.create(

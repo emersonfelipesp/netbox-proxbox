@@ -201,9 +201,39 @@ class ProxboxConfig(PluginConfig):
                 "Skipping ProxBox job and view registration because Pydantic is not installed."
             )
             return
+        from .integrations.openbao import register_openbao_assignable_models
+
+        register_openbao_assignable_models()
         from .services.encryption_recovery import install_encrypted_writer_guards
 
         install_encrypted_writer_guards()
+        from .integrations.openbao_writer import install_endpoint_material_writer
+
+        install_endpoint_material_writer()
+        from .integrations.openbao_node_writer import install_node_material_writer
+
+        install_node_material_writer()
+        from .integrations.openbao_node_guards import install_node_material_guards
+
+        install_node_material_guards()
+        from .integrations.openbao_single_writer import (
+            install_single_secret_material_writer,
+        )
+
+        install_single_secret_material_writer()
+        from .integrations.openbao_single_guards import (
+            install_single_secret_material_guards,
+        )
+
+        install_single_secret_material_guards()
+        from .integrations.openbao_cloudinit import install_cloudinit_material_writer
+
+        install_cloudinit_material_writer()
+        from .integrations.openbao_cloudinit_guards import (
+            install_cloudinit_material_guards,
+        )
+
+        install_cloudinit_material_guards()
         from . import jobs  # noqa: F401 — registers ProxboxSyncJob with the NetBox job system
         from .views import job_cancel, job_run  # noqa: F401 — core Job: proxbox-run / proxbox-cancel
         from . import signals  # noqa: F401 — enforces read-only key checks before backend sync

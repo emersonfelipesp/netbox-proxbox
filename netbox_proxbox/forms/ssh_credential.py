@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django import forms
+from django.views.decorators.debug import sensitive_variables
 from utilities.forms.fields import DynamicModelChoiceField
 
 from netbox.forms import NetBoxModelFilterSetForm, NetBoxModelForm
@@ -56,9 +57,21 @@ class NodeSSHCredentialForm(NetBoxModelForm):
             "tags",
         )
 
+    @sensitive_variables()
     def __init__(self, *args: object, **kwargs: object) -> None:
         """Surface undecryptable stored values without pre-filling secrets."""
+        self._request = kwargs.pop("request", None)
+        self._request_user = kwargs.pop("request_user", None)
+        if self._request_user is None and self._request is not None:
+            self._request_user = getattr(self._request, "user", None)
+        if self._request_user is None:
+            from netbox_proxbox.integrations.openbao_node_transaction import (
+                current_node_request,
+                current_node_request_actor,
+            )
 
+            self._request_user = current_node_request_actor()
+            self._request = current_node_request()
         super().__init__(*args, **kwargs)
         instance = getattr(self, "instance", None)
         if (
@@ -78,7 +91,11 @@ class NodeSSHCredentialForm(NetBoxModelForm):
         value = self.cleaned_data["known_host_fingerprint"]
         return normalize_fingerprint(value)
 
-    def _encryption_key(self) -> str:
+    def _storage_key(self) -> str:
+        from netbox_proxbox.integrations.openbao import node_uses_openbao_storage
+
+        if node_uses_openbao_storage(self.instance):
+            return ""
         settings_obj = ProxboxPluginSettings.get_solo()
         key = settings_obj.encryption_key or ""
         if not key:
@@ -87,28 +104,41 @@ class NodeSSHCredentialForm(NetBoxModelForm):
             )
         return key
 
+    @sensitive_variables()
     def _apply_secret_inputs(self) -> None:
         password = self.cleaned_data.get("password")
         private_key = self.cleaned_data.get("private_key")
         if not password and not private_key:
             return
-        key = self._encryption_key()
-        from netbox_proxbox.services.encryption_recovery import (
-            mark_encrypted_fields_for_write,
-        )
+        key = self._storage_key()
 
         try:
             if password:
-                mark_encrypted_fields_for_write(self.instance, "password_enc")
-                self.instance.password_enc = enc_helpers.encrypt(password, key=key)
-            if private_key:
-                mark_encrypted_fields_for_write(self.instance, "private_key_enc")
-                self.instance.private_key_enc = enc_helpers.encrypt(
-                    private_key, key=key
+                self.instance.set_password(
+                    password,
+                    key=key,
+                    user=self._request_user,
+                    request=self._request,
                 )
-        except enc_helpers.EncryptionError as exc:
+            if private_key:
+                self.instance.set_private_key(
+                    private_key,
+                    key=key,
+                    user=self._request_user,
+                    request=self._request,
+                )
+        except (forms.ValidationError, enc_helpers.EncryptionError) as exc:
             raise forms.ValidationError(str(exc)) from exc
 
+    @sensitive_variables()
+    def _prepare_secret_context(self) -> None:
+        node = self.cleaned_data.get("node")
+        if node is not None:
+            self.instance.node = node
+        if self._request_user is not None:
+            self.instance._openbao_actor_user = self._request_user
+
+    @sensitive_variables()
     def _post_clean(self) -> None:
         """Encrypt write-only secret fields, then delegate to the NetBox chain.
 
@@ -127,6 +157,7 @@ class NodeSSHCredentialForm(NetBoxModelForm):
         """
         if not self.errors:
             try:
+                self._prepare_secret_context()
                 self._apply_secret_inputs()
             except forms.ValidationError as exc:
                 self.add_error(None, exc)

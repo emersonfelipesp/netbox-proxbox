@@ -14,6 +14,9 @@ on:
     branches: ['**']
   workflow_dispatch:
 
+permissions:
+  contents: read
+
 jobs:
   django-tests:
     # Keep the host OS line stable; GitHub maintains the image behind this
@@ -44,7 +47,7 @@ jobs:
             netbox_requirements_sha256: 646c5bb635d5b9b126c6af4d56664dfde461608bdcaa8a65c1735ac5d8ddde9b
             netbox_input_sha256: eaa1232512302fd9eaf7c3ca1cee1ea959ba9c7001eb276025b4f4612c9593c3
             netbox_lock: ci/netbox-requirements/v4.5.8-py312-linux-x86_64.txt
-            netbox_lock_sha256: 5f0e6ab7c61bad67006d819918b7c4fb8c0f88dd67250e4c64127bc86e9e008a
+            netbox_lock_sha256: 7b515f5fd7d4b3fb03afc5b2ec3ed3b20808853de5f635fe2dc5640a1acac9fd
           - netbox: "v4.5.10"
             pdm: false
             netbox_ref: b78bd713294564e0421c36c936a909e64da04b8d
@@ -53,7 +56,7 @@ jobs:
             netbox_requirements_sha256: d68f08fb6167317174be89cda3045ee0e2fa34dd6e18ce19db2a31cf31a26e6f
             netbox_input_sha256: bdfd166f32c07d4223fe2f105a4b57873923c55b13c76946cb7b56c667fb12b5
             netbox_lock: ci/netbox-requirements/v4.5.10-py312-linux-x86_64.txt
-            netbox_lock_sha256: 3c4745890047b8b96e7c3461cd5ec0ecdc483edbe4054d63f370dbca3f74ceb7
+            netbox_lock_sha256: da7e4167ffd9a6d01fd8dbeede148170c5ecc759a798a289308b9d6952c711ba
           - netbox: "v4.6.0"
             pdm: false
             netbox_ref: 00791344e68213bde942218283dce03cc3941c30
@@ -62,7 +65,7 @@ jobs:
             netbox_requirements_sha256: 0d88cea37b413f22953ead2c2c341c82fe7a5e5d8a01f42632288676db8d66b6
             netbox_input_sha256: d948640804f4d6f45fa42bd7b5192bd583c08cf3ac5156c2969dc87a6063857d
             netbox_lock: ci/netbox-requirements/v4.6.0-py312-linux-x86_64.txt
-            netbox_lock_sha256: 9ea5a21bd89890c43ae6163b9dd00f4dbb62db99b28c8cb5021edfb1d191cce4
+            netbox_lock_sha256: 7132a376f2cd458840bb55c93268b4d09efd1aad169ff4a5aa203da62fef355b
           - netbox: "v4.6.6"
             pdm: false
             netbox_ref: fb8c455ba61b57119a70670612dfdd05e8438b10
@@ -71,7 +74,7 @@ jobs:
             netbox_requirements_sha256: 25eb62e54362568599c7701a528a7ac24dbe0400d5311fc496eab866bd6174b9
             netbox_input_sha256: 2413106d8fd6e3e9023c73071059f7784add9c12309d70c6b349c83819cd37b1
             netbox_lock: ci/netbox-requirements/v4.6.6-py312-linux-x86_64.txt
-            netbox_lock_sha256: 509991af7910f91578f6f7ff2cc74a048eb5ce2c5f793e9f7d6479c59ac0396d
+            netbox_lock_sha256: 91453ae85fa951ce8469f508d2304f9eefd5f6f469b1e633b0ba40734c96852f
           - netbox: "v4.7.0"
             pdm: false
             netbox_ref: 5f06007e4c9bacc93ce17c1e645fc1143d60df3d
@@ -80,7 +83,7 @@ jobs:
             netbox_requirements_sha256: 61589a94b25149765d230d3f33597326c3987faae7cbc20aae4c49e825c2b582
             netbox_input_sha256: 61589a94b25149765d230d3f33597326c3987faae7cbc20aae4c49e825c2b582
             netbox_lock: ci/netbox-requirements/v4.7.0-py312-linux-x86_64.txt
-            netbox_lock_sha256: 3e5b77507f4490ddf38c72fdabd57e5a55bc1178097ebbac848cb1e1fb165678
+            netbox_lock_sha256: 3345dd1b02e944b52ffb67edb05e8a7549b913924297f9ce23f7d2a92c6192c9
           - netbox: "v4.6.6"
             pdm: true
             netbox_ref: fb8c455ba61b57119a70670612dfdd05e8438b10
@@ -88,8 +91,34 @@ jobs:
             netbox_designation: ""
             netbox_requirements_sha256: 25eb62e54362568599c7701a528a7ac24dbe0400d5311fc496eab866bd6174b9
             netbox_input_sha256: 2413106d8fd6e3e9023c73071059f7784add9c12309d70c6b349c83819cd37b1
-            netbox_lock: ci/netbox-requirements/v4.6.6-py312-linux-x86_64.txt
-            netbox_lock_sha256: 509991af7910f91578f6f7ff2cc74a048eb5ce2c5f793e9f7d6479c59ac0396d
+            netbox_lock: ci/netbox-requirements/v4.6.6-pdm-3408441672bf-py312-linux-x86_64.txt
+            netbox_lock_sha256: f1200401205d3e8f3c0f866626d71b8e8381916e0430e5aa23b1245eaa305955
+          - netbox: "v4.7.0"
+            pdm: false
+            all_companions: true
+            netbox_ref: 5f06007e4c9bacc93ce17c1e645fc1143d60df3d
+            netbox_version: "4.7.0"
+            netbox_designation: ""
+            netbox_requirements_sha256: 61589a94b25149765d230d3f33597326c3987faae7cbc20aae4c49e825c2b582
+            netbox_input_sha256: 61589a94b25149765d230d3f33597326c3987faae7cbc20aae4c49e825c2b582
+            netbox_lock: ci/netbox-requirements/v4.7.0-all-companions-py312-linux-x86_64.txt
+            netbox_lock_sha256: e8bda99e3a415e2370973fb5e1082b2e7e0a4fabd092c244fa038851404c5508
+            pdm_ref: c96b425b69677107635749860e240576e91041ee
+            ceph_ref: 227f386148219522476423a85156a72ab215ece5
+            pbs_ref: e00bdcab5fa519f6a2cd22d51fc329e0623af746
+            packer_ref: 31f9ddf9652dbbbb9b34b83604acd888228caae7
+          - netbox: "v4.7.0"
+            pdm: false
+            openbao: true
+            netbox_ref: 5f06007e4c9bacc93ce17c1e645fc1143d60df3d
+            netbox_version: "4.7.0"
+            netbox_designation: ""
+            netbox_requirements_sha256: 61589a94b25149765d230d3f33597326c3987faae7cbc20aae4c49e825c2b582
+            netbox_input_sha256: 61589a94b25149765d230d3f33597326c3987faae7cbc20aae4c49e825c2b582
+            netbox_lock: ci/netbox-requirements/v4.7.0-openbao-58677ef-py312-linux-x86_64.txt
+            netbox_lock_sha256: f6d37cbf70aece0618adb9845a559fd9af867c4664ef66cf33d5c4fc33e422da
+            openbao_ref: 58677efdd595c34cf0d597ca3efa1951b05ea25e
+            rpc_ref: eae471d601423195c28ffa8482422b4c1cb4344d
 
     services:
       postgres:
@@ -120,6 +149,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           path: netbox-proxbox
+          persist-credentials: false
 
       - name: Checkout NetBox ${{ matrix.netbox }}
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -127,14 +157,61 @@ jobs:
           repository: netbox-community/netbox
           ref: ${{ matrix.netbox_ref }}
           path: netbox
+          persist-credentials: false
 
       - name: Checkout supported PDM registry override
-        if: matrix.pdm
+        if: matrix.pdm || matrix.all_companions
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: emersonfelipesp/netbox-pdm
-          ref: 3408441672bf849dfaf953d96d6e0ba1561cd576
+          ref: ${{ matrix.all_companions && matrix.pdm_ref || '3408441672bf849dfaf953d96d6e0ba1561cd576' }}
           path: netbox-pdm
+          persist-credentials: false
+
+      - name: Checkout supported Ceph companion
+        if: matrix.all_companions
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: emersonfelipesp/netbox-ceph
+          ref: ${{ matrix.ceph_ref }}
+          path: netbox-ceph
+          persist-credentials: false
+
+      - name: Checkout supported PBS companion
+        if: matrix.all_companions
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: emersonfelipesp/netbox-pbs
+          ref: ${{ matrix.pbs_ref }}
+          path: netbox-pbs
+          persist-credentials: false
+
+      - name: Checkout supported Packer companion
+        if: matrix.all_companions
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: emersonfelipesp/netbox-packer
+          ref: ${{ matrix.packer_ref }}
+          path: netbox-packer
+          persist-credentials: false
+
+      - name: Checkout supported OpenBao companion
+        if: matrix.openbao
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: emersonfelipesp/netbox-openbao
+          ref: ${{ matrix.openbao_ref }}
+          path: netbox-openbao
+          persist-credentials: false
+
+      - name: Checkout supported RPC dependency
+        if: matrix.openbao
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: N-MultiCloud/netbox-rpc
+          ref: ${{ matrix.rpc_ref }}
+          path: netbox-rpc
+          persist-credentials: false
 
       - name: Set up Python
         uses: actions/setup-python@ece7cb06caefa5fff74198d8649806c4678c61a1 # v6
@@ -151,6 +228,11 @@ jobs:
           EXPECTED_INPUT_SHA256: ${{ matrix.netbox_input_sha256 }}
           EXPECTED_NETBOX_LOCK: ${{ matrix.netbox_lock }}
           EXPECTED_LOCK_SHA256: ${{ matrix.netbox_lock_sha256 }}
+          EXPECTED_PROJECT_INPUT_SHA256: 54ee51ae82ab1ec26e1de7a5f07634eff981013a8b41e62cced50e8a99d3fd18
+          EXPECTED_PDM_INPUT_SHA256: 424c8807691eaa50c53762e6b1dbddbbe4489fe0b2a9bd15d142acb17699d50e
+          EXPECTED_PDM_PYPROJECT_SHA256: 496d7924629f7aa98452d302a33ce9b47c1533079f4a4320b92ee8b18133cfce
+          EXPECTED_ALL_COMPANIONS_INPUT_SHA256: 7b277c8c7baf88778fac40258dca059212097e36dede04d1250f920a3ec7994b
+          EXPECTED_OPENBAO_INPUT_SHA256: 5c60d62b4e84eaff3350e37045edc8b208c3b28b144815772c7dda0b2f754d85
         run: |
           actual_ref="$(git -C netbox rev-parse HEAD)"
           test "$actual_ref" = "$EXPECTED_NETBOX_REF"
@@ -160,11 +242,54 @@ jobs:
           test "$tagged_ref" = "$EXPECTED_NETBOX_REF"
           printf '%s  %s\n' "$EXPECTED_REQUIREMENTS_SHA256" netbox/requirements.txt \
             | sha256sum --check --strict
-          input_path="${EXPECTED_NETBOX_LOCK%.txt}.in"
+          input_path="ci/netbox-requirements/${EXPECTED_NETBOX_TAG}-py312-linux-x86_64.in"
           printf '%s  %s\n' "$EXPECTED_INPUT_SHA256" "netbox-proxbox/$input_path" \
             | sha256sum --check --strict
           printf '%s  %s\n' "$EXPECTED_LOCK_SHA256" "netbox-proxbox/$EXPECTED_NETBOX_LOCK" \
             | sha256sum --check --strict
+          printf '%s  %s\n' "$EXPECTED_PROJECT_INPUT_SHA256" \
+            netbox-proxbox/ci/netbox-requirements/netbox-proxbox-test-py312.in \
+            | sha256sum --check --strict
+          if [[ "${{ matrix.pdm }}" == "true" ]]; then
+            printf '%s  %s\n' "$EXPECTED_PDM_INPUT_SHA256" \
+              netbox-proxbox/ci/netbox-requirements/netbox-pdm-3408441672bf-py312.in \
+              | sha256sum --check --strict
+            printf '%s  %s\n' "$EXPECTED_PDM_PYPROJECT_SHA256" netbox-pdm/pyproject.toml \
+              | sha256sum --check --strict
+          fi
+          if [[ "${{ matrix.all_companions }}" == "true" ]]; then
+            printf '%s  %s\n' "$EXPECTED_ALL_COMPANIONS_INPUT_SHA256" \
+              netbox-proxbox/ci/netbox-requirements/netbox-all-companions-py312.in \
+              | sha256sum --check --strict
+            declare -A companion_refs=(
+              [netbox-pdm]="${{ matrix.pdm_ref }}"
+              [netbox-ceph]="${{ matrix.ceph_ref }}"
+              [netbox-pbs]="${{ matrix.pbs_ref }}"
+              [netbox-packer]="${{ matrix.packer_ref }}"
+            )
+            for companion in netbox-pdm netbox-ceph netbox-pbs netbox-packer; do
+              test "$(git -C "$companion" rev-parse HEAD)" = "${companion_refs[$companion]}"
+            done
+            printf '%s  %s\n' bf9ff5877ba6a3257d01804b78128510ada750e70aa344316dbf181b71c00b46 \
+              netbox-pdm/pyproject.toml | sha256sum --check --strict
+            printf '%s  %s\n' 407633d87cc6fc096d0a3824e2eaa9efd4ceda7486f70b2b65197c30450e82d9 \
+              netbox-ceph/pyproject.toml | sha256sum --check --strict
+            printf '%s  %s\n' da206270a647fe3bb5a26e3cb1136e39d7344bef8375a5fb20e11637ff318e7e \
+              netbox-pbs/pyproject.toml | sha256sum --check --strict
+            printf '%s  %s\n' 5f1b95feee604e4f617bffa0bb6efa548c3f12e02b28c57902754f599ab964fe \
+              netbox-packer/pyproject.toml | sha256sum --check --strict
+          fi
+          if [[ "${{ matrix.openbao }}" == "true" ]]; then
+            printf '%s  %s\n' "$EXPECTED_OPENBAO_INPUT_SHA256" \
+              netbox-proxbox/ci/netbox-requirements/netbox-openbao-58677ef-py312.in \
+              | sha256sum --check --strict
+            test "$(git -C netbox-openbao rev-parse HEAD)" = "${{ matrix.openbao_ref }}"
+            test "$(git -C netbox-rpc rev-parse HEAD)" = "${{ matrix.rpc_ref }}"
+            printf '%s  %s\n' 9f5d28152a617adc85a5b986dcf6f4c896620618c74e661faf2d7f4c13f72b60 \
+              netbox-openbao/pyproject.toml | sha256sum --check --strict
+            printf '%s  %s\n' 1ca5be578acaae8d12261e559c93c2ff63c5bf81d1dbe782b2d79465400eb2f2 \
+              netbox-rpc/pyproject.toml | sha256sum --check --strict
+          fi
           python - <<'PY'
           import os
           from pathlib import Path
@@ -205,21 +330,35 @@ jobs:
       - name: Install NetBox and plugin
         working-directory: netbox-proxbox
         run: |
-          # uv.lock carries hashes for the reviewed plugin/test environment;
-          # each exact NetBox source commit has a reviewed Python 3.12/Linux
-          # lock whose artifact hashes are enforced against the public index.
-          uv sync --extra test --locked
+          # The row lock resolves plugin runtime/test metadata together with
+          # exact NetBox metadata and, where enabled, pinned PDM metadata.
+          uv venv --python 3.12.13
           uv pip install --python .venv/bin/python \
             --require-hashes \
             --default-index https://pypi.org/simple \
             --index-strategy first-index \
             -r "${{ matrix.netbox_lock }}"
-          if [[ "${{ matrix.pdm }}" == "true" ]]; then
-            uv pip install --python .venv/bin/python --no-deps -e ../netbox-pdm
+          uv pip install --python .venv/bin/python --no-build-isolation --no-deps -e .
+          if [[ "${{ matrix.pdm }}" == "true" || "${{ matrix.all_companions }}" == "true" ]]; then
+            uv pip install --python .venv/bin/python \
+              --no-build-isolation --no-deps -e ../netbox-pdm
           fi
+          if [[ "${{ matrix.all_companions }}" == "true" ]]; then
+            for companion in netbox-ceph netbox-pbs netbox-packer; do
+              uv pip install --python .venv/bin/python \
+                --no-build-isolation --no-deps -e "../$companion"
+            done
+          fi
+          if [[ "${{ matrix.openbao }}" == "true" ]]; then
+            uv pip install --python .venv/bin/python \
+              --no-build-isolation --no-deps -e ../netbox-rpc
+            uv pip install --python .venv/bin/python \
+              --no-build-isolation --no-deps -e ../netbox-openbao
+          fi
+          uv pip check --python .venv/bin/python
 
       - name: Prove official NetBox 4.7.0 GA loader identity
-        if: matrix.netbox == 'v4.7.0' && !matrix.pdm
+        if: matrix.netbox == 'v4.7.0' && !matrix.pdm && !matrix.all_companions
         working-directory: netbox-proxbox
         env:
           NETBOX_CONFIGURATION: tests.netbox_test_configuration
@@ -241,6 +380,36 @@ jobs:
           '
           test -z "$(git -C ../netbox status --porcelain --untracked-files=all)"
 
+      - name: Prove the combined NetBox 4.7 companion registry
+        if: matrix.all_companions
+        working-directory: netbox-proxbox
+        env:
+          NETBOX_CONFIGURATION: tests.netbox_test_configuration
+          DJANGO_SETTINGS_MODULE: netbox.settings
+          NETBOX_PROXBOX_TEST_ALL_COMPANIONS: "1"
+          PYTHONPATH: ${{ github.workspace }}/netbox/netbox:${{ github.workspace }}/netbox-proxbox
+        run: |
+          set -euo pipefail
+          manage=(.venv/bin/python ../netbox/netbox/manage.py)
+          "${manage[@]}" migrate --noinput
+          "${manage[@]}" check
+          "${manage[@]}" shell -c '
+          from django.apps import apps
+          from django.core.checks import run_checks
+          from netbox.registry import registry
+
+          expected = {"netbox_proxbox", "netbox_ceph", "netbox_pbs", "netbox_pdm", "netbox_packer"}
+          installed = set(registry["plugins"]["installed"])
+          assert expected <= installed, (expected, installed)
+          for plugin in expected:
+              assert apps.is_installed(plugin), plugin
+          plugin_messages = [
+              message for message in run_checks()
+              if str(getattr(message, "id", "")).partition(".")[0] in expected
+          ]
+          assert plugin_messages == [], plugin_messages
+          '
+
       - name: Run NetBox-backed model, view, and integration tests
         working-directory: netbox-proxbox
         env:
@@ -253,7 +422,10 @@ jobs:
           # Make a missing/broken NetBox harness a hard failure here instead of
           # a silent skip, so this job genuinely gates merges.
           NETBOX_PROXBOX_REQUIRE_DJANGO: "1"
+          NETBOX_SOURCE_ROOT: ${{ github.workspace }}/netbox/netbox
           NETBOX_PROXBOX_TEST_PDM: ${{ matrix.pdm && '1' || '0' }}
+          NETBOX_PROXBOX_TEST_ALL_COMPANIONS: ${{ matrix.all_companions && '1' || '0' }}
+          NETBOX_PROXBOX_TEST_OPENBAO: ${{ matrix.openbao && '1' || '0' }}
           PYTHONPATH: ${{ github.workspace }}/netbox/netbox:${{ github.workspace }}/netbox-proxbox
         run: |
           .venv/bin/pytest tests/test_netbox_compat_django.py \
@@ -263,6 +435,11 @@ jobs:
             tests/test_sync_state_models.py tests/test_sync_state_contracts.py \
             tests/test_proxmox_endpoint_allowed_tenants.py \
             tests/test_openbao_optionality_django.py \
+            tests/test_openbao_assignments_django.py \
+            tests/test_openbao_node_assignments_django.py \
+            tests/test_openbao_single_secret_django.py \
+            tests/test_openbao_cloudinit_django.py \
+            tests/test_openbao_setup_django.py \
             tests/test_backend_key_adoption_django.py \
             tests/test_encryption_key_recovery_django.py \
             tests/test_job_stream_django.py \

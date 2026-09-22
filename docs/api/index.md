@@ -235,8 +235,8 @@ Two models perform an **upsert** on POST — if a matching record already exists
 | `/api/plugins/proxbox/firecracker-microvms/{id}/` | GET PUT PATCH DELETE | FirecrackerMicroVM CRUD |
 | `/api/plugins/proxbox/cloud-image-templates/` | GET POST | CloudImageTemplate CRUD |
 | `/api/plugins/proxbox/cloud-image-templates/{id}/` | GET PUT PATCH DELETE | CloudImageTemplate CRUD |
-| `/api/plugins/proxbox/vm-cloudinit/` | GET POST | ProxmoxVMCloudInit CRUD |
-| `/api/plugins/proxbox/vm-cloudinit/{id}/` | GET PUT PATCH DELETE | ProxmoxVMCloudInit CRUD |
+| `/api/plugins/proxbox/vm-cloudinit/` | GET POST | [VM cloud-init](../models/vm-cloudinit.md) reflection, intent, and write-only login credential inputs |
+| `/api/plugins/proxbox/vm-cloudinit/{id}/` | GET PUT PATCH DELETE | [VM cloud-init](../models/vm-cloudinit.md) detail, guarded credential update, and shared-safe cleanup |
 | `/api/plugins/proxbox/branch-intents/` | GET POST | ProxboxBranchIntent CRUD; soft branch reference must resolve |
 | `/api/plugins/proxbox/branch-intents/{id}/` | GET PUT PATCH DELETE | ProxboxBranchIntent CRUD; branch reference is immutable |
 | `/api/plugins/proxbox/vm-templates/` | GET POST | ProxmoxVMTemplate CRUD |

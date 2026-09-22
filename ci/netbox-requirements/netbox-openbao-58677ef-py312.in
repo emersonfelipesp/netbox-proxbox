@@ -1,0 +1,19 @@
+# Direct runtime and build inputs from the immutable companion pyprojects used
+# by the OpenBao assignment cell:
+#
+# - netbox-openbao 58677efdd595c34cf0d597ca3efa1951b05ea25e
+# - netbox-rpc eae471d601423195c28ffa8482422b4c1cb4344d
+#
+# The workflow verifies each checkout HEAD and pyproject checksum before
+# installing the companions without dependency resolution or build isolation.
+hvac>=2.3.0
+cryptography>=42.0.0
+bcrypt>=4.0.0
+jsonschema>=4.0.0
+pydantic>=2.0
+rpgp-py>=0.20.0,<0.21
+requests>=2.32
+Jinja2>=3.1
+PyYAML>=6.0
+packaging
+setuptools==83.0.0

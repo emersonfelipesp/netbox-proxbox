@@ -24,11 +24,9 @@ from django.core.exceptions import ValidationError
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.debug import sensitive_variables
 
 from netbox.models import NetBoxModel
-
-from netbox_proxbox.utils import encryption as enc_helpers
-
 
 AUTH_METHOD_KEY = "key"
 AUTH_METHOD_PASSWORD = "password"
@@ -146,6 +144,20 @@ class NodeSSHCredential(NetBoxModel):
         verbose_name=_("Encrypted private key"),
         help_text=_("Fernet-encrypted OpenSSH PEM ciphertext. Internal."),
     )
+    openbao_password_credential_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("OpenBao password credential UUID"),
+        help_text=_("Opaque reference to the OpenBao SSH password credential."),
+    )
+    openbao_keypair_credential_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("OpenBao key-pair credential UUID"),
+        help_text=_("Opaque reference to the OpenBao SSH key-pair credential."),
+    )
 
     class Meta:
         ordering = ("node",)
@@ -157,12 +169,28 @@ class NodeSSHCredential(NetBoxModel):
 
     @property
     def has_password(self) -> bool:
-        """Return whether a password ciphertext is stored."""
+        """Return whether a password ciphertext or OpenBao reference is stored."""
+        from netbox_proxbox.integrations.openbao import node_uses_openbao_storage
+        from netbox_proxbox.integrations.openbao_node_pending import pending_credential
+
+        if node_uses_openbao_storage(self):
+            return bool(
+                self.openbao_password_credential_uuid
+                or pending_credential(self, "openbao_password_credential_uuid")
+            )
         return bool(self.password_enc)
 
     @property
     def has_private_key(self) -> bool:
-        """Return whether a private-key ciphertext is stored."""
+        """Return whether a private-key ciphertext or OpenBao reference is stored."""
+        from netbox_proxbox.integrations.openbao import node_uses_openbao_storage
+        from netbox_proxbox.integrations.openbao_node_pending import pending_credential
+
+        if node_uses_openbao_storage(self):
+            return bool(
+                self.openbao_keypair_credential_uuid
+                or pending_credential(self, "openbao_keypair_credential_uuid")
+            )
         return bool(self.private_key_enc)
 
     @property
@@ -170,11 +198,18 @@ class NodeSSHCredential(NetBoxModel):
         """Return a secret-free aggregate state for list and edit recovery UX."""
 
         from netbox_proxbox.services.encryption_recovery import ciphertext_state
+        from netbox_proxbox.integrations.openbao import node_uses_openbao_storage
 
-        states = (
-            ciphertext_state(self.password_enc),
-            ciphertext_state(self.private_key_enc),
-        )
+        if node_uses_openbao_storage(self):
+            states = (
+                "configured" if self.openbao_password_credential_uuid else "empty",
+                "configured" if self.openbao_keypair_credential_uuid else "empty",
+            )
+        else:
+            states = (
+                ciphertext_state(self.password_enc),
+                ciphertext_state(self.private_key_enc),
+            )
         if "recovery_required" in states:
             return "Recovery required"
         if "configured" in states:
@@ -187,31 +222,59 @@ class NodeSSHCredential(NetBoxModel):
 
     # ------------------------------------------------------------------ secrets
 
-    def set_password(self, plaintext: str, *, key: str) -> None:
-        """Encrypt and store the SSH password with the supplied Fernet key."""
-        from netbox_proxbox.services.encryption_recovery import (
-            mark_encrypted_fields_for_write,
+    @sensitive_variables()
+    def set_password(
+        self,
+        plaintext: str,
+        *,
+        key: str,
+        user: object | None = None,
+        request: object | None = None,
+    ) -> None:
+        """Queue OpenBao material or encrypt with the supplied Fernet key."""
+        from netbox_proxbox.integrations.openbao import store_node_ssh_password
+
+        store_node_ssh_password(
+            self,
+            plaintext,
+            key=key,
+            user=user,
+            request=request,
         )
 
-        mark_encrypted_fields_for_write(self, "password_enc")
-        self.password_enc = enc_helpers.encrypt(plaintext, key=key)
-
+    @sensitive_variables()
     def get_password(self, *, key: str) -> str:
-        """Decrypt and return the stored SSH password."""
-        return enc_helpers.decrypt(self.password_enc, key=key)
+        """Resolve the stored SSH password from the selected backend."""
+        from netbox_proxbox.integrations.openbao import resolve_node_ssh_password
 
-    def set_private_key(self, plaintext: str, *, key: str) -> None:
-        """Encrypt and store the SSH private key PEM with the supplied key."""
-        from netbox_proxbox.services.encryption_recovery import (
-            mark_encrypted_fields_for_write,
+        return resolve_node_ssh_password(self, key=key)
+
+    @sensitive_variables()
+    def set_private_key(
+        self,
+        plaintext: str,
+        *,
+        key: str,
+        user: object | None = None,
+        request: object | None = None,
+    ) -> None:
+        """Queue OpenBao material or encrypt with the supplied Fernet key."""
+        from netbox_proxbox.integrations.openbao import store_node_ssh_keypair
+
+        store_node_ssh_keypair(
+            self,
+            plaintext,
+            key=key,
+            user=user,
+            request=request,
         )
 
-        mark_encrypted_fields_for_write(self, "private_key_enc")
-        self.private_key_enc = enc_helpers.encrypt(plaintext, key=key)
-
+    @sensitive_variables()
     def get_private_key(self, *, key: str) -> str:
-        """Decrypt and return the stored SSH private key PEM."""
-        return enc_helpers.decrypt(self.private_key_enc, key=key)
+        """Resolve the stored SSH private key from the selected backend."""
+        from netbox_proxbox.integrations.openbao import resolve_node_ssh_private_key
+
+        return resolve_node_ssh_private_key(self, key=key)
 
     # ------------------------------------------------------------------ clean
 
@@ -221,7 +284,7 @@ class NodeSSHCredential(NetBoxModel):
         self.known_host_fingerprint = normalize_fingerprint(self.known_host_fingerprint)
         if self.port < 1 or self.port > 65535:
             raise ValidationError({"port": "Port must be between 1 and 65535."})
-        if self.auth_method == AUTH_METHOD_KEY and not self.private_key_enc:
+        if self.auth_method == AUTH_METHOD_KEY and not self.has_private_key:
             raise ValidationError(
                 {
                     "auth_method": (
@@ -230,7 +293,7 @@ class NodeSSHCredential(NetBoxModel):
                     )
                 }
             )
-        if self.auth_method == AUTH_METHOD_PASSWORD and not self.password_enc:
+        if self.auth_method == AUTH_METHOD_PASSWORD and not self.has_password:
             raise ValidationError(
                 {
                     "auth_method": (

@@ -6,6 +6,7 @@ disables every editable field. Edits flow in only via the plugin DRF endpoint
 """
 
 from django.http import HttpRequest
+from django.views.decorators.debug import sensitive_variables
 from netbox.object_actions import BulkExport, BulkDelete
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
@@ -66,6 +67,19 @@ class ProxmoxVMCloudInitDeleteView(generic.ObjectDeleteView):
     queryset = ProxmoxVMCloudInit.objects.all()
     default_return_url = "plugins:netbox_proxbox:proxmoxvmcloudinit_list"
 
+    @sensitive_variables()
+    def post(self, request: HttpRequest, *args: object, **kwargs: object) -> object:
+        """Own provider cleanup outside NetBox's deletion transaction."""
+        from netbox_proxbox.integrations.openbao_cloudinit import (
+            cloudinit_mutation_boundary,
+        )
+
+        owner = self.get_object(**kwargs)
+        with cloudinit_mutation_boundary(
+            [owner], [], actor=request.user, request=request
+        ):
+            return super().post(request, *args, **kwargs)
+
 
 @register_model_view(ProxmoxVMCloudInit, "bulk_delete", detail=False)
 class ProxmoxVMCloudInitBulkDeleteView(generic.BulkDeleteView):
@@ -75,6 +89,31 @@ class ProxmoxVMCloudInitBulkDeleteView(generic.BulkDeleteView):
     filterset = ProxmoxVMCloudInitFilterSet
     table = ProxmoxVMCloudInitTable
     default_return_url = "plugins:netbox_proxbox:proxmoxvmcloudinit_list"
+
+    def _selected_pks(self, request: HttpRequest) -> object:
+        if not request.POST.get("_all"):
+            return [int(pk) for pk in request.POST.getlist("pk")]
+        queryset = self.queryset.model.objects.all()
+        if self.filterset is not None:
+            queryset = self.filterset(request.GET, queryset, request=request).qs
+        return queryset.only("pk").values_list("pk", flat=True)
+
+    def _selected_owners(self, request: HttpRequest) -> list[ProxmoxVMCloudInit]:
+        selected = self._selected_pks(request)
+        return list(self.queryset.filter(pk__in=selected).order_by("pk"))
+
+    @sensitive_variables()
+    def post(self, request: HttpRequest, *args: object, **kwargs: object) -> object:
+        """Own provider cleanup for every selected cloud-init owner."""
+        from netbox_proxbox.integrations.openbao_cloudinit import (
+            cloudinit_mutation_boundary,
+        )
+
+        owners = self._selected_owners(request)
+        with cloudinit_mutation_boundary(
+            owners, [], actor=request.user, request=request
+        ):
+            return super().post(request, *args, **kwargs)
 
 
 @register_model_view(VirtualMachine, "proxmox_cloudinit", path="proxmox-cloudinit")

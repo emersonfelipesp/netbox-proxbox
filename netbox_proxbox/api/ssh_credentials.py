@@ -25,6 +25,7 @@ import requests
 from django.conf import settings as django_settings
 from django.core.exceptions import ValidationError
 from django.shortcuts import get_object_or_404
+from django.views.decorators.debug import sensitive_variables
 from netbox.api.authentication import TokenAuthentication
 from rest_framework import status
 from rest_framework.permissions import BasePermission
@@ -62,7 +63,13 @@ _SSH_ACCESS_DISABLED = (
 
 
 def _metadata_payload(cred: NodeSSHCredential) -> dict:
-    return {
+    from netbox_proxbox.integrations.openbao import (
+        node_openbao_assignment_lookup,
+        node_openbao_assignment_readiness,
+        node_uses_openbao_storage,
+    )
+
+    payload = {
         "id": cred.pk,
         "node_id": cred.node_id,
         "username": cred.username,
@@ -70,9 +77,15 @@ def _metadata_payload(cred: NodeSSHCredential) -> dict:
         "auth_method": cred.auth_method,
         "known_host_fingerprint": cred.known_host_fingerprint,
         "sudo_required": cred.sudo_required,
-        "has_password": bool(cred.password_enc),
-        "has_private_key": bool(cred.private_key_enc),
+        "has_password": cred.has_password,
+        "has_private_key": cred.has_private_key,
     }
+    if node_uses_openbao_storage(cred):
+        ready, detail = node_openbao_assignment_readiness(cred)
+        payload["openbao_assignment_ready"] = ready
+        payload["openbao_assignment_detail"] = detail
+        payload["openbao_assignment_lookup"] = node_openbao_assignment_lookup(cred)
+    return payload
 
 
 def _endpoint_metadata_payload(endpoint: ProxmoxEndpoint) -> dict:
@@ -135,6 +148,32 @@ def _node_ssh_access_disabled(cred: NodeSSHCredential) -> bool:
     if endpoint is None:
         return False
     return not endpoint.ssh_access_enabled
+
+
+@sensitive_variables()
+def _resolved_node_secrets(cred: NodeSSHCredential, user: object) -> dict[str, str]:
+    """Resolve the selected backend without exposing provider diagnostics."""
+    from netbox_proxbox.integrations.openbao import (
+        node_uses_openbao_storage,
+        resolve_node_ssh_password,
+        resolve_node_ssh_private_key,
+    )
+
+    key = ProxboxPluginSettings.get_solo().encryption_key or ""
+    if not node_uses_openbao_storage(cred) and not key:
+        raise enc_helpers.EncryptionKeyMissing(_ENCRYPTION_KEY_MISSING)
+    return {
+        "password": (
+            resolve_node_ssh_password(cred, key=key, user=user)
+            if cred.has_password
+            else ""
+        ),
+        "private_key": (
+            resolve_node_ssh_private_key(cred, key=key, user=user)
+            if cred.has_private_key
+            else ""
+        ),
+    }
 
 
 class _NetBoxTokenPermission(BasePermission):
@@ -209,6 +248,7 @@ class NodeSSHCredentialSecretsAPIView(APIView):
 
     permission_classes = [_NetBoxTokenCanViewNodeSSHCredential]
 
+    @sensitive_variables()
     def get(self, request: Request, node_id: int) -> Response:
         """Return decrypted secrets for proxbox-api API-token callers only."""
         if not django_settings.DEBUG and not request.is_secure():
@@ -236,31 +276,26 @@ class NodeSSHCredentialSecretsAPIView(APIView):
                 {"detail": _SSH_ACCESS_DISABLED},
                 status=status.HTTP_403_FORBIDDEN,
             )
-        settings_obj = ProxboxPluginSettings.get_solo()
-        key = settings_obj.encryption_key or ""
-        if not key:
+        try:
+            secrets = _resolved_node_secrets(cred, request.user)
+        except enc_helpers.EncryptionKeyMissing:
             return Response(
                 {"detail": _ENCRYPTION_KEY_MISSING},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
-
-        try:
-            password = cred.get_password(key=key) if cred.password_enc else ""
-            private_key = cred.get_private_key(key=key) if cred.private_key_enc else ""
-        except enc_helpers.EncryptionError:
+        except (ValidationError, enc_helpers.EncryptionError):
             return Response(
                 {
                     "detail": (
-                        "Stored SSH credential cannot be decrypted. Plugin "
-                        "encryption recovery is required."
+                        "Stored SSH credential cannot be resolved. Credential "
+                        "storage recovery is required."
                     )
                 },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
         payload = _metadata_payload(cred)
-        payload["password"] = password
-        payload["private_key"] = private_key
+        payload.update(secrets)
         return Response(payload)
 
 

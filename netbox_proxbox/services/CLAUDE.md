@@ -22,6 +22,10 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
   for the supported Proxmox calendar-event grammar. Unsupported or hostile
   input must never raise and must remain visible on every projected day with an
   approximate marker.
+- [`endpoint_timezone.py`](./endpoint_timezone.py): best-effort endpoint IANA
+  timezone discovery through the generated proxbox-api node-time read. It pins
+  the stable backend endpoint name, refuses redirects, validates with
+  `zoneinfo`, and persists without firing endpoint save signals.
 - [`encryption_recovery.py`](./encryption_recovery.py): exhaustive registry of
   plugin-owned encrypted model fields, the optional netbox-pbs fallback API-key
   ciphertext, and trust receipts; secret-free family status; ordinary
@@ -248,6 +252,16 @@ never dialled — not by the same candidate, and not by the IP fallback.
 `_checked_response()` / `HttpRedirectError`. Elsewhere a 3xx simply surfaces
 through the call site's existing non-2xx error handling; with redirects
 disabled the credential is never replayed either way.
+
+`run_sync_stream()` applies readiness handling per unique primary/IP candidate.
+It may advance only when a read-only readiness probe fails. Once a candidate is
+selected and the mutating stream request is attempted, every connection, TLS,
+timeout, HTTP, body, and semantic outcome is terminal for that invocation
+because the backend task may already have progressed. Never infer replay safety
+from the absence of an SSE frame or `complete` event. Every candidate must
+preserve the original headers, query parameters, TLS policy, connect/read
+timeout, redirect refusal, and callback. A successful bounded 401 rebind is the
+only restart and selects again from one freshly resolved endpoint context.
 
 The 401 auth-retry is bound to one endpoint identity end to end.
 `backend_context.py::_handle_auth_registration_and_retry(context, *,

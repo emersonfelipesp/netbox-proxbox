@@ -1,8 +1,14 @@
 {
   "fastapiendpoint:api_list_objects": 12,
+  "fastapiendpoint-netbox-4-6-6:api_list_objects": 13,
   "netboxendpoint:api_list_objects": 12,
+  "netboxendpoint-netbox-4-6-6:api_list_objects": 13,
   "proxmoxendpoint:api_list_objects": 19,
+  "proxmoxendpoint-netbox-4-6-6:api_list_objects": 20,
   "vmbackup:api_list_objects": 12,
+  "vmbackup-netbox-4-6-6:api_list_objects": 13,
   "vmsnapshot:api_list_objects": 12,
-  "vmtaskhistory:api_list_objects": 12
+  "vmsnapshot-netbox-4-6-6:api_list_objects": 13,
+  "vmtaskhistory:api_list_objects": 12,
+  "vmtaskhistory-netbox-4-6-6:api_list_objects": 13
 }

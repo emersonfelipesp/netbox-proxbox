@@ -479,6 +479,13 @@ def _validate_ciphertexts_use_current_key(
 ) -> None:
     """Reject ciphertext prepared under a stale or unavailable key."""
 
+    from netbox_proxbox.models.primary_secrets import (
+        primary_secret_encryption_is_skipped,
+    )
+
+    if primary_secret_encryption_is_skipped():
+        return
+
     try:
         for ciphertext in ciphertexts:
             if ciphertext:

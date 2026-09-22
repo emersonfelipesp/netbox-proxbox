@@ -5,15 +5,17 @@ from __future__ import annotations
 import os
 from pathlib import Path
 import sys
+from types import SimpleNamespace
+import uuid
+from unittest.mock import patch
 
 import pytest
 
+from tests.netbox_test_paths import netbox_source_roots
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-NETBOX_ROOTS = (
-    REPO_ROOT.parent / "netbox" / "netbox",
-    REPO_ROOT.parents[1] / "nmulticloud-context" / "netbox" / "netbox",
-)
+NETBOX_ROOTS = netbox_source_roots(REPO_ROOT)
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
@@ -61,7 +63,11 @@ from django.test import TestCase  # noqa: E402
 from extras.models import Tag  # noqa: E402
 
 from netbox_proxbox.forms.ssh_credential import NodeSSHCredentialForm  # noqa: E402
+from netbox_proxbox.api.serializers.ssh_credential import (  # noqa: E402
+    NodeSSHCredentialSerializer,
+)
 from netbox_proxbox.models import (  # noqa: E402
+    NodeSSHCredential,
     ProxmoxEndpoint,
     ProxmoxNode,
     ProxboxPluginSettings,
@@ -101,7 +107,10 @@ class NodeSSHCredentialFormPersistenceTest(TestCase):
     def setUp(self) -> None:
         settings_obj = ProxboxPluginSettings.get_solo()
         settings_obj.encryption_key = ENCRYPTION_KEY
-        settings_obj.save(update_fields=("encryption_key",))
+        settings_obj.credential_storage_backend = "legacy_encrypted"
+        settings_obj.save(
+            update_fields=("encryption_key", "credential_storage_backend")
+        )
 
     def _form_data(
         self,
@@ -152,6 +161,93 @@ class NodeSSHCredentialFormPersistenceTest(TestCase):
         self.assertEqual(credential.get_private_key(key=ENCRYPTION_KEY), PRIVATE_KEY)
         self.assertQuerySetEqual(credential.tags.all(), [self.tag], ordered=False)
         self.assertEqual(credential._m2m_values["tags"], [self.tag])
+
+    def test_blank_edit_preserves_stored_password(self) -> None:
+        credential = NodeSSHCredential(
+            node=self.node,
+            username="proxbox-discovery",
+            port=22,
+            auth_method=AUTH_METHOD_PASSWORD,
+            known_host_fingerprint=FINGERPRINT,
+        )
+        credential.set_password(PASSWORD, key=ENCRYPTION_KEY)
+        credential.save()
+        form = NodeSSHCredentialForm(
+            instance=credential,
+            data=self._form_data(auth_method=AUTH_METHOD_PASSWORD),
+        )
+
+        self.assertTrue(form.is_valid(), form.errors.as_json())
+        saved = form.save()
+
+        self.assertEqual(saved.get_password(key=ENCRYPTION_KEY), PASSWORD)
+
+    def test_openbao_form_uses_model_setter_without_fernet_key(self) -> None:
+        from netbox_proxbox.integrations import openbao
+
+        settings_obj = ProxboxPluginSettings.get_solo()
+        settings_obj.encryption_key = ""
+        settings_obj.save(update_fields=("encryption_key",))
+        actor = SimpleNamespace(is_authenticated=True)
+        request = SimpleNamespace(user=actor)
+        calls = []
+
+        def _set_password(instance, plaintext, *, key, user=None, request=None):
+            calls.append((plaintext, key, user, request))
+            instance.openbao_password_credential_uuid = uuid.uuid4()
+
+        with (
+            patch.object(openbao, "node_uses_openbao_storage", return_value=True),
+            patch.object(NodeSSHCredential, "set_password", _set_password),
+        ):
+            form = NodeSSHCredentialForm(
+                data=self._form_data(
+                    auth_method=AUTH_METHOD_PASSWORD,
+                    password=PASSWORD,
+                ),
+                request=request,
+                request_user=actor,
+            )
+            self.assertTrue(form.is_valid(), form.errors.as_json())
+
+        self.assertEqual(calls, [(PASSWORD, "", actor, request)])
+        self.assertIs(form.instance._openbao_actor_user, actor)
+
+    def test_openbao_serializer_uses_model_setter_and_request_actor(self) -> None:
+        from netbox_proxbox.integrations import openbao
+
+        settings_obj = ProxboxPluginSettings.get_solo()
+        settings_obj.encryption_key = ""
+        settings_obj.save(update_fields=("encryption_key",))
+        actor = SimpleNamespace(is_authenticated=True)
+        request = SimpleNamespace(user=actor)
+        calls = []
+
+        def _set_password(instance, plaintext, *, key, user=None, request=None):
+            calls.append((plaintext, key, user, request))
+            instance.openbao_password_credential_uuid = uuid.uuid4()
+
+        serializer = NodeSSHCredentialSerializer(
+            data={
+                key: value
+                for key, value in self._form_data(
+                    auth_method=AUTH_METHOD_PASSWORD,
+                    password=PASSWORD,
+                ).items()
+                if key != "tags"
+            },
+            context={"request": request},
+        )
+        with (
+            patch.object(openbao, "node_uses_openbao_storage", return_value=True),
+            patch.object(NodeSSHCredential, "set_password", _set_password),
+            patch.object(NodeSSHCredential, "save", autospec=True),
+        ):
+            self.assertTrue(serializer.is_valid(), serializer.errors)
+            credential = serializer.save()
+
+        self.assertEqual(calls, [(PASSWORD, "", actor, request)])
+        self.assertIs(credential._openbao_actor_user, actor)
 
     def test_auth_method_requires_its_matching_secret(self) -> None:
         cases = (

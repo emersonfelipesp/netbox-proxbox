@@ -1,0 +1,78 @@
+# syntax=docker/dockerfile:1.7
+
+ARG NETBOX_IMAGE=netboxcommunity/netbox:v4.7.0-5.1.0@sha256:a2cdf00fab61d2ae37e4f987adaa403fad5c4049a63bc960768b7bbf804e2cb6
+FROM ${NETBOX_IMAGE}
+
+ARG NETBOX_PROXBOX_VERSION
+ARG PROXBOX_API_VERSION
+ARG PROXBOX_API_PYTHON=3.13
+
+LABEL org.opencontainers.image.title="NetBox Proxbox testing appliance" \
+      org.opencontainers.image.description="Testing-only NetBox, netbox-proxbox, and proxbox-api OCI/LXC appliance" \
+      org.opencontainers.image.source="https://github.com/emersonfelipesp/netbox-proxbox" \
+      io.nmulti.netbox-proxbox.version="${NETBOX_PROXBOX_VERSION}" \
+      io.nmulti.proxbox-api.version="${PROXBOX_API_VERSION}"
+
+USER root
+
+RUN test -n "${NETBOX_PROXBOX_VERSION}" \
+    && test -n "${PROXBOX_API_VERSION}" \
+    && apt-get update \
+    && DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends \
+        postgresql \
+        redis-server \
+        supervisor \
+    && rm -rf /var/lib/postgresql/18/main \
+    && rm -rf /var/lib/apt/lists/* \
+    && uv pip install --python /opt/netbox/venv/bin/python \
+        "netbox-proxbox==${NETBOX_PROXBOX_VERSION}" \
+    && uv python install --install-dir /opt/uv-python "${PROXBOX_API_PYTHON}" \
+    && UV_PYTHON_INSTALL_DIR=/opt/uv-python \
+       uv venv --python "${PROXBOX_API_PYTHON}" /opt/proxbox-api \
+    && uv pip install --python /opt/proxbox-api/bin/python \
+        "proxbox-api==${PROXBOX_API_VERSION}" \
+    && /opt/netbox/venv/bin/python -c \
+        'from importlib.metadata import version; assert version("netbox-proxbox")' \
+    && /opt/proxbox-api/bin/python -c \
+        'from importlib.metadata import version; assert version("proxbox-api")'
+
+COPY oci/netbox-configuration.py /etc/netbox/config/90-proxbox-stack.py
+COPY oci/supervisord.conf /etc/supervisor/supervisord.conf
+COPY oci/bin/ /usr/local/sbin/
+
+RUN chmod 0755 /usr/local/sbin/proxbox-stack-* \
+    && mkdir -p \
+        /run/proxbox-stack \
+        /var/lib/proxbox-api \
+        /var/lib/proxbox-stack/secrets \
+    && chown -R netbox:root /var/lib/proxbox-stack \
+    && SECRET_KEY='build-only-secret-key-build-only-secret-key-build-only-secret-key' \
+       API_TOKEN_PEPPER_1='build-only-api-token-pepper-build-only-api-token-pepper' \
+       DB_PASSWORD='build-only' \
+       PROXBOX_STACK_BUILD=1 \
+       /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py collectstatic --no-input
+
+ENV DB_HOST=127.0.0.1 \
+    DB_NAME=netbox \
+    DB_USER=netbox \
+    REDIS_HOST=127.0.0.1 \
+    REDIS_CACHE_HOST=127.0.0.1 \
+    SKIP_SUPERUSER=true \
+    PROXBOX_BIND_HOST=127.0.0.1 \
+    PROXBOX_ENCRYPTION_KEY_FILE=/var/lib/proxbox-stack/secrets/proxbox-encryption-key \
+    PROXBOX_SKIP_NETBOX_BOOTSTRAP=true \
+    PROXBOX_DATABASE_PATH=/var/lib/proxbox-api/database.db
+
+EXPOSE 8080 8800
+VOLUME ["/var/lib/postgresql", "/var/lib/redis", "/var/lib/proxbox-api", "/var/lib/proxbox-stack"]
+
+HEALTHCHECK --interval=30s --timeout=5s --start-period=600s --retries=5 \
+    CMD ["/usr/local/sbin/proxbox-stack-healthcheck"]
+
+# Proxmox VE's OCI-to-LXC flow defaults to /sbin/init. Make that path and the
+# OCI entrypoint equivalent so the same artifact boots in both runtimes.
+RUN ln -s /usr/local/sbin/proxbox-stack-init /sbin/init \
+    && ln -s /var/lib/proxbox-api/proxbox.log /var/log/proxbox.log
+
+ENTRYPOINT ["/usr/bin/tini", "--"]
+CMD ["/usr/local/sbin/proxbox-stack-init"]

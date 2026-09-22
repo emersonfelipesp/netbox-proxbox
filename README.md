@@ -43,10 +43,10 @@ submit a key explicitly for manual rotation or recovery.
 
 Proxbox can be extended with standalone companion plugins. Install only the
 plugins you need; `netbox-proxbox` remains the base plugin and must be enabled
-before any companion plugin. The infrastructure inventory plugins declare
-`netbox-proxbox>=0.0.18` as a dependency, while `netbox-packer` and
-`netbox-rpc` follow the same operational conventions for the Proxbox plugin
-family. `netbox-rpc` is an *operational* companion: when it is installed,
+before any companion plugin. The Ceph, PBS, and PDM inventory companions
+declare `netbox-proxbox>=0.0.25.post2,<0.1.0`; `netbox-packer` and `netbox-rpc`
+follow the same operational conventions without declaring that package floor.
+`netbox-rpc` is an *operational* companion: when it is installed,
 netbox-proxbox can run audited SSH procedures against Proxmox hosts (for
 example installing the proxbox-api cloud-image-build SSH key on a node, or
 collecting systemd service status for an endpoint) through the netbox-rpc engine
@@ -246,9 +246,10 @@ other tenants.
 
 ## What's New in v0.0.27rc4
 
-Current backend-runtime pairing: netbox-proxbox 0.0.27rc4 <-> proxbox-api 0.0.22.post1 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source pairing: netbox-proxbox 0.0.27rc4 <-> proxbox-api 0.0.23 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This is the current sibling-source development stack, not a rewrite of historical release compatibility. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
-Paired with backend: `proxbox-api 0.0.22`.
+The last documented released runtime pairing for this release line is
+`proxbox-api 0.0.22.post1`, `proxmox-sdk 0.0.13`, and `netbox-sdk 0.0.13`.
 
 - **Virtual machines list search and filtering.** The Proxbox virtual machines page now uses NetBox's `VirtualMachineFilterSet`, exposes Results and Filters tabs, and keeps sync actions and pagination aligned with the API list view.
 - **Actionable console recovery.** Console failures now distinguish a healthy backend API from missing or invalid synchronized NetBox endpoint and node relations, provide stable diagnostic codes and exact remedies, and offer the existing full synchronization repair only to authorized operators with an explicit estate-wide scope warning.
@@ -378,6 +379,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| 4.5.8-4.7.0 GA (current source) | v0.0.27rc4 | v0.0.23 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc4 | v0.0.22.post1 | v0.0.13 | v0.0.13 |
 | >=4.5.8 | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
 | >=4.5.8 | v0.0.23 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
@@ -482,6 +484,7 @@ Choose the installation path that matches your NetBox deployment:
 
 - **Standard NetBox install (venv on host):** follow steps below.
 - **NetBox Docker install (`netbox-docker`):** use the Docker-specific workflow in [Installing the Plugin in Docker-Based NetBox Deployments](./docs/installation/3-installing-plugin-docker.md).
+- **Disposable Proxmox VE test LXC:** use the [all-in-one OCI testing appliance](./docs/installation/proxmox-oci-appliance.md), which bundles NetBox, the latest stable PyPI plugin, proxbox-api, PostgreSQL, and Redis.
 
 1. **Install the plugin** into your NetBox virtual environment (host/venv deployment):
 

@@ -108,17 +108,26 @@ def test_forward_migration_preserves_explicit_storage_choices(pytestconfig, save
     from django.db import connection
     from django.db.migrations.executor import MigrationExecutor
     from netbox_proxbox.choices import CredentialStorageBackendChoices
+    from netbox_proxbox.models import ProxboxPluginSettings
 
     before = ("netbox_proxbox", "0093_proxmox_metrics_source_mode")
     after = ("netbox_proxbox", "0094_automatic_credential_storage_default")
     executor = MigrationExecutor(connection)
     latest = executor.loader.graph.leaf_nodes()
     try:
+        # Seed the row at the current leaf before migrating backwards. The
+        # idempotent additive migration contract deliberately retains newer
+        # physical columns on rollback, so an older historical model cannot
+        # safely insert a row that omits their non-null values.
+        current_row, _created = ProxboxPluginSettings.objects.update_or_create(
+            singleton_key="default",
+            defaults={"credential_storage_backend": saved},
+        )
         executor.migrate([before])
         old_settings = executor.loader.project_state([before]).apps.get_model(
             "netbox_proxbox", "ProxboxPluginSettings"
         )
-        row = old_settings.objects.first() or old_settings.objects.create()
+        row = old_settings.objects.get(pk=current_row.pk)
         row.credential_storage_backend = saved
         row.save(update_fields=["credential_storage_backend"])
         executor = MigrationExecutor(connection)

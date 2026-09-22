@@ -1,0 +1,5 @@
+#!/bin/bash
+set -euo pipefail
+
+touch /run/proxbox-stack/netbox-initialized
+exec /opt/netbox/launch-netbox.sh

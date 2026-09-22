@@ -286,6 +286,8 @@ jobs:
           "${UV_BIN}" build --clear --no-create-gitignore --no-build-isolation \
             --python .venv/bin/python --out-dir dist sanitized-candidate
           ls dist/
+          .venv/bin/python scripts/check_public_boundary.py \
+            --artifacts-only --artifact dist/*.whl --artifact dist/*.tar.gz
 
       - name: Build release manifest
         run: |

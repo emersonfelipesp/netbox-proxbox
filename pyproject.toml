@@ -30,7 +30,10 @@ dependencies = [
     # imports it directly, so it belongs in the metadata rather than being
     # inherited by luck.
     "packaging>=23.0",
-    "cryptography>=48.0.1",
+    # Security floor: GHSA-g6cj-pr64-35w5 affects cryptography >=44.0.0,<50.0.0.
+    # Keep the published runtime contract above that range; the wheel does not
+    # ship uv.lock, so downstream pip resolution relies on this declaration.
+    "cryptography>=50.0.0",
     "pydantic>=2.13.3,<2.14.0",
     "requests>=2.33.0",
     "websockets>=16.0",

@@ -1,0 +1,60 @@
+#!/bin/bash
+set -euo pipefail
+
+postgres_bindir="$(pg_config --bindir)"
+data_dir=/var/lib/postgresql/proxbox-stack
+password_file=/var/lib/proxbox-stack/secrets/postgres-password
+provisioned_marker="${data_dir}/.proxbox-provisioned"
+
+install -d -m 0700 -o postgres -g postgres "${data_dir}"
+
+if [[ ! -s "${data_dir}/PG_VERSION" ]]; then
+    runuser -u postgres -- "${postgres_bindir}/initdb" \
+        --auth-host=scram-sha-256 \
+        --auth-local=peer \
+        --encoding=UTF8 \
+        --no-locale \
+        --pgdata="${data_dir}"
+fi
+
+temporary_server_started=false
+stop_temporary_server() {
+    if [[ "${temporary_server_started}" == true ]]; then
+        runuser -u postgres -- "${postgres_bindir}/pg_ctl" \
+            --pgdata="${data_dir}" --mode=fast --wait stop
+    fi
+}
+trap stop_temporary_server EXIT
+
+if [[ ! -e "${provisioned_marker}" ]]; then
+    runuser -u postgres -- "${postgres_bindir}/pg_ctl" \
+        --pgdata="${data_dir}" \
+        --options="-c listen_addresses=127.0.0.1" \
+        --wait start
+    temporary_server_started=true
+
+    if ! runuser -u postgres -- "${postgres_bindir}/psql" --tuples-only --command \
+        "SELECT 1 FROM pg_roles WHERE rolname = 'netbox'" | grep -q 1; then
+        runuser -u postgres -- "${postgres_bindir}/createuser" netbox
+    fi
+    postgres_password="$(<"${password_file}")"
+    if [[ ! "${postgres_password}" =~ ^[0-9a-f]{64}$ ]]; then
+        echo "The generated PostgreSQL password has an invalid format." >&2
+        exit 1
+    fi
+    runuser -u postgres -- "${postgres_bindir}/psql" --command \
+        "ALTER ROLE netbox WITH LOGIN PASSWORD '${postgres_password}'"
+    if ! runuser -u postgres -- "${postgres_bindir}/psql" --list --tuples-only \
+        | cut -d '|' -f 1 | tr -d ' ' | grep -qx netbox; then
+        runuser -u postgres -- "${postgres_bindir}/createdb" --owner=netbox netbox
+    fi
+    runuser -u postgres -- "${postgres_bindir}/pg_ctl" \
+        --pgdata="${data_dir}" --mode=fast --wait stop
+    temporary_server_started=false
+    runuser -u postgres -- touch "${provisioned_marker}"
+fi
+
+trap - EXIT
+exec runuser -u postgres -- "${postgres_bindir}/postgres" \
+    -D "${data_dir}" \
+    -c listen_addresses=127.0.0.1

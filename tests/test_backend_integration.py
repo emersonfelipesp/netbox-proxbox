@@ -223,12 +223,25 @@ def test_proxbox_config_ready_skips_runtime_registration_without_pydantic(
 
     django_checks.Warning = _StubWarning
     django_checks.register = lambda check: check
+    django_exceptions = types.ModuleType("django.core.exceptions")
+
+    class _ValidationError(Exception):
+        pass
+
+    django_exceptions.ValidationError = _ValidationError
+    django_utils = types.ModuleType("django.utils")
+    django_utils.__path__ = []
+    django_translation = types.ModuleType("django.utils.translation")
+    django_translation.gettext_lazy = lambda value: value
 
     for _name, _mod in (
         ("django", django_module),
         ("django.conf", django_conf),
         ("django.core", django_core),
         ("django.core.checks", django_checks),
+        ("django.core.exceptions", django_exceptions),
+        ("django.utils", django_utils),
+        ("django.utils.translation", django_translation),
     ):
         monkeypatch.setitem(sys.modules, _name, _mod)
 

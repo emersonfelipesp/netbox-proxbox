@@ -6,6 +6,7 @@ import argparse
 import ast
 from collections.abc import Mapping
 from dataclasses import dataclass
+import gzip
 import hashlib
 from io import BytesIO
 import os
@@ -15,17 +16,106 @@ import stat
 import struct
 import subprocess
 import sys
+import tarfile
 import zipfile
 import zlib
 
 
-_PRIVATE_NAME_DIGEST = (
-    "00e1e10b7f275ff455afed38eb08cb1bfcc007805f50e0d6e8573f503a63f4be"
+@dataclass(frozen=True)
+class ForbiddenIdentifier:
+    """One reviewed identifier class, stored without disclosing its value."""
+
+    category: str
+    digest: str
+    pattern: re.Pattern[str]
+
+
+@dataclass
+class ArchiveBudget:
+    """Mutable limits shared by one top-level archive and all nested members."""
+
+    remaining_bytes: int
+    remaining_members: int
+
+    def charge_bytes(self, size: int) -> None:
+        if size > self.remaining_bytes:
+            raise ValueError("archive exceeds cumulative byte budget")
+        self.remaining_bytes -= size
+
+    def charge_member(self) -> None:
+        if self.remaining_members < 1:
+            raise ValueError("archive exceeds cumulative member budget")
+        self.remaining_members -= 1
+
+
+_WORD_IDENTIFIER = re.compile(r"[a-z0-9]+", re.IGNORECASE)
+_HOST_IDENTIFIER = re.compile(r"[a-z0-9-]+(?:\.[a-z0-9-]+)+", re.IGNORECASE)
+_URL_IDENTIFIER = re.compile(r"https?://[^\s\"'<>`]+", re.IGNORECASE)
+_PATH_IDENTIFIER = re.compile(r"/(?:[a-z0-9._-]+/)*[a-z0-9._-]+", re.IGNORECASE)
+_COMPOUND_IDENTIFIER = re.compile(r"[a-z0-9]+(?:[-_.][a-z0-9]+)+", re.IGNORECASE)
+_FORBIDDEN_IDENTIFIERS = (
+    ForbiddenIdentifier(
+        "name",
+        "00e1e10b7f275ff455afed38eb08cb1bfcc007805f50e0d6e8573f503a63f4be",
+        _WORD_IDENTIFIER,
+    ),
+    ForbiddenIdentifier(
+        "domain",
+        "576ddfa7bccc00515b8ac49966d5d5422bbacc3035604c89f4bd1b1156c59cad",
+        _HOST_IDENTIFIER,
+    ),
+    ForbiddenIdentifier(
+        "url",
+        "7bcd2e5385d81a914078e04c622a8780eb7b59ea2411f1ce78ba6deb18f6dd17",
+        _URL_IDENTIFIER,
+    ),
+    ForbiddenIdentifier(
+        "command",
+        "00e1e10b7f275ff455afed38eb08cb1bfcc007805f50e0d6e8573f503a63f4be",
+        _WORD_IDENTIFIER,
+    ),
+    ForbiddenIdentifier(
+        "path",
+        "26bc7a79cd68f57928f3f7db21d1145753b014383e20d8185f2fb5a157fc364b",
+        _PATH_IDENTIFIER,
+    ),
+    ForbiddenIdentifier(
+        "package",
+        "5c719a925ed5521afb861a83300c7782103f22a2d49a223d93a66914c18b4645",
+        _COMPOUND_IDENTIFIER,
+    ),
+    ForbiddenIdentifier(
+        "service",
+        "0624331dd76c08e10732893dc6a22155b60e23a2d3937984157d23f77f500699",
+        _COMPOUND_IDENTIFIER,
+    ),
+    ForbiddenIdentifier(
+        "distribution",
+        "ea624d243626d7f3bbdeaf7c58711b824702963fd2e71bf74fe451872d947c20",
+        _COMPOUND_IDENTIFIER,
+    ),
+    ForbiddenIdentifier(
+        "workspace",
+        "ca7573d4012c1230fc5da3de3bd61ffc28bcdc18d8742404d32de7174bc51121",
+        _COMPOUND_IDENTIFIER,
+    ),
+    ForbiddenIdentifier(
+        "contract",
+        "9851abb282006b6aa941f4689303c5a5dc0920ff197d59c9ac62b68261a494b0",
+        _WORD_IDENTIFIER,
+    ),
+    ForbiddenIdentifier(
+        "host",
+        "bab7bd5fce43127fde0a8768adc63ea541e4621a7bf8c2924bd307e5ca4936d4",
+        _COMPOUND_IDENTIFIER,
+    ),
 )
+_PRIVATE_NAME_DIGEST = _FORBIDDEN_IDENTIFIERS[0].digest
 _WORD_PATTERN = re.compile(r"[a-z0-9]+", re.IGNORECASE)
 _BINARY_SUFFIXES = {
     ".eot",
     ".gif",
+    ".gz",
     ".ico",
     ".jpeg",
     ".jpg",
@@ -35,16 +125,13 @@ _BINARY_SUFFIXES = {
     ".webp",
     ".woff",
     ".woff2",
+    ".whl",
     ".zip",
 }
 _MAX_ARCHIVE_MEMBERS = 10_000
+_MAX_ARCHIVE_COMPRESSED_BYTES = 100 * 1024 * 1024
 _MAX_ARCHIVE_UNCOMPRESSED_BYTES = 100 * 1024 * 1024
 _MAX_ARCHIVE_DEPTH = 3
-_APPROVED_HISTORICAL_TEXT_DIGESTS = {
-    "docs/release-notes/version-0.0.26.post2.md": (
-        "d2968b2cda726d818a5091fbb5a01b93513458b591a270a15d0ba8d859db86ea"
-    ),
-}
 _APPROVED_BINARY_DIGESTS = {
     "docs/.icons/favicon.ico": "b82a2f30b29620a932a43426a7e88d6bac551567c578d00b0c50664c0331d3cc",
     "docs/assets/screenshots/backup-detail.png": "da4c444b201e8f92df4c8245d57754d33ef2da74db414f32b7a3432dbfd1ed83",
@@ -150,6 +237,40 @@ def _contains_private_name(
         if hashlib.sha256(word.encode("utf-8")).hexdigest() == private_name_digest:
             return True
     return False
+
+
+def _identifier_categories(
+    value: str,
+    identifiers: tuple[ForbiddenIdentifier, ...] = _FORBIDDEN_IDENTIFIERS,
+) -> set[str]:
+    """Return forbidden classes whose reviewed digest matches literal text."""
+    categories: set[str] = set()
+    for identifier in identifiers:
+        for match in identifier.pattern.finditer(value):
+            candidates = _identifier_candidates(identifier.category, match.group(0))
+            if any(_digest(candidate) == identifier.digest for candidate in candidates):
+                categories.add(identifier.category)
+    return categories
+
+
+def _digest(value: str) -> str:
+    return hashlib.sha256(value.casefold().encode("utf-8")).hexdigest()
+
+
+def _identifier_candidates(category: str, value: str) -> tuple[str, ...]:
+    """Include normalized prefixes so decorated identifiers cannot hide."""
+    value = value.rstrip(").,;:]}>'\"")
+    if category in {"url", "path"}:
+        parts = value.split("/")
+        return tuple("/".join(parts[:end]) for end in range(2, len(parts) + 1))
+    if category in {"package", "service", "distribution", "workspace"}:
+        parts = re.split(r"[-_.]", value)
+        separators = [match.group(0) for match in re.finditer(r"[-_.]", value)]
+        prefixes = [parts[0]]
+        for separator, part in zip(separators, parts[1:], strict=False):
+            prefixes.append(prefixes[-1] + separator + part)
+        return tuple(prefixes)
+    return (value,)
 
 
 def _run_git(root: Path, *args: str) -> bytes:
@@ -562,34 +683,58 @@ def _javascript_findings(text: str, private_name_digest: str) -> set[int]:
     return findings
 
 
+def _manifest_text_findings(
+    text: str, identifiers: tuple[ForbiddenIdentifier, ...]
+) -> set[int]:
+    findings: set[int] = set()
+    for identifier in identifiers:
+        for match in identifier.pattern.finditer(text):
+            candidates = _identifier_candidates(identifier.category, match.group(0))
+            if any(_digest(candidate) == identifier.digest for candidate in candidates):
+                findings.add(_line_number(text, match.start()))
+    return findings
+
+
+def _python_constant_findings(text: str, private_name_digest: str) -> set[int]:
+    try:
+        tree = ast.parse(text)
+    except SyntaxError:
+        return set()
+    findings: set[int] = set()
+    for node in ast.walk(tree):
+        value = _constant_value(node)
+        if isinstance(value, bytes):
+            value = value.decode("utf-8", errors="ignore")
+        if isinstance(value, str) and _contains_private_name(
+            value, private_name_digest
+        ):
+            findings.add(getattr(node, "lineno", 1))
+    return findings
+
+
+def _private_word_findings(text: str, private_name_digest: str) -> set[int]:
+    return {
+        _line_number(text, match.start())
+        for match in _WORD_PATTERN.finditer(text)
+        if _contains_private_name(match.group(0), private_name_digest)
+    }
+
+
 def _text_findings(
     relative_path: Path,
     text: str,
     private_name_digest: str = _PRIVATE_NAME_DIGEST,
+    forbidden_identifiers: tuple[ForbiddenIdentifier, ...] = _FORBIDDEN_IDENTIFIERS,
 ) -> list[str]:
-    findings: set[int] = set()
-    for match in _WORD_PATTERN.finditer(text):
-        if _contains_private_name(match.group(0), private_name_digest):
-            findings.add(_line_number(text, match.start()))
+    findings = _manifest_text_findings(text, forbidden_identifiers)
+    findings.update(_private_word_findings(text, private_name_digest))
     findings.update(_fragment_findings(text, private_name_digest))
     findings.update(_escaped_text_findings(text, private_name_digest))
     if relative_path.suffix in {".js", ".jsx", ".mjs", ".cjs"}:
         findings.update(_javascript_findings(text, private_name_digest))
     if relative_path.suffix == ".py":
-        try:
-            tree = ast.parse(text)
-        except SyntaxError:
-            tree = None
-        if tree is not None:
-            for node in ast.walk(tree):
-                value = _constant_value(node)
-                if isinstance(value, bytes):
-                    value = value.decode("utf-8", errors="ignore")
-                if isinstance(value, str) and _contains_private_name(
-                    value, private_name_digest
-                ):
-                    findings.add(getattr(node, "lineno", 1))
-    return [f"{relative_path}:{line_number}" for line_number in sorted(findings)]
+        findings.update(_python_constant_findings(text, private_name_digest))
+    return [f"tracked content line {line_number}" for line_number in sorted(findings)]
 
 
 def _valid_png(data: bytes) -> bool:
@@ -670,11 +815,8 @@ def _valid_sfnt(data: bytes) -> bool:
     return True
 
 
-def _recognized_binary_kind(relative_path: Path, data: bytes) -> str | None:
-    """Return a structurally validated kind; a suffix or magic alone is insufficient."""
-    suffix = relative_path.suffix.casefold()
-    if suffix not in _BINARY_SUFFIXES:
-        return None
+def _structured_binary_kind(data: bytes) -> str | None:
+    """Return the validated kind for structured image and font containers."""
     if data[:4] in {b"PK\x03\x04", b"PK\x05\x06", b"PK\x07\x08"}:
         return "zip"
     if _valid_png(data):
@@ -689,6 +831,11 @@ def _recognized_binary_kind(relative_path: Path, data: bytes) -> str | None:
         return "opaque"
     if _valid_eot(data) or _valid_sfnt(data):
         return "opaque"
+    return None
+
+
+def _simple_image_kind(data: bytes) -> str | None:
+    """Recognize bounded image envelopes without adding scanner branches."""
     if data.startswith(b"\xff\xd8\xff") and data.endswith(b"\xff\xd9"):
         return "opaque"
     if data[:6] in {b"GIF87a", b"GIF89a"} and data.endswith(b";"):
@@ -696,38 +843,225 @@ def _recognized_binary_kind(relative_path: Path, data: bytes) -> str | None:
     return None
 
 
+def _recognized_binary_kind(relative_path: Path, data: bytes) -> str | None:
+    """Return a structurally validated kind; suffix or magic alone is insufficient."""
+    if relative_path.suffix.casefold() not in _BINARY_SUFFIXES:
+        return None
+    if relative_path.name.casefold().endswith(".tar.gz") and data.startswith(
+        b"\x1f\x8b"
+    ):
+        return "tar"
+    return _structured_binary_kind(data) or _simple_image_kind(data)
+
+
+def _tar_findings(
+    relative_path: Path,
+    data: bytes,
+    private_name_digest: str,
+    approved_binary_digests: Mapping[str, str],
+    forbidden_identifiers: tuple[ForbiddenIdentifier, ...],
+    depth: int,
+    budget: ArchiveBudget,
+) -> list[str]:
+    """Inspect every bounded regular member in a gzip-compressed source archive."""
+    if depth >= _MAX_ARCHIVE_DEPTH:
+        raise ValueError(f"archive nesting exceeds scan limit: {relative_path}")
+    findings: list[str] = []
+    unpacked = _bounded_gzip_decompress(data, budget)
+    with tarfile.open(fileobj=BytesIO(unpacked), mode="r:") as archive:
+        members = archive.getmembers()
+        if len(members) > _MAX_ARCHIVE_MEMBERS:
+            raise ValueError(f"archive has too many members: {relative_path}")
+        if any(member.size > _MAX_ARCHIVE_UNCOMPRESSED_BYTES for member in members):
+            raise ValueError(f"archive expands beyond scan limit: {relative_path}")
+        for member in members:
+            budget.charge_member()
+            findings.extend(
+                _tar_member_findings(
+                    archive,
+                    member,
+                    relative_path,
+                    private_name_digest,
+                    approved_binary_digests,
+                    forbidden_identifiers,
+                    depth,
+                    budget,
+                )
+            )
+    return findings
+
+
+def _bounded_gzip_decompress(data: bytes, budget: ArchiveBudget) -> bytes:
+    """Decompress at most the reviewed archive budget plus one sentinel byte."""
+    with gzip.GzipFile(fileobj=BytesIO(data)) as stream:
+        limit = min(_MAX_ARCHIVE_UNCOMPRESSED_BYTES, budget.remaining_bytes)
+        unpacked = stream.read(limit + 1)
+    if len(unpacked) > limit:
+        raise ValueError("gzip archive expands beyond scan limit")
+    budget.charge_bytes(len(unpacked))
+    return unpacked
+
+
+def _tar_member_findings(
+    archive: tarfile.TarFile,
+    member: tarfile.TarInfo,
+    relative_path: Path,
+    private_name_digest: str,
+    approved_binary_digests: Mapping[str, str],
+    forbidden_identifiers: tuple[ForbiddenIdentifier, ...],
+    depth: int,
+    budget: ArchiveBudget,
+) -> list[str]:
+    findings = _archive_metadata_findings(
+        "tar member metadata",
+        (member.name, member.linkname, member.uname, member.gname),
+        private_name_digest,
+        forbidden_identifiers,
+    )
+    findings.extend(
+        _archive_metadata_findings(
+            "tar PAX metadata",
+            tuple(member.pax_headers) + tuple(member.pax_headers.values()),
+            private_name_digest,
+            forbidden_identifiers,
+        )
+    )
+    if member.isdir() or member.issym() or member.islnk():
+        return findings
+    if not member.isfile():
+        raise ValueError("unsupported tar member type")
+    extracted = archive.extractfile(member)
+    if extracted is None:
+        raise ValueError("archive member cannot be inspected")
+    findings.extend(
+        _data_findings(
+            relative_path / member.name,
+            _read_bounded(extracted, member.size),
+            private_name_digest,
+            approved_binary_digests,
+            forbidden_identifiers,
+            depth=depth + 1,
+            budget=budget,
+            charge_content=False,
+        )
+    )
+    return findings
+
+
+def _archive_metadata_findings(
+    label: str,
+    values: tuple[str, ...],
+    private_name_digest: str,
+    forbidden_identifiers: tuple[ForbiddenIdentifier, ...],
+) -> list[str]:
+    """Inspect archive metadata while returning only a safe field label."""
+    found = any(
+        _text_findings(
+            Path("metadata"), value, private_name_digest, forbidden_identifiers
+        )
+        for value in values
+        if value
+    )
+    return [f"{label}: forbidden identifier"] if found else []
+
+
+def _read_bounded(
+    stream: object, declared_size: int, remaining_budget: int | None = None
+) -> bytes:
+    """Read one member with both its declaration and the global budget enforced."""
+    limit = min(declared_size, _MAX_ARCHIVE_UNCOMPRESSED_BYTES)
+    if remaining_budget is not None:
+        limit = min(limit, remaining_budget)
+    data = stream.read(limit + 1)
+    if len(data) > limit:
+        raise ValueError("archive member exceeds declared or global limit")
+    return data
+
+
+def _zip_metadata_size(member: zipfile.ZipInfo) -> int:
+    return (
+        len(member.filename.encode("utf-8")) + len(member.comment) + len(member.extra)
+    )
+
+
+def _new_archive_budget() -> ArchiveBudget:
+    return ArchiveBudget(
+        remaining_bytes=_MAX_ARCHIVE_UNCOMPRESSED_BYTES,
+        remaining_members=_MAX_ARCHIVE_MEMBERS,
+    )
+
+
+def _zip_member_supported(member: zipfile.ZipInfo) -> bool:
+    mode = member.external_attr >> 16
+    file_type = stat.S_IFMT(mode)
+    return not file_type or member.is_dir() or stat.S_ISREG(mode)
+
+
 def _archive_findings(
     relative_path: Path,
     data: bytes,
     private_name_digest: str,
     approved_binary_digests: Mapping[str, str],
+    forbidden_identifiers: tuple[ForbiddenIdentifier, ...],
     depth: int,
+    budget: ArchiveBudget,
 ) -> list[str]:
     """Inspect every bounded ZIP member rather than exempting the container."""
     if depth >= _MAX_ARCHIVE_DEPTH:
         raise ValueError(f"archive nesting exceeds scan limit: {relative_path}")
     findings: list[str] = []
     with zipfile.ZipFile(BytesIO(data)) as archive:
+        budget.charge_bytes(len(archive.comment))
+        findings.extend(
+            _archive_metadata_findings(
+                "ZIP archive comment",
+                (archive.comment.decode("latin-1"),),
+                private_name_digest,
+                forbidden_identifiers,
+            )
+        )
         members = archive.infolist()
         if len(members) > _MAX_ARCHIVE_MEMBERS:
             raise ValueError(f"archive has too many members: {relative_path}")
-        total_size = sum(member.file_size for member in members)
-        if total_size > _MAX_ARCHIVE_UNCOMPRESSED_BYTES:
+        if any(
+            member.file_size > _MAX_ARCHIVE_UNCOMPRESSED_BYTES for member in members
+        ):
             raise ValueError(f"archive expands beyond scan limit: {relative_path}")
         for member in members:
+            budget.charge_member()
+            budget.charge_bytes(_zip_metadata_size(member))
+            findings.extend(
+                _archive_metadata_findings(
+                    "ZIP member metadata",
+                    (
+                        member.filename,
+                        member.comment.decode("latin-1"),
+                        member.extra.decode("latin-1"),
+                    ),
+                    private_name_digest,
+                    forbidden_identifiers,
+                )
+            )
+            if not _zip_member_supported(member):
+                raise ValueError("unsupported ZIP member type")
             if member.is_dir():
                 continue
             if member.flag_bits & 0x1:
                 raise ValueError(f"encrypted archive member: {relative_path}")
             member_path = relative_path / member.filename
-            if _contains_private_name(member.filename, private_name_digest):
-                findings.append(str(member_path))
+            with archive.open(member) as stream:
+                member_data = _read_bounded(
+                    stream, member.file_size, budget.remaining_bytes
+                )
             member_findings = _data_findings(
                 member_path,
-                archive.read(member),
+                member_data,
                 private_name_digest,
                 approved_binary_digests,
+                forbidden_identifiers,
                 depth=depth + 1,
+                budget=budget,
+                charge_content=True,
             )
             findings.extend(member_findings)
     return findings
@@ -738,34 +1072,88 @@ def _data_findings(
     data: bytes,
     private_name_digest: str,
     approved_binary_digests: Mapping[str, str],
+    forbidden_identifiers: tuple[ForbiddenIdentifier, ...] = _FORBIDDEN_IDENTIFIERS,
     *,
     depth: int = 0,
+    budget: ArchiveBudget | None = None,
+    charge_content: bool = False,
 ) -> list[str]:
     """Inspect one blob, validating binary content and failing closed on text."""
-    content_digest = hashlib.sha256(data).hexdigest()
-    relative_name = relative_path.as_posix()
-    if _APPROVED_HISTORICAL_TEXT_DIGESTS.get(relative_name) == content_digest:
-        return []
+    if budget is not None and charge_content:
+        budget.charge_bytes(len(data))
     binary_kind = _recognized_binary_kind(relative_path, data)
+    binary_findings = _binary_findings(
+        binary_kind,
+        relative_path,
+        data,
+        private_name_digest,
+        approved_binary_digests,
+        forbidden_identifiers,
+        depth,
+        budget,
+    )
+    if binary_findings is not None:
+        return binary_findings
+    return _decoded_text_findings(
+        relative_path, data, private_name_digest, forbidden_identifiers
+    )
+
+
+def _binary_findings(
+    binary_kind: str | None,
+    relative_path: Path,
+    data: bytes,
+    private_name_digest: str,
+    approved_binary_digests: Mapping[str, str],
+    forbidden_identifiers: tuple[ForbiddenIdentifier, ...],
+    depth: int,
+    budget: ArchiveBudget | None,
+) -> list[str] | None:
     if binary_kind == "opaque":
-        if approved_binary_digests.get(relative_name) == content_digest:
+        content_digest = hashlib.sha256(data).hexdigest()
+        relative_name = relative_path.as_posix()
+        if _approved_binary(relative_name, content_digest, approved_binary_digests):
             return []
         byte_findings = _text_findings(
             relative_path,
             data.decode("latin-1"),
             private_name_digest,
+            forbidden_identifiers,
         )
         if byte_findings:
             return byte_findings
         raise ValueError(f"opaque binary is not digest-approved: {relative_path}")
     if binary_kind == "zip":
+        budget = budget or _new_archive_budget()
         return _archive_findings(
             relative_path,
             data,
             private_name_digest,
             approved_binary_digests,
+            forbidden_identifiers,
             depth,
+            budget,
         )
+    if binary_kind == "tar":
+        budget = budget or _new_archive_budget()
+        return _tar_findings(
+            relative_path,
+            data,
+            private_name_digest,
+            approved_binary_digests,
+            forbidden_identifiers,
+            depth,
+            budget,
+        )
+    return None
+
+
+def _decoded_text_findings(
+    relative_path: Path,
+    data: bytes,
+    private_name_digest: str,
+    forbidden_identifiers: tuple[ForbiddenIdentifier, ...],
+) -> list[str]:
     normalized = data.replace(b"\0", b"")
     try:
         text = normalized.decode("utf-8")
@@ -774,30 +1162,50 @@ def _data_findings(
             relative_path,
             normalized.decode("latin-1"),
             private_name_digest,
+            forbidden_identifiers,
         )
         if byte_findings:
             return byte_findings
         raise UnicodeError(f"tracked text is not valid UTF-8: {relative_path}") from exc
-    return _text_findings(relative_path, text, private_name_digest)
+    return _text_findings(
+        relative_path, text, private_name_digest, forbidden_identifiers
+    )
+
+
+def _approved_binary(
+    relative_name: str,
+    content_digest: str,
+    approved_binary_digests: Mapping[str, str],
+) -> bool:
+    """Accept a reviewed binary at its tree path or beneath a package root."""
+    return any(
+        digest == content_digest
+        and (relative_name == path or relative_name.endswith(f"/{path}"))
+        for path, digest in approved_binary_digests.items()
+    )
 
 
 def violations(
     root: Path,
     private_name_digest: str = _PRIVATE_NAME_DIGEST,
     approved_binary_digests: Mapping[str, str] = _APPROVED_BINARY_DIGESTS,
+    forbidden_identifiers: tuple[ForbiddenIdentifier, ...] = _FORBIDDEN_IDENTIFIERS,
 ) -> list[str]:
     """Return proposed-tree matches and fail if tracked content is unreadable."""
     findings: list[str] = []
     for entry in proposed_files(root):
         relative_path = entry.relative_path
-        if _contains_private_name(str(relative_path), private_name_digest):
-            findings.append(str(relative_path))
+        if _contains_private_name(
+            str(relative_path), private_name_digest
+        ) or _identifier_categories(str(relative_path), forbidden_identifiers):
+            findings.append("tracked path metadata: forbidden identifier")
         findings.extend(
             _data_findings(
                 relative_path,
                 entry.data,
                 private_name_digest,
                 approved_binary_digests,
+                forbidden_identifiers,
             )
         )
     return findings
@@ -808,18 +1216,53 @@ def main(
     *,
     private_name_digest: str = _PRIVATE_NAME_DIGEST,
     approved_binary_digests: Mapping[str, str] = _APPROVED_BINARY_DIGESTS,
+    forbidden_identifiers: tuple[ForbiddenIdentifier, ...] = _FORBIDDEN_IDENTIFIERS,
 ) -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--root", type=Path, default=Path.cwd())
+    parser.add_argument("--artifact", action="append", type=Path, default=[])
+    parser.add_argument("--artifacts-only", action="store_true")
     args = parser.parse_args(argv)
     try:
-        findings = violations(
-            args.root.resolve(),
-            private_name_digest,
-            approved_binary_digests,
+        if args.artifacts_only and not args.artifact:
+            raise ValueError("artifact-only scan requires an artifact")
+        findings = (
+            []
+            if args.artifacts_only
+            else violations(
+                args.root.resolve(),
+                private_name_digest,
+                approved_binary_digests,
+                forbidden_identifiers,
+            )
         )
-    except (OSError, UnicodeError, subprocess.SubprocessError, ValueError) as exc:
-        print(f"public-boundary scan failed closed: {exc}", file=sys.stderr)
+        for artifact in args.artifact:
+            artifact_name = artifact.name
+            if _contains_private_name(
+                artifact_name, private_name_digest
+            ) or _identifier_categories(artifact_name, forbidden_identifiers):
+                findings.append("artifact filename: forbidden identifier")
+            findings.extend(
+                _data_findings(
+                    Path(artifact_name),
+                    _read_artifact_bounded(artifact),
+                    private_name_digest,
+                    approved_binary_digests,
+                    forbidden_identifiers,
+                )
+            )
+    except (
+        OSError,
+        UnicodeError,
+        subprocess.SubprocessError,
+        tarfile.TarError,
+        ValueError,
+        zipfile.BadZipFile,
+    ) as exc:
+        print(
+            f"public-boundary scan failed closed: {_safe_failure_reason(exc)}",
+            file=sys.stderr,
+        )
         return 2
     if findings:
         print("private control-plane references found:", file=sys.stderr)
@@ -827,6 +1270,37 @@ def main(
         return 1
     print("public-boundary scan passed")
     return 0
+
+
+def _read_artifact_bounded(path: Path) -> bytes:
+    """Reject oversized compressed input before allocating its full contents."""
+    if path.stat().st_size > _MAX_ARCHIVE_COMPRESSED_BYTES:
+        raise ValueError("artifact compressed input exceeds scan limit")
+    with path.open("rb") as stream:
+        data = stream.read(_MAX_ARCHIVE_COMPRESSED_BYTES + 1)
+    if len(data) > _MAX_ARCHIVE_COMPRESSED_BYTES:
+        raise ValueError("artifact compressed input exceeds scan limit")
+    return data
+
+
+def _safe_failure_reason(exc: BaseException) -> str:
+    """Classify failures without echoing paths, metadata, or forbidden values."""
+    message = str(exc).casefold()
+    reasons = (
+        ("cumulative byte budget", "cumulative-byte-budget"),
+        ("cumulative member budget", "cumulative-member-budget"),
+        ("compressed input", "compressed-input-limit"),
+        ("expands beyond", "expanded-content-limit"),
+        ("nesting exceeds", "archive-nesting-limit"),
+        ("too many members", "archive-member-limit"),
+        ("unsupported", "unsupported-archive-member"),
+        ("not digest-approved", "unapproved-opaque-binary"),
+        ("not valid utf-8", "invalid-text-encoding"),
+        ("requires an artifact", "missing-artifact"),
+    )
+    return next(
+        (reason for marker, reason in reasons if marker in message), type(exc).__name__
+    )
 
 
 if __name__ == "__main__":

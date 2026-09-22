@@ -11,8 +11,17 @@ requests must reject redirects and use the shared destination-validation and
 timeout policies.
 
 Firecracker resource endpoints expose stable project-owned response shapes.
-Cloud-init intent uses `credential_reference_id` as an opaque external reference;
-the plugin does not import or assume a credential-provider implementation.
+In explicit legacy mode, cloud-init intent preserves
+`credential_reference_id` as an opaque external reference. With OpenBao
+selected, the write-only `password` and `private_key` inputs create provider
+credentials assigned to the parent VM; public `sshkeys` and `sshkeys_intent`
+remain outside provider payloads.
+FastAPI, PBS, PDM, and Firecracker host serializers expose only vendor-neutral
+credential assignment readiness, detail, and lookup metadata. Token inputs are
+write-only. Cloud-init exposes the same secret-free readiness and VM `login`
+lookup shape. Their create, update, delete, and bulk mutations must begin the
+provider transaction before NetBox enters its framework-owned atomic block and
+must carry the authenticated request actor through that boundary.
 
 The authoritative discovery, authentication, schema, invocation, and safety
 contract is [`docs/api/semantic-mcp-bridge.md`](../../docs/api/semantic-mcp-bridge.md).

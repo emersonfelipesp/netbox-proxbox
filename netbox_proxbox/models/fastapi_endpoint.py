@@ -36,6 +36,7 @@ _BACKEND_KEY_PERSISTED_FIELDS = frozenset(
         "websocket_port",
         "server_side_websocket",
         "token_enc",
+        "openbao_token_credential_uuid",
         "backend_key_target_fingerprint",
     }
 )
@@ -127,6 +128,13 @@ class FastAPIEndpoint(EndpointBase):
             "Fernet-encrypted backend token used by the ProxBox service. Internal."
         ),
     )
+    openbao_token_credential_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("OpenBao token credential UUID"),
+        help_text=_("Opaque reference to the OpenBao backend API token."),
+    )
     backend_key_target_fingerprint = models.CharField(
         max_length=64,
         blank=True,
@@ -182,21 +190,50 @@ class FastAPIEndpoint(EndpointBase):
     @property
     def token(self) -> str:
         """Decrypt and return the proxbox-api backend token."""
+        from netbox_proxbox.integrations.openbao_single import (
+            owner_uses_openbao_storage,
+            resolve_single_secret,
+        )
+
+        if owner_uses_openbao_storage(self):
+            return resolve_single_secret(self)
         return decrypt_primary_secret(str(self.token_enc or ""))
 
     @token.setter
     def token(self, value: object | None) -> None:
+        from netbox_proxbox.integrations.openbao_single import (
+            owner_uses_openbao_storage,
+            store_single_secret,
+        )
+
+        self._backend_key_token_explicitly_assigned = True
+        if owner_uses_openbao_storage(self):
+            if value not in (None, ""):
+                store_single_secret(self, str(value))
+            return
         from netbox_proxbox.services.encryption_recovery import (
             mark_encrypted_fields_for_write,
         )
 
         mark_encrypted_fields_for_write(self, "token_enc")
-        self._backend_key_token_explicitly_assigned = True
         self.token_enc = encrypt_primary_secret(value)
 
     @property
     def credential_encryption_state(self) -> str:
         """Return a secret-free list/dashboard state for the stored backend key."""
+
+        from netbox_proxbox.integrations.openbao_single import (
+            owner_uses_openbao_storage,
+        )
+        from netbox_proxbox.integrations.openbao_single_pending import (
+            pending_single_secret,
+        )
+
+        if owner_uses_openbao_storage(self):
+            configured = bool(
+                self.openbao_token_credential_uuid or pending_single_secret(self)
+            )
+            return "Configured" if configured else "Not configured"
 
         from netbox_proxbox.services.encryption_recovery import ciphertext_state
 
@@ -441,6 +478,7 @@ class FastAPIEndpoint(EndpointBase):
             bool(self.enabled),
             *self._backend_connection_identity(),
             self.backend_key_target_fingerprint,
+            self.openbao_token_credential_uuid,
             self.token_enc,
         )
 
@@ -498,6 +536,7 @@ class FastAPIEndpoint(EndpointBase):
                 .select_for_update()
                 .only(
                     "token_enc",
+                    "openbao_token_credential_uuid",
                     "enabled",
                     "domain",
                     "ip_address",

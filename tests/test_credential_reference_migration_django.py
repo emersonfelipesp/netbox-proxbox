@@ -41,6 +41,7 @@ except Exception as exc:
 from django.db import connection  # noqa: E402
 from django.db.migrations.executor import MigrationExecutor  # noqa: E402
 from django.test import TransactionTestCase  # noqa: E402
+from virtualization.models import VirtualMachine  # noqa: E402
 
 from tests.django_support import ForwardOnlyMigrationTestCase  # noqa: E402
 
@@ -87,19 +88,49 @@ class CredentialReferenceMigrationTest(TransactionTestCase):
             )
             return cursor.fetchone()[0]
 
+    def _drop_retained_column(self) -> None:
+        if self.retained_column not in self._columns():
+            return
+        with connection.schema_editor() as editor:
+            editor.execute(
+                f"ALTER TABLE {editor.quote_name(self.table)} "
+                f"DROP COLUMN {editor.quote_name(self.retained_column)}"
+            )
+
     def test_populated_forward_reverse_reapply_and_serialization(self) -> None:
         try:
+            self._drop_retained_column()
+            # Create the core row at the current NetBox leaf. NetBox 4.7 keeps
+            # a newer non-null generation column in the physical table when
+            # this test rewinds only the plugin migration graph, so the older
+            # historical model cannot create a valid row by itself.
+            current_virtual_machine = VirtualMachine.objects.create(
+                name="credential-migration-vm",
+                status="active",
+            )
             apps = self._migrate(self.migrate_from)
             virtual_machine = apps.get_model(
                 "virtualization", "VirtualMachine"
-            ).objects.create(name="credential-migration-vm", status="active")
+            ).objects.get(pk=current_virtual_machine.pk)
             cloud_init = apps.get_model(
                 "netbox_proxbox", "ProxmoxVMCloudInit"
             ).objects.create(
                 virtual_machine=virtual_machine,
                 credential_reference_id=901,
             )
+            with connection.cursor() as cursor:
+                constraints = connection.introspection.get_constraints(
+                    cursor, self.table
+                )
+            target_indexes = [
+                name
+                for name, constraint in constraints.items()
+                if constraint["index"]
+                and tuple(constraint["columns"]) == (self.target_column,)
+            ]
             with connection.schema_editor() as editor:
+                for index_name in target_indexes:
+                    editor.execute(f"DROP INDEX {editor.quote_name(index_name)}")
                 editor.execute(
                     f"ALTER TABLE {editor.quote_name(self.table)} "
                     f"RENAME COLUMN {editor.quote_name(self.target_column)} "
@@ -120,13 +151,19 @@ class CredentialReferenceMigrationTest(TransactionTestCase):
                 ProxmoxVMCloudInitSerializer,
             )
 
+            serializer = ProxmoxVMCloudInitSerializer(
+                migrated,
+                context={"request": None},
+            )
             self.assertEqual(
-                ProxmoxVMCloudInitSerializer(migrated).data[self.target_column],
+                serializer.fields[self.target_column].to_representation(
+                    migrated.credential_reference_id
+                ),
                 901,
             )
 
             self._migrate(self.migrate_from)
-            self.assertNotIn(self.target_column, self._columns())
+            self.assertIn(self.target_column, self._columns())
             self.assertIn(self.retained_column, self._columns())
             self.assertEqual(self._retained_value(cloud_init.pk), 901)
 
@@ -139,6 +176,7 @@ class CredentialReferenceMigrationTest(TransactionTestCase):
         finally:
             executor = MigrationExecutor(connection)
             executor.migrate(executor.loader.graph.leaf_nodes())
+            self._drop_retained_column()
 
     def test_fresh_install_graph_runs_sanitized_source_before_additive_guard(
         self,

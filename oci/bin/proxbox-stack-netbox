@@ -1,0 +1,10 @@
+#!/bin/bash
+set -euo pipefail
+
+SECRET_KEY="$(</var/lib/proxbox-stack/secrets/netbox-secret-key)"
+DB_PASSWORD="$(</var/lib/proxbox-stack/secrets/postgres-password)"
+export SECRET_KEY DB_PASSWORD
+export SKIP_SUPERUSER=true
+
+cd /opt/netbox/netbox
+exec /opt/netbox/docker-entrypoint.sh /usr/local/sbin/proxbox-stack-launch-netbox

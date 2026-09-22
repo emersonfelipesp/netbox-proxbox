@@ -6,7 +6,11 @@ from netbox.configuration_testing import *  # noqa: F403
 from netbox.configuration_testing import PLUGINS as BASE_PLUGINS
 
 PLUGINS = [*BASE_PLUGINS, "netbox_proxbox"]
-if os.environ.get("NETBOX_PROXBOX_TEST_PDM") == "1":
+if os.environ.get("NETBOX_PROXBOX_TEST_OPENBAO") == "1":
+    PLUGINS.extend(("netbox_rpc", "netbox_openbao"))
+elif os.environ.get("NETBOX_PROXBOX_TEST_ALL_COMPANIONS") == "1":
+    PLUGINS.extend(("netbox_ceph", "netbox_pbs", "netbox_pdm", "netbox_packer"))
+elif os.environ.get("NETBOX_PROXBOX_TEST_PDM") == "1":
     PLUGINS.append("netbox_pdm")
 
 # Local isolated harnesses may bind their disposable services away from the

@@ -41,17 +41,17 @@ because a referenced secret is unavailable.
 ## Main Models
 
 - `EndpointBase`: shared endpoint identity and URL-building fields.
-- `ProxmoxEndpoint`: stores Proxmox API connection settings, credentials, mode, and version metadata. Its `open_console_proxmoxendpoint` custom permission is the endpoint-object authorization boundary for the standalone browser console; it does not imply any write capability. Its default-off `allow_packer_template_builds` field is a narrow capability subordinate to endpoint `enabled` and `allow_writes`; it authorizes only netbox-packer Cloud-Init template-image creation, and only the effective three-gate result is propagated to proxbox-api for an independent final-boundary check. `effective_connection_tuning()` owns the nullable endpoint timeout/retry/back-off contract: endpoint values win when not `None` (including zero retries/back-off), otherwise the matching `ProxboxPluginSettings` value is returned, and all three outputs are concrete typed values. The model also carries `pushed_credential_fingerprint` (migration 0074) — the Proxmox twin of the `NetBoxEndpoint` field below, under a distinct HMAC salt so the two namespaces can never compare equal. It lets the preflight's soft push budget detect a secret rotated *in place* (invisible on the wire: `ProxmoxEndpointPublic` withholds `password`/`token_name`/`token_value`) and re-push instead of skipping. Unlike the NetBox twin it fails **toward pushing**: an empty or stale fingerprint costs one extra push, never a blocked run. Written by the push itself with `queryset.update()`, never `save()`, because the model's `post_save` handler re-pushes to the backend.
+- `ProxmoxEndpoint`: stores Proxmox API connection settings, credentials, mode, and version metadata. Its `open_console_proxmoxendpoint` custom permission is the endpoint-object authorization boundary for the standalone browser console; it does not imply any write capability. Its default-off `allow_packer_template_builds` field is a narrow capability subordinate to endpoint `enabled` and `allow_writes`; it authorizes only netbox-packer Cloud-Init template-image creation, and only the effective three-gate result is propagated to proxbox-api for an independent final-boundary check. `effective_connection_tuning()` owns the nullable endpoint timeout/retry/back-off contract: endpoint values win when not `None` (including zero retries/back-off), otherwise the matching `ProxboxPluginSettings` value is returned, and all three outputs are concrete typed values. The model also carries `pushed_credential_fingerprint` (migration 0074) — the Proxmox twin of the `NetBoxEndpoint` field below, under a distinct HMAC salt so the two namespaces can never compare equal. It lets the preflight's soft push budget detect a secret rotated *in place* (invisible on the wire: `ProxmoxEndpointPublic` withholds `password`/`token_name`/`token_value`) and re-push instead of skipping. Unlike the NetBox twin it fails **toward pushing**: an empty or stale fingerprint costs one extra push, never a blocked run. Written by the push itself with `queryset.update()`, never `save()`, because the model's `post_save` handler re-pushes to the backend. `iana_timezone` is read-only discovered state populated best-effort through proxbox-api's generated node-time route; its writer also uses `queryset.update()` so refresh cannot re-enter that signal.
 - `NetBoxEndpoint`: stores the remote NetBox API target and either v1 token or v2 key/secret credentials. Also carries `pushed_credential_fingerprint` (migration 0073) — a keyed HMAC-SHA256 digest of the credentials the last **successful** push handed proxbox-api. It is **not** a credential and must never be treated as one: `salted_hmac` keys the digest off NetBox's `SECRET_KEY`, so it is non-reversible and meaningless outside this install. It exists because `NetBoxEndpointResponse` withholds `token`/`token_key`, leaving an in-place token rotation invisible to any comparison against what the backend returns; the sync-job preflight reads it through `views/backend_sync.py::netbox_push_credentials_unchanged()`. Written by the push itself with `queryset.update()`, never `save()`, because the model's `post_save` handler re-pushes to the backend. An **empty** value means "credentials changed" (fail-closed), so nothing should back-fill it.
 - `FastAPIEndpoint`: stores the ProxBox backend HTTP/WebSocket target and its
-  encrypted backend token plus the credential-free
+  selected-backend token plus the credential-free
   `backend_key_target_fingerprint` that durably binds the token to the exact
   canonical HTTP/fallback-IP/WebSocket/TLS target. Disabled new rows may remain
   intentionally keyless. If stored ciphertext is undecryptable, only an
   explicitly assigned replacement may proceed; it must authenticate against the
   exact enabled target through the normal adoption flow before persistence.
-- `PBSEndpoint`: stores Proxmox Backup Server connection settings and credentials for companion inventory/status paths.
-- `PDMEndpoint`: stores Proxmox Datacenter Manager connection settings plus declared PVE/PBS federation links.
+- `PBSEndpoint`: stores Proxmox Backup Server connection settings and a selected-backend API token for companion inventory/status paths.
+- `PDMEndpoint`: stores Proxmox Datacenter Manager connection settings, a selected-backend API token, and declared PVE/PBS federation links.
 - `ProxboxPluginSettings`: owns the plugin-at-rest Fernet key. Its redact-all
   `save()` rejects ordinary key clearing/replacement while any encrypted family
   contains ciphertext using the same settings-row and deterministic PostgreSQL
@@ -129,6 +129,10 @@ because a referenced secret is unavailable.
 - `VMBackup`: stores backup inventory for NetBox virtual machines.
 - `VMSnapshot`: stores snapshot inventory for NetBox virtual machines.
 - `VMTaskHistory`: stores VM task history records linked to NetBox virtual machines.
+- `ProxmoxVMCloudInit`: mirrors public cloud-init configuration and stores
+  create-time intent. Under OpenBao, its password and private-key UUIDs refer to
+  credentials assigned to the parent VM for `login`; `ssh_pwauth` selects the
+  primary credential. Its public SSH-key fields are never provider material.
 - `ProxmoxServiceCollection`, `ProxmoxServiceSample`, and
   `ProxmoxServiceStatus`: store asynchronous netbox-rpc systemctl service
   collection history, raw per-run samples, and latest projected service state
@@ -148,6 +152,14 @@ explicit endpoint and persisted plugin selections remain authoritative. Required
 OpenBao secret access raises a secret-safe endpoint/reference-field error instead
 of returning empty material. Backend payloads and exports use the shared API
 credential selector to avoid resolving an absent, unselected authentication method.
+FastAPI, PBS, PDM, and Firecracker host token writes use the shared typed
+single-secret transaction. It preserves explicit legacy Fernet behavior,
+creates `api-token` assignments with the declared `api` or `agent` purpose,
+and never migrates material merely because the effective backend changes.
+VM cloud-init uses the same transaction, actor, permission, CAS, rollback, and
+guard primitives for its password/keypair pair. Selected OpenBao never resolves
+through the legacy `credential_reference_id`; explicit legacy mode preserves
+that opaque reference unchanged.
 
 - Inbound: forms, tables, filtersets, views, serializers, and migrations all rely on these model definitions.
 - Outbound: NetBox core model base classes plus related objects in `dcim`, `ipam`, `users`, and `virtualization`.
@@ -174,12 +186,14 @@ credential selector to avoid resolving an absent, unselected authentication meth
   target has been re-authenticated.
 - `NetBoxEndpoint.has_configured_token` and serializer/form validation together define the remote NetBox credential behavior.
 - Primary endpoint secrets are exposed as compatibility properties and stored in
-  encrypted backing fields: `ProxmoxEndpoint.password_enc`,
+  backend-selected storage: `ProxmoxEndpoint.password_enc`,
   `ProxmoxEndpoint.token_value_enc`, `FastAPIEndpoint.token_enc`,
   `PBSEndpoint.token_secret_enc`, and `PDMEndpoint.token_secret_enc`. Use the
   public properties (`password`, `token_value`, `token`, `token_secret`) in
   service code and serializers; never add plaintext model fields for these
-  secrets.
+  secrets. With OpenBao selected, FastAPI/PBS/PDM and Firecracker host tokens
+  persist only an opaque UUID reference after a confirmed provider write and
+  clear the corresponding Fernet column in the same transaction.
 - `ProxmoxEndpoint.ssh_credential_source` controls the proxbox-native endpoint
   SSH credential surface used by the browser terminal. The default
   `dedicated` mode keeps the encrypted `ssh_*_enc` behavior unchanged.

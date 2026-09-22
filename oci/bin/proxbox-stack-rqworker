@@ -1,0 +1,9 @@
+#!/bin/bash
+set -euo pipefail
+
+until [[ -e /run/proxbox-stack/netbox-initialized ]]; do
+    sleep 1
+done
+
+cd /opt/netbox/netbox
+exec /opt/netbox/venv/bin/python manage.py rqworker high default low

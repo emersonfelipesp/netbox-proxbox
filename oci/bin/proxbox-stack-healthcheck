@@ -1,0 +1,11 @@
+#!/bin/bash
+set -euo pipefail
+
+/opt/netbox/venv/bin/python - <<'PY'
+from urllib.request import urlopen
+
+for url in ("http://127.0.0.1:8080/login/", "http://127.0.0.1:8800/health"):
+    with urlopen(url, timeout=3) as response:
+        if response.status >= 400:
+            raise SystemExit(f"unhealthy response from {url}: {response.status}")
+PY

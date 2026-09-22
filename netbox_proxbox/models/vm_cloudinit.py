@@ -5,6 +5,7 @@ from __future__ import annotations
 from django.db import models
 from django.urls import reverse
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.debug import sensitive_variables
 
 from netbox.models import NetBoxModel
 
@@ -147,6 +148,22 @@ class ProxmoxVMCloudInit(NetBoxModel):
         ),
     )
 
+    openbao_password_credential_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("OpenBao password credential UUID"),
+        help_text=_("Opaque reference to the OpenBao VM login password."),
+    )
+
+    openbao_keypair_credential_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("OpenBao keypair credential UUID"),
+        help_text=_("Opaque reference to the OpenBao VM login SSH keypair."),
+    )
+
     sshkeys_enc = models.TextField(
         blank=True,
         help_text=_(
@@ -207,3 +224,59 @@ class ProxmoxVMCloudInit(NetBoxModel):
         from netbox_proxbox.models.primary_secrets import decrypt_primary_secret
 
         return decrypt_primary_secret(self.sshkeys_enc) if self.sshkeys_enc else ""
+
+    @property
+    def password_configured(self) -> bool:
+        """Return secret-free VM login-password readiness metadata."""
+        from netbox_proxbox.integrations.openbao_cloudinit import (
+            cloudinit_secret_configured,
+        )
+
+        return cloudinit_secret_configured(self, "password")
+
+    @property
+    def private_key_configured(self) -> bool:
+        """Return secret-free VM login-keypair readiness metadata."""
+        from netbox_proxbox.integrations.openbao_cloudinit import (
+            cloudinit_secret_configured,
+        )
+
+        return cloudinit_secret_configured(self, "private_key")
+
+    @sensitive_variables("value")
+    def set_password(
+        self, value: object | None, *, user: object = None, request: object = None
+    ) -> None:
+        """Queue a VM login password for the selected credential backend."""
+        from netbox_proxbox.integrations.openbao_cloudinit import (
+            queue_cloudinit_secret,
+        )
+
+        queue_cloudinit_secret(self, "password", value, user=user, request=request)
+
+    @sensitive_variables("value")
+    def set_private_key(
+        self, value: object | None, *, user: object = None, request: object = None
+    ) -> None:
+        """Queue a VM login keypair for the selected credential backend."""
+        from netbox_proxbox.integrations.openbao_cloudinit import (
+            queue_cloudinit_secret,
+        )
+
+        queue_cloudinit_secret(self, "private_key", value, user=user, request=request)
+
+    def get_password(self, *, user: object = None) -> str:
+        """Resolve the selected OpenBao password without legacy fallback."""
+        from netbox_proxbox.integrations.openbao_cloudinit import (
+            resolve_cloudinit_secret,
+        )
+
+        return resolve_cloudinit_secret(self, "password", user=user)
+
+    def get_private_key(self, *, user: object = None) -> str:
+        """Resolve the selected OpenBao private key without legacy fallback."""
+        from netbox_proxbox.integrations.openbao_cloudinit import (
+            resolve_cloudinit_secret,
+        )
+
+        return resolve_cloudinit_secret(self, "private_key", user=user)

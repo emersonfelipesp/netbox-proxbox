@@ -33,7 +33,6 @@ import requests  # noqa: E402
 
 from stack_common import must_getenv, wait_http_ok  # noqa: E402
 from stack_setup import (  # noqa: E402
-    create_proxbox_custom_fields,
     ensure_netbox_plugin_endpoints,
     ensure_proxbox_backend_endpoints,
     register_proxbox_api_key,
@@ -174,9 +173,6 @@ def seed_data(
         timeout=30,
     )
     keepalive_resp.raise_for_status()
-
-    print("Creating Proxbox custom fields...")
-    create_proxbox_custom_fields(proxbox_base_url, proxbox_api_key=proxbox_api_key)
 
     # Run each sync stage individually in dependency order (same as e2e tests).
     # The full-update route streams all stages in one proxbox-api call and fails

@@ -340,6 +340,16 @@ def proxbox_sync_job_module(monkeypatch):
         sys.modules, "netbox_proxbox.services.backend_context", backend_context_mod
     )
 
+    endpoint_timezone_mod = types.ModuleType(
+        "netbox_proxbox.services.endpoint_timezone"
+    )
+    endpoint_timezone_mod.refresh_endpoint_timezone = lambda *a, **kw: False
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.endpoint_timezone",
+        endpoint_timezone_mod,
+    )
+
     # Stub views.backend_sync with no-op sync helpers.
     views_backend_sync_mod = types.ModuleType("netbox_proxbox.views.backend_sync")
     views_backend_sync_mod.sync_netbox_endpoint_to_backend = lambda *a, **kw: (
@@ -4823,6 +4833,78 @@ def test_preflight_continues_when_backend_already_holds_an_endpoint(
     assert result.blocking_error is None
     assert result.hint and "was not pushed" in result.hint
     assert any("may" in entry and "stale" in entry for entry in records["warning"])
+
+
+def test_preflight_refreshes_timezone_for_each_selected_proxmox_endpoint(
+    monkeypatch, proxbox_sync_job_module
+):
+    _arrange_preflight(monkeypatch)
+    refresh = MagicMock(return_value=True)
+    monkeypatch.setattr(
+        sys.modules["netbox_proxbox.services.endpoint_timezone"],
+        "refresh_endpoint_timezone",
+        refresh,
+    )
+    job, records = _preflight_job()
+
+    result = proxbox_sync_job_module._ensure_backend_endpoints(job)
+
+    assert result.blocking_error is None
+    refresh.assert_called_once()
+    assert refresh.call_args.kwargs == {"fastapi_endpoint_id": None, "timeout": 10.0}
+    assert any("refreshed the Proxmox timezone" in entry for entry in records["info"])
+
+
+def test_timezone_refresh_obeys_the_shared_discovery_budget(
+    monkeypatch, proxbox_sync_job_module
+):
+    refresh = MagicMock()
+    monkeypatch.setattr(
+        proxbox_sync_job_module, "_refresh_proxmox_endpoint_timezone", refresh
+    )
+    monkeypatch.setattr(
+        proxbox_sync_job_module,
+        "time",
+        SimpleNamespace(monotonic=MagicMock(side_effect=[100.0, 105.0])),
+    )
+    state = SimpleNamespace()
+    endpoint = SimpleNamespace(pk=1)
+
+    elapsed = proxbox_sync_job_module._refresh_timezone_within_budget(
+        state, endpoint, 25.0
+    )
+    exhausted = proxbox_sync_job_module._refresh_timezone_within_budget(
+        state, endpoint, elapsed
+    )
+
+    assert elapsed == 30.0
+    assert exhausted == 30.0
+    refresh.assert_called_once_with(state, endpoint, timeout=5.0)
+
+
+def test_preflight_does_not_discover_timezone_after_failed_endpoint_push(
+    monkeypatch, proxbox_sync_job_module
+):
+    _arrange_preflight(monkeypatch)
+    backend_sync = sys.modules["netbox_proxbox.views.backend_sync"]
+    monkeypatch.setattr(
+        backend_sync,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: (False, "backend rejected endpoint", None),
+    )
+    refresh = MagicMock(return_value=True)
+    monkeypatch.setattr(
+        sys.modules["netbox_proxbox.services.endpoint_timezone"],
+        "refresh_endpoint_timezone",
+        refresh,
+    )
+    job, _records = _preflight_job()
+
+    result = proxbox_sync_job_module._ensure_backend_endpoints(job)
+
+    assert result.blocking_error is None
+    assert result.phases[-1]["status"] == "warning"
+    refresh.assert_not_called()
 
 
 def test_preflight_blocks_when_only_a_later_backend_row_is_ours(

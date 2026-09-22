@@ -143,3 +143,11 @@ class ProxmoxNodeSerializer(NetBoxModelSerializer):
             "tags",
         )
         brief_fields = ("id", "url", "display", "name", "online")
+
+    def update(self, instance: ProxmoxNode, validated_data: dict) -> ProxmoxNode:
+        """Attach the initiating actor before device-link reconciliation."""
+        request = self.context.get("request")
+        user = getattr(request, "user", None)
+        if user is not None:
+            instance._openbao_actor_user = user
+        return super().update(instance, validated_data)

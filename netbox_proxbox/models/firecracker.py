@@ -112,6 +112,13 @@ class FirecrackerHost(NetBoxModel):
         verbose_name=_("Encrypted agent token"),
         help_text=_("Fernet-encrypted host-agent bearer token. Internal."),
     )
+    openbao_agent_token_credential_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("OpenBao agent token credential UUID"),
+        help_text=_("Opaque reference to the OpenBao Firecracker agent token."),
+    )
     status = models.CharField(
         max_length=32,
         choices=FirecrackerHostStatusChoices,
@@ -174,11 +181,29 @@ class FirecrackerHost(NetBoxModel):
 
     @property
     def token_configured(self) -> bool:
+        from netbox_proxbox.integrations.openbao_single import (
+            owner_uses_openbao_storage,
+        )
+        from netbox_proxbox.integrations.openbao_single_pending import (
+            pending_single_secret,
+        )
+
+        if owner_uses_openbao_storage(self):
+            return bool(
+                self.openbao_agent_token_credential_uuid or pending_single_secret(self)
+            )
         return bool(self.agent_token_enc)
 
     @property
     def credential_encryption_state(self) -> str:
         """Return a secret-free state for the encrypted host-agent token."""
+
+        from netbox_proxbox.integrations.openbao_single import (
+            owner_uses_openbao_storage,
+        )
+
+        if owner_uses_openbao_storage(self):
+            return "Configured" if self.token_configured else "Not configured"
 
         from netbox_proxbox.services.encryption_recovery import ciphertext_state
 
@@ -201,6 +226,14 @@ class FirecrackerHost(NetBoxModel):
         return max(self.capacity_disk_mib - self.allocated_disk_mib, 0)
 
     def set_agent_token(self, plaintext: str, *, key: str) -> None:
+        from netbox_proxbox.integrations.openbao_single import (
+            owner_uses_openbao_storage,
+            store_single_secret,
+        )
+
+        if owner_uses_openbao_storage(self):
+            store_single_secret(self, plaintext)
+            return
         from netbox_proxbox.services.encryption_recovery import (
             mark_encrypted_fields_for_write,
         )
@@ -209,7 +242,33 @@ class FirecrackerHost(NetBoxModel):
         self.agent_token_enc = enc_helpers.encrypt(plaintext, key=key)
 
     def get_agent_token(self, *, key: str) -> str:
+        from netbox_proxbox.integrations.openbao_single import (
+            owner_uses_openbao_storage,
+            resolve_single_secret,
+        )
+
+        if owner_uses_openbao_storage(self):
+            return resolve_single_secret(self)
         return enc_helpers.decrypt(self.agent_token_enc, key=key)
+
+    @property
+    def agent_token(self) -> str:
+        """Return the selected host-agent token using the configured backend."""
+        from netbox_proxbox.models import ProxboxPluginSettings
+
+        settings = ProxboxPluginSettings.objects.first()
+        key = getattr(settings, "encryption_key", "") if settings else ""
+        return self.get_agent_token(key=key)
+
+    @agent_token.setter
+    def agent_token(self, value: object | None) -> None:
+        if value in (None, ""):
+            return
+        from netbox_proxbox.models import ProxboxPluginSettings
+
+        settings = ProxboxPluginSettings.objects.first()
+        key = getattr(settings, "encryption_key", "") if settings else ""
+        self.set_agent_token(str(value), key=key)
 
 
 class FirecrackerImageTemplate(NetBoxModel):

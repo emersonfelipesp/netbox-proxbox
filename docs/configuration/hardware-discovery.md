@@ -65,11 +65,20 @@ command allow-listing — live in `proxmox-sdk.ssh.RemoteSSHClient`.
 
 ## One-time setup
 
-### 1. Configure the encryption key
+### 1. Select the credential storage backend
 
-The credentials store reuses `ProxboxPluginSettings.encryption_key`
-(introduced in `0.0.11`). If it is empty, the plugin refuses to save
-SSH credentials and `proxbox-api` refuses to fetch them.
+Node SSH credentials follow the effective storage selection of their
+`ProxmoxEndpoint`: an explicit endpoint selection overrides the plugin setting,
+and an explicit plugin setting overrides Automatic. Automatic selects OpenBao
+only when `netbox_openbao` is enabled; otherwise it selects legacy Fernet.
+
+For **OpenBao** storage, configure the default `SecretEngine`, the exact
+`openbao_policy_slug`, and an OpenBao service user for automated reveals. The
+node credential form stores password or keypair material through
+netbox-openbao's audited transaction and keeps only opaque UUID references in
+`NodeSSHCredential`. A Fernet key is not required for these node secrets.
+
+For **Legacy encrypted (Fernet)** storage:
 
 1. Open **Plugins → Proxbox → Settings** in the NetBox UI.
 2. Tick **Enable encryption** and paste a 32-byte Fernet key (or a
@@ -79,7 +88,9 @@ SSH credentials and `proxbox-api` refuses to fetch them.
 This is the plugin-at-rest key for ciphertext in NetBox. It is separate from
 proxbox-api's own database-encryption key and from the FastAPI endpoint API key.
 Once any plugin ciphertext exists, ordinary settings saves cannot clear or
-replace it; use the verified rotation workflow on the same page.
+replace it; use the verified rotation workflow on the same page. An explicit
+OpenBao selection never falls back to these Fernet columns when its reference,
+provider, policy, or access is unavailable.
 
 ### 2. Enable the feature flag
 
@@ -166,8 +177,41 @@ Copy the `SHA256:<base64>` segment.
     - **Pinned host-key fingerprint**: paste `SHA256:abc123…`
     - **Sudo required**: ✅ (the dispatch script uses `sudo` for
       `dmidecode`)
-4. Save. The form encrypts the private key with the configured
-   Fernet key before persisting.
+4. Save. With OpenBao selected, the form writes an `ssh-keypair` or
+   `ssh-password` credential through netbox-openbao and persists its opaque UUID
+   reference. With Legacy encrypted selected, it encrypts the selected material
+   with the configured Fernet key before persisting.
+
+When the Proxmox node is linked to a `dcim.Device`, the selected authentication
+credential is also assigned to that device as the primary credential for the
+`login` purpose. Material may be saved before the node has a device link; in
+that state the OpenBao credential and UUID reference exist, but assignment is
+deferred. Creating, changing, or removing `ProxmoxNode.netbox_device`
+automatically creates, moves, or removes the owned primary login assignment.
+Unrelated assignments and provider material are preserved.
+
+Automation can inspect the credential metadata endpoint before attempting a
+connection. For OpenBao-backed nodes it returns
+`openbao_assignment_ready`, a sanitized `openbao_assignment_detail`, and an
+`openbao_assignment_lookup` containing the generic assignment selectors
+`assigned_object_type=dcim.device`, the linked device ID, and
+`purpose=login`. These selectors are compatible with netbox-openbao assignment
+filters and disclose neither credential UUIDs nor material. The authenticated
+hardware credential endpoint remains the only Proxbox API path that returns
+the selected password or private key to an authorized consumer.
+
+Do not use ORM bulk writes or parent-object cascades to unlink this graph.
+Proxbox refuses raw update, bulk-create/update, raw-delete, and deletion of the
+linked Device, node, or endpoint while OpenBao references or assignments
+remain. Clean up the node credential explicitly first. Storage cannot be
+changed from OpenBao to legacy until that cleanup is complete; if the provider
+package was removed too early, restore it so the owned assignment can be
+removed safely.
+
+This local `NodeSSHCredential` plus public netbox-openbao assignment boundary
+supersedes every unrelated credential-provider fallback. Hardware
+discovery and terminal access do not query another private plugin for node SSH
+material.
 
 ## Browser terminal endpoint SSH
 
@@ -279,12 +323,14 @@ succeeds when run as the discovery user on the node.
 ### 503 from the secrets endpoint
 
 `/api/plugins/proxbox/ssh-credentials/by-node/<id>/credentials/`
-returns `503 Service Unavailable` when
-`ProxboxPluginSettings.encryption_key` is empty or the row is
-not decryptable with the configured key. Open **Plugins → Proxbox → Settings**:
-use verified rotation when the old key is available, or have a separately
-authorized operator destructively reset only the affected SSH family when it
-is not. Re-enter reset credentials before the next sync.
+returns `503 Service Unavailable` when the selected credential material cannot
+be resolved. For OpenBao, verify the UUID reference, plugin configuration,
+exact policy, provider availability, and actor access; the resolver fails closed
+and never reads legacy Fernet ciphertext as a downgrade. For Legacy encrypted,
+verify `ProxboxPluginSettings.encryption_key` and that the row is decryptable
+with that key. Use verified rotation when the old key is available, or have a
+separately authorized operator destructively reset only the affected SSH family
+when it is not. Re-enter reset credentials before the next sync.
 
 ### 403 from the secrets endpoint
 

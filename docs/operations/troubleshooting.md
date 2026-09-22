@@ -365,6 +365,17 @@ If the log is empty:
 4. Confirm the job has not already been purged.
 5. Check browser console errors for blocked EventSource connections.
 
+For a background synchronization job, the plugin probes each unique configured
+primary/IP candidate before choosing one. It may select the IP candidate when
+the primary readiness probe fails. Once it attempts the mutating stream request
+through the selected candidate, it never falls back for a connection, TLS,
+timeout, HTTP, body, or semantic failure. The backend may have accepted or
+started work even if the Job has not received a progress frame, so replaying
+through another candidate could apply the same work twice. Diagnose the prior
+run from the Job and backend logs, establish its outcome, and then retry as a
+new operator action. A bounded 401 authentication rebind is the only automatic
+restart because authentication rejection precedes route work.
+
 ## Plan Summary Problems
 
 If the plan page returns a local message instead of backend verdicts:

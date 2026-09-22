@@ -14,6 +14,17 @@ part of the same plugin family.
 
 ## Unreleased Maintenance Fixes
 
+- Docker E2E and page coverage now use proxbox-api `0.0.23`, and the E2E
+  bootstrap no longer calls the removed custom-field creation route. Typed
+  sync-state sidecars require no custom-field bootstrap before synchronization.
+- SSE-backed synchronization now probes each unique primary/IP backend
+  candidate before selecting one, then issues the mutating stream request only
+  once. Every post-selection outcome is terminal, preventing an unseen or
+  partial response from causing duplicate work through another candidate.
+- The published runtime metadata now requires `cryptography>=50.0.0`, so fresh
+  downstream installs cannot resolve releases covered by
+  `GHSA-g6cj-pr64-35w5`; the lockfile and fixed security-floor guard enforce the
+  same boundary.
 - The sync-state bootstrap status card now surfaces the actionable
   `no_netbox_session` backend reason and explains that proxbox-api requires its
   own NetBox endpoint configuration.
@@ -25,7 +36,7 @@ part of the same plugin family.
 
 | Version | Summary |
 |---------|---------|
-| `0.0.27rc4` | Adds actionable VM console identity diagnostics and a permission-gated full synchronization repair action, while retaining VM list filtering and the `proxbox-api 0.0.22.post1` pairing. |
+| `0.0.27rc4` | Adds actionable VM console identity diagnostics and a permission-gated full synchronization repair action, while retaining VM list filtering and the released `proxbox-api 0.0.22.post1` pairing. Current sibling source development has advanced to `proxbox-api 0.0.23` and `proxmox-sdk 0.0.15`. |
 | `0.0.26.post6` | Restores migration `0083` for production deploy compatibility and ships VM list search/filtering with the `proxbox-api 0.0.21.post7` pairing. |
 | `0.0.26.post5` | Adds NetBox-native search and filtering to the Proxbox virtual machines list while retaining the `proxbox-api 0.0.21.post7` pairing and existing console, metrics, and purge surfaces. |
 | `0.0.26.post4` | Maintenance release that aligns the migration helper with the currently deployed production digest while retaining the soft-deleted VM purge surface and the `proxbox-api 0.0.21.post7` pairing. |
@@ -72,4 +83,6 @@ part of the same plugin family.
 - Older pages are intentionally brief because the repository does not preserve fuller release-note prose for those versions.
 
 
-> **Current release:** netbox-proxbox `0.0.27rc4` pairs with proxbox-api `0.0.22` (NetBox `4.5.8`-`4.7.0`, including official v4.7.0 GA). Current backend-runtime pairing: netbox-proxbox 0.0.27rc4 <-> proxbox-api 0.0.22.post1 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+> **Current source:** netbox-proxbox `0.0.27rc4` supports NetBox `4.5.8`-`4.7.0`, including official v4.7.0 GA. Current source pairing: netbox-proxbox 0.0.27rc4 <-> proxbox-api 0.0.23 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. The last documented released runtime pairing remains proxbox-api `0.0.22.post1`, proxmox-sdk `0.0.13`, and netbox-sdk `0.0.13`. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+
+Current backend-runtime pairing: netbox-proxbox 0.0.27rc4 <-> proxbox-api 0.0.22.post1 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.

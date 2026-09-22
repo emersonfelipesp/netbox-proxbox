@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Callable, Generator, Iterable
+from dataclasses import dataclass
 from typing import Literal
 
 import requests
@@ -59,6 +60,17 @@ STAGE_FAILURE_APPLICATION = "application"
 _BACKEND_JSON_METHODS = Literal["GET", "POST"]
 _REDIRECT_TRANSPORT_DETAIL = "ProxBox backend redirects are not permitted."
 _REDIRECT_TRANSPORT_STATUS = 502
+_StreamFailure = tuple[str | None, int | None, str]
+
+
+@dataclass(frozen=True)
+class _StreamCandidatePass:
+    """One bounded traversal of the current endpoint's URL candidates."""
+
+    payload: dict[str, object] | None = None
+    status: int | None = None
+    fresh_context: BackendRequestContext | None = None
+    failures: tuple[_StreamFailure, ...] = ()
 
 
 def _refuse_redirect(
@@ -156,12 +168,41 @@ def _redacted_mapping(payload: dict[str, object]) -> dict[str, object]:
     return redacted if isinstance(redacted, dict) else {"detail": redacted}
 
 
+def _completed_stream_result(
+    last_complete: SseCompletePayload | None,
+) -> tuple[dict[str, object], int]:
+    """Classify a normally ended SSE iterator without replaying the request."""
+    if last_complete is None:
+        return (
+            {
+                "stream": True,
+                "detail": "ProxBox backend stream ended without a complete event.",
+                "failure_kind": STAGE_FAILURE_TRANSPORT,
+            },
+            502,
+        )
+    if last_complete.ok is False:
+        msg = redact_backend_detail(last_complete.message or "Sync failed.")
+        if last_complete.errors and last_complete.errors[0].get("detail"):
+            msg = redact_backend_detail(last_complete.errors[0]["detail"])
+        return (
+            {
+                "stream": True,
+                "detail": msg,
+                "response": last_complete.model_dump(),
+                "failure_kind": STAGE_FAILURE_APPLICATION,
+            },
+            503,
+        )
+    return {"stream": True, "response": last_complete.model_dump()}, 200
+
+
 def _consume_sse_until_complete(
     response: requests.Response,
     *,
     on_frame: Callable[[str, dict[str, object]], None] | None = None,
 ) -> tuple[dict[str, object], int]:
-    """Read an SSE body to the final ``complete`` event; return (payload, http_status_hint)."""
+    """Read one SSE body without inferring that an unseen frame permits replay."""
     last_complete: SseCompletePayload | None = None
     try:
         for frame in _iter_sse_frames(response.iter_lines(decode_unicode=True)):
@@ -182,46 +223,29 @@ def _consume_sse_until_complete(
                     # read. That is a version-skew defect to act on, not a
                     # transient path failure, so it must outrank a later TLS
                     # or connection error in stage attribution.
-                    return {
-                        "stream": True,
-                        "detail": (
-                            "ProxBox backend stream sent an invalid complete event: "
-                            f"{exc.errors()[0].get('msg', str(exc))}"
-                        ),
-                        "failure_kind": STAGE_FAILURE_APPLICATION,
-                    }, 502
+                    return (
+                        {
+                            "stream": True,
+                            "detail": (
+                                "ProxBox backend stream sent an invalid complete event: "
+                                f"{exc.errors()[0].get('msg', str(exc))}"
+                            ),
+                            "failure_kind": STAGE_FAILURE_APPLICATION,
+                        },
+                        502,
+                    )
     except requests.exceptions.RequestException as exc:
         detail, _ = extract_backend_error_detail(exc)
-        return {
-            "stream": True,
-            "detail": detail,
-            "failure_kind": STAGE_FAILURE_TRANSPORT,
-        }, 502
+        return (
+            {
+                "stream": True,
+                "detail": detail,
+                "failure_kind": STAGE_FAILURE_TRANSPORT,
+            },
+            502,
+        )
 
-    if last_complete is None:
-        return {
-            "stream": True,
-            "detail": "ProxBox backend stream ended without a complete event.",
-            "failure_kind": STAGE_FAILURE_TRANSPORT,
-        }, 502
-
-    if last_complete.ok is False:
-        msg = redact_backend_detail(last_complete.message or "Sync failed.")
-        if last_complete.errors:
-            first_error = last_complete.errors[0]
-            if first_error.get("detail"):
-                msg = redact_backend_detail(first_error["detail"])
-        return {
-            "stream": True,
-            "detail": msg,
-            "response": last_complete.model_dump(),
-            "failure_kind": STAGE_FAILURE_APPLICATION,
-        }, 503
-
-    return {
-        "stream": True,
-        "response": last_complete.model_dump(),
-    }, 200
+    return _completed_stream_result(last_complete)
 
 
 def request_backend_resource(
@@ -613,6 +637,120 @@ def reconcile_backend_custom_fields(
     )
 
 
+def _stream_candidate_context(
+    context: BackendRequestContext,
+    *,
+    url: str,
+    path: str,
+    verify_ssl: bool,
+) -> BackendRequestContext:
+    """Bind a readiness probe to the exact candidate used by the stream."""
+    suffix = f"/{path}"
+    candidate_base = url[: -len(suffix)] if url.endswith(suffix) else url
+    return context.model_copy(
+        update={
+            "http_url": candidate_base,
+            "ip_address_url": None,
+            "verify_ssl": verify_ssl,
+        }
+    )
+
+
+def _consume_stream_response(
+    response: requests.Response,
+    *,
+    path: str,
+    requested_urls: list[str],
+    on_frame: Callable[[str, dict[str, object]], None] | None,
+) -> tuple[dict[str, object], int]:
+    """Consume and close one open stream response."""
+    try:
+        payload, status = _consume_sse_until_complete(
+            response,
+            on_frame=on_frame,
+        )
+    finally:
+        response.close()
+    payload = {**payload, "path": path, "requested_urls": requested_urls}
+    if status >= 400:
+        payload = _redacted_mapping(payload)
+    return payload, status
+
+
+def _run_stream_candidate_pass(
+    context: BackendRequestContext,
+    *,
+    path: str,
+    query_params: dict[str, str] | None,
+    on_frame: Callable[[str, dict[str, object]], None] | None,
+    endpoint_id: int | None,
+    auth_register_attempted: bool,
+    requested_urls: list[str],
+) -> _StreamCandidatePass:
+    """Select a ready candidate, then issue exactly one mutating request."""
+    failures: list[_StreamFailure] = []
+    if not context.http_url:
+        return _StreamCandidatePass(
+            failures=(
+                (
+                    "No FastAPI URL found after authentication retry.",
+                    None,
+                    STAGE_FAILURE_APPLICATION,
+                ),
+            )
+        )
+    candidates = _build_request_candidates(
+        context.http_url,
+        context.ip_address_url,
+        path,
+        bool(context.verify_ssl),
+    )
+    for url, verify in candidates:
+        requested_urls.append(url)
+        ready, ready_msg = wait_for_backend_ready(
+            _stream_candidate_context(
+                context,
+                url=url,
+                path=path,
+                verify_ssl=verify,
+            )
+        )
+        if not ready:
+            logger.error("Backend candidate not ready: %s", ready_msg)
+            failures.append(
+                (f"Backend not ready: {ready_msg}", 503, STAGE_FAILURE_TRANSPORT)
+            )
+            if ready_msg == "Backend redirects are not permitted.":
+                break
+            continue
+
+        result = _try_sync_stream_url(
+            url=url,
+            verify=verify,
+            path=path,
+            query_params=query_params,
+            context=context,
+            on_frame=on_frame,
+            endpoint_id=endpoint_id,
+            auth_register_attempted=auth_register_attempted,
+        )
+        if not isinstance(result, tuple):
+            payload, status = _consume_stream_response(
+                result,
+                path=path,
+                requested_urls=requested_urls,
+                on_frame=on_frame,
+            )
+            return _StreamCandidatePass(payload=payload, status=status)
+
+        detail, _should_retry, fresh_context, http_status, failure_kind = result
+        failures.append((detail, http_status, failure_kind))
+        if fresh_context is not None:
+            return _StreamCandidatePass(fresh_context=fresh_context)
+        break
+    return _StreamCandidatePass(failures=tuple(failures))
+
+
 def run_sync_stream(
     path: str,
     query_params: dict[str, str] | None = None,
@@ -639,15 +777,6 @@ def run_sync_stream(
             "failure_kind": STAGE_FAILURE_APPLICATION,
         }, 404
 
-    ready, ready_msg = wait_for_backend_ready(context)
-    if not ready:
-        logger.error("Backend not ready: %s", ready_msg)
-        return {
-            "stream": False,
-            "detail": f"Backend not ready: {ready_msg}",
-            "failure_kind": STAGE_FAILURE_TRANSPORT,
-        }, 503
-
     active_context = context
     requested_urls: list[str] = []
     # Every candidate URL (hostname, then IP fallback) and every auth-rebound
@@ -658,82 +787,25 @@ def run_sync_stream(
     auth_register_attempted = False
 
     while True:
-        http_url = active_context.http_url
-        if not http_url:
-            candidate_failures.append(
-                (
-                    "No FastAPI URL found after authentication retry.",
-                    None,
-                    STAGE_FAILURE_APPLICATION,
-                )
-            )
-            break
-        request_candidates = _build_request_candidates(
-            http_url,
-            active_context.ip_address_url,
-            path,
-            bool(active_context.verify_ssl),
+        candidate_pass = _run_stream_candidate_pass(
+            active_context,
+            path=path,
+            query_params=query_params,
+            on_frame=on_frame,
+            endpoint_id=endpoint_id,
+            auth_register_attempted=auth_register_attempted,
+            requested_urls=requested_urls,
         )
-        restart_candidate_selection = False
-
-        for url, verify in request_candidates:
-            requested_urls.append(url)
-
-            result = _try_sync_stream_url(
-                url=url,
-                verify=verify,
-                path=path,
-                query_params=query_params,
-                context=active_context,
-                on_frame=on_frame,
-                endpoint_id=endpoint_id,
-                auth_register_attempted=auth_register_attempted,
-            )
-            if not isinstance(result, tuple):
-                # Success: consume SSE from the already-open connection
-                try:
-                    payload, status = _consume_sse_until_complete(
-                        result,
-                        on_frame=on_frame,
-                    )
-                finally:
-                    result.close()
-                payload = {
-                    **payload,
-                    "path": path,
-                    "requested_urls": requested_urls,
-                }
-                if status >= 400:
-                    # A failed stream payload is consumed by ``sync_stages.py``,
-                    # which logs it and folds it into the ``RuntimeError`` that
-                    # becomes ``Job.error``. Redact the whole mapping here, at the
-                    # producer, so every downstream reader — including the
-                    # ``str(payload)`` fallbacks and ``_format_stage_sync_error()``
-                    # — is working from already-redacted data. The success payload
-                    # is deliberately left alone: it carries the sync counters
-                    # callers depend on, not error text.
-                    payload = _redacted_mapping(payload)
-                return payload, status
-
-            # Error tuple: detail, candidate-fallback flag, rebound context,
-            # status, failure provenance.
-            detail, should_retry, fresh_context, http_status, failure_kind = result
-            candidate_failures.append((detail, http_status, failure_kind))
-            if fresh_context is not None:
-                # A successful rebind resolves the 401 that triggered it, so
-                # the failures recorded so far describe a context that no
-                # longer exists. Start a new selection epoch: only what the
-                # authenticated context reports can be the cause.
-                candidate_failures.clear()
-                auth_register_attempted = True
-                active_context = fresh_context
-                restart_candidate_selection = True
-                break
-            if not should_retry:
-                break
-
-        if restart_candidate_selection:
+        if candidate_pass.payload is not None and candidate_pass.status is not None:
+            return candidate_pass.payload, candidate_pass.status
+        if candidate_pass.fresh_context is not None:
+            # A successful rebind starts a new candidate-selection epoch. Only
+            # the freshly authenticated context can determine the final cause.
+            candidate_failures.clear()
+            auth_register_attempted = True
+            active_context = candidate_pass.fresh_context
             continue
+        candidate_failures.extend(candidate_pass.failures)
         break
 
     detail, http_status, failure_kind = _select_stream_failure(candidate_failures)
@@ -783,8 +855,9 @@ def _try_sync_stream_url(
         - An open ``requests.Response`` on success -- caller MUST close it.
         - (error_detail, should_retry, fresh_context, http_status, failure_kind)
           on HTTP error.
-        - (error_detail, False, None, http_status, failure_kind) on connection
-          error.
+        - (error_detail, False, None, http_status, failure_kind) on a connection
+          error. Once attempted, the mutating request is never replayed through
+          another candidate.
 
     ``failure_kind`` is the producer's own verdict on *what* failed —
     :data:`STAGE_FAILURE_APPLICATION` when the backend answered with a JSON
@@ -833,15 +906,7 @@ def _try_sync_stream_url(
         logger.error(
             "Sync stream request failed for %s via %s: %s", path, url, last_detail
         )
-        if getattr(exc, "response", None) is not None:
-            return last_detail, False, None, http_st, STAGE_FAILURE_TRANSPORT
-        return (
-            last_detail,
-            bool(http_st and http_st >= 500),
-            None,
-            http_st,
-            STAGE_FAILURE_TRANSPORT,
-        )
+        return last_detail, False, None, http_st, STAGE_FAILURE_TRANSPORT
     except (KeyboardInterrupt, SystemExit, GeneratorExit):
         raise
     except OSError as exc:

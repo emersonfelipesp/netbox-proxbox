@@ -58,6 +58,15 @@ def _stub_proxmox_endpoint_dependencies(monkeypatch):
     utils_translation.gettext_lazy = lambda value: value
     utils.translation = utils_translation
 
+    views = types.ModuleType("django.views")
+    views_decorators = types.ModuleType("django.views.decorators")
+    views_debug = types.ModuleType("django.views.decorators.debug")
+
+    def sensitive_variables(*_variables):
+        return lambda function: function
+
+    views_debug.sensitive_variables = sensitive_variables
+
     np_pkg = types.ModuleType("netbox_proxbox")
     np_pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox")]
 
@@ -135,6 +144,9 @@ def _stub_proxmox_endpoint_dependencies(monkeypatch):
         ("django.urls", urls),
         ("django.utils", utils),
         ("django.utils.translation", utils_translation),
+        ("django.views", views),
+        ("django.views.decorators", views_decorators),
+        ("django.views.decorators.debug", views_debug),
         ("netbox_proxbox", np_pkg),
         ("netbox_proxbox.choices", choices),
         ("netbox_proxbox.constants", constants),

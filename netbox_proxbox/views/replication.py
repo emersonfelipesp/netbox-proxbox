@@ -64,6 +64,7 @@ class ReplicationListView(DataProtectionCalendarMixin, generic.ObjectListView):
         "proxmox_node__name",
         "disable",
         "status",
+        "endpoint__iana_timezone",
     )
     calendar_label_builder = staticmethod(_replication_label)
     calendar_muted_builder = staticmethod(_replication_muted)

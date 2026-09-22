@@ -113,6 +113,14 @@ class ProxmoxEndpoint(EndpointBase):
         null=True,
         verbose_name=_("Repository ID"),
     )
+    iana_timezone = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        editable=False,
+        verbose_name=_("IANA time zone"),
+        help_text=_("Proxmox endpoint time zone discovered during synchronization."),
+    )
     username = models.CharField(
         default="root@pam",
         max_length=255,
@@ -800,11 +808,12 @@ class ProxmoxEndpoint(EndpointBase):
                     "the backend grant is revoked."
                 )
             )
-        self.purge_openbao_credentials()
-        return super().delete(*args, **kwargs)
+        from netbox_proxbox.integrations.openbao_writer import delete_endpoint
+
+        return delete_endpoint(self, super().delete, args, kwargs)
 
     def purge_openbao_credentials(self, *, user: object | None = None) -> None:
-        """Delete OpenBao credential inventory rows referenced by this endpoint."""
+        """Queue removal of this endpoint's OpenBao references and assignments."""
         from netbox_proxbox.integrations.openbao import (
             clear_endpoint_openbao_credential,
             endpoint_uses_openbao_storage,
@@ -1043,9 +1052,20 @@ class ProxmoxEndpoint(EndpointBase):
         )
 
         if endpoint_uses_openbao_storage(self):
-            store_endpoint_ssh_password(
-                self, plaintext, user=self._openbao_interaction_user()
-            )
+            actor = self._openbao_interaction_user()
+            if plaintext:
+                store_endpoint_ssh_password(self, plaintext, user=actor)
+            else:
+                from netbox_proxbox.integrations.openbao import (
+                    clear_endpoint_openbao_credential,
+                )
+
+                clear_endpoint_openbao_credential(
+                    self,
+                    "openbao_ssh_password_credential_uuid",
+                    user=actor,
+                )
+                self.ssh_password_enc = ""
             return
 
         mark_encrypted_fields_for_write(self, "ssh_password_enc")
@@ -1075,11 +1095,24 @@ class ProxmoxEndpoint(EndpointBase):
         )
 
         if endpoint_uses_openbao_storage(self):
-            store_endpoint_ssh_keypair(
-                self,
-                private_key=plaintext,
-                user=self._openbao_interaction_user(),
-            )
+            actor = self._openbao_interaction_user()
+            if plaintext:
+                store_endpoint_ssh_keypair(
+                    self,
+                    private_key=plaintext,
+                    user=actor,
+                )
+            else:
+                from netbox_proxbox.integrations.openbao import (
+                    clear_endpoint_openbao_credential,
+                )
+
+                clear_endpoint_openbao_credential(
+                    self,
+                    "openbao_ssh_keypair_credential_uuid",
+                    user=actor,
+                )
+                self.ssh_private_key_enc = ""
             return
 
         mark_encrypted_fields_for_write(self, "ssh_private_key_enc")

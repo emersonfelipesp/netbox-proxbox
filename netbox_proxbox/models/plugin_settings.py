@@ -472,6 +472,15 @@ class ProxboxPluginSettings(NetBoxModel):
             "keeps Fernet-encrypted columns in NetBox."
         ),
     )
+    openbao_policy_slug = models.SlugField(
+        max_length=100,
+        default="proxbox",
+        verbose_name=_("OpenBao policy slug"),
+        help_text=_(
+            "Exact CredentialPolicy slug on the default OpenBao SecretEngine. "
+            "No other policy is selected when it is missing."
+        ),
+    )
     openbao_service_username = models.CharField(
         max_length=150,
         blank=True,

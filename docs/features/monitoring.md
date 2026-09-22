@@ -153,7 +153,7 @@ Open **Plugins → Proxbox → InfluxDB Metrics → Add** and fill in:
 | **Proxmox cluster** (`proxmox_cluster`) | The cluster associated with the InfluxDB bucket. It must belong to the selected endpoint. |
 | **Metrics source** (`source_mode`) | `influx`, `pull`, or `reconciled`. |
 | **InfluxDB URL** (`influx_url`) | Required for `influx` and `reconciled`; omitted for `pull`. Use a credential-free HTTPS base URL. |
-| **InfluxDB organization** (`org`) | InfluxDB v2 organization; default `nmulticloud`. |
+| **InfluxDB organization** (`org`) | InfluxDB v2 organization; default `nmulticloud`. This persisted public default is retained for compatibility; operators may choose another organization for new endpoints. |
 | **InfluxDB bucket** (`bucket`) | Bucket containing the Proxmox measurements; default `proxmox`. |
 | **Measurement prefix** (`measurement_prefix`) | Optional prefix automatically added to the requested measurement. Leave blank unless the writer uses one. |
 | **InfluxDB query token** (`query_token`) | Required for `influx` and `reconciled`; omitted for `pull`. It is write-only and encrypted before persistence. |

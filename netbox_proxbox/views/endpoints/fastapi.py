@@ -1,10 +1,13 @@
 """Provide NetBox CRUD and OpenAPI tab views for FastAPI endpoint records."""
 
+from typing import Any
+
 from django.contrib import messages
 from django.http import HttpRequest, HttpResponse, JsonResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
+from django.views.decorators.debug import sensitive_variables
 from netbox.api.authentication import TokenAuthentication
 from netbox.views import generic
 from utilities.permissions import get_permission_for_model
@@ -99,6 +102,7 @@ class FastAPIEndpointBulkImportView(generic.BulkImportView):
     queryset = FastAPIEndpoint.objects.all()
     model_form = FastAPIEndpointImportForm
 
+    @sensitive_variables()
     def post(self, request: HttpRequest, *args, **kwargs) -> HttpResponse:
         """Intercept if singleton exists and override is not yet confirmed."""
         existing = FastAPIEndpoint.objects.first()
@@ -118,7 +122,21 @@ class FastAPIEndpointBulkImportView(generic.BulkImportView):
                         "post_items": list(request.POST.lists()),
                     },
                 )
-        return super().post(request, *args, **kwargs)
+        from netbox_proxbox.integrations.openbao_single_request import (
+            single_secret_mutation_boundary,
+        )
+
+        owners = [existing] if existing is not None else []
+        with single_secret_mutation_boundary(
+            owners,
+            [request.POST],
+            model=FastAPIEndpoint,
+            material_field="token",
+            actor=request.user,
+            request=request,
+            allow_new=True,
+        ):
+            return super().post(request, *args, **kwargs)
 
     def create_and_update_objects(
         self, form: FastAPIEndpointImportForm, request: HttpRequest
@@ -147,75 +165,76 @@ class FastAPIEndpointExportView(generic.ObjectListView):
         """Require model ``view`` on FastAPI endpoints (same as the list)."""
         return get_permission_for_model(self.queryset.model, "view")
 
-    def _validate_sensitive_export_token(self, request: HttpRequest) -> bool:
-        """Confirm POSTed NetBox API token maps to a user allowed to view FastAPI endpoints.
-
-        Supports three modes based on the ``token_version`` POST field:
-        - ``v1``: ``v1_manual_token`` (raw plaintext) takes priority over a dropdown
-          ``token_id`` selection.  Either must be provided.
-        - ``v2``: construct a Bearer header from ``token_key`` and ``token_secret`` fields.
-        - Fallback (no ``token_version``): legacy ``netbox_token`` single-field format.
-        """
+    def _v1_export_header(self, request: HttpRequest) -> str | None:
         from users.models import Token
 
+        manual_token = (request.POST.get("v1_manual_token") or "").strip()
+        if manual_token:
+            return (
+                manual_token
+                if manual_token.startswith("Token ")
+                else f"Token {manual_token}"
+            )
+        token_id = (request.POST.get("token_id") or "").strip()
+        if not token_id:
+            messages.error(
+                request,
+                "Select a v1 token or enter one manually to export secrets.",
+            )
+            return None
+        try:
+            token_obj = Token.objects.get(
+                pk=int(token_id), version=1, user=request.user
+            )
+        except (Token.DoesNotExist, ValueError):
+            messages.error(request, "The selected v1 token could not be found.")
+            return None
+        plaintext = (token_obj.plaintext or "").strip()
+        if plaintext:
+            return f"Token {plaintext}"
+        messages.error(
+            request,
+            "The selected v1 token does not have a usable plaintext value.",
+        )
+        return None
+
+    def _v2_export_header(self, request: HttpRequest) -> str | None:
+        token_key = (request.POST.get("token_key") or "").strip()
+        token_secret = (request.POST.get("token_secret") or "").strip()
+        if token_key and token_secret:
+            return f"Bearer {token_key}.{token_secret}"
+        messages.error(
+            request,
+            "Both token key and token secret are required for v2 authentication.",
+        )
+        return None
+
+    def _legacy_export_header(self, request: HttpRequest) -> str | None:
+        raw_token = (request.POST.get("netbox_token") or "").strip()
+        if not raw_token:
+            messages.error(
+                request, "A valid NetBox token is required to export secrets."
+            )
+            return None
+        if raw_token.startswith(("Token ", "Bearer ")):
+            return raw_token
+        return (
+            f"Bearer {raw_token}"
+            if raw_token.startswith("nbt_")
+            else f"Token {raw_token}"
+        )
+
+    def _sensitive_export_header(self, request: HttpRequest) -> str | None:
         token_version = (request.POST.get("token_version") or "").strip()
-
         if token_version == "v1":
-            manual_token = (request.POST.get("v1_manual_token") or "").strip()
-            if manual_token:
-                if manual_token.startswith("Token "):
-                    header_value = manual_token
-                else:
-                    header_value = f"Token {manual_token}"
-            else:
-                token_id = (request.POST.get("token_id") or "").strip()
-                if not token_id:
-                    messages.error(
-                        request,
-                        "Select a v1 token or enter one manually to export secrets.",
-                    )
-                    return False
-                try:
-                    token_obj = Token.objects.get(
-                        pk=int(token_id), version=1, user=request.user
-                    )
-                except (Token.DoesNotExist, ValueError):
-                    messages.error(request, "The selected v1 token could not be found.")
-                    return False
-                plaintext = (token_obj.plaintext or "").strip()
-                if not plaintext:
-                    messages.error(
-                        request,
-                        "The selected v1 token does not have a usable plaintext value.",
-                    )
-                    return False
-                header_value = f"Token {plaintext}"
+            return self._v1_export_header(request)
+        if token_version == "v2":
+            return self._v2_export_header(request)
+        return self._legacy_export_header(request)
 
-        elif token_version == "v2":
-            token_key = (request.POST.get("token_key") or "").strip()
-            token_secret = (request.POST.get("token_secret") or "").strip()
-            if not token_key or not token_secret:
-                messages.error(
-                    request,
-                    "Both token key and token secret are required for v2 authentication.",
-                )
-                return False
-            header_value = f"Bearer {token_key}.{token_secret}"
-
-        else:
-            raw_token = (request.POST.get("netbox_token") or "").strip()
-            if not raw_token:
-                messages.error(
-                    request, "A valid NetBox token is required to export secrets."
-                )
-                return False
-            if raw_token.startswith("Token ") or raw_token.startswith("Bearer "):
-                header_value = raw_token
-            elif raw_token.startswith("nbt_"):
-                header_value = f"Bearer {raw_token}"
-            else:
-                header_value = f"Token {raw_token}"
-
+    def _authenticate_export_user(
+        self, request: HttpRequest, header_value: str
+    ) -> Any | None:
         request.META["HTTP_AUTHORIZATION"] = header_value
         authenticator = TokenAuthentication()
         try:
@@ -225,23 +244,30 @@ class FastAPIEndpointExportView(generic.ObjectListView):
 
         if not auth_result:
             messages.error(request, "The provided NetBox token is invalid.")
-            return False
+            return None
 
         user, _token = auth_result
         if not user.is_authenticated:
             messages.error(
                 request, "The provided NetBox token could not be authenticated."
             )
-            return False
+            return None
 
         if not user.has_perm("netbox_proxbox.view_fastapiendpoint"):
             messages.error(
                 request,
                 "The provided token user does not have permission to view FastAPI endpoints.",
             )
-            return False
+            return None
 
-        return True
+        return user
+
+    def _validate_sensitive_export_token(self, request: HttpRequest) -> Any | None:
+        """Return the authenticated token user authorized for secret export."""
+        header_value = self._sensitive_export_header(request)
+        if header_value is None:
+            return None
+        return self._authenticate_export_user(request, header_value)
 
     def _resolve_export_format(self, request: HttpRequest) -> str:
         """Normalize ``format`` from GET/POST to one of ``allowed_formats`` (default csv)."""
@@ -251,7 +277,12 @@ class FastAPIEndpointExportView(generic.ObjectListView):
         return format_value if format_value in self.allowed_formats else "csv"
 
     def _export_response(
-        self, request: HttpRequest, include_sensitive: bool, data_format: str
+        self,
+        request: HttpRequest,
+        include_sensitive: bool,
+        data_format: str,
+        *,
+        material_user: Any = None,
     ) -> HttpResponse:
         """Serialize the current filtered queryset to a downloadable HTTP response."""
         import csv
@@ -266,7 +297,11 @@ class FastAPIEndpointExportView(generic.ObjectListView):
 
         fieldnames = _fastapi_export_fieldnames(include_sensitive)
         rows = [
-            _serialize_fastapi_endpoint(endpoint, include_sensitive)
+            _serialize_fastapi_endpoint(
+                endpoint,
+                include_sensitive,
+                user=material_user,
+            )
             for endpoint in queryset
         ]
 
@@ -302,12 +337,16 @@ class FastAPIEndpointExportView(generic.ObjectListView):
         """Export with optional secrets after ``_validate_sensitive_export_token`` succeeds."""
         include_sensitive = request.POST.get("include_sensitive") == "true"
         data_format = self._resolve_export_format(request)
-        if include_sensitive and not self._validate_sensitive_export_token(request):
-            return redirect("plugins:netbox_proxbox:fastapiendpoint_list")
+        material_user = None
+        if include_sensitive:
+            material_user = self._validate_sensitive_export_token(request)
+            if material_user is None:
+                return redirect("plugins:netbox_proxbox:fastapiendpoint_list")
         return self._export_response(
             request,
             include_sensitive=include_sensitive,
             data_format=data_format,
+            material_user=material_user,
         )
 
 
@@ -319,12 +358,50 @@ class FastAPIEndpointEditView(generic.ObjectEditView):
     queryset = FastAPIEndpoint.objects.all()
     form = FastAPIEndpointForm
 
+    @sensitive_variables()
+    def post(self, request: HttpRequest, *args: object, **kwargs: object) -> object:
+        """Own provider compensation outside NetBox's edit atomic block."""
+        from netbox_proxbox.integrations.openbao_single_request import (
+            single_secret_mutation_boundary,
+        )
+
+        owner = self.get_object(**kwargs)
+        owners = [] if owner.pk is None else [owner]
+        with single_secret_mutation_boundary(
+            owners,
+            [request.POST],
+            model=FastAPIEndpoint,
+            material_field="token",
+            actor=request.user,
+            request=request,
+            allow_new=owner.pk is None,
+        ):
+            return super().post(request, *args, **kwargs)
+
 
 @register_model_view(FastAPIEndpoint, "delete")
 class FastAPIEndpointDeleteView(generic.ObjectDeleteView):
     """Delete a FastAPI endpoint record."""
 
     queryset = FastAPIEndpoint.objects.all()
+
+    @sensitive_variables()
+    def post(self, request: HttpRequest, *args: object, **kwargs: object) -> object:
+        """Own provider cleanup outside NetBox's deletion atomic block."""
+        from netbox_proxbox.integrations.openbao_single_request import (
+            single_secret_mutation_boundary,
+        )
+
+        owner = self.get_object(**kwargs)
+        with single_secret_mutation_boundary(
+            [owner],
+            [],
+            model=FastAPIEndpoint,
+            material_field="token",
+            actor=request.user,
+            request=request,
+        ):
+            return super().post(request, *args, **kwargs)
 
 
 @register_model_view(

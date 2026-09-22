@@ -55,6 +55,7 @@ NETBOX_REQUIREMENTS_DIR = ROOT / "ci" / "netbox-requirements"
 
 # Location keys. Each names one manifest position a floor can be required in;
 # _SPEC_SOURCES maps them to the accessor that reads that position.
+RUNTIME_DEPENDENCIES = "pyproject.toml [project].dependencies"
 CLI_EXTRA = "pyproject.toml [project.optional-dependencies].cli"
 DEV_GROUP = "pyproject.toml [dependency-groups].dev"
 DOCS_REQUIREMENTS = "requirements-docs.txt"
@@ -98,6 +99,16 @@ SECURITY_FLOORS: dict[str, SecurityFloor] = {
         # Reached by proxbox_cli/client.py in the shipped extra, and installed
         # by the documentation workflows.
         declared_in=(CLI_EXTRA, DOCS_REQUIREMENTS),
+    ),
+    "cryptography": SecurityFloor(
+        name="cryptography",
+        floor="50.0.0",
+        # GHSA-g6cj-pr64-35w5 covers >= 44.0.0, < 50.0.0.
+        affected=("44.0.0", "48.0.1", "49.0.0"),
+        advisories=("GHSA-g6cj-pr64-35w5",),
+        # This is a shipped runtime dependency. The wheel does not include or
+        # consult uv.lock, so the floor must be present in project metadata.
+        declared_in=(RUNTIME_DEPENDENCIES,),
     ),
     "pymdown-extensions": SecurityFloor(
         name="pymdown-extensions",
@@ -228,14 +239,6 @@ NETBOX_MATRIX_SECURITY_ADVISORIES = {
     "tablib": ("GHSA-gqgw-jghv-mxwx",),
 }
 
-# ``cryptography`` is deliberately absent. Its advisory (GHSA-g6cj-pr64-35w5)
-# covers >= 44.0.0, < 50.0.0, so the declared ``cryptography>=48.0.1`` runtime
-# floor does admit affected versions -- but this project's only surface is
-# ``Fernet``/``InvalidToken``, which the PKCS#7 ``EnvelopedData`` defect does not
-# touch, and raising a *runtime* floor changes what an installed NetBox
-# deployment resolves on its next deploy. That trade-off is decided separately.
-# Add an entry above once it is.
-
 
 def _load_pyproject() -> dict:
     """Parse ``pyproject.toml``, failing loudly if it cannot be read."""
@@ -267,6 +270,10 @@ def _pyproject_list(path: tuple[str, ...], origin: str) -> list[str]:
     if not isinstance(node, list) or not node:
         pytest.fail(f"{origin}: {'.'.join(path)} is not a non-empty list")
     return [str(item) for item in node]
+
+
+def _runtime_dependency_specs() -> list[str]:
+    return _pyproject_list(("project", "dependencies"), RUNTIME_DEPENDENCIES)
 
 
 def _cli_extra_specs() -> list[str]:
@@ -317,6 +324,7 @@ def _docs_specs() -> list[str]:
 
 
 _SPEC_SOURCES = {
+    RUNTIME_DEPENDENCIES: _runtime_dependency_specs,
     CLI_EXTRA: _cli_extra_specs,
     DEV_GROUP: _dev_group_specs,
     DOCS_REQUIREMENTS: _docs_specs,

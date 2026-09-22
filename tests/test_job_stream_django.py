@@ -10,12 +10,11 @@ from unittest.mock import patch
 
 import pytest
 
+from tests.netbox_test_paths import netbox_source_roots
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-NETBOX_ROOTS = (
-    REPO_ROOT.parent / "netbox" / "netbox",
-    REPO_ROOT.parents[1] / "nmulticloud-context" / "netbox" / "netbox",
-)
+NETBOX_ROOTS = netbox_source_roots(REPO_ROOT)
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 

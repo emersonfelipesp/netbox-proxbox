@@ -30,7 +30,7 @@ on:
         type: string
         default: ""
       proxbox_api_version:
-        description: "proxbox-api version to use in package-index E2E. Empty uses repository variables/default."
+        description: "Explicit proxbox-api version for coordinated package-index E2E. Empty requires the repository configuration to equal the checked-in stable default."
         required: false
         type: string
         default: ""
@@ -39,9 +39,9 @@ permissions:
   contents: read
 
 env:
-  PROXBOX_API_DEFAULT_VERSION: ${{ vars.PROXBOX_API_RELEASE_VERSION || '0.0.20' }}
-  PROXBOX_API_TESTPYPI_VERSION: ${{ vars.PROXBOX_API_TESTPYPI_VERSION || '0.0.20' }}
-  PROXBOX_API_PYPI_VERSION: ${{ vars.PROXBOX_API_PYPI_VERSION || vars.PROXBOX_API_RELEASE_VERSION || '0.0.20' }}
+  PROXBOX_API_DEFAULT_VERSION: ${{ vars.PROXBOX_API_RELEASE_VERSION || '0.0.23' }}
+  PROXBOX_API_PYPI_VERSION: ${{ vars.PROXBOX_API_PYPI_VERSION || vars.PROXBOX_API_RELEASE_VERSION || '0.0.23' }}
+  PROXBOX_API_REQUIRED_DEFAULT_VERSION: 0.0.23
 
 jobs:
   prepare-release:
@@ -94,6 +94,8 @@ jobs:
           import pathlib
           import re
           import tomllib
+
+          from scripts.e2e_backend_selection import resolve_release_version
 
           data = tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))
           lock_data = tomllib.loads(pathlib.Path('uv.lock').read_text(encoding='utf-8'))
@@ -158,14 +160,19 @@ jobs:
                   f'Unsupported release event/ref combination: event={event!r}, ref={ref_name!r}'
               )
 
-          proxbox_api_version = os.getenv('PROXBOX_API_VERSION_INPUT', '') or ''
-          if not proxbox_api_version:
-              if publish_target == 'testpypi':
-                  proxbox_api_version = os.environ['PROXBOX_API_TESTPYPI_VERSION']
-              elif publish_target == 'pypi':
-                  proxbox_api_version = os.environ['PROXBOX_API_PYPI_VERSION']
-              else:
-                  proxbox_api_version = os.environ['PROXBOX_API_DEFAULT_VERSION']
+          configured_backend = (
+              os.environ['PROXBOX_API_PYPI_VERSION']
+              if publish_target in {'testpypi', 'pypi'}
+              else os.environ['PROXBOX_API_DEFAULT_VERSION']
+          )
+          try:
+              proxbox_api_version = resolve_release_version(
+                  explicit=os.getenv('PROXBOX_API_VERSION_INPUT', '') or '',
+                  configured=configured_backend,
+                  required_default=os.environ['PROXBOX_API_REQUIRED_DEFAULT_VERSION'],
+              )
+          except ValueError as exc:
+              raise SystemExit(str(exc)) from exc
           with open(os.environ['GITHUB_OUTPUT'], 'a', encoding='utf-8') as fh:
               fh.write(f'package_name={project_name}\n')
               fh.write(f'proxbox_api_version={proxbox_api_version}\n')
@@ -192,6 +199,8 @@ jobs:
           export SOURCE_SHA="$(git rev-parse HEAD^{commit})"
           rm -rf dist
           uv build --sdist --wheel --out-dir dist
+          python scripts/check_public_boundary.py \
+            --artifacts-only --artifact dist/*.whl --artifact dist/*.tar.gz
           .venv/bin/python -m twine check dist/*
 
           # Record what was built and validate it in one pass, so the manifest
@@ -427,7 +436,7 @@ jobs:
     uses: ./.github/workflows/e2e-docker.yml
     with:
       install_source: testpypi
-      dependency_mode: testpypi-package
+      dependency_mode: pypi-package
       proxbox_api_version: ${{ needs.prepare-release.outputs.proxbox_api_version }}
       proxbox_api_runtime: both
 

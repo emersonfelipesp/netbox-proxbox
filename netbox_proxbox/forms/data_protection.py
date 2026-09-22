@@ -12,6 +12,8 @@ from netbox_proxbox.models import ProxmoxCluster, ProxmoxNode
 
 __all__ = ("DataProtectionFilterForm",)
 
+MAX_SELECTED_NODES = 50
+
 
 class DataProtectionFilterForm(forms.Form):
     """Filter all four data-protection event sources on one page."""
@@ -75,4 +77,11 @@ class DataProtectionFilterForm(forms.Form):
         end = cleaned.get("date_to")
         if start and end and start > end:
             raise forms.ValidationError(_("Date from must not be after date to."))
+        nodes = cleaned.get("node")
+        if nodes is not None and len(nodes) > MAX_SELECTED_NODES:
+            self.add_error(
+                "node",
+                _("Select at most %(limit)s Proxmox nodes.")
+                % {"limit": MAX_SELECTED_NODES},
+            )
         return cleaned

@@ -68,6 +68,9 @@ def test_quality_and_docs_install_only_their_locked_dependency_scope() -> None:
     assert "uv sync --group dev --group publish --locked" in docs_install
     assert "uv pip install" not in docs_install
     assert ".venv/bin/python -m build --no-isolation" in package_build
+    boundary_scan = package_build.index("scripts/check_public_boundary.py")
+    twine_check = package_build.index(".venv/bin/twine check", boundary_scan)
+    assert "--artifacts-only" in package_build[boundary_scan:twine_check]
 
 
 def test_jobs_preflight_capacity_and_always_clean_workspace_artifacts() -> None:

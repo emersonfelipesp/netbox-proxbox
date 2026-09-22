@@ -246,6 +246,10 @@ the current measured v4.7.0 runtime is recorded in `tests/CLAUDE.md`.
   preserves only safe endpoint metadata, and requires operators to enter new
   credentials. The forward scrub is intentionally irreversible; rollback can
   restore schema state but cannot recreate discarded references.
+- **0098_proxmoxendpoint_iana_timezone** adds the blank, non-editable
+  `ProxmoxEndpoint.iana_timezone` discovery field. It has no data migration:
+  sync preflight fills it best-effort from proxbox-api after node inventory is
+  available, and blank remains the explicit unknown state.
 - **0082_proxmoxendpoint_allow_packer_template_builds**: adds the idempotent,
   default-off `ProxmoxEndpoint.allow_packer_template_builds` capability and the
   default-false, non-editable
@@ -396,6 +400,17 @@ fake historical models for both generations.
   platform overwrite gate and nullable per-endpoint override. It uses the
   idempotent additive-field helper so partial legacy schemas converge safely;
   `None` on an endpoint continues to mean inherit the global setting.
+- Migration `0101_single_secret_owner_openbao_references` adds nullable UUID
+  references for the FastAPI, PBS, and PDM API tokens and the Firecracker agent
+  token. Each operation uses `add_field_idempotent`, so a partially converged
+  legacy schema can be retried without destructive data movement. The migration
+  does not move Fernet material or create provider assignments; backend changes
+  remain explicit runtime writes.
+- Migration `0102_vm_cloudinit_openbao_references` adds nullable password and
+  SSH-keypair UUID references to `ProxmoxVMCloudInit` with
+  `add_field_idempotent`. It performs no data or provider migration; the
+  existing `credential_reference_id`, `sshkeys`, and `sshkeys_enc` values are
+  preserved unchanged.
 
 ## Links
 

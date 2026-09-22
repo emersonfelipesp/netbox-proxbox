@@ -334,6 +334,22 @@ to Fernet if the plugin is later disabled or its engine, policy, or access is
 missing. Existing saved selections are unchanged by the automatic-default
 migration; no credentials are moved or rewritten.
 
+Set **OpenBao policy slug** to the exact `CredentialPolicy.slug` on the default
+OpenBao `SecretEngine` that Proxbox may use. The default is `proxbox`. Proxbox
+does not fall back to another policy when that row is absent; run
+`proxbox_openbao_setup` or create the named policy before storing endpoint
+material.
+
+Each successful endpoint material write preserves the existing UUID reference
+columns and creates or updates a netbox-openbao `CredentialAssignment` on the
+`ProxmoxEndpoint`. Password and API-token assignments use the `login` and `api`
+purposes and are primary. Both SSH credentials use `console`; only the selected
+dedicated SSH authentication method is primary. Clearing a slot removes that
+endpoint's assignment and UUID reference but does not delete a credential that
+another object still uses. The database references, assignment rows, audited
+material write, and post-commit metadata projection share the provider-owned
+transaction boundary and fail closed together.
+
 The four OpenBao endpoint resolvers require a resolvable credential reference
 and a nonempty string for the requested secret field. Missing references, stale
 credentials, denied access, and invalid material raise an error naming the
@@ -371,6 +387,7 @@ they are not the FastAPI endpoint key used to authenticate HTTP requests.
 | Field | Default | Description |
 |---|---|---|
 | **Credential storage backend** | `openbao` | Default store for Proxmox API tokens, passwords, and SSH secrets. `openbao` uses netbox-openbao; `legacy_encrypted` keeps Fernet columns in NetBox. |
+| **OpenBao policy slug** | `proxbox` | Exact policy on the default OpenBao engine used for endpoint credential inventory and material writes. Missing policies fail closed; there is no arbitrary fallback. |
 | **OpenBao service username** | _(empty)_ | NetBox user for automated OpenBao credential reveal during backend sync and background jobs. Required for non-interactive OpenBao access. |
 | **Enable credential encryption** | `false` | Enables plugin-at-rest Fernet encryption (legacy backend only). Once ciphertext exists, this control is locked until all ciphertext is removed through the recovery workflow. |
 | **Encryption key** | _(empty)_ | A canonical Fernet key or raw 32-byte secret for plugin-owned ciphertext in NetBox when using the legacy backend. Ordinary API serializers keep it write-only. The backend runtime route retains a permission-gated compatibility fallback for current proxbox-api releases. |

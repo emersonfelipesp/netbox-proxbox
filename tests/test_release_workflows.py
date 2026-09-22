@@ -52,6 +52,32 @@ RELEASE_CONTROL_DOC_PATHS = (
 CANARY_DOC_PATHS = RELEASE_CONTROL_DOC_PATHS[:3]
 
 
+@pytest.mark.parametrize(
+    ("workflow_path", "build_marker", "later_marker"),
+    (
+        (
+            GITEA_PUBLISH_WORKFLOW,
+            "name: Build distributions",
+            "name: Build release manifest",
+        ),
+        (
+            GITHUB_PUBLISH_WORKFLOW,
+            "name: Build distributions from the exact tagged source",
+            "release-manifest.json",
+        ),
+    ),
+)
+def test_publish_artifacts_are_boundary_scanned_before_release_state(
+    workflow_path: Path, build_marker: str, later_marker: str
+) -> None:
+    text = workflow_path.read_text(encoding="utf-8")
+    build = text.index(build_marker)
+    scan = text.index("scripts/check_public_boundary.py", build)
+    later = text.index(later_marker, scan)
+    assert build < scan < later
+    assert "--artifacts-only" in text[scan:later]
+
+
 def _load_release_artifacts():
     spec = importlib.util.spec_from_file_location(
         "release_artifacts", RELEASE_ARTIFACTS_PATH

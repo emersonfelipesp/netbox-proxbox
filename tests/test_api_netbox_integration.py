@@ -55,6 +55,7 @@ from netbox_proxbox.choices import (  # noqa: E402
     ProxmoxSnapshotStatusChoices,
     ProxmoxSnapshotSubtypeChoices,
 )
+from netbox_proxbox.compat import detect_netbox_version  # noqa: E402
 from netbox_proxbox.models import (  # noqa: E402
     FastAPIEndpoint,
     NetBoxEndpoint,
@@ -79,6 +80,15 @@ class _ProxboxAPIViewTestCase(
     __test__ = False
     api_namespace = "plugins-api:netbox_proxbox-api"
     api_basename: str | None = None
+
+    @property
+    def query_count_model_label(self) -> str:
+        """Select the strict baseline for the running NetBox query plan."""
+        model_name = self.model._meta.model_name
+        comparison_version, _display_version = detect_netbox_version()
+        if comparison_version == "4.6.6":
+            return f"{model_name}-netbox-4-6-6"
+        return model_name
 
     def _get_detail_url(self, instance):
         basename = self.api_basename or instance._meta.model_name

@@ -153,7 +153,18 @@ sequenceDiagram
 
 The `iter_backend_sse_lines()` function in `netbox_proxbox/services/backend_proxy.py` opens a streaming `requests.get()` with `stream=True` and yields each raw SSE line. The Django view wraps this in a `StreamingHttpResponse` with `Content-Type: text/event-stream`.
 
-For background jobs, `run_sync_stream()` consumes the SSE stream to completion using an `on_frame` callback that writes progress data to the NetBox Job record.
+For background jobs, `run_sync_stream()` consumes the SSE stream to completion
+using an `on_frame` callback that writes progress data to the NetBox Job record.
+It checks readiness against each unique configured candidate in order (primary
+URL, then the endpoint's IP fallback). Candidate fallback ends before the
+mutating stream request is issued. Once the first ready candidate is selected,
+the plugin makes exactly one stream request: connection, TLS, timeout, HTTP,
+body, and semantic failures are terminal because proxbox-api may have accepted
+or started work even when the plugin has not received a valid SSE frame. A
+bounded 401 authentication rebind is the only restart; authentication rejection
+occurs before route work, and the retry uses one freshly resolved endpoint
+context. Every candidate retains the same authentication, query parameters,
+TLS policy, connect/read timeouts, redirect refusal, and callback.
 
 ### Background job observer lifetime
 

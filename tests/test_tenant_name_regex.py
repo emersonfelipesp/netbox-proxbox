@@ -762,6 +762,7 @@ def parser_module(monkeypatch):
             pass
 
     forms_mod.CharField = _Field
+    forms_mod.SlugField = _Field
     forms_mod.BooleanField = _Field
     forms_mod.IntegerField = _Field
     forms_mod.DecimalField = _Field

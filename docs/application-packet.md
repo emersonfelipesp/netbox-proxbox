@@ -59,5 +59,5 @@ evidence on disposable data — not a production certification.
 - Screenshot capture workflows use the immutable
   `netboxcommunity/netbox:v4.7.0-5.1.0@sha256:73a54ff279461170032b59a57a1930929965e3ba15c195af59f4b5f6d39a84a9`
   image reference.
-- Support is handled through GitHub Issues, with family coordination tracked in
-  <https://github.com/emersonfelipesp/netbox-proxbox/issues/499>.
+- Support and family coordination are handled through the canonical Gitea issue
+  workflow.

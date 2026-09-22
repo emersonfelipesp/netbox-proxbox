@@ -71,6 +71,16 @@ def test_ssh_credential_form_uses_write_only_secret_fields():
     assert "Leave blank on edit to keep the stored value" in src
     assert "submitted keys are never redisplayed after" in src
     assert "_apply_secret_inputs" in src
+    assert ".set_password(" in src
+    assert ".set_private_key(" in src
+
+
+def test_ssh_credential_edit_view_owns_outer_request_boundary():
+    src = _class_source(VIEWS_PATH, "NodeSSHCredentialEditView")
+    assert "node_credential_request_boundary" in src
+    assert "actor=request.user" in src
+    assert "request=request" in src
+    assert "return super().post" in src
 
 
 def test_private_key_textarea_suppresses_values_without_changing_input_type():

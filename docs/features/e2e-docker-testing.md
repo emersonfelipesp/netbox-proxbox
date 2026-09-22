@@ -128,7 +128,6 @@ sequenceDiagram
   GA->>NB: Configure plugin endpoints (NetBox, FastAPI, Proxmox)
   GA->>NB: assert_plugin_routes (UI + keepalive)
   GA->>NB: assert_plugin_internal_contracts (tags, singletons, RQ queue)
-  GA->>NB: create_proxbox_custom_fields
   GA->>NB: POST /plugins/proxbox/sync/full-update/
   NB->>RQ: Enqueue ProxboxSyncJob on default RQ queue
   RQ->>API: GET /full-update/stream (SSE)
@@ -165,12 +164,18 @@ sequenceDiagram
   GA->>PM: GET /api2/json/version (accept 4xx; mock has no PVE schema)
   GA->>NB: assert_plugin_routes (FastAPI + NetBox keepalive only)
   GA->>NB: assert_plugin_internal_contracts (tags, singletons, RQ queue)
-  GA->>NB: create_proxbox_custom_fields
   GA-->>GA: log_service_skip("sync devices job", ...) for every PVE-shaped assertion
 ```
 
 Every skipped assertion is logged with a `log_service_skip(<service>, <name>)`
 line so the omission is visible in CI logs.
+
+The harness does not call proxbox-api's removed custom-field creation route.
+Current synchronization persists plugin-owned typed sync-state sidecars, so no
+custom-field bootstrap is required before the first sync. The checked-in Docker
+workflow defaults to the exact published proxbox-api `0.0.23` image, including
+for pull-request, scheduled, and NetBox 4.7.0 cells. Source-head validation is
+available only through the explicit `dependency_mode: dev` opt-in.
 
 ## What Each Cell Verifies
 
@@ -190,7 +195,6 @@ exact distribution looks like this:
 | Plugin discovery API root + 7 resource routes | yes | yes | yes |
 | Settings runtime endpoint | yes | yes | yes |
 | RQ default-queue contract | yes | yes | yes |
-| Custom field creation via proxbox-api | yes | yes | yes |
 | Backend `/full-update/stream` completes | yes | skip | skip |
 | Devices / VMs / storage / backups / snapshots / IPs / replications sync | yes | skip | skip |
 | VM status transition assertion | yes | skip | skip |
@@ -228,7 +232,7 @@ The runtime side is split across four Python files under `tests/e2e/`:
 | File | Responsibility |
 |---|---|
 | `stack_common.py` | `StackContext` dataclass, env loading (`load_stack_context`), `get_proxmox_service`, `wait_http_ok(verify=...)`, JSON helpers, and `log_service_skip` for visible CI skip logs. |
-| `stack_setup.py` | Backend / NetBox endpoint bootstrap, custom field creation, plugin route assertions, the new `assert_plugin_internal_contracts` block, and `assert_proxmox_mock_contract`. |
+| `stack_setup.py` | Backend / NetBox endpoint bootstrap, plugin route assertions, the `assert_plugin_internal_contracts` block, and `assert_proxmox_mock_contract`. |
 | `stack_sync.py` | All sync trigger + assertion helpers, including the service-aware skip logic in `run_and_assert_all_sync_operations`, `assert_backend_stream`, and `assert_task_history_sync_data`. |
 | `e2e_stack_check.py` | Top-level entrypoint the workflow runs once per matrix cell. |
 

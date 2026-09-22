@@ -52,6 +52,13 @@ class PDMEndpoint(EndpointBase):
         verbose_name=_("Encrypted token secret"),
         help_text=_("Fernet-encrypted PDM API token secret ciphertext. Internal."),
     )
+    openbao_token_credential_uuid = models.UUIDField(
+        null=True,
+        blank=True,
+        editable=False,
+        verbose_name=_("OpenBao token credential UUID"),
+        help_text=_("Opaque reference to the OpenBao PDM API token."),
+    )
     fingerprint = models.CharField(
         max_length=255,
         blank=True,
@@ -132,10 +139,26 @@ class PDMEndpoint(EndpointBase):
     @property
     def token_secret(self) -> str:
         """Decrypt and return the PDM API token secret."""
+        from netbox_proxbox.integrations.openbao_single import (
+            owner_uses_openbao_storage,
+            resolve_single_secret,
+        )
+
+        if owner_uses_openbao_storage(self):
+            return resolve_single_secret(self)
         return decrypt_primary_secret(self.token_secret_enc)
 
     @token_secret.setter
     def token_secret(self, value: object | None) -> None:
+        from netbox_proxbox.integrations.openbao_single import (
+            owner_uses_openbao_storage,
+            store_single_secret,
+        )
+
+        if owner_uses_openbao_storage(self):
+            if value not in (None, ""):
+                store_single_secret(self, str(value))
+            return
         from netbox_proxbox.services.encryption_recovery import (
             mark_encrypted_fields_for_write,
         )
@@ -146,6 +169,19 @@ class PDMEndpoint(EndpointBase):
     @property
     def credential_encryption_state(self) -> str:
         """Return a secret-free state for dashboards and companion tables."""
+
+        from netbox_proxbox.integrations.openbao_single import (
+            owner_uses_openbao_storage,
+        )
+        from netbox_proxbox.integrations.openbao_single_pending import (
+            pending_single_secret,
+        )
+
+        if owner_uses_openbao_storage(self):
+            configured = bool(
+                self.openbao_token_credential_uuid or pending_single_secret(self)
+            )
+            return "Configured" if configured else "Not configured"
 
         from netbox_proxbox.services.encryption_recovery import ciphertext_state
 

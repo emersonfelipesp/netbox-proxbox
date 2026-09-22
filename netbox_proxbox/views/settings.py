@@ -19,6 +19,7 @@ from netbox_proxbox.constants import (
 from netbox_proxbox.forms.settings import ProxboxPluginSettingsForm
 from netbox_proxbox.integrations.bgp import netbox_bgp_status
 from netbox_proxbox.models import ProxboxPluginSettings
+from netbox_proxbox.services.openbao_readiness import openbao_readiness
 from netbox_proxbox.views.proxbox_access import (
     permission_change_proxbox_plugin_settings,
     permission_reset_encrypted_secrets,
@@ -50,6 +51,7 @@ def _settings_template_context(
     return {
         "form": form,
         "netbox_bgp_status": netbox_bgp_status(),
+        "openbao_readiness": openbao_readiness(),
         "overwrite_field_groups": OVERWRITE_FIELD_GROUPS,
         "sync_mode_field_groups": SYNC_MODE_FIELD_GROUPS,
         "encryption_family_statuses": encryption_statuses,
@@ -152,6 +154,11 @@ class SettingsView(
                 settings_obj,
                 "credential_storage_backend",
                 "openbao",
+            ),
+            "openbao_policy_slug": getattr(
+                settings_obj,
+                "openbao_policy_slug",
+                "proxbox",
             ),
             "openbao_service_username": getattr(
                 settings_obj,
@@ -471,6 +478,9 @@ class SettingsView(
                 "credential_storage_backend",
                 "openbao",
             )
+            settings_obj.openbao_policy_slug = (
+                form.cleaned_data.get("openbao_policy_slug", "proxbox") or "proxbox"
+            ).strip()
             settings_obj.openbao_service_username = (
                 form.cleaned_data.get("openbao_service_username", "") or ""
             ).strip()
@@ -514,6 +524,7 @@ class SettingsView(
                     "explicitly_blocked_ip_ranges",
                     "encryption_key",
                     "credential_storage_backend",
+                    "openbao_policy_slug",
                     "openbao_service_username",
                     "proxmox_timeout",
                     "proxmox_max_retries",

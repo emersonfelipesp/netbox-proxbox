@@ -66,11 +66,13 @@ nav:
       - Using pip: 'installation/1-installing-plugin.md'
       - Using git (recommended): 'installation/2-installing-plugin-git.md'
       - Using Docker: 'installation/3-installing-plugin-docker.md'
+      - Proxmox OCI Testing Appliance: 'installation/proxmox-oci-appliance.md'
     - Backend Setup: 'installation/backend-setup.md'
     - Upgrading: 'installation/upgrading.md'
   - Companion Plugins:
     - Overview: 'companion-plugins/index.md'
     - Audited Proxmox Writes: 'companion-plugins/audited-proxmox-writes.md'
+    - Enable OpenBao storage: 'companion-plugins/enable-openbao.md'
     - netbox-rpc: 'companion-plugins/netbox-rpc.md'
     - netbox-openbao: 'companion-plugins/netbox-openbao.md'
     - netbox-pbs: 'companion-plugins/netbox-pbs.md'

@@ -21,6 +21,14 @@ interfaces documented in this repository.
   persisted names. Do not add optional imports from unrelated private plugins.
 - Generated documentation must be regenerated from sanitized sources. Never fix
   only a generated artifact while leaving its source contaminated.
+- The boundary manifest covers reviewed name, domain, URL, command, path,
+  package, service, distribution, workspace, retired contract, and private host
+  identifier classes. It scans
+  tracked text plus explicitly supplied wheel and source archives and fails
+  closed when any file or archive member cannot be inspected.
+- The persisted `nmulticloud` InfluxDB organization default is public user
+  configuration, not a private control-plane identifier. Preserve it until a
+  separately scoped compatibility migration provides an additive transition.
 
 ## Architecture
 
@@ -35,6 +43,10 @@ interfaces documented in this repository.
 - `proxbox_cli/` is a standalone client and must not import Django or NetBox.
 - `docs/` is the source for the MkDocs site; `llms.txt` is committed generated
   documentation and must remain consistent with the source documentation.
+- `Dockerfile.oci` and `oci/` define the testing-only all-in-one OCI appliance.
+  It keeps NetBox and proxbox-api on separate Python runtimes, persists all
+  database and secret state under the declared volumes, and must remain usable
+  through both the OCI entrypoint and Proxmox LXC `/sbin/init`.
 - The authoritative semantic bridge contract is
   [`docs/api/semantic-mcp-bridge.md`](docs/api/semantic-mcp-bridge.md).
 
@@ -43,7 +55,56 @@ interfaces documented in this repository.
 The certified stable NetBox range is `4.5.8` through `4.7.0` GA. The current
 plugin version is `0.0.27rc4`.
 
+Current source pairing: netbox-proxbox 0.0.27rc4 <-> proxbox-api 0.0.23 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+
+The last documented released runtime pairing for this release line remains
+netbox-proxbox 0.0.27rc4 <-> proxbox-api 0.0.22.post1 <-> proxmox-sdk 0.0.13
+<-> netbox-sdk 0.0.13. Preserve release-note and compatibility rows as
+historical records unless a release workflow changes them.
+
 Current backend-runtime pairing: netbox-proxbox 0.0.27rc4 <-> proxbox-api 0.0.22.post1 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+
+CI pairing: the E2E Docker, page-coverage, documentation-screenshot, and
+release-validation workflow defaults consume proxbox-api `0.0.23`. E2E uses the
+exact published image by default; GitHub source-head builds require explicit
+`dependency_mode: dev`. Repository variables are equality-checked configuration:
+release preparation fails closed when an implicit value does not equal the
+checked-in current default, and a coordinated candidate requires an explicit
+workflow input. TestPyPI plugin candidates use stable proxbox-api `0.0.23` from
+PyPI because that backend version is not published on TestPyPI. The E2E harness
+uses typed sync-state sidecars and must not call the removed proxbox-api custom-
+field creation route.
+
+## Current source map
+
+- Models include endpoint configuration, synchronized cluster/node/storage/VM
+  data, typed sync-state sidecars, guest interfaces, SDN and firewall
+  inventory, Firecracker inventory, service-monitoring collections, metrics,
+  intent/apply records, deletion requests, cloud-init records, and companion
+  PBS/PDM endpoint records. Migration
+  `0102_vm_cloudinit_openbao_references`
+  is the current schema tip.
+- UI routes include the home/dashboard, data-protection calendar, HA, endpoint
+  and inventory views, model-scoped Sync Now actions, repair/recovery flows,
+  soft-deleted VM review, and standalone VM console sessions. Cluster and node
+  detail routes are mounted through NetBox model URLs so their Sync Now actions
+  resolve correctly.
+  Data Protection scheduled events use the source endpoint's best-effort
+  discovered IANA timezone and convert exact wall-clock occurrences to
+  NetBox's active timezone before day bucketing. Fail-open cases remain visibly
+  approximate, and combined node selection is capped at 50.
+- REST routes expose typed endpoint and inventory viewsets, sync-state
+  sidecars, SDN/firewall/Firecracker resources, service monitoring, jobs,
+  settings, semantic MCP manifest discovery, browser-console session creation,
+  and operational actions. The API is not a generic backend proxy.
+- `ProxmoxServiceMonitoringJob` is a one-minute system job;
+  `ProxboxSyncJob` owns the staged SSE synchronization pipeline. The standalone
+  `pxb` CLI covers local configuration, backend inspection, NetBox/Proxmox
+  resources, headless sync, and deterministic CLI documentation capture.
+- Gitea workflows own CI, package publication, final-tag promotion, artifact
+  compatibility, and the approved GitHub mirror. GitHub workflows own public
+  CI, the real-Django matrix, documentation, screenshots, E2E contracts,
+  nightly contracts, page coverage, notifications, and TestPyPI publication.
 
 ## GitHub matrix observation
 
@@ -54,6 +115,66 @@ with a mode-`0600` or stricter file; `GH_MATRIX_READ_TOKEN` is a weaker fallback
 Removing an inherited environment value cannot erase the original process
 environment from `/proc/<pid>/environ`. The bootstrap must remain non-consuming
 and must not be treated as a security gate.
+
+The Django workflow includes one immutable NetBox 4.7 cell that installs and
+registers netbox-proxbox together with netbox-ceph, netbox-pbs, netbox-pdm, and
+netbox-packer. Keep every companion checkout pinned by commit, verified by HEAD
+and pyproject digest, resolved from the reviewed hash-locked input, and covered
+by the post-migration registry and system-check assertions. This GitHub evidence
+does not replace a required Gitea pre-merge gate.
+
+The workflow also includes an immutable NetBox 4.7 OpenBao cell. Keep its
+netbox-openbao and netbox-rpc source commits, pyproject digests, composed input,
+and hash lock aligned. Endpoint OpenBao writes must use the exact configured
+policy slug and the provider-owned material transaction; credential UUIDs,
+assignments, audit witnesses, and metadata projection must not be persisted as
+independent best-effort steps. Selected node SSH password/keypair material uses
+the same boundary, assigns the primary `login` purpose to the linked
+`dcim.Device`, and reconciles link, relink, and unlink changes automatically.
+FastAPI, PBS, and PDM API tokens use `api-token` credentials assigned to their
+owner for the `api` purpose; Firecracker agent tokens use the same credential
+type with the `agent` purpose. Their public readiness and assignment lookup
+metadata is provider-neutral and never reveals material or UUID references.
+VM cloud-init password and private-key inputs use `password` and `ssh-keypair`
+credentials assigned to the parent `virtualization.VirtualMachine` for the
+`login` purpose. `ssh_pwauth` selects the primary assignment; public
+`sshkeys`/`sshkeys_enc` never enter provider payloads, and the legacy
+`credential_reference_id` remains an opaque external reference only in
+explicit legacy mode.
+Unlinked nodes defer assignment. OpenBao resolution fails closed without a
+Fernet or an unrelated credential-provider fallback; explicitly selected legacy
+storage continues to use Fernet. UI and REST credential/link mutations must
+enter the provider material transaction before NetBox's atomic wrapper and
+carry the request actor through that boundary. Raw/bulk ORM bypasses, parent
+cascades, and OpenBao-to-legacy changes must refuse while owned references or
+assignments remain and require explicit cleanup. Readiness and generic
+assignment selectors may be exposed as secret-free metadata, but live node
+material remains confined to the authenticated hardware credential endpoint.
+`proxbox_openbao_setup --check` and the settings readiness card share one typed,
+secret-free structural readiness service. Writable setup may create only an
+explicitly configured default engine and the configured policy; it never creates
+users or material. Assignment backfill adds only missing relations and refuses
+unresolved references or another owner's primary assignment. This does not
+certify the broader RPC/backend protected-write rollout.
+Backfill accepts an exact existing relation only when it is enabled, its primary
+state matches the declared slot, and the provider credential type is exact.
+Mismatches are reported without UUIDs and are never rewritten implicitly.
+Interactive storage validation consumes only the provider, default-engine, and
+exact-policy subset; it must not require RPC or an automation username when the
+authenticated request actor supplies the write identity. Writable setup raises
+inside its atomic block so failed final composed readiness rolls back every row.
+
+## Real-NetBox migration test compatibility
+
+When a test rewinds only the plugin migration graph, create shared NetBox rows
+through the current model before rewinding and reacquire them through the
+historical app registry. A historical model may omit newer non-null physical
+columns. Never reverse an additive repair by dropping a field or column owned
+by an earlier migration, and never rewrite a published migration to accommodate
+a newer app-registry class identity; narrow the compatibility fixture while
+retaining isolated coverage of the published behavior. Version-specific
+query-count baselines are allowed only for a demonstrated NetBox core query-plan
+difference and must be verified in the affected and adjacent matrix lanes.
 
 ## Safety invariants
 

@@ -95,7 +95,7 @@ def test_calendar_templates_expose_limits_and_accessible_date_semantics() -> Non
     assert 'aria-current="date"' in calendar
     assert "calendar.truncation" in calendar
     assert "cell.hidden_count" in calendar
-    assert "node's local time" in calendar
+    assert "NetBox's active time zone" in calendar
     assert '<span class="visually-hidden">' in event
     for kind in ("Backup", "Snapshot", "Replication", "Routine"):
         assert f'{{% trans "{kind}" %}}' in event
@@ -106,7 +106,18 @@ def test_combined_filter_submission_does_not_keep_a_stale_anchor() -> None:
 
     assert 'name="cal_view"' in template
     assert 'name="cal_date"' not in template
-    assert "(node local time)" in template
+    assert "(node local time)" not in template
+
+
+def test_endpoint_timezone_migration_is_additive_and_follows_the_current_tip() -> None:
+    source = _source("netbox_proxbox/migrations/0098_proxmoxendpoint_iana_timezone.py")
+    tree = ast.parse(source)
+    text = ast.dump(tree)
+
+    assert "0097_add_cloudinit_credential_reference" in source
+    assert "iana_timezone" in source
+    assert "AddField" in text
+    assert "RunPython" not in text
 
 
 def test_combined_view_uses_login_and_queryset_restrictions() -> None:

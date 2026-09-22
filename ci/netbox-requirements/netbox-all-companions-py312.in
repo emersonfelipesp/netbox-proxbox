@@ -1,0 +1,17 @@
+# Direct runtime and build inputs from the immutable companion pyprojects used
+# by the combined NetBox 4.7 cell:
+#
+# - netbox-ceph 227f386148219522476423a85156a72ab215ece5
+# - netbox-pbs e00bdcab5fa519f6a2cd22d51fc329e0623af746
+# - netbox-pdm c96b425b69677107635749860e240576e91041ee
+# - netbox-packer 31f9ddf9652dbbbb9b34b83604acd888228caae7
+#
+# The workflow verifies each checkout HEAD and pyproject checksum before
+# installing the companions without dependency resolution or build isolation.
+packaging>=23.0
+PyYAML>=6.0
+pydantic>=2.13.3,<2.14.0
+requests>=2.33.0
+proxmox-sdk>=0.0.12
+setuptools>=77.0.3
+wheel

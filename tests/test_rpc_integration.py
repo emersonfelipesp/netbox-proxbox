@@ -194,7 +194,7 @@ def test_rpc_dashboard_context_reads_enabled_settings(monkeypatch) -> None:
     monkeypatch.setattr(mod, "is_netbox_rpc_installed", lambda: True)
 
     class _Backend:
-        backend_url = "https://backend.rpc.nmulti.cloud"
+        backend_url = "https://rpc.example.test"
 
         def __str__(self) -> str:
             return "rpc-prod"
@@ -206,7 +206,7 @@ def test_rpc_dashboard_context_reads_enabled_settings(monkeypatch) -> None:
     assert ctx["enabled"] is True
     assert ctx["settings_supported"] is True
     assert ctx["backend_name"] == "rpc-prod"
-    assert ctx["backend_url"] == "https://backend.rpc.nmulti.cloud"
+    assert ctx["backend_url"] == "https://rpc.example.test"
     assert ctx["home_url"] == "/plugins/rpc/"
 
 

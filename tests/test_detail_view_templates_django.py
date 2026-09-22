@@ -9,14 +9,13 @@ import sys
 from unittest.mock import patch
 
 import pytest
+
+from tests.netbox_test_paths import netbox_source_roots
 from cryptography.fernet import Fernet
 
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
-NETBOX_ROOTS = (
-    REPO_ROOT.parent / "netbox" / "netbox",
-    REPO_ROOT.parents[1] / "nmulticloud-context" / "netbox" / "netbox",
-)
+NETBOX_ROOTS = netbox_source_roots(REPO_ROOT)
 _REQUIRE_DJANGO = os.environ.get("NETBOX_PROXBOX_REQUIRE_DJANGO", "").lower() in (
     "1",
     "true",
@@ -121,7 +120,6 @@ _REQUIRED_OBJECT_VIEW_REGISTRY = {
     "netbox_proxbox.guestvminterfaceaddress:guestvminterfaceaddress": "netbox_proxbox.views.guest_vm_interface.GuestVMInterfaceAddressView",
     "netbox_proxbox.netboxendpoint:netboxendpoint": "netbox_proxbox.views.endpoints.netbox.NetBoxEndpointView",
     "netbox_proxbox.nodesshcredential:nodesshcredential": "netbox_proxbox.views.ssh_credential.NodeSSHCredentialView",
-    "netbox_proxbox.pdmendpoint:pdmendpoint": "netbox_proxbox.views.endpoints.pdm.PDMEndpointView",
     "netbox_proxbox.proxboxbranchintent:proxboxbranchintent": "netbox_proxbox.views.branch_intent.ProxboxBranchIntentView",
     "netbox_proxbox.proxmoxcluster:proxmoxcluster": "netbox_proxbox.views.proxmox_cluster_node.ProxmoxClusterView",
     "netbox_proxbox.proxmoxdatacentercpumodel:proxmoxdatacentercpumodel": "netbox_proxbox.views.datacenter.ProxmoxDatacenterCpuModelView",
@@ -171,9 +169,39 @@ _REQUIRED_OBJECT_VIEW_REGISTRY = {
     "virtualization.virtualmachine:snapshots": "netbox_proxbox.views.vm_snapshot.VMSnapshotTabView",
     "virtualization.virtualmachine:task_history": "netbox_proxbox.views.vm_task_history.VMTaskHistoryTabView",
 }
+_OPTIONAL_OBJECT_VIEW_REGISTRY = {
+    "netbox_pdm": {
+        "netbox_proxbox.pdmendpoint:pdmendpoint": "netbox_proxbox.views.endpoints.pdm.PDMEndpointView",
+    },
+}
 _SSH_PASSWORD_MARKER = "detail-view-password-must-not-render"
 _SSH_PRIVATE_KEY_MARKER = "detail-view-private-key-must-not-render"
 _METRICS_QUERY_TOKEN_MARKER = "detail-view-query-token-must-not-render"
+
+
+def _registered_plugin_object_view(
+    app_label: str,
+    model_name: str,
+    config: dict,
+) -> tuple[str, type[ObjectView]] | None:
+    """Normalize one installed plugin detail-view registration."""
+    if not config.get("detail", True):
+        return None
+    view_class = config["view"]
+    if isinstance(view_class, str):
+        view_class = import_string(view_class)
+    if not isinstance(view_class, type) or not issubclass(view_class, ObjectView):
+        return None
+    if not view_class.__module__.startswith(_PLUGIN_VIEW_MODULE_PREFIX):
+        return None
+    if (
+        app_label == "netbox_proxbox"
+        and model_name == "pdmendpoint"
+        and not apps.is_installed("netbox_pdm")
+    ):
+        return None
+    view_name = config.get("name") or model_name
+    return f"{app_label}.{model_name}:{view_name}", view_class
 
 
 def _registered_plugin_object_views() -> tuple[tuple[str, type[ObjectView]], ...]:
@@ -186,24 +214,25 @@ def _registered_plugin_object_views() -> tuple[tuple[str, type[ObjectView]], ...
     for app_label, model_views in registry["views"].items():
         for model_name, view_configs in model_views.items():
             for config in view_configs:
-                if not config.get("detail", True):
-                    continue
-                view_class = config["view"]
-                if isinstance(view_class, str):
-                    view_class = import_string(view_class)
-                if not isinstance(view_class, type) or not issubclass(
-                    view_class, ObjectView
-                ):
-                    continue
-                if not view_class.__module__.startswith(_PLUGIN_VIEW_MODULE_PREFIX):
-                    continue
-                view_name = config.get("name") or model_name
-                registrations.append(
-                    (f"{app_label}.{model_name}:{view_name}", view_class)
+                registration = _registered_plugin_object_view(
+                    app_label,
+                    model_name,
+                    config,
                 )
+                if registration is not None:
+                    registrations.append(registration)
 
     registrations.sort(key=lambda registration: registration[0])
     return tuple(registrations)
+
+
+def _expected_plugin_object_views() -> dict[str, str]:
+    """Return the fixed registry oracle for the installed companion set."""
+    expected_registry = dict(_REQUIRED_OBJECT_VIEW_REGISTRY)
+    for app_label, optional_registry in _OPTIONAL_OBJECT_VIEW_REGISTRY.items():
+        if apps.is_installed(app_label):
+            expected_registry.update(optional_registry)
+    return expected_registry
 
 
 def _registered_detail_view(
@@ -225,6 +254,18 @@ def _registered_detail_view(
 
 class RegisteredObjectViewTemplateRuntimeTest(SimpleTestCase):
     """Validate actual runtime template resolution for every plugin ObjectView."""
+
+    maxDiff = None
+
+    def test_optional_registry_contract_tracks_companion_installation(self) -> None:
+        optional_key = "netbox_proxbox.pdmendpoint:pdmendpoint"
+        with patch.object(apps, "is_installed", return_value=False):
+            self.assertNotIn(optional_key, _expected_plugin_object_views())
+        with patch.object(apps, "is_installed", return_value=True):
+            self.assertEqual(
+                _expected_plugin_object_views()[optional_key],
+                "netbox_proxbox.views.endpoints.pdm.PDMEndpointView",
+            )
 
     def test_pdm_detail_override_is_class_aware_idempotent_and_strict(self) -> None:
         proxbox_urls = importlib.import_module("netbox_proxbox.urls")
@@ -299,7 +340,7 @@ class RegisteredObjectViewTemplateRuntimeTest(SimpleTestCase):
             registry_name: f"{view_class.__module__}.{view_class.__qualname__}"
             for registry_name, view_class in registrations
         }
-        expected_registry = dict(_REQUIRED_OBJECT_VIEW_REGISTRY)
+        expected_registry = _expected_plugin_object_views()
 
         self.assertEqual(
             len(registrations),
@@ -344,19 +385,33 @@ class MissingDetailTemplateRenderTest(TestCase):
             name="detail-render-node",
             ip_address="192.0.2.195",
         )
+        encryption_key = Fernet.generate_key().decode("ascii")
+        settings_obj = ProxboxPluginSettings.get_solo()
+        raw_update_fields(
+            ProxboxPluginSettings,
+            settings_obj.pk,
+            encryption_key=encryption_key,
+        )
         cls.ssh_credential = NodeSSHCredential.objects.create(
             node=cls.node,
             username="detail-render-ssh-user",
             auth_method=AUTH_METHOD_PASSWORD,
             known_host_fingerprint=f"SHA256:{'A' * 43}",
         )
-        raw_update_fields(
-            NodeSSHCredential,
-            cls.ssh_credential.pk,
-            password_enc=_SSH_PASSWORD_MARKER,
-            private_key_enc=_SSH_PRIVATE_KEY_MARKER,
+        cls.ssh_credential.set_password(
+            _SSH_PASSWORD_MARKER,
+            key=encryption_key,
+        )
+        cls.ssh_credential.set_private_key(
+            _SSH_PRIVATE_KEY_MARKER,
+            key=encryption_key,
+        )
+        cls.ssh_credential.save(
+            update_fields=("password_enc", "private_key_enc", "last_updated"),
         )
         cls.ssh_credential.refresh_from_db()
+        cls.ssh_password_ciphertext = cls.ssh_credential.password_enc
+        cls.ssh_private_key_ciphertext = cls.ssh_credential.private_key_enc
         cls.cpu_model = ProxmoxDatacenterCpuModel.objects.create(
             endpoint=cls.endpoint,
             cluster_name=cls.cluster.name,
@@ -495,8 +550,14 @@ class MissingDetailTemplateRenderTest(TestCase):
         response = self.client.get(url)
 
         self.assertEqual(response.status_code, 200, response.content)
+        self.assertNotEqual(self.ssh_credential.password_enc, _SSH_PASSWORD_MARKER)
+        self.assertNotEqual(
+            self.ssh_credential.private_key_enc, _SSH_PRIVATE_KEY_MARKER
+        )
         self.assertNotContains(response, _SSH_PASSWORD_MARKER)
         self.assertNotContains(response, _SSH_PRIVATE_KEY_MARKER)
+        self.assertNotContains(response, self.ssh_password_ciphertext)
+        self.assertNotContains(response, self.ssh_private_key_ciphertext)
 
     def test_metrics_render_uses_fail_closed_display_properties(self) -> None:
         self.metrics.influx_url = _METRICS_INFLUX_URL_MARKER

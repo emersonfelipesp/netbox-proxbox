@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import date, datetime, time, timedelta
+from datetime import UTC, date, datetime, time, timedelta
 from typing import Callable, Iterable, Mapping
+from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from django.db.models import Q, QuerySet
 from django.http import HttpRequest, HttpResponse
@@ -36,7 +37,7 @@ from netbox_proxbox.services.data_protection_calendar import (
     shift_anchor,
     visible_range,
 )
-from netbox_proxbox.services.pve_calendar_event import parse
+from netbox_proxbox.services.pve_calendar_event import ParsedSchedule, parse
 
 __all__ = ("DataProtectionCalendarMixin", "DataProtectionView")
 
@@ -232,6 +233,67 @@ def _date_sequence(start: date, end: date) -> Iterable[date]:
         yield start + timedelta(days=offset)
 
 
+def _fixed_schedule_time(schedule: ParsedSchedule) -> time | None:
+    """Return an exact wall-clock time, excluding ranges and repetitions."""
+    alias = schedule.raw.strip().casefold()
+    if schedule.time_text == alias and alias in {
+        "daily",
+        "weekly",
+        "monthly",
+        "yearly",
+        "annually",
+        "quarterly",
+        "semiannually",
+    }:
+        return time()
+    parts = schedule.time_text.split(":")
+    if not 1 <= len(parts) <= 3 or any(not part.isdigit() for part in parts):
+        return None
+    values = [int(part) for part in parts]
+    values.extend([0] * (3 - len(values)))
+    try:
+        return time(*values)
+    except ValueError:
+        return None
+
+
+def _endpoint_zone(row: Mapping[str, object]) -> ZoneInfo | None:
+    value = str(row.get("endpoint__iana_timezone") or "").strip()
+    if not value:
+        return None
+    try:
+        return ZoneInfo(value)
+    except (ValueError, ZoneInfoNotFoundError):
+        return None
+
+
+def _converted_occurrence(
+    day: date, schedule: ParsedSchedule, zone: ZoneInfo
+) -> datetime | None:
+    wall_time = _fixed_schedule_time(schedule)
+    if wall_time is None:
+        return None
+    naive = datetime.combine(day, wall_time)
+    first = naive.replace(tzinfo=zone, fold=0)
+    second = naive.replace(tzinfo=zone, fold=1)
+    if first.utcoffset() != second.utcoffset():
+        return None
+    if first.astimezone(UTC).astimezone(zone).replace(tzinfo=None) != naive:
+        return None
+    return timezone.localtime(first)
+
+
+def _projected_days(start: date, end: date, has_zone: bool) -> Iterable[date]:
+    padding = timedelta(days=2) if has_zone else timedelta()
+    return _date_sequence(start - padding, end + padding)
+
+
+def _formatted_occurrence_time(occurrence: datetime, schedule: ParsedSchedule) -> str:
+    """Format a converted instant without discarding source clock precision."""
+    has_seconds = len(schedule.time_text.split(":")) == 3 or occurrence.second != 0
+    return occurrence.strftime("%H:%M:%S" if has_seconds else "%H:%M")
+
+
 def _schedule_records(
     queryset: QuerySet,
     *,
@@ -300,24 +362,37 @@ def _project_schedule_row(
 ) -> list[_EventRecord]:
     schedule = parse(row.get(schedule_field))  # type: ignore[arg-type]
     vm_name, node_name = detail_builder(row)
-    return [
-        _EventRecord(
-            CalendarEvent(
-                day=day,
-                kind=kind,
-                label=label_builder(row),
-                url=reverse(url_name, args=[row["pk"]]),
-                time_text=schedule.time_text,
-                muted=muted_builder(row),
-                approximate=schedule.approximate,
-                sort_key=f"{schedule.time_text}|{kind}|{row['pk']}",
-            ),
-            vm_name,
-            node_name,
+    zone = _endpoint_zone(row)
+    records: list[_EventRecord] = []
+    for source_day in _projected_days(start, end, zone is not None):
+        if not schedule.matches(source_day):
+            continue
+        occurrence = _converted_occurrence(source_day, schedule, zone) if zone else None
+        event_day = occurrence.date() if occurrence else source_day
+        if not start <= event_day < end:
+            continue
+        time_text = (
+            _formatted_occurrence_time(occurrence, schedule)
+            if occurrence
+            else schedule.time_text
         )
-        for day in _date_sequence(start, end)
-        if schedule.matches(day)
-    ]
+        records.append(
+            _EventRecord(
+                CalendarEvent(
+                    day=event_day,
+                    kind=kind,
+                    label=label_builder(row),
+                    url=reverse(url_name, args=[row["pk"]]),
+                    time_text=time_text,
+                    muted=muted_builder(row),
+                    approximate=schedule.approximate or occurrence is None,
+                    sort_key=f"{time_text}|{kind}|{row['pk']}",
+                ),
+                vm_name,
+                node_name,
+            )
+        )
+    return records
 
 
 def _backup_label(row: Mapping[str, object]) -> str:
@@ -705,6 +780,7 @@ class DataProtectionView(ConditionalLoginRequiredMixin, View):
                 "proxmox_node__name",
                 "disable",
                 "status",
+                "endpoint__iana_timezone",
             ),
             order_fields=REPLICATION_ORDER_FIELDS,
             label_builder=_replication_label,
@@ -721,7 +797,13 @@ class DataProtectionView(ConditionalLoginRequiredMixin, View):
             queryset,
             kind="routine",
             schedule_field="schedule",
-            value_fields=("job_id", "node__name", "enabled", "status"),
+            value_fields=(
+                "job_id",
+                "node__name",
+                "enabled",
+                "status",
+                "endpoint__iana_timezone",
+            ),
             order_fields=ROUTINE_ORDER_FIELDS,
             label_builder=_routine_label,
             muted_builder=_routine_muted,

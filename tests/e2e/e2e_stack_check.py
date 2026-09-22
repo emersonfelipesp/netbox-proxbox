@@ -14,7 +14,6 @@ from stack_setup import (
     assert_plugin_internal_contracts,
     assert_plugin_routes,
     assert_proxmox_mock_contract,
-    create_proxbox_custom_fields,
     ensure_netbox_plugin_endpoints,
     ensure_proxbox_backend_endpoints,
     register_proxbox_api_key,
@@ -66,9 +65,6 @@ def main() -> None:
         stack.netbox_base_url,
         stack.netbox_token,
         endpoint_ids,
-    )
-    create_proxbox_custom_fields(
-        stack.proxbox_base_url, proxbox_api_key=proxbox_api_key
     )
     run_and_assert_all_sync_operations(
         stack.netbox_base_url,

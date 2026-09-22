@@ -5,14 +5,25 @@ from __future__ import annotations
 from io import BytesIO
 import hashlib
 from pathlib import Path
+import re
 import struct
 import subprocess
+import tarfile
 import zipfile
 import zlib
 
 import pytest
+import scripts.check_public_boundary as boundary
 
-from scripts.check_public_boundary import main
+from scripts.check_public_boundary import (
+    ForbiddenIdentifier,
+    _COMPOUND_IDENTIFIER,
+    _HOST_IDENTIFIER,
+    _PATH_IDENTIFIER,
+    _URL_IDENTIFIER,
+    _WORD_IDENTIFIER,
+    main,
+)
 
 
 def _git(root: Path, *args: str) -> None:
@@ -26,11 +37,48 @@ TEST_NAME_DIGEST = hashlib.sha256(TEST_NAME.encode("ascii")).hexdigest()
 def _scan(
     root: Path,
     approved_binary_digests: dict[str, str] | None = None,
+    forbidden_identifiers: tuple[ForbiddenIdentifier, ...] | None = None,
 ) -> int:
-    kwargs = {"private_name_digest": TEST_NAME_DIGEST}
+    private_digest = (
+        hashlib.sha256(b"unused-token").hexdigest()
+        if forbidden_identifiers is not None
+        else TEST_NAME_DIGEST
+    )
+    kwargs = {"private_name_digest": private_digest}
     if approved_binary_digests is not None:
         kwargs["approved_binary_digests"] = approved_binary_digests
+    if forbidden_identifiers is not None:
+        kwargs["forbidden_identifiers"] = forbidden_identifiers
     return main(["--root", str(root)], **kwargs)
+
+
+@pytest.mark.parametrize(
+    ("category", "value", "pattern"),
+    (
+        ("name", "alpha", _WORD_IDENTIFIER),
+        ("domain", "control.example.test", _HOST_IDENTIFIER),
+        ("url", "https://control.example.test/private", _URL_IDENTIFIER),
+        ("command", "private-cli", _COMPOUND_IDENTIFIER),
+        ("path", "/srv/private/worktree", _PATH_IDENTIFIER),
+        ("package", "private-package", _COMPOUND_IDENTIFIER),
+        ("service", "private-service", _COMPOUND_IDENTIFIER),
+        ("distribution", "restricted-release", _COMPOUND_IDENTIFIER),
+        ("workspace", "private-workspace", _COMPOUND_IDENTIFIER),
+        ("contract", "PrivateContract", _WORD_IDENTIFIER),
+        ("host", "private-runner-42", _COMPOUND_IDENTIFIER),
+    ),
+)
+def test_boundary_rejects_every_manifest_identifier_class(
+    tracked_repo: Path, category: str, value: str, pattern: re.Pattern[str]
+) -> None:
+    identifier = ForbiddenIdentifier(
+        category,
+        hashlib.sha256(value.casefold().encode("utf-8")).hexdigest(),
+        pattern,
+    )
+    (tracked_repo / "mutant.txt").write_text(value, encoding="utf-8")
+    _git(tracked_repo, "add", "mutant.txt")
+    assert _scan(tracked_repo, forbidden_identifiers=(identifier,)) == 1
 
 
 def _png_chunk(kind: bytes, payload: bytes) -> bytes:
@@ -182,6 +230,320 @@ def test_boundary_inspects_archive_members(
     (tracked_repo / "mutant.zip").write_bytes(payload.getvalue())
     _git(tracked_repo, "add", "mutant.zip")
     assert _scan(tracked_repo) == 1
+
+
+@pytest.mark.parametrize("package_kind", ("wheel", "sdist"))
+def test_boundary_inspects_built_package_members(
+    tracked_repo: Path, package_kind: str
+) -> None:
+    artifact = tracked_repo / (
+        "public-1.0-py3-none-any.whl"
+        if package_kind == "wheel"
+        else "public-1.0.tar.gz"
+    )
+    payload = BytesIO()
+    if package_kind == "wheel":
+        with zipfile.ZipFile(payload, "w", zipfile.ZIP_DEFLATED) as archive:
+            archive.writestr("public/module.py", TEST_NAME)
+    else:
+        content = TEST_NAME.encode("utf-8")
+        with tarfile.open(fileobj=payload, mode="w:gz") as archive:
+            member = tarfile.TarInfo("public/module.py")
+            member.size = len(content)
+            archive.addfile(member, BytesIO(content))
+    artifact.write_bytes(payload.getvalue())
+    assert (
+        main(
+            ["--root", str(tracked_repo), "--artifact", str(artifact)],
+            private_name_digest=TEST_NAME_DIGEST,
+            forbidden_identifiers=(),
+            approved_binary_digests={},
+        )
+        == 1
+    )
+
+
+@pytest.mark.parametrize(
+    "decoration",
+    (
+        "[https://control.example.test/private)",
+        "private-package-v2.1.0",
+        "private-package.backup",
+        "private-package-1.0.whl",
+    ),
+)
+def test_boundary_canonicalizes_decorated_identifiers(
+    tracked_repo: Path, decoration: str
+) -> None:
+    is_url = decoration.startswith("[")
+    value = "https://control.example.test/private" if is_url else "private-package"
+    pattern = _URL_IDENTIFIER if is_url else _COMPOUND_IDENTIFIER
+    identifier = ForbiddenIdentifier(
+        "url" if is_url else "package",
+        hashlib.sha256(value.encode()).hexdigest(),
+        pattern,
+    )
+    (tracked_repo / "mutant.txt").write_text(decoration, encoding="utf-8")
+    _git(tracked_repo, "add", "mutant.txt")
+    assert _scan(tracked_repo, forbidden_identifiers=(identifier,)) == 1
+
+
+@pytest.mark.parametrize("field", ("archive", "entry", "extra", "directory"))
+def test_boundary_scans_zip_metadata_without_echoing_value(
+    tracked_repo: Path, field: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    payload = BytesIO()
+    with zipfile.ZipFile(payload, "w") as archive:
+        info = zipfile.ZipInfo(
+            f"{TEST_NAME}/" if field == "directory" else "public.txt"
+        )
+        info.comment = TEST_NAME.encode() if field == "entry" else b""
+        info.extra = (
+            b"\x01\x00\x03\x00" + TEST_NAME.encode() if field == "extra" else b""
+        )
+        archive.writestr(info, b"public")
+        archive.comment = TEST_NAME.encode() if field == "archive" else b""
+    artifact = tracked_repo / "metadata.zip"
+    artifact.write_bytes(payload.getvalue())
+    result = main(
+        ["--root", str(tracked_repo), "--artifact", str(artifact)],
+        private_name_digest=TEST_NAME_DIGEST,
+        forbidden_identifiers=(),
+        approved_binary_digests={},
+    )
+    assert result == 1
+    assert TEST_NAME not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "field", ("name", "linkname", "uname", "gname", "pax_key", "pax_value")
+)
+def test_boundary_scans_tar_metadata(tracked_repo: Path, field: str) -> None:
+    payload = BytesIO()
+    with tarfile.open(fileobj=payload, mode="w:gz") as archive:
+        member = tarfile.TarInfo(TEST_NAME if field == "name" else "public-link")
+        member.type = tarfile.SYMTYPE
+        member.linkname = TEST_NAME if field == "linkname" else "public-target"
+        member.uname = TEST_NAME if field == "uname" else "public"
+        member.gname = TEST_NAME if field == "gname" else "public"
+        if field == "pax_key":
+            member.pax_headers[TEST_NAME] = "public"
+        if field == "pax_value":
+            member.pax_headers["public"] = TEST_NAME
+        archive.addfile(member)
+    artifact = tracked_repo / "metadata.tar.gz"
+    artifact.write_bytes(payload.getvalue())
+    assert (
+        main(
+            ["--root", str(tracked_repo), "--artifact", str(artifact)],
+            private_name_digest=TEST_NAME_DIGEST,
+            forbidden_identifiers=(),
+            approved_binary_digests={},
+        )
+        == 1
+    )
+
+
+def test_boundary_rejects_unsupported_tar_special_member(tracked_repo: Path) -> None:
+    payload = BytesIO()
+    with tarfile.open(fileobj=payload, mode="w:gz") as archive:
+        member = tarfile.TarInfo("public-device")
+        member.type = tarfile.CHRTYPE
+        archive.addfile(member)
+    artifact = tracked_repo / "special.tar.gz"
+    artifact.write_bytes(payload.getvalue())
+    assert main(["--root", str(tracked_repo), "--artifact", str(artifact)]) == 2
+
+
+def test_boundary_rejects_malformed_archive(tracked_repo: Path) -> None:
+    artifact = tracked_repo / "malformed.zip"
+    artifact.write_bytes(b"PK\x03\x04not-a-valid-archive")
+    assert main(["--root", str(tracked_repo), "--artifact", str(artifact)]) == 2
+
+
+def test_boundary_rejects_archive_member_limit(
+    tracked_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(boundary, "_MAX_ARCHIVE_MEMBERS", 1)
+    payload = BytesIO()
+    with zipfile.ZipFile(payload, "w") as archive:
+        archive.writestr("one.txt", "public")
+        archive.writestr("two.txt", "public")
+    artifact = tracked_repo / "limited.zip"
+    artifact.write_bytes(payload.getvalue())
+    assert main(["--root", str(tracked_repo), "--artifact", str(artifact)]) == 2
+
+
+def test_boundary_rejects_archive_expansion_limit(
+    tracked_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(boundary, "_MAX_ARCHIVE_UNCOMPRESSED_BYTES", 3)
+    payload = BytesIO()
+    with zipfile.ZipFile(payload, "w") as archive:
+        archive.writestr("public.txt", "four")
+    artifact = tracked_repo / "expanded.zip"
+    artifact.write_bytes(payload.getvalue())
+    assert main(["--root", str(tracked_repo), "--artifact", str(artifact)]) == 2
+
+
+def test_boundary_rejects_nested_archive_limit(
+    tracked_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(boundary, "_MAX_ARCHIVE_DEPTH", 1)
+    nested = BytesIO()
+    with zipfile.ZipFile(nested, "w") as archive:
+        archive.writestr("public.txt", "public")
+    outer = BytesIO()
+    with zipfile.ZipFile(outer, "w") as archive:
+        archive.writestr("nested.zip", nested.getvalue())
+    artifact = tracked_repo / "nested.zip"
+    artifact.write_bytes(outer.getvalue())
+    assert main(["--root", str(tracked_repo), "--artifact", str(artifact)]) == 2
+
+
+def test_nested_archives_share_one_cumulative_budget() -> None:
+    payload = b"public-data"
+    inner = BytesIO()
+    with zipfile.ZipFile(inner, "w") as archive:
+        archive.writestr("payload.txt", payload)
+    inner_data = inner.getvalue()
+
+    def outer(member_names: tuple[str, ...]) -> bytes:
+        result = BytesIO()
+        with zipfile.ZipFile(result, "w") as archive:
+            for name in member_names:
+                archive.writestr(name, inner_data)
+        return result.getvalue()
+
+    one_cost = len("one.zip") + len(inner_data) + len("payload.txt") + len(payload)
+    one_budget = boundary.ArchiveBudget(one_cost, 10)
+    assert (
+        boundary._data_findings(
+            Path("outer.zip"),
+            outer(("one.zip",)),
+            TEST_NAME_DIGEST,
+            {},
+            (),
+            budget=one_budget,
+        )
+        == []
+    )
+
+    combined_budget = boundary.ArchiveBudget(one_cost, 10)
+    with pytest.raises(ValueError, match="cumulative byte budget"):
+        boundary._data_findings(
+            Path("outer.zip"),
+            outer(("one.zip", "two.zip")),
+            TEST_NAME_DIGEST,
+            {},
+            (),
+            budget=combined_budget,
+        )
+
+
+def test_boundary_rejects_compressed_input_before_full_read(
+    tracked_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(boundary, "_MAX_ARCHIVE_COMPRESSED_BYTES", 3)
+    artifact = tracked_repo / "oversized.zip"
+    artifact.write_bytes(b"four")
+    assert main(["--root", str(tracked_repo), "--artifact", str(artifact)]) == 2
+
+
+def test_boundary_enforces_actual_member_read_limit() -> None:
+    with pytest.raises(ValueError, match="member exceeds"):
+        boundary._read_bounded(BytesIO(b"four"), 3)
+
+
+def test_boundary_counts_tar_payload_and_pax_metadata(
+    tracked_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = BytesIO()
+    with tarfile.open(
+        fileobj=payload, mode="w:gz", format=tarfile.PAX_FORMAT
+    ) as archive:
+        member = tarfile.TarInfo("public.txt")
+        member.pax_headers["public-key"] = "public-value"
+        member.size = 4
+        archive.addfile(member, BytesIO(b"four"))
+    monkeypatch.setattr(boundary, "_MAX_ARCHIVE_UNCOMPRESSED_BYTES", 3)
+    artifact = tracked_repo / "budget.tar.gz"
+    artifact.write_bytes(payload.getvalue())
+    assert main(["--root", str(tracked_repo), "--artifact", str(artifact)]) == 2
+
+
+def test_boundary_counts_zip_comment_and_extra_metadata(
+    tracked_repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    payload = BytesIO()
+    with zipfile.ZipFile(payload, "w") as archive:
+        info = zipfile.ZipInfo("a")
+        info.comment = b"comment"
+        archive.writestr(info, b"")
+        archive.comment = b"archive"
+    monkeypatch.setattr(boundary, "_MAX_ARCHIVE_UNCOMPRESSED_BYTES", 3)
+    artifact = tracked_repo / "budget.zip"
+    artifact.write_bytes(payload.getvalue())
+    assert main(["--root", str(tracked_repo), "--artifact", str(artifact)]) == 2
+
+
+@pytest.mark.parametrize("kind", ("whl", "tar.gz"))
+def test_boundary_scans_explicit_artifact_basename(
+    tracked_repo: Path, kind: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    token = "private-package"
+    identifier = ForbiddenIdentifier(
+        "package", hashlib.sha256(token.encode()).hexdigest(), _COMPOUND_IDENTIFIER
+    )
+    artifact = tracked_repo / f"{token}-1.0.{kind}"
+    payload = BytesIO()
+    if kind == "whl":
+        with zipfile.ZipFile(payload, "w") as archive:
+            archive.writestr("public.txt", "public")
+    else:
+        with tarfile.open(fileobj=payload, mode="w:gz") as archive:
+            member = tarfile.TarInfo("public.txt")
+            member.size = 6
+            archive.addfile(member, BytesIO(b"public"))
+    artifact.write_bytes(payload.getvalue())
+    result = main(
+        ["--root", str(tracked_repo), "--artifact", str(artifact)],
+        private_name_digest=hashlib.sha256(b"unused").hexdigest(),
+        forbidden_identifiers=(identifier,),
+        approved_binary_digests={},
+    )
+    assert result == 1
+    assert token not in capsys.readouterr().err
+
+
+def test_artifact_only_scan_ignores_transient_checkout_content(
+    tracked_repo: Path,
+) -> None:
+    (tracked_repo / "transient.zip").write_bytes(b"PK\x03\x04invalid")
+    artifact = tracked_repo / "public.whl"
+    with zipfile.ZipFile(artifact, "w") as archive:
+        archive.writestr("public.txt", "public")
+    assert (
+        main(
+            [
+                "--root",
+                str(tracked_repo),
+                "--artifacts-only",
+                "--artifact",
+                str(artifact),
+            ],
+            forbidden_identifiers=(),
+            approved_binary_digests={},
+        )
+        == 0
+    )
+
+
+def test_artifact_only_scan_requires_explicit_artifact(
+    tracked_repo: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    assert main(["--root", str(tracked_repo), "--artifacts-only"]) == 2
+    assert "missing-artifact" in capsys.readouterr().err
 
 
 def test_boundary_allows_valid_binary_near_miss(tracked_repo: Path) -> None:

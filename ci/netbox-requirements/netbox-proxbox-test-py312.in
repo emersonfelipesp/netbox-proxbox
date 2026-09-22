@@ -1,0 +1,15 @@
+# Direct metadata inputs from pyproject.toml [project].dependencies and
+# [project.optional-dependencies].test.  Every Django matrix lock resolves this
+# file together with the immutable NetBox requirements input.
+packaging>=23.0
+cryptography>=50.0.0
+pydantic>=2.13.3,<2.14.0
+requests>=2.33.0
+websockets>=16.0
+PyYAML>=6.0.3
+pytest>=9.0.2
+pytest-cov>=7.1.0
+pytest-django>=4.11.1
+hatchling>=1.27,<1.32
+# Hatchling imports this only for PEP 660 editable builds.
+editables>=0.3

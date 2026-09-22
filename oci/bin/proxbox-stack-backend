@@ -1,0 +1,6 @@
+#!/bin/bash
+set -euo pipefail
+
+exec /opt/proxbox-api/bin/python -m uvicorn proxbox_api.main:app \
+    --host "${PROXBOX_BIND_HOST:-127.0.0.1}" \
+    --port 8800

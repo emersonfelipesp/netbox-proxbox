@@ -353,8 +353,8 @@ def test_production_sequence_end_to_end(  # noqa: F811 - pytest fixture injectio
     """The observed incident, through the real ``run_sync_stream`` producer.
 
     Two completed streams reject the stage (HTTP 503, ``ok=false``), then the
-    third attempt fails opening the stream with a TLS error (also a 5xx). The
-    job error must name the validation cause and list the TLS attempt.
+    selected candidate on the third attempt fails opening with a TLS error. The job
+    error must name the validation cause and list the TLS attempt.
     """
     import json
 
@@ -410,13 +410,10 @@ def test_production_sequence_end_to_end(  # noqa: F811 - pytest fixture injectio
     assert records["error"][-1] == message
 
 
-def test_hostname_answer_outranks_ip_fallback_transport_failure_end_to_end(  # noqa: F811
+def test_hostname_answer_is_terminal_end_to_end(  # noqa: F811
     sync_stages_module, backend_proxy_module, monkeypatch
 ):
-    """Through the real two-candidate builder: hostname answers HTTP 503 with a
-    backend-authored body, the IP fallback fails TLS, on every attempt. The job
-    error must carry the backend's answer, never the fallback's TLS failure."""
-    import requests as _req
+    """A backend-authored hostname response is terminal on every attempt."""
 
     bp = backend_proxy_module
     module = sync_stages_module
@@ -435,8 +432,6 @@ def test_hostname_answer_outranks_ip_fallback_transport_failure_end_to_end(  # n
     def fake_get(url, **kwargs):
         if url.endswith("/health"):
             return _HealthResponse()
-        if url.startswith(_stream_context(bp).ip_address_url + "/"):
-            raise _req.exceptions.SSLError("TLS error connecting to ProxBox backend")
         return _Body()
 
     monkeypatch.setattr(bp.requests, "get", fake_get)
