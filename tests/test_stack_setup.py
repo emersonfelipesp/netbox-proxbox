@@ -64,6 +64,31 @@ def test_ensure_proxbox_backend_endpoints_skips_direct_proxmox_seed(monkeypatch)
     ]
 
 
+def test_netbox_e2e_endpoint_explicitly_uses_local_credential_storage(monkeypatch):
+    stack_setup = _load_stack_setup()
+    requests: list[tuple[str, dict]] = []
+
+    def fake_post_json(url: str, payload: dict, *_args, **_kwargs) -> dict:
+        requests.append((url, payload))
+        return {"id": len(requests)}
+
+    monkeypatch.setattr(stack_setup, "post_json", fake_post_json)
+
+    stack_setup.ensure_netbox_plugin_endpoints(
+        "http://netbox.test",
+        "token-value",
+        17,
+        proxbox_api_key="proxbox-key",
+    )
+
+    proxmox_payload = next(
+        payload
+        for url, payload in requests
+        if url.endswith("/api/plugins/proxbox/endpoints/proxmox/")
+    )
+    assert proxmox_payload["credential_storage_backend"] == "legacy_encrypted"
+
+
 def test_register_proxbox_api_key_bootstraps_only_a_consistent_empty_backend(
     monkeypatch,
 ):

@@ -487,6 +487,7 @@ def ensure_netbox_plugin_endpoints(
             "username": "root@pam",
             "token_name": "e2e",
             "token_value": "e2e-secret",
+            "credential_storage_backend": "legacy_encrypted",
             "verify_ssl": False,
         },
         headers,
