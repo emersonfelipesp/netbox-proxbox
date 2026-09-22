@@ -244,13 +244,17 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
-## What's New in v0.0.27rc7
+## What's New in v0.0.27rc8
 
-Current source pairing: netbox-proxbox 0.0.27rc7 <-> proxbox-api 0.0.23 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This is the current sibling-source development stack, not a rewrite of historical release compatibility. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source pairing: netbox-proxbox 0.0.27rc8 <-> proxbox-api 0.0.23 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This is the current sibling-source development stack, not a rewrite of historical release compatibility. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The last documented released runtime pairing for this release line is
 `proxbox-api 0.0.22.post1`, `proxmox-sdk 0.0.13`, and `netbox-sdk 0.0.13`.
 
+- **Working REST credential-storage override.** The Proxmox endpoint API now
+  accepts the existing `credential_storage_backend` field, allowing disposable
+  validation stacks to select `legacy_encrypted` storage without changing the
+  production OpenBao default.
 - **Reliable disposable-stack validation.** The Page Coverage fixture selects
   local encrypted credential storage explicitly, so its mock endpoint remains
   independent of the production-only OpenBao companion while production
@@ -387,7 +391,8 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
-| 4.5.8-4.7.0 GA (current source) | v0.0.27rc7 | v0.0.23 | v0.0.13 | v0.0.15 |
+| 4.5.8-4.7.0 GA (current source) | v0.0.27rc8 | v0.0.23 | v0.0.13 | v0.0.15 |
+| 4.5.8-4.7.0 GA | v0.0.27rc8 | v0.0.22.post1 | v0.0.13 | v0.0.13 |
 | 4.5.8-4.7.0 GA | v0.0.27rc7 | v0.0.22.post1 | v0.0.13 | v0.0.13 |
 | 4.5.8-4.7.0 GA | v0.0.27rc4 | v0.0.22.post1 | v0.0.13 | v0.0.13 |
 | >=4.5.8 | v0.0.23.post1 | guest-VM-interface writer build / next release | v0.0.10 | v0.0.12 |
