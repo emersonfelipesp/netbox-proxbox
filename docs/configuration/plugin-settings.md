@@ -325,7 +325,10 @@ SSH secrets for endpoints:
 
 Configure the default on **Plugin Settings → Credential storage backend**.
 Each **Proxmox endpoint** may override that default with its own
-**Credential storage backend** field (blank = inherit).
+**Credential storage backend** field (blank = inherit). API clients use the
+same `credential_storage_backend` field when creating or updating a Proxmox
+endpoint; accepted values are an empty string, `openbao`, and
+`legacy_encrypted`.
 
 An explicit endpoint selection wins over an explicit plugin setting, which wins
 over Automatic. Installing the Python package without enabling `netbox_openbao`
@@ -386,7 +389,7 @@ they are not the FastAPI endpoint key used to authenticate HTTP requests.
 
 | Field | Default | Description |
 |---|---|---|
-| **Credential storage backend** | `openbao` | Default store for Proxmox API tokens, passwords, and SSH secrets. `openbao` uses netbox-openbao; `legacy_encrypted` keeps Fernet columns in NetBox. |
+| **Credential storage backend** | Automatic (empty string) | Default store for Proxmox API tokens, passwords, and SSH secrets. Automatic selects OpenBao when netbox-openbao is enabled and otherwise selects legacy Fernet; `openbao` and `legacy_encrypted` make either backend explicit. |
 | **OpenBao policy slug** | `proxbox` | Exact policy on the default OpenBao engine used for endpoint credential inventory and material writes. Missing policies fail closed; there is no arbitrary fallback. |
 | **OpenBao service username** | _(empty)_ | NetBox user for automated OpenBao credential reveal during backend sync and background jobs. Required for non-interactive OpenBao access. |
 | **Enable credential encryption** | `false` | Enables plugin-at-rest Fernet encryption (legacy backend only). Once ciphertext exists, this control is locked until all ciphertext is removed through the recovery workflow. |

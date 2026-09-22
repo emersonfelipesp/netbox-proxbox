@@ -119,6 +119,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "password",
             "token_name",
             "token_value",
+            "credential_storage_backend",
             "verify_ssl",
             "enabled",
             "timeout",

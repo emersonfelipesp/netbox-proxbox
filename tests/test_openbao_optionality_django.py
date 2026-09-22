@@ -90,6 +90,40 @@ def test_explicit_openbao_writes_fail_closed_without_plugin(
         assert getattr(endpoint, field) == ""
 
 
+def test_endpoint_serializer_applies_explicit_legacy_storage_override(
+    optionality_models, settings
+):
+    from netbox_proxbox.api.serializers.endpoints import ProxmoxEndpointSerializer
+
+    Settings, _ = optionality_models
+    settings.PLUGINS = ["netbox_proxbox"]
+    configuration = Settings.get_solo()
+    configuration.credential_storage_backend = "openbao"
+    configuration.encryption_key = Fernet.generate_key().decode("ascii")
+    configuration.save(update_fields=("credential_storage_backend", "encryption_key"))
+
+    serializer = ProxmoxEndpointSerializer(
+        data={
+            "name": "legacy-api-fixture",
+            "domain": "pve.example.test",
+            "port": 8006,
+            "mode": "cluster",
+            "username": "root@pam",
+            "token_name": "e2e",
+            "token_value": "e2e-secret",
+            "credential_storage_backend": "legacy_encrypted",
+            "verify_ssl": False,
+        }
+    )
+
+    assert serializer.is_valid(), serializer.errors
+    endpoint = serializer.save()
+    assert endpoint.credential_storage_backend == "legacy_encrypted"
+    assert endpoint.token_value == "e2e-secret"
+    configuration.refresh_from_db()
+    assert configuration.credential_storage_backend == "openbao"
+
+
 def test_automatic_settings_form_and_serializer_accept_blank(optionality_models):
     from netbox_proxbox.forms.settings import ProxboxPluginSettingsForm
     from netbox_proxbox.api.serializers.settings import ProxboxPluginSettingsSerializer
