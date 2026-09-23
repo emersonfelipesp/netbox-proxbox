@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 import time
-from collections.abc import Iterable
 from typing import Any
+from urllib.parse import urljoin, urlsplit
 
 import requests
 
@@ -16,9 +16,49 @@ from stack_common import (
     get_vm_by_proxmox_vmid,
     list_records,
     log_service_skip,
+    read_json_with_deadline,
     require_one,
-    snapshot_proxbox_job_ids,
 )
+
+
+def _remaining_sync_timeout(deadline: float, *, context: str) -> float:
+    """Return a transport timeout bounded by the sync polling deadline."""
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise AssertionError(f"{context} exceeded the sync polling deadline")
+    return min(30.0, remaining)
+
+
+def _validate_sync_redirect(
+    trigger: requests.Response,
+    *,
+    netbox_base_url: str,
+    route: str,
+) -> int:
+    """Require the documented redirect and return its authoritative job ID."""
+    if trigger.status_code not in (302, 303):
+        raise AssertionError(
+            f"Sync trigger {route} did not redirect as expected: "
+            f"HTTP {trigger.status_code} {trigger.text}"
+        )
+    location = trigger.headers.get("Location", "")
+    redirect_url = urljoin(netbox_base_url, location)
+    expected_origin = urlsplit(netbox_base_url)[:2]
+    parsed_redirect = urlsplit(redirect_url)
+    if not location or parsed_redirect[:2] != expected_origin:
+        raise AssertionError(
+            f"Sync trigger {route} returned an invalid redirect destination"
+        )
+    if parsed_redirect.path.rstrip("/") != "/plugins/proxbox":
+        raise AssertionError(
+            f"Sync trigger {route} redirected outside the Proxbox home page: {location}"
+        )
+    raw_job_id = trigger.headers.get("X-Proxbox-Job-ID", "")
+    if not str(raw_job_id).isdigit():
+        raise AssertionError(
+            f"Sync trigger {route} did not return an authoritative job ID"
+        )
+    return int(raw_job_id)
 
 
 def trigger_and_wait_sync(
@@ -32,12 +72,24 @@ def trigger_and_wait_sync(
         "Authorization": f"Token {netbox_token}",
         "Accept": "application/json",
     }
-    seen_job_ids = snapshot_proxbox_job_ids(netbox_base_url, netbox_token)
+    deadline = time.monotonic() + 600
 
     # Django's CSRF middleware requires a CSRF token for POST to non-DRF views.
     # Fetch the csrftoken cookie from the login page then echo it via X-CSRFToken.
-    _csrf = requests.get(f"{netbox_base_url}/login/", timeout=10)
-    csrftoken = _csrf.cookies.get("csrftoken", "")
+    csrf_response = requests.get(
+        f"{netbox_base_url}/login/",
+        timeout=_remaining_sync_timeout(deadline, context="CSRF bootstrap"),
+        allow_redirects=False,
+        stream=True,
+    )
+    try:
+        if csrf_response.status_code != 200:
+            raise AssertionError(
+                f"CSRF bootstrap failed: HTTP {csrf_response.status_code}"
+            )
+        csrftoken = csrf_response.cookies.get("csrftoken", "")
+    finally:
+        csrf_response.close()
     trigger_headers = {**headers, "X-CSRFToken": csrftoken}
     trigger_cookies = {"csrftoken": csrftoken} if csrftoken else {}
 
@@ -45,43 +97,42 @@ def trigger_and_wait_sync(
         f"{netbox_base_url}{route}",
         headers=trigger_headers,
         cookies=trigger_cookies,
-        timeout=30,
+        timeout=_remaining_sync_timeout(deadline, context=f"sync trigger {route}"),
         allow_redirects=False,
     )
-    if trigger.status_code not in (302, 303):
-        raise AssertionError(
-            f"Sync trigger {route} did not redirect as expected: HTTP {trigger.status_code} {trigger.text}"
-        )
+    job_id = _validate_sync_redirect(
+        trigger,
+        netbox_base_url=netbox_base_url,
+        route=route,
+    )
 
-    jobs_url = f"{netbox_base_url}/api/core/jobs/?limit=50"
-    deadline = time.time() + 600
+    job_url = f"{netbox_base_url}/api/core/jobs/{job_id}/"
     terminal_statuses = {"completed", "errored", "failed"}
     expected_lower = expected_name_fragment.strip().lower()
 
-    while time.time() < deadline:
-        jobs_response = requests.get(jobs_url, headers=headers, timeout=30)
-        jobs_payload = assert_ok(jobs_response, context="list jobs")
-        results: Iterable[dict[str, Any]] = jobs_payload.get("results", [])
-        proxbox_jobs = [
-            job
-            for job in results
-            if str(job.get("name", "")).startswith("Proxbox Sync")
-        ]
-        for job in proxbox_jobs:
-            job_id = extract_id(job.get("id"))
-            if job_id is None or job_id in seen_job_ids:
-                continue
-            name = str(job.get("name", "")).lower()
-            if expected_lower and expected_lower not in name:
-                continue
-            status = extract_status_value(job.get("status"))
-            if status in terminal_statuses:
-                if status != "completed":
-                    raise AssertionError(
-                        f"Proxbox sync job for {route} failed with status={status}: {job}"
-                    )
-                return job
-        time.sleep(5)
+    while time.monotonic() < deadline:
+        job = read_json_with_deadline(
+            job_url,
+            headers,
+            context=f"read sync job {job_id}",
+            deadline=deadline,
+        )
+        name = str(job.get("name", "")).lower()
+        if expected_lower and expected_lower not in name:
+            raise AssertionError(
+                f"Sync trigger {route} returned mismatched job {job_id}: {job}"
+            )
+        status = extract_status_value(job.get("status"))
+        if status in terminal_statuses:
+            if status != "completed":
+                raise AssertionError(
+                    f"Proxbox sync job for {route} failed with status={status}: {job}"
+                )
+            return job
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            break
+        time.sleep(min(5.0, remaining))
 
     raise AssertionError(
         f"Timed out waiting for Proxbox sync job completion for route={route}"

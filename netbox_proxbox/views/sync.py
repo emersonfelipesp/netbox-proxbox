@@ -66,6 +66,7 @@ class _ProxboxSyncEnqueueView(_ProxboxSyncViewBase):
         self, request: HttpRequest, *args: object, **kwargs: object
     ) -> HttpResponse:
         """Handle post."""
+        job_id: object | None = None
         try:
             job = ProxboxSyncJob.enqueue(
                 instance=None,
@@ -82,9 +83,13 @@ class _ProxboxSyncEnqueueView(_ProxboxSyncViewBase):
                     "A Proxbox sync job has been queued. Open the job to follow progress."
                 ),
             )
+            job_id = getattr(job, "pk", None) or getattr(job, "id", None)
         except Exception as e:  # noqa: BLE001 — surface any enqueue failure to the user
             notify_sync_error(request, e)
-        return redirect("plugins:netbox_proxbox:home")
+        response = redirect("plugins:netbox_proxbox:home")
+        if job_id is not None:
+            response["X-Proxbox-Job-ID"] = str(job_id)
+        return response
 
 
 class SyncDevicesView(_ProxboxSyncEnqueueView):

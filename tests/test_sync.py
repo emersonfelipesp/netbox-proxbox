@@ -32,6 +32,8 @@ def _enqueue_spy(monkeypatch, module):
     calls: list[dict] = []
 
     class _FakeJob:
+        pk = 1
+
         def get_absolute_url(self):
             return "/core/jobs/1/"
 
@@ -55,7 +57,10 @@ def test_sync_devices_enqueues_job_with_device_stage(monkeypatch, fastapi_endpoi
 
     response = module.sync_devices(_post_request())
 
-    assert response == {"redirect": "plugins:netbox_proxbox:home"}
+    assert response == {
+        "redirect": "plugins:netbox_proxbox:home",
+        "X-Proxbox-Job-ID": "1",
+    }
     assert len(calls) == 1
     assert calls[0]["sync_types"] == [ST_DEVICES]
 

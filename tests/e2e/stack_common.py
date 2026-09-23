@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+import json
 import os
 import time
-from collections.abc import Iterable
 from dataclasses import dataclass
 from typing import Any
 
@@ -128,6 +128,54 @@ def list_records(
     return [record for record in results if isinstance(record, dict)]
 
 
+def _remaining_request_timeout(context: str, deadline: float | None) -> float:
+    """Return a request timeout bounded by an optional absolute deadline."""
+    if deadline is None:
+        return 30.0
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise AssertionError(f"{context} exceeded its wall-clock deadline")
+    return min(30.0, remaining)
+
+
+def read_json_with_deadline(
+    url: str,
+    headers: dict,
+    *,
+    context: str,
+    deadline: float | None,
+) -> dict[str, Any]:
+    """Read one non-redirected JSON page within the absolute deadline."""
+    response = requests.get(
+        url,
+        headers=headers,
+        timeout=_remaining_request_timeout(context, deadline),
+        allow_redirects=False,
+        stream=True,
+    )
+    try:
+        if 300 <= response.status_code < 400:
+            raise AssertionError(
+                f"{context} failed: HTTP {response.status_code} redirect rejected"
+            )
+        if response.status_code >= 400:
+            raise AssertionError(f"{context} failed: HTTP {response.status_code}")
+        body = bytearray()
+        for chunk in response.iter_content(chunk_size=64 * 1024):
+            if deadline is not None and time.monotonic() >= deadline:
+                raise AssertionError(f"{context} exceeded its wall-clock deadline")
+            body.extend(chunk)
+        try:
+            payload = json.loads(body)
+        except (TypeError, ValueError) as error:
+            raise AssertionError(f"{context} did not return JSON: {error}") from error
+        if not isinstance(payload, dict):
+            raise AssertionError(f"{context} did not return a JSON object")
+        return payload
+    finally:
+        response.close()
+
+
 def require_one(
     records: list[dict[str, Any]],
     *,
@@ -159,24 +207,3 @@ def get_vm_by_proxmox_vmid(netbox_base_url: str, netbox_token: str, vmid: int) -
     if not isinstance(results, list) or not results:
         raise AssertionError(f"No NetBox VM found with cf_proxmox_vm_id={vmid}")
     return results[0]
-
-
-def snapshot_proxbox_job_ids(netbox_base_url: str, netbox_token: str) -> set[int]:
-    headers = {"Authorization": f"Token {netbox_token}", "Accept": "application/json"}
-    jobs_payload = assert_ok(
-        requests.get(
-            f"{netbox_base_url}/api/core/jobs/?limit=50", headers=headers, timeout=30
-        ),
-        context="list existing jobs",
-    )
-    results: Iterable[dict[str, Any]] = jobs_payload.get("results", [])
-    job_ids: set[int] = set()
-    for job in results:
-        if not isinstance(job, dict):
-            continue
-        if not str(job.get("name", "")).startswith("Proxbox Sync"):
-            continue
-        job_id = extract_id(job.get("id"))
-        if job_id is not None:
-            job_ids.add(job_id)
-    return job_ids
