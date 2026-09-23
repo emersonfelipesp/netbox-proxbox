@@ -63,6 +63,197 @@ def _load_stack_sync():
         sys.path.pop(0)
 
 
+def _load_stack_common():
+    e2e_dir = Path(__file__).resolve().parent / "e2e"
+    sys.path.insert(0, str(e2e_dir))
+    try:
+        sys.modules.pop("stack_common", None)
+        return importlib.import_module("stack_common")
+    finally:
+        sys.path.pop(0)
+
+
+def test_get_vm_by_proxmox_vmid_resolves_exact_sync_state(monkeypatch):
+    stack_common = _load_stack_common()
+    requested: list[tuple[str, dict]] = []
+
+    def fake_get(url: str, **kwargs):
+        requested.append((url, kwargs))
+        if url.endswith("/sync-state/virtual-machines/"):
+            return _Response(
+                status_code=200,
+                payload={
+                    "count": 1,
+                    "next": None,
+                    "results": [
+                        {"proxmox_vm_id": 101, "virtual_machine": {"id": 10}},
+                    ],
+                },
+            )
+        if url.endswith("/virtual-machines/10/"):
+            return _Response(status_code=200, payload={"id": 10, "name": "vm-101"})
+        raise AssertionError(f"Unexpected GET url: {url}")
+
+    monkeypatch.setattr(stack_common.requests, "get", fake_get)
+
+    vm = stack_common.get_vm_by_proxmox_vmid("http://netbox.example", "token", 101)
+
+    assert vm == {"id": 10, "name": "vm-101"}
+    assert requested[0][1]["params"] == {"proxmox_vm_id": 101, "limit": 100}
+
+
+@pytest.mark.parametrize(
+    ("results", "message"),
+    [
+        ([], "found 0"),
+        (
+            [{"proxmox_vm_id": 107, "virtual_machine": {"id": 70}}],
+            "filter mismatch",
+        ),
+        (
+            [
+                {"proxmox_vm_id": 101, "virtual_machine": {"id": 10}},
+                {"proxmox_vm_id": 101, "virtual_machine": {"id": 11}},
+            ],
+            "found 2",
+        ),
+    ],
+)
+def test_get_vm_by_proxmox_vmid_rejects_missing_or_ambiguous_identity(
+    monkeypatch, results, message
+):
+    stack_common = _load_stack_common()
+    monkeypatch.setattr(
+        stack_common.requests,
+        "get",
+        lambda *_args, **_kwargs: _Response(
+            status_code=200,
+            payload={"count": len(results), "next": None, "results": results},
+        ),
+    )
+
+    with pytest.raises(AssertionError, match=message):
+        stack_common.get_vm_by_proxmox_vmid("http://netbox.example", "token", 101)
+
+
+@pytest.mark.parametrize("linked_id", [None, True, 0, -1, "10"])
+def test_get_vm_by_proxmox_vmid_requires_linked_virtual_machine(monkeypatch, linked_id):
+    stack_common = _load_stack_common()
+    monkeypatch.setattr(
+        stack_common.requests,
+        "get",
+        lambda *_args, **_kwargs: _Response(
+            status_code=200,
+            payload={
+                "count": 1,
+                "next": None,
+                "results": [
+                    {
+                        "proxmox_vm_id": 101,
+                        "virtual_machine": {"id": linked_id},
+                    }
+                ],
+            },
+        ),
+    )
+
+    with pytest.raises(AssertionError, match="has no virtual_machine identity"):
+        stack_common.get_vm_by_proxmox_vmid("http://netbox.example", "token", 101)
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {},
+        {"count": 1, "next": None, "results": None},
+        {"count": 2, "next": "http://netbox.example/page/2", "results": []},
+        {"count": True, "next": None, "results": []},
+        {"count": 0, "next": "", "results": []},
+        {"count": 1, "next": None, "results": [None]},
+        {
+            "count": 2,
+            "next": None,
+            "results": [
+                {"proxmox_vm_id": 101, "virtual_machine": {"id": 10}},
+                {"proxmox_vm_id": 107, "virtual_machine": {"id": 70}},
+            ],
+        },
+        {
+            "count": 2,
+            "next": None,
+            "results": [
+                {"proxmox_vm_id": 101, "virtual_machine": {"id": 10}},
+                None,
+            ],
+        },
+        {
+            "count": 1,
+            "next": None,
+            "results": [{"proxmox_vm_id": True, "virtual_machine": {"id": 10}}],
+        },
+        {
+            "count": 1,
+            "next": None,
+            "results": [{"proxmox_vm_id": "101", "virtual_machine": {"id": 10}}],
+        },
+        {
+            "count": 1,
+            "next": None,
+            "results": [{"proxmox_vm_id": 101.0, "virtual_machine": {"id": 10}}],
+        },
+    ],
+)
+def test_get_vm_by_proxmox_vmid_rejects_malformed_or_incomplete_results(
+    monkeypatch, payload
+):
+    stack_common = _load_stack_common()
+    monkeypatch.setattr(
+        stack_common.requests,
+        "get",
+        lambda *_args, **_kwargs: _Response(status_code=200, payload=payload),
+    )
+
+    with pytest.raises(AssertionError):
+        stack_common.get_vm_by_proxmox_vmid("http://netbox.example", "token", 101)
+
+
+@pytest.mark.parametrize("detail_id", [None, True, 0, -1, 11, "10"])
+def test_get_vm_by_proxmox_vmid_rejects_mismatched_detail_identity(
+    monkeypatch, detail_id
+):
+    stack_common = _load_stack_common()
+
+    def fake_get(url: str, **_kwargs):
+        if url.endswith("/sync-state/virtual-machines/"):
+            return _Response(
+                status_code=200,
+                payload={
+                    "count": 1,
+                    "next": None,
+                    "results": [{"proxmox_vm_id": 101, "virtual_machine": {"id": 10}}],
+                },
+            )
+        return _Response(status_code=200, payload={"id": detail_id})
+
+    monkeypatch.setattr(stack_common.requests, "get", fake_get)
+
+    with pytest.raises(AssertionError, match="detail identity mismatch"):
+        stack_common.get_vm_by_proxmox_vmid("http://netbox.example", "token", 101)
+
+
+@pytest.mark.parametrize("vmid", [None, True, 0, -1, 101.0, "101"])
+def test_get_vm_by_proxmox_vmid_rejects_invalid_requested_identity(monkeypatch, vmid):
+    stack_common = _load_stack_common()
+    monkeypatch.setattr(
+        stack_common.requests,
+        "get",
+        lambda *_args, **_kwargs: pytest.fail("invalid VMID must fail before request"),
+    )
+
+    with pytest.raises(AssertionError, match="Invalid requested proxmox_vm_id"):
+        stack_common.get_vm_by_proxmox_vmid("http://netbox.example", "token", vmid)
+
+
 def _trigger_response(*, job_id: str = "42", location: str = "/plugins/proxbox/home/"):
     return _Response(
         status_code=302,

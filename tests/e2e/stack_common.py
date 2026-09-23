@@ -194,16 +194,94 @@ def post_json(url: str, payload: dict, headers: dict, *, context: str) -> dict:
     return assert_ok(response, context=context)
 
 
+def _positive_int(value: Any) -> int | None:
+    if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+        return None
+    return value
+
+
+def _nested_positive_id(value: Any) -> int | None:
+    if not isinstance(value, dict):
+        return None
+    return _positive_int(value.get("id"))
+
+
+def _complete_sync_state_results(payload: Any, vmid: int) -> list[Any]:
+    if not isinstance(payload, dict) or "results" not in payload:
+        raise AssertionError(f"Invalid VM sync-state envelope for proxmox_vm_id={vmid}")
+    results = payload["results"]
+    if not isinstance(results, list):
+        raise AssertionError(f"Invalid VM sync-state results for proxmox_vm_id={vmid}")
+    count = payload.get("count")
+    if (
+        isinstance(count, bool)
+        or not isinstance(count, int)
+        or count != len(results)
+        or payload.get("next") is not None
+    ):
+        raise AssertionError(
+            f"Incomplete VM sync-state page for proxmox_vm_id={vmid}: "
+            f"count={count!r}, returned={len(results)}, next={payload.get('next')!r}"
+        )
+    return results
+
+
+def _validated_linked_vm_id(record: Any, vmid: int) -> int:
+    returned_vmid = record.get("proxmox_vm_id") if isinstance(record, dict) else None
+    if _positive_int(returned_vmid) != vmid:
+        raise AssertionError(
+            f"VM sync-state filter mismatch for proxmox_vm_id={vmid}: "
+            f"returned {returned_vmid!r}"
+        )
+    vm_id = _nested_positive_id(record.get("virtual_machine"))
+    if vm_id is None:
+        raise AssertionError(
+            f"VM sync state proxmox_vm_id={vmid} has no virtual_machine identity"
+        )
+    return vm_id
+
+
+def _linked_vm_id(results: list[Any], vmid: int) -> int:
+    linked_ids = [_validated_linked_vm_id(record, vmid) for record in results]
+    if len(linked_ids) != 1:
+        raise AssertionError(
+            f"Expected one VM sync state with proxmox_vm_id={vmid}, "
+            f"found {len(linked_ids)}"
+        )
+    return linked_ids[0]
+
+
 def get_vm_by_proxmox_vmid(netbox_base_url: str, netbox_token: str, vmid: int) -> dict:
+    validated_vmid = _positive_int(vmid)
+    if validated_vmid is None:
+        raise AssertionError(f"Invalid requested proxmox_vm_id={vmid!r}")
     headers = {"Authorization": f"Token {netbox_token}"}
     response = requests.get(
-        f"{netbox_base_url}/api/virtualization/virtual-machines/",
+        f"{netbox_base_url}/api/plugins/proxbox/sync-state/virtual-machines/",
         headers=headers,
-        params={"cf_proxmox_vm_id": vmid, "limit": 5},
+        params={"proxmox_vm_id": validated_vmid, "limit": 100},
         timeout=30,
     )
-    payload = assert_ok(response, context=f"lookup vm cf_proxmox_vm_id={vmid}")
-    results = payload.get("results", [])
-    if not isinstance(results, list) or not results:
-        raise AssertionError(f"No NetBox VM found with cf_proxmox_vm_id={vmid}")
-    return results[0]
+    payload = assert_ok(
+        response,
+        context=f"lookup vm sync state proxmox_vm_id={validated_vmid}",
+    )
+    vm_id = _linked_vm_id(
+        _complete_sync_state_results(payload, validated_vmid), validated_vmid
+    )
+    vm_response = requests.get(
+        f"{netbox_base_url}/api/virtualization/virtual-machines/{vm_id}/",
+        headers=headers,
+        timeout=30,
+    )
+    vm = assert_ok(
+        vm_response,
+        context=f"lookup NetBox VM {vm_id} for vmid={validated_vmid}",
+    )
+    detail_id = _positive_int(vm.get("id") if isinstance(vm, dict) else None)
+    if detail_id != vm_id:
+        raise AssertionError(
+            f"NetBox VM detail identity mismatch for vmid={validated_vmid}: "
+            f"expected {vm_id}, returned {detail_id!r}"
+        )
+    return vm
