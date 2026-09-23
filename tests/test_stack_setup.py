@@ -136,6 +136,8 @@ def test_netbox_e2e_endpoint_uses_deterministic_fixture_settings(monkeypatch):
         if url.endswith("/api/plugins/proxbox/endpoints/proxmox/")
     )
     assert proxmox_payload["credential_storage_backend"] == "legacy_encrypted"
+    assert proxmox_payload["timeout"] == 60
+    assert proxmox_payload["max_retries"] == 1
 
 
 def test_register_proxbox_api_key_bootstraps_only_a_consistent_empty_backend(

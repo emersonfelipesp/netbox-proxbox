@@ -535,6 +535,8 @@ def ensure_netbox_plugin_endpoints(
             "token_name": "e2e",
             "token_value": "e2e-secret",
             "credential_storage_backend": "legacy_encrypted",
+            "timeout": 60,
+            "max_retries": 1,
             "verify_ssl": False,
         },
         headers,
