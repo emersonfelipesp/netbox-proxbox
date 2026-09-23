@@ -27,6 +27,8 @@ LLMS_PATH = REPO_ROOT / "llms.txt"
 CLAUDE_PATH = REPO_ROOT / "CLAUDE.md"
 COMPATIBILITY_PATH = REPO_ROOT / "COMPATIBILITY.md"
 DOCS_INDEX_PATH = REPO_ROOT / "docs" / "index.md"
+CI_E2E_WORKFLOWS_DOC_PATH = REPO_ROOT / "docs" / "developer" / "ci-e2e-workflows.md"
+RELEASE_PUBLISHING_DOC_PATH = REPO_ROOT / "docs" / "developer" / "release-publishing.md"
 INSTALL_GIT_PATH = REPO_ROOT / "docs" / "installation" / "2-installing-plugin-git.md"
 UPGRADING_PATH = REPO_ROOT / "docs" / "installation" / "upgrading.md"
 RELEASE_NOTES_INDEX_PATH = REPO_ROOT / "docs" / "release-notes" / "index.md"
@@ -99,16 +101,16 @@ CERTIFICATION_PATH = REPO_ROOT / "CERTIFICATION.md"
 DOCS_CERTIFICATION_PATH = REPO_ROOT / "docs" / "certification.md"
 APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
-CURRENT_PLUGIN_VERSION = "0.0.27rc9"
-CURRENT_RELEASE_VERSION = "0.0.27rc9"
-CURRENT_PACKAGE_VERSION = "0.0.27rc9"
-CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.22.post1"
+CURRENT_PLUGIN_VERSION = "0.0.27rc10"
+CURRENT_RELEASE_VERSION = "0.0.27rc10"
+CURRENT_PACKAGE_VERSION = "0.0.27rc10"
+CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.23.post1"
 CURRENT_PAIRING_LINE = (
-    "Current backend-runtime pairing: netbox-proxbox 0.0.27rc9 <-> proxbox-api "
-    "0.0.22.post1 <-> proxmox-sdk 0.0.13 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST "
+    "Current backend-runtime pairing: netbox-proxbox 0.0.27rc10 <-> proxbox-api "
+    "0.0.23.post1 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST "
     "dependency only and does not provide the semantic MCP bridge."
 )
-PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.23"
+PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.23.post1"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
 # Ceiling of the backward-compatible stable tier, including NetBox 4.7 GA.
 CURRENT_NETBOX_STABLE_MAX_VERSION = "4.7.0"
@@ -1163,7 +1165,7 @@ def _assert_release_workflow_e2e_counts(publish_workflow: str) -> None:
 def test_release_workflow_uses_matching_package_indexes_for_e2e() -> None:
     # The release workflow pairs each E2E gate with the same package index the
     # plugin is being validated against: the TestPyPI plugin candidate uses the
-    # stable proxbox-api from PyPI because proxbox-api 0.0.23 is not published
+    # stable proxbox-api from PyPI because proxbox-api 0.0.23.post1 is not published
     # on TestPyPI. PyPI candidate and final gates use that same PyPI source.
     # `dependency_mode: dev` clones
     # proxbox-api main HEAD and must not appear here — main may sit on a
@@ -1182,17 +1184,27 @@ def test_release_workflow_uses_matching_package_indexes_for_e2e() -> None:
 
 def test_release_workflow_defaults_to_current_proxbox_api() -> None:
     publish_workflow = PUBLISH_WORKFLOW_PATH.read_text(encoding="utf-8")
-    assert "vars.PROXBOX_API_RELEASE_VERSION || '0.0.23'" in publish_workflow
+    assert "vars.PROXBOX_API_RELEASE_VERSION || '0.0.23.post1'" in publish_workflow
     assert (
-        "vars.PROXBOX_API_PYPI_VERSION || vars.PROXBOX_API_RELEASE_VERSION || '0.0.23'"
+        "vars.PROXBOX_API_PYPI_VERSION || vars.PROXBOX_API_RELEASE_VERSION || '0.0.23.post1'"
         in publish_workflow
     )
-    assert "PROXBOX_API_REQUIRED_DEFAULT_VERSION: 0.0.23" in publish_workflow
+    assert "PROXBOX_API_REQUIRED_DEFAULT_VERSION: 0.0.23.post1" in publish_workflow
     assert (
         "from scripts.e2e_backend_selection import resolve_release_version"
         in publish_workflow
     )
     assert "proxbox_api_version = resolve_release_version(" in publish_workflow
+
+
+def test_operational_docs_pin_current_proxbox_api_default() -> None:
+    expected_requirement = f"proxbox-api=={PROXBOX_API_WORKFLOW_DEFAULT_VERSION}"
+    ci_e2e_docs = CI_E2E_WORKFLOWS_DOC_PATH.read_text(encoding="utf-8")
+    release_docs = RELEASE_PUBLISHING_DOC_PATH.read_text(encoding="utf-8")
+
+    assert expected_requirement in ci_e2e_docs
+    assert expected_requirement in release_docs
+    assert f"checked-in `{PROXBOX_API_WORKFLOW_DEFAULT_VERSION}` default" in ci_e2e_docs
 
 
 def test_e2e_defaults_to_exact_published_backend() -> None:
@@ -1237,7 +1249,7 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         f"v{CURRENT_RELEASE_VERSION}",
         CURRENT_PROXBOX_API_PAIRING_LABEL,
         "v0.0.13",
-        "v0.0.13",
+        "v0.0.15",
     )
     for path in (README_PATH, DOCS_INDEX_PATH, CURRENT_RELEASE_NOTES_PATH):
         text = _read(path)
@@ -1249,7 +1261,7 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         ">=3.12",
         CURRENT_PROXBOX_API_PAIRING_LABEL,
         "v0.0.13",
-        "v0.0.13",
+        "v0.0.15",
     )
     _assert_markdown_table_row(_read(COMPATIBILITY_PATH), compatibility_row)
 
