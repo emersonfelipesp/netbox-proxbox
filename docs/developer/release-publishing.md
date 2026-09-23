@@ -19,7 +19,7 @@ flowchart TD
     Control[Locked release control verifies\nand publishes exact sealed bytes]
     RCUpload[Upload vX.Y.ZrcN to TestPyPI\nwithout --skip-existing]
     RCValidate[Install rcN from TestPyPI\nrun package checks]
-    RCE2E[E2E Docker\nnetbox-proxbox rcN from TestPyPI\nproxbox-api 0.0.23.post1 from PyPI]
+    RCE2E[E2E Docker\nnetbox-proxbox rcN from TestPyPI\nproxbox-api 0.0.23.post2 from PyPI]
     RCFailed{Any TestPyPI\nvalidation failed?}
     NextRC[Bump to vX.Y.ZrcN+1]
     FinalPrivate[Publish final package to Gitea\nvX.Y.Z]
@@ -270,7 +270,7 @@ sequenceDiagram
    request SHA-256. After it succeeds, dispatch the separate irreversible
    `publish.yml` with those same three inputs. For RCs, the control publishes
    the Gitea package and promotes only that exact RC tag to GitHub.
-4. Verify the stable `proxbox-api==0.0.23.post1` backend package on PyPI.
+4. Verify the stable `proxbox-api==0.0.23.post2` backend package on PyPI.
 5. Publish and validate `netbox-proxbox` on TestPyPI against that stable PyPI
    backend. The paired backend is not published on TestPyPI.
 6. Publish each final package in Gitea and verify its repository link, source

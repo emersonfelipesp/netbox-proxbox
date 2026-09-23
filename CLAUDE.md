@@ -53,24 +53,24 @@ interfaces documented in this repository.
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.0` GA. The current
-plugin version is `0.0.27rc15`.
+plugin version is `0.0.27rc16`.
 
-Current source pairing: netbox-proxbox 0.0.27rc15 <-> proxbox-api 0.0.23.post1 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source pairing: netbox-proxbox 0.0.27rc16 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The last documented released runtime pairing for this release line remains
 netbox-proxbox 0.0.27rc4 <-> proxbox-api 0.0.22.post1 <-> proxmox-sdk 0.0.13
 <-> netbox-sdk 0.0.13. Preserve release-note and compatibility rows as
 historical records unless a release workflow changes them.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.27rc15 <-> proxbox-api 0.0.23.post1 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.27rc16 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 CI pairing: the E2E Docker, page-coverage, documentation-screenshot, and
-release-validation workflow defaults consume proxbox-api `0.0.23.post1`. E2E uses the
+release-validation workflow defaults consume proxbox-api `0.0.23.post2`. E2E uses the
 exact published image by default; GitHub source-head builds require explicit
 `dependency_mode: dev`. Repository variables are equality-checked configuration:
 release preparation fails closed when an implicit value does not equal the
 checked-in current default, and a coordinated candidate requires an explicit
-workflow input. TestPyPI plugin candidates use stable proxbox-api `0.0.23.post1` from
+workflow input. TestPyPI plugin candidates use stable proxbox-api `0.0.23.post2` from
 PyPI because that backend version is not published on TestPyPI. The E2E harness
 uses typed sync-state sidecars and must not call the removed proxbox-api custom-
 field creation route.

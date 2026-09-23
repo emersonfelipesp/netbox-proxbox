@@ -173,7 +173,7 @@ line so the omission is visible in CI logs.
 The harness does not call proxbox-api's removed custom-field creation route.
 Current synchronization persists plugin-owned typed sync-state sidecars, so no
 custom-field bootstrap is required before the first sync. The checked-in Docker
-workflow defaults to the exact published proxbox-api `0.0.23.post1` image, including
+workflow defaults to the exact published proxbox-api `0.0.23.post2` image, including
 for pull-request, scheduled, and NetBox 4.7.0 cells. Source-head validation is
 available only through the explicit `dependency_mode: dev` opt-in.
 

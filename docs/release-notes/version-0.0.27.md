@@ -2,10 +2,18 @@
 
 ## Standalone virtual machine consoles and hardened synchronization
 
-Current backend-runtime pairing: netbox-proxbox 0.0.27rc15 <-> proxbox-api 0.0.23.post1 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.27rc16 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 This release adds a permission-gated Console tab directly to synchronized NetBox virtual machines. QEMU guests support noVNC and terminal sessions, and LXC guests support terminal sessions. The browser connects through the public proxbox-api relay without receiving Proxmox credentials, private topology, or reusable upstream tickets.
 
+RC15 paired with `proxbox-api 0.0.23.post1` and failed the real-stack Page
+Coverage gate because the expected backup inventory record was missing. RC16
+pairs with post2, which hydrates typed virtual-machine identity before backup
+filtering and restores that record.
+
+- Restores backup synchronization in the real-stack Page Coverage gate with
+  `proxbox-api 0.0.23.post2`, which hydrates typed virtual-machine identity
+  before filtering backup records.
 - Resolves expected Proxmox VMIDs through the typed sync-state API during
   release validation, rejects incomplete, malformed, ambiguous, or
   ignored-filter responses, and verifies the linked NetBox virtual machine.
@@ -45,12 +53,13 @@ This release adds a permission-gated Console tab directly to synchronized NetBox
 - Replaces the generic VM console endpoint-unavailable response with stable diagnostics that distinguish backend connectivity from missing, disabled, drifted, or inconsistent NetBox endpoint and node relations.
 - Shows exact administrator remedies and, when the caller has core Job add permission, a CSRF-protected **Repair all enabled endpoints** action with an explicit warning that the full synchronization can reconcile stale NetBox inventory outside the displayed VM.
 
-Deploy `proxbox-api 0.0.23.post1` before installing this plugin release. This
-backend corrects duplicate virtual-machine status reconciliation that blocked
-the previous appliance release-validation candidate.
+Deploy `proxbox-api 0.0.23.post2` before installing this plugin release. This
+backend preserves the earlier duplicate virtual-machine reconciliation fix and
+restores backup records by hydrating typed VM identity before backup filtering.
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |---|---|---|---|---|
+| 4.5.8-4.7.0 GA | v0.0.27rc16 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc15 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc14 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc13 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
