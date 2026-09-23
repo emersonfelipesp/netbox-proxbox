@@ -1421,7 +1421,7 @@ wheels = [
 
 [[package]]
 name = "netbox-proxbox"
-version = "0.0.27rc14"
+version = "0.0.27rc15"
 source = { editable = "." }
 dependencies = [
     { name = "cryptography" },

@@ -101,12 +101,12 @@ CERTIFICATION_PATH = REPO_ROOT / "CERTIFICATION.md"
 DOCS_CERTIFICATION_PATH = REPO_ROOT / "docs" / "certification.md"
 APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
-CURRENT_PLUGIN_VERSION = "0.0.27rc14"
-CURRENT_RELEASE_VERSION = "0.0.27rc14"
-CURRENT_PACKAGE_VERSION = "0.0.27rc14"
+CURRENT_PLUGIN_VERSION = "0.0.27rc15"
+CURRENT_RELEASE_VERSION = "0.0.27rc15"
+CURRENT_PACKAGE_VERSION = "0.0.27rc15"
 CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.23.post1"
 CURRENT_PAIRING_LINE = (
-    "Current backend-runtime pairing: netbox-proxbox 0.0.27rc14 <-> proxbox-api "
+    "Current backend-runtime pairing: netbox-proxbox 0.0.27rc15 <-> proxbox-api "
     "0.0.23.post1 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST "
     "dependency only and does not provide the semantic MCP bridge."
 )
@@ -1264,6 +1264,9 @@ def test_current_release_pairing_is_documented_in_primary_docs():
         "v0.0.15",
     )
     _assert_markdown_table_row(_read(COMPATIBILITY_PATH), compatibility_row)
+    assert f"Plugin version `{CURRENT_PLUGIN_VERSION}` in source" in _read(
+        DOCS_INDEX_PATH
+    )
 
     for path in (
         CLAUDE_PATH,
