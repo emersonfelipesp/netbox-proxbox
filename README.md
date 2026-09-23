@@ -244,13 +244,17 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
-## What's New in v0.0.27rc10
+## What's New in v0.0.27rc11
 
-Current source pairing: netbox-proxbox 0.0.27rc10 <-> proxbox-api 0.0.23.post1 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This is the current sibling-source development stack, not a rewrite of historical release compatibility. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source pairing: netbox-proxbox 0.0.27rc11 <-> proxbox-api 0.0.23.post1 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This is the current sibling-source development stack, not a rewrite of historical release compatibility. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The current released runtime pairing for this release line is
 `proxbox-api 0.0.23.post1`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`.
 
+- **Deterministic mock-backed synchronization.** Disposable Page Coverage and
+  Docker E2E stacks cap Proxmox fetch concurrency at one through the supported
+  plugin settings API, preventing the lightweight mock server from dropping
+  simultaneous VM configuration requests without changing production defaults.
 - **Working REST credential-storage override.** The Proxmox endpoint API now
   accepts the existing `credential_storage_backend` field, allowing disposable
   validation stacks to select `legacy_encrypted` storage without changing the
@@ -391,7 +395,8 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
-| 4.5.8-4.7.0 GA (current source) | v0.0.27rc10 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
+| 4.5.8-4.7.0 GA (current source) | v0.0.27rc11 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
+| 4.5.8-4.7.0 GA | v0.0.27rc11 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc10 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc9 | v0.0.22.post1 | v0.0.13 | v0.0.13 |
 | 4.5.8-4.7.0 GA | v0.0.27rc8 | v0.0.22.post1 | v0.0.13 | v0.0.13 |
