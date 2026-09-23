@@ -111,6 +111,41 @@ and OpenBao-to-legacy changes must refuse while owned references or assignments
 remain and require explicit cleanup. Readiness and generic assignment selectors
 may be exposed as secret-free metadata, but live node material remains confined
 to the authenticated hardware credential endpoint.
+`netbox_proxbox/api/device_openbao_ssh_resolver.py` resolves the by-node SSH
+secrets fallback (used only when no local `NodeSSHCredential` exists) against
+a netbox-openbao `ServiceEndpoint` + `Credential` pair on the node's linked
+`dcim.Device`, through the same audited `reveal_credential_material` path,
+with the same SSH-access gate as the local-credential path. The credential
+lookup is additionally scoped through
+`Credential.objects.restrict(request.user, "reveal")` — the same object
+permission netbox-openbao's own reveal API requires — so a caller authorized
+only for the local `NodeSSHCredential` path (e.g. `view_nodesshcredential`)
+cannot reveal an arbitrary device's OpenBao-stored material through this
+fallback; an unauthenticated caller or one lacking `reveal_credential` gets a
+403. More than one
+credentialed SSH `ServiceEndpoint` for a device is a denial — callers may
+narrow with an explicit port — never a partial answer. netbox-openbao is
+optional and imported lazily through `apps.is_installed()`/`apps.get_model()`;
+with it absent, with no matching endpoint, or predating the
+`ServiceEndpoint`/`Credential` models this module expects, resolution returns
+nothing and the caller sees the same 404 as before this fallback existed
+(`_get_openbao_model()` catches `apps.get_model()`'s `LookupError` for the
+last case — see docs/companion-plugins/netbox-openbao.md for the pinned CI
+revision this currently affects and when the pin can move). There is no
+reintroduced coupling to any other non-public, environment-specific plugin —
+the public-boundary scanner (`scripts/check_public_boundary.py`) is the
+enforced reason: it fails closed on private identifiers, which ruled out
+restoring the exact legacy design the originating issue described. Both
+`_credential_for_node_identifier()` and `_proxmox_node_for_identifier()` in
+`ssh_credentials.py` resolve both interpretations of `node_id` (own PK and
+linked-device PK) and refuse a genuine collision between two distinct rows,
+never silently preferring one.
+
+Keep OpenBao-dependent real-Django suites isolated to the exact NetBox 4.7
+OpenBao companion cell. Ordinary compatibility cells must prove the optional
+package is absent without collecting provider-dependent tests. Tag-triggered
+screenshots validate the immutable tag and never push generated assets; only a
+manual screenshot refresh may write its selected branch.
 `proxbox_openbao_setup --check` and the settings card consume the same typed,
 secret-free readiness snapshot. Setup creates no users or credential material;
 assignment backfill creates only missing relations and preserves shared-owner

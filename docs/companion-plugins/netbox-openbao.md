@@ -118,6 +118,43 @@ unrelated assignments and the OpenBao credential material remain intact.
 Conflicting foreign primary login assignments fail closed instead of being
 replaced.
 
+When a `ProxmoxNode` has no local `NodeSSHCredential` row at all, the by-node
+secrets endpoint (`netbox_proxbox/api/device_openbao_ssh_resolver.py`) falls
+back to resolving SSH login material from the node's linked `dcim.Device`
+through netbox-openbao directly: it looks up a single credentialed SSH
+`ServiceEndpoint` assigned to that device and reveals its `Credential` through
+the same audited `reveal_credential_material` path used everywhere else in
+this integration, gated by the same SSH-access check the local-credential
+path applies. The `Credential` lookup is additionally scoped through
+`Credential.objects.restrict(request.user, "reveal")` — the same object
+permission netbox-openbao's own reveal API requires — so a caller authorized
+only for the local `NodeSSHCredential` path cannot reveal an arbitrary
+device's OpenBao-stored material through this fallback; an unauthenticated
+caller or one without `reveal_credential` gets a 403. More than one
+credentialed SSH endpoint on the device is treated as a denial, not an
+ambiguity to guess through — the caller may supply
+a port to disambiguate. When netbox-openbao is not installed, or has no
+matching endpoint for the device, resolution returns nothing and the endpoint
+answers the same 404 it always has; there is no further legacy fallback, since
+one would require importing a non-public, environment-specific plugin, which
+`scripts/check_public_boundary.py` refuses.
+
+⚠️ **`ServiceEndpoint` is not yet in the pinned CI netbox-openbao revision.**
+The immutable NetBox 4.7 OpenBao CI cell (`ci/netbox-requirements/netbox-openbao-58677ef-py312.in`,
+commit `58677efdd595c34cf0d597ca3efa1951b05ea25e`) predates `ServiceEndpoint` —
+it merged to netbox-openbao's `develop` branch as commit `e7f94ee`, but has not
+reached a public netbox-openbao release, so the pin must not move to pick it
+up yet. `device_openbao_ssh_resolver.py` feature-detects instead of assuming
+the model exists: every `apps.get_model("netbox_openbao", …)` lookup goes
+through `_get_openbao_model()`, which catches `LookupError` (what
+`apps.get_model()` raises for a model an installed app doesn't define) and
+treats it as "not available" — the by-node secrets fallback degrades to its
+existing 404 rather than an uncaught 500. Once a netbox-openbao release
+ships `ServiceEndpoint`, move the CI pin (and `openbao_ref` in
+`.github/workflows/django-tests.yml`) forward so this path is exercised
+against the real model in CI, and add a real-Django case that confirms an
+actual `ServiceEndpoint` row also resolves end to end.
+
 FastAPI backend tokens, PBS tokens, PDM tokens, and Firecracker agent tokens
 follow the same effective storage selection. With OpenBao selected, each owner
 stores one opaque credential UUID and clears its legacy Fernet ciphertext only

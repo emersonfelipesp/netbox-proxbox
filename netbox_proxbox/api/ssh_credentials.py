@@ -23,7 +23,7 @@ from __future__ import annotations
 
 import requests
 from django.conf import settings as django_settings
-from django.core.exceptions import ValidationError
+from django.core.exceptions import PermissionDenied, ValidationError
 from django.shortcuts import get_object_or_404
 from django.views.decorators.debug import sensitive_variables
 from netbox.api.authentication import TokenAuthentication
@@ -60,6 +60,36 @@ _SSH_ACCESS_DISABLED = (
     "endpoint's access method to 'API + SSH' to enable the SSH terminal; SSH "
     "only complements API and cannot be enabled on its own."
 )
+
+
+_AMBIGUOUS_NODE_IDENTIFIER = (
+    "This identifier matches both a Proxmox node's own id and a different "
+    "node's linked NetBox device id; refusing an ambiguous lookup."
+)
+
+
+class _AmbiguousNodeIdentifier(Exception):
+    """``node_id`` is simultaneously valid under both interpretations.
+
+    Raised when a numeric identifier is at once a real object's own PK and a
+    *different* object's linked-device PK. Deliberately not a
+    ``Model.DoesNotExist`` subclass: callers must refuse explicitly instead of
+    the exception being caught by an existing "not found → try the next
+    resolution" branch and silently guessing one of the two objects.
+    """
+
+
+def _optional_get(queryset, model, **kwargs):
+    """Return the one matching row, or ``None`` when there isn't one.
+
+    A genuine ambiguity among rows matching *this single* lookup still raises
+    ``model.MultipleObjectsReturned`` — only "no match" is converted to
+    ``None`` here.
+    """
+    try:
+        return queryset.get(**kwargs)
+    except model.DoesNotExist:
+        return None
 
 
 def _metadata_payload(cred: NodeSSHCredential) -> dict:
@@ -124,17 +154,86 @@ def _credential_for_node_identifier(node_id: int) -> NodeSSHCredential:
     ``proxbox-api`` initially passed the linked ``dcim.Device`` id when fetching
     credentials. The primary lookup stays the intended ``ProxmoxNode`` id, while
     the fallback keeps that backend build compatible.
+
+    Both interpretations are always resolved and compared: ``node_id`` can be
+    simultaneously a real ``ProxmoxNode``'s own PK *and* a different node's
+    linked-device PK. That collision is refused (``_AmbiguousNodeIdentifier``)
+    rather than silently preferring the PK match, since that node's own
+    credential row is not necessarily the one the caller meant.
     """
     queryset = NodeSSHCredential.objects.select_related(
         "node", "node__netbox_device", "node__endpoint"
     )
+    by_pk = _optional_get(queryset, NodeSSHCredential, node_id=node_id)
     try:
-        return queryset.get(node_id=node_id)
-    except NodeSSHCredential.DoesNotExist:
-        try:
-            return queryset.get(node__netbox_device_id=node_id)
-        except NodeSSHCredential.DoesNotExist as exc:
-            raise exc
+        by_device = _optional_get(
+            queryset, NodeSSHCredential, node__netbox_device_id=node_id
+        )
+    except NodeSSHCredential.MultipleObjectsReturned:
+        # Several nodes share this value as their device id, so at least one
+        # of them differs from any PK match: the identifier is ambiguous
+        # either way and must never resolve to a credential.
+        if by_pk is not None:
+            raise _AmbiguousNodeIdentifier(
+                f"{node_id} matches a ProxmoxNode PK and several nodes' linked device PK."
+            ) from None
+        raise
+    if by_pk is not None and by_device is not None and by_pk.pk != by_device.pk:
+        raise _AmbiguousNodeIdentifier(
+            f"{node_id} matches both a ProxmoxNode PK and a different node's "
+            "linked device PK."
+        )
+    if by_pk is not None:
+        return by_pk
+    if by_device is not None:
+        return by_device
+    raise NodeSSHCredential.DoesNotExist()
+
+
+def _proxmox_node_for_identifier(node_id: int) -> ProxmoxNode:
+    """Resolve a ``ProxmoxNode`` by its own PK, with NetBox device PK fallback.
+
+    Mirrors ``_credential_for_node_identifier()``'s dual-resolution, fail-
+    closed-on-collision semantics, since ``proxbox-api`` may pass either
+    identifier here too. Unlike a ``NodeSSHCredential`` lookup, more than one
+    ``ProxmoxNode`` can share one ``netbox_device_id`` — that ambiguity among
+    device-PK matches still fails closed via
+    ``ProxmoxNode.MultipleObjectsReturned`` rather than silently resolving to
+    an arbitrary one of them.
+    """
+    queryset = ProxmoxNode.objects.select_related("netbox_device", "endpoint")
+    by_pk = _optional_get(queryset, ProxmoxNode, pk=node_id)
+    try:
+        by_device = _optional_get(queryset, ProxmoxNode, netbox_device_id=node_id)
+    except ProxmoxNode.MultipleObjectsReturned:
+        # Several nodes share this value as their device id; with a PK match
+        # as well, the caller's intent cannot be known, so fail closed.
+        if by_pk is not None:
+            raise _AmbiguousNodeIdentifier(
+                f"{node_id} matches a ProxmoxNode PK and several nodes' linked device PK."
+            ) from None
+        raise
+    if by_pk is not None and by_device is not None and by_pk.pk != by_device.pk:
+        raise _AmbiguousNodeIdentifier(
+            f"{node_id} matches both a ProxmoxNode PK and a different node's "
+            "linked device PK."
+        )
+    if by_pk is not None:
+        return by_pk
+    if by_device is not None:
+        return by_device
+    raise ProxmoxNode.DoesNotExist()
+
+
+def _parse_optional_port(raw: str | None) -> int | None:
+    """Parse an optional ``?port=`` query value, ignoring anything invalid."""
+    if not raw:
+        return None
+    try:
+        port = int(raw)
+    except (TypeError, ValueError):
+        return None
+    return port if 1 <= port <= 65535 else None
 
 
 def _node_ssh_access_disabled(cred: NodeSSHCredential) -> bool:
@@ -234,7 +333,13 @@ class NodeSSHCredentialByNodeAPIView(APIView):
 
     def get(self, request: Request, node_id: int) -> Response:
         """Return metadata only; 404 if no row, never returns secrets."""
-        cred = _credential_for_node_identifier(node_id)
+        try:
+            cred = _credential_for_node_identifier(node_id)
+        except _AmbiguousNodeIdentifier:
+            return Response(
+                {"detail": _AMBIGUOUS_NODE_IDENTIFIER},
+                status=status.HTTP_404_NOT_FOUND,
+            )
         return Response(_metadata_payload(cred))
 
 
@@ -259,16 +364,16 @@ class NodeSSHCredentialSecretsAPIView(APIView):
 
         try:
             cred = _credential_for_node_identifier(node_id)
-        except NodeSSHCredential.DoesNotExist:
+        except _AmbiguousNodeIdentifier:
+            # Fail closed here rather than falling through to the OpenBao
+            # fallback: that path resolves the same node_id independently and
+            # would only rediscover the same collision.
             return Response(
-                {
-                    "detail": (
-                        "No local NodeSSHCredential is registered for this node. "
-                        "Create one in Proxbox before requesting SSH access."
-                    )
-                },
+                {"detail": _AMBIGUOUS_NODE_IDENTIFIER},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        except NodeSSHCredential.DoesNotExist:
+            return self._resolve_from_device_openbao(request, node_id)
 
         # Gate node-target SSH on the owning endpoint's access method.
         if _node_ssh_access_disabled(cred):
@@ -296,6 +401,64 @@ class NodeSSHCredentialSecretsAPIView(APIView):
 
         payload = _metadata_payload(cred)
         payload.update(secrets)
+        return Response(payload)
+
+    @sensitive_variables()
+    def _resolve_from_device_openbao(self, request: Request, node_id: int) -> Response:
+        """Fall back to the linked device's OpenBao SSH credential, when any.
+
+        Only reached when no local ``NodeSSHCredential`` row exists. An
+        optional ``?port=`` query parameter narrows an ambiguous match to a
+        single credentialed service endpoint.
+        """
+        from netbox_proxbox.api.device_openbao_ssh_resolver import (
+            resolve_node_ssh_from_device_openbao,
+        )
+
+        try:
+            node = _proxmox_node_for_identifier(node_id)
+        except _AmbiguousNodeIdentifier:
+            return Response(
+                {"detail": _AMBIGUOUS_NODE_IDENTIFIER},
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except ProxmoxNode.DoesNotExist:
+            return Response(
+                {
+                    "detail": (
+                        "No local NodeSSHCredential is registered for this node. "
+                        "Create one in Proxbox before requesting SSH access."
+                    )
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        except ProxmoxNode.MultipleObjectsReturned:
+            return Response(
+                {
+                    "detail": (
+                        "Multiple Proxmox nodes are linked to this identifier; "
+                        "refusing an ambiguous lookup."
+                    )
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
+        port = _parse_optional_port(request.query_params.get("port"))
+        try:
+            payload = resolve_node_ssh_from_device_openbao(
+                node, user=request.user, port=port
+            )
+        except PermissionDenied as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
+        if payload is None:
+            return Response(
+                {
+                    "detail": (
+                        "No local NodeSSHCredential is registered for this node. "
+                        "Create one in Proxbox before requesting SSH access."
+                    )
+                },
+                status=status.HTTP_404_NOT_FOUND,
+            )
         return Response(payload)
 
 

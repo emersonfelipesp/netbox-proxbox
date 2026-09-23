@@ -428,38 +428,48 @@ jobs:
           NETBOX_PROXBOX_TEST_OPENBAO: ${{ matrix.openbao && '1' || '0' }}
           PYTHONPATH: ${{ github.workspace }}/netbox/netbox:${{ github.workspace }}/netbox-proxbox
         run: |
-          .venv/bin/pytest tests/test_netbox_compat_django.py \
-            tests/test_api_netbox_integration.py \
-            tests/test_list_view_render_django.py \
-            tests/test_django_database_reclamation_django.py \
-            tests/test_sync_state_models.py tests/test_sync_state_contracts.py \
-            tests/test_proxmox_endpoint_allowed_tenants.py \
-            tests/test_openbao_optionality_django.py \
-            tests/test_openbao_assignments_django.py \
-            tests/test_openbao_node_assignments_django.py \
-            tests/test_openbao_single_secret_django.py \
-            tests/test_openbao_cloudinit_django.py \
-            tests/test_openbao_setup_django.py \
-            tests/test_backend_key_adoption_django.py \
-            tests/test_encryption_key_recovery_django.py \
-            tests/test_job_stream_django.py \
-            tests/test_ceph_runtime_settings_django.py \
-            tests/test_credential_reference_migration_django.py \
-            tests/test_data_protection_views_django.py \
-            tests/test_influxdb_metrics_django.py \
-            tests/test_node_ssh_credential_form_django.py \
-            tests/test_node_ssh_credential_audit_django.py \
-            tests/test_detail_view_templates_django.py \
-            tests/test_vm_console_django.py \
-            tests/test_pdm_endpoint_permissions_django.py \
-            tests/test_packer_endpoint_authorization_django.py \
-            tests/test_storage_nodes_capacity_django.py \
-            tests/test_mcp_bridge_django.py \
-            tests/test_proxbox_job_filter_django.py \
-            tests/test_sync_jobs_api_django.py \
-            tests/test_sync_state_endpoint_backfill_django.py \
-            tests/test_vm_intent_django.py \
-            tests/test_soft_deleted_vm_purge_django.py \
+          common_tests=(
+            tests/test_netbox_compat_django.py
+            tests/test_api_netbox_integration.py
+            tests/test_list_view_render_django.py
+            tests/test_django_database_reclamation_django.py
+            tests/test_sync_state_models.py
+            tests/test_sync_state_contracts.py
+            tests/test_proxmox_endpoint_allowed_tenants.py
+            tests/test_openbao_optionality_django.py
+            tests/test_backend_key_adoption_django.py
+            tests/test_encryption_key_recovery_django.py
+            tests/test_job_stream_django.py
+            tests/test_ceph_runtime_settings_django.py
+            tests/test_credential_reference_migration_django.py
+            tests/test_data_protection_views_django.py
+            tests/test_influxdb_metrics_django.py
+            tests/test_node_ssh_credential_form_django.py
+            tests/test_node_ssh_credential_audit_django.py
+            tests/test_detail_view_templates_django.py
+            tests/test_vm_console_django.py
+            tests/test_pdm_endpoint_permissions_django.py
+            tests/test_packer_endpoint_authorization_django.py
+            tests/test_storage_nodes_capacity_django.py
+            tests/test_mcp_bridge_django.py
+            tests/test_proxbox_job_filter_django.py
+            tests/test_sync_jobs_api_django.py
+            tests/test_sync_state_endpoint_backfill_django.py
+            tests/test_vm_intent_django.py
+            tests/test_soft_deleted_vm_purge_django.py
+          )
+          openbao_tests=(
+            tests/test_openbao_assignments_django.py
+            tests/test_openbao_node_assignments_django.py
+            tests/test_openbao_single_secret_django.py
+            tests/test_openbao_cloudinit_django.py
+            tests/test_openbao_setup_django.py
+          )
+          selected_tests=("${common_tests[@]}")
+          if [[ "${{ matrix.openbao }}" == "true" ]]; then
+            selected_tests+=("${openbao_tests[@]}")
+          fi
+          .venv/bin/pytest "${selected_tests[@]}" \
             --ds=netbox.settings --reuse-db --create-db -v --no-header \
             --cov=netbox_proxbox.services.endpoint_autoconfiguration \
             --cov=netbox_proxbox.api.serializers.resource_views \

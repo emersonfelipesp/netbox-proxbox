@@ -767,6 +767,53 @@ def test_django_tests_use_read_only_nonpersistent_checkout_credentials():
     assert all(step["with"]["persist-credentials"] is False for step in checkout_steps)
 
 
+def test_release_screenshots_validate_the_tag_without_writing_from_tag_events():
+    parsed = yaml.safe_load(_read(DOCS_SCREENSHOTS_WORKFLOW_PATH))
+    steps = parsed["jobs"]["capture-screenshots"]["steps"]
+    checkout = next(step for step in steps if step.get("name") == "Checkout repository")
+    publish = next(
+        step for step in steps if step.get("name") == "Commit and push screenshots"
+    )
+
+    assert checkout["with"]["ref"] == (
+        "${{ startsWith(github.ref, 'refs/tags/') && github.sha || github.ref_name }}"
+    )
+    assert publish["if"] == "github.event_name == 'workflow_dispatch'"
+    assert 'git pull --rebase origin "${GITHUB_REF_NAME}"' in publish["run"]
+    assert 'git push origin "HEAD:${GITHUB_REF_NAME}"' in publish["run"]
+
+
+def test_django_tests_isolate_optional_openbao_suites_to_the_companion_cell():
+    parsed = yaml.safe_load(_read(DJANGO_TESTS_WORKFLOW_PATH))
+    run = next(
+        step["run"]
+        for step in parsed["jobs"]["django-tests"]["steps"]
+        if step.get("name") == "Run NetBox-backed model, view, and integration tests"
+    )
+
+    assert 'if [[ "${{ matrix.openbao }}" == "true" ]]' in run
+    assert 'selected_tests+=("${openbao_tests[@]}")' in run
+    assert '.venv/bin/pytest "${selected_tests[@]}"' in run
+    common = run[run.index("common_tests=(") : run.index("openbao_tests=(")]
+    isolated = run[run.index("openbao_tests=(") : run.index("selected_tests=(")]
+    for suite in (
+        "tests/test_openbao_assignments_django.py",
+        "tests/test_openbao_node_assignments_django.py",
+        "tests/test_openbao_single_secret_django.py",
+        "tests/test_openbao_cloudinit_django.py",
+        "tests/test_openbao_setup_django.py",
+    ):
+        assert suite in isolated
+        assert suite not in common
+    for suite in (
+        "tests/test_backend_key_adoption_django.py",
+        "tests/test_encryption_key_recovery_django.py",
+        "tests/test_detail_view_templates_django.py",
+        "tests/test_packer_endpoint_authorization_django.py",
+    ):
+        assert suite in common
+
+
 def test_django_tests_pin_source_identity_proof():
     workflow = _read(DJANGO_TESTS_WORKFLOW_PATH)
     assert "uv venv --python 3.12.13" in workflow

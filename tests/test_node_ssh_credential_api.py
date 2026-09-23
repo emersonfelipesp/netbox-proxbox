@@ -48,6 +48,7 @@ def _stub_for_ssh_credentials(
     django_conf.settings = SimpleNamespace(DEBUG=False)
     django_exceptions = types.ModuleType("django.core.exceptions")
     django_exceptions.ValidationError = type("ValidationError", (Exception,), {})
+    django_exceptions.PermissionDenied = type("PermissionDenied", (Exception,), {})
     monkeypatch.setitem(sys.modules, "django.core.exceptions", django_exceptions)
 
     django_shortcuts = types.ModuleType("django.shortcuts")
@@ -139,14 +140,24 @@ def _stub_for_ssh_credentials(
         class DoesNotExist(Exception):
             pass
 
+        class MultipleObjectsReturned(Exception):
+            pass
+
     class _ProxmoxEndpoint:
         pass
+
+    class _ProxmoxNode:
+        class DoesNotExist(Exception):
+            pass
+
+        class MultipleObjectsReturned(Exception):
+            pass
 
     np_models = types.ModuleType("netbox_proxbox.models")
     np_models.NodeSSHCredential = _NodeSSHCredential
     np_models.ProxboxPluginSettings = _ProxboxPluginSettings
     np_models.ProxmoxEndpoint = _ProxmoxEndpoint
-    np_models.ProxmoxNode = type("ProxmoxNode", (), {})
+    np_models.ProxmoxNode = _ProxmoxNode
 
     np_models_ssh = types.ModuleType("netbox_proxbox.models.ssh_credential")
     np_models_ssh.AUTH_METHOD_PASSWORD = "password"
@@ -224,6 +235,7 @@ def _stub_for_ssh_credentials(
         NodeSSHCredential=_NodeSSHCredential,
         ProxboxPluginSettings=_ProxboxPluginSettings,
         ProxmoxEndpoint=_ProxmoxEndpoint,
+        ProxmoxNode=_ProxmoxNode,
     )
 
 
@@ -342,13 +354,15 @@ def test_credential_lookup_prefers_proxmox_node_id(monkeypatch):
             self.calls.append(kwargs)
             if kwargs == {"node_id": 42}:
                 return credential
+            if kwargs == {"node__netbox_device_id": 42}:
+                raise stubs.NodeSSHCredential.DoesNotExist()
             raise AssertionError(f"unexpected lookup: {kwargs}")
 
     queryset = _QuerySet()
     stubs.NodeSSHCredential.objects = queryset
 
     assert module._credential_for_node_identifier(42) is credential
-    assert queryset.calls == [{"node_id": 42}]
+    assert queryset.calls == [{"node_id": 42}, {"node__netbox_device_id": 42}]
     assert queryset.select_related_fields == (
         "node",
         "node__netbox_device",
@@ -383,6 +397,58 @@ def test_credential_lookup_falls_back_to_netbox_device_id(monkeypatch):
         {"node_id": 99},
         {"node__netbox_device_id": 99},
     ]
+
+
+def test_credential_lookup_refuses_a_pk_versus_device_id_collision(monkeypatch):
+    """42 is simultaneously node 42's own credential row's PK match *and*
+    node 100's linked-device PK match, for two genuinely different
+    credentials. Both interpretations are valid on their own; picking either
+    silently would return the wrong caller's secret material.
+    """
+    module, stubs = _load_ssh_credentials_view(monkeypatch)
+    by_pk_credential = SimpleNamespace(pk=1, node_id=42)
+    by_device_credential = SimpleNamespace(pk=2, node_id=100)
+
+    class _QuerySet:
+        def select_related(self, *_fields):
+            return self
+
+        def get(self, **kwargs):
+            if kwargs == {"node_id": 42}:
+                return by_pk_credential
+            if kwargs == {"node__netbox_device_id": 42}:
+                return by_device_credential
+            raise AssertionError(f"unexpected lookup: {kwargs}")
+
+    stubs.NodeSSHCredential.objects = _QuerySet()
+
+    with pytest.raises(module._AmbiguousNodeIdentifier):
+        module._credential_for_node_identifier(42)
+
+
+def test_credential_lookup_refuses_pk_plus_multiple_device_matches(
+    monkeypatch,
+):
+    """One PK match plus several device-id matches is ambiguous: a caller
+    passing a device id could otherwise receive the PK node's credential."""
+    module, stubs = _load_ssh_credentials_view(monkeypatch)
+    by_pk_credential = SimpleNamespace(pk=1, node_id=42)
+
+    class _QuerySet:
+        def select_related(self, *_fields):
+            return self
+
+        def get(self, **kwargs):
+            if kwargs == {"node_id": 42}:
+                return by_pk_credential
+            if kwargs == {"node__netbox_device_id": 42}:
+                raise stubs.NodeSSHCredential.MultipleObjectsReturned()
+            raise AssertionError(f"unexpected lookup: {kwargs}")
+
+    stubs.NodeSSHCredential.objects = _QuerySet()
+
+    with pytest.raises(module._AmbiguousNodeIdentifier):
+        module._credential_for_node_identifier(42)
 
 
 # ---------------------------------------------------------------------------
@@ -424,7 +490,13 @@ def test_metadata_payload_omits_secrets(monkeypatch):
     assert "private_key" not in payload
 
 
-def _node_credential_queryset(credential):
+def _node_credential_queryset(credential, *, node_ssh_credential_stub):
+    """Stand-in for ``NodeSSHCredential.objects`` supporting both the PK and
+    linked-device-PK lookups ``_credential_for_node_identifier()`` always
+    issues. Only the PK lookup matches; the device-PK lookup raises
+    ``DoesNotExist``.
+    """
+
     class _QuerySet:
         def select_related(self, *_fields):
             return self
@@ -432,6 +504,8 @@ def _node_credential_queryset(credential):
         def get(self, **kwargs):
             if kwargs == {"node_id": credential.node_id}:
                 return credential
+            if "node__netbox_device_id" in kwargs:
+                raise node_ssh_credential_stub.DoesNotExist()
             raise AssertionError(f"unexpected credential lookup: {kwargs}")
 
     return _QuerySet()
@@ -452,7 +526,9 @@ def test_node_secrets_view_resolves_openbao_with_authenticated_actor(monkeypatch
         has_password=True,
         has_private_key=False,
     )
-    stubs.NodeSSHCredential.objects = _node_credential_queryset(credential)
+    stubs.NodeSSHCredential.objects = _node_credential_queryset(
+        credential, node_ssh_credential_stub=stubs.NodeSSHCredential
+    )
     openbao = sys.modules["netbox_proxbox.integrations.openbao"]
     openbao.node_uses_openbao_storage = lambda _credential: True
     calls = []
@@ -489,7 +565,9 @@ def test_node_secrets_view_sanitizes_openbao_failure(monkeypatch):
         has_password=True,
         has_private_key=False,
     )
-    stubs.NodeSSHCredential.objects = _node_credential_queryset(credential)
+    stubs.NodeSSHCredential.objects = _node_credential_queryset(
+        credential, node_ssh_credential_stub=stubs.NodeSSHCredential
+    )
     openbao = sys.modules["netbox_proxbox.integrations.openbao"]
     openbao.node_uses_openbao_storage = lambda _credential: True
 
@@ -817,6 +895,289 @@ def test_node_host_key_scan_route_is_registered() -> None:
     assert "ssh-credentials/by-node/<int:node_id>/host-key-fingerprint/" in src
     assert "NodeHostKeyFingerprintAPIView" in src
     assert 'name="api-ssh-credential-node-host-key"' in src
+
+
+# ---------------------------------------------------------------------------
+# Behavior: NodeSSHCredentialSecretsAPIView._resolve_from_device_openbao
+# (issue #614)
+# ---------------------------------------------------------------------------
+
+
+class _NodeQuerySet:
+    """Stand-in for ``ProxmoxNode.objects`` with real ``.get()`` semantics:
+    zero matches raises ``DoesNotExist``, more than one raises
+    ``MultipleObjectsReturned`` — the same fail-closed behavior Django's ORM
+    gives ``_credential_for_node_identifier()`` on the local-credential path.
+    """
+
+    def __init__(self, nodes: list, *, does_not_exist, multiple_returned) -> None:
+        self._nodes = nodes
+        self._does_not_exist = does_not_exist
+        self._multiple_returned = multiple_returned
+
+    def select_related(self, *_fields):
+        return self
+
+    def get(self, **kwargs):
+        ((field, value),) = kwargs.items()
+        matches = [n for n in self._nodes if getattr(n, field) == value]
+        if not matches:
+            raise self._does_not_exist()
+        if len(matches) > 1:
+            raise self._multiple_returned()
+        return matches[0]
+
+
+def _load_device_openbao_fallback(monkeypatch, *, resolver, nodes: list | None = None):
+    """Load ssh_credentials with a NodeSSHCredential lookup miss and a stub
+    ``netbox_proxbox.api.device_openbao_ssh_resolver`` module providing
+    *resolver*.
+
+    *nodes* defaults to a single ``ProxmoxNode`` whose own ``pk`` (42) differs
+    from its linked NetBox device's id (4242), so a test that requests either
+    identifier exercises the real PK-first/device-PK-second resolution
+    instead of a stub that returns the same node regardless of lookup.
+    """
+    module, stubs = _load_ssh_credentials_view(monkeypatch)
+
+    class _MissingQuerySet:
+        def select_related(self, *_fields):
+            return self
+
+        def get(self, **_kwargs):
+            raise stubs.NodeSSHCredential.DoesNotExist()
+
+    stubs.NodeSSHCredential.objects = _MissingQuerySet()
+
+    if nodes is None:
+        nodes = [
+            SimpleNamespace(
+                pk=42, netbox_device_id=4242, netbox_device=SimpleNamespace()
+            )
+        ]
+    module.ProxmoxNode.objects = _NodeQuerySet(
+        nodes,
+        does_not_exist=stubs.ProxmoxNode.DoesNotExist,
+        multiple_returned=stubs.ProxmoxNode.MultipleObjectsReturned,
+    )
+
+    resolver_mod = types.ModuleType("netbox_proxbox.api.device_openbao_ssh_resolver")
+    resolver_mod.resolve_node_ssh_from_device_openbao = resolver
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.api.device_openbao_ssh_resolver",
+        resolver_mod,
+    )
+    return module, nodes[0]
+
+
+def _fallback_request(*, port: str | None = None):
+    return SimpleNamespace(
+        user=SimpleNamespace(),
+        is_secure=lambda: True,
+        query_params={} if port is None else {"port": port},
+    )
+
+
+def test_resolve_from_device_openbao_returns_payload_on_match(monkeypatch):
+    calls = []
+
+    def _resolver(node, *, user=None, port=None):
+        calls.append((node, user, port))
+        return {"node_id": node.pk, "username": "root"}
+
+    module, node = _load_device_openbao_fallback(monkeypatch, resolver=_resolver)
+    request = _fallback_request()
+
+    response = module.NodeSSHCredentialSecretsAPIView().get(request, 42)
+
+    assert response.status_code == 200
+    assert response.data == {"node_id": 42, "username": "root"}
+    assert calls == [(node, request.user, None)]
+
+
+def test_resolve_from_device_openbao_forwards_a_valid_port(monkeypatch):
+    calls = []
+
+    def _resolver(node, *, user=None, port=None):
+        calls.append(port)
+        return {"node_id": node.pk}
+
+    module, _node = _load_device_openbao_fallback(monkeypatch, resolver=_resolver)
+    request = _fallback_request(port="2222")
+
+    module.NodeSSHCredentialSecretsAPIView().get(request, 42)
+
+    assert calls == [2222]
+
+
+def test_resolve_from_device_openbao_ignores_an_invalid_port(monkeypatch):
+    calls = []
+
+    def _resolver(node, *, user=None, port=None):
+        calls.append(port)
+        return {"node_id": node.pk}
+
+    module, _node = _load_device_openbao_fallback(monkeypatch, resolver=_resolver)
+    request = _fallback_request(port="not-a-port")
+
+    module.NodeSSHCredentialSecretsAPIView().get(request, 42)
+
+    assert calls == [None]
+
+
+def test_resolve_from_device_openbao_returns_404_when_nothing_matches(monkeypatch):
+    module, _node = _load_device_openbao_fallback(
+        monkeypatch, resolver=lambda *a, **k: None
+    )
+    request = _fallback_request()
+
+    response = module.NodeSSHCredentialSecretsAPIView().get(request, 42)
+
+    assert response.status_code == 404
+    assert "No local NodeSSHCredential" in response.data["detail"]
+
+
+def test_resolve_from_device_openbao_translates_permission_denied_to_403(
+    monkeypatch,
+):
+    def _deny(*_args, **_kwargs):
+        raise module_permission_denied_exception("ambiguous match")
+
+    module, _node = _load_device_openbao_fallback(monkeypatch, resolver=_deny)
+    request = _fallback_request()
+
+    response = module.NodeSSHCredentialSecretsAPIView().get(request, 42)
+
+    assert response.status_code == 403
+    assert response.data == {"detail": "ambiguous match"}
+
+
+def test_resolve_from_device_openbao_falls_back_to_linked_device_id(monkeypatch):
+    """proxbox-api may pass the linked ``dcim.Device`` id instead of the
+    ``ProxmoxNode`` PK, exactly as ``_credential_for_node_identifier()``
+    already tolerates on the local-credential path. The node's own pk (42)
+    differs from its device id (4242) so a stub that ignored the lookup field
+    would pass this test vacuously.
+    """
+    calls = []
+
+    def _resolver(node, *, user=None, port=None):
+        calls.append(node.pk)
+        return {"node_id": node.pk}
+
+    module, node = _load_device_openbao_fallback(monkeypatch, resolver=_resolver)
+    request = _fallback_request()
+
+    response = module.NodeSSHCredentialSecretsAPIView().get(
+        request, node.netbox_device_id
+    )
+
+    assert response.status_code == 200
+    assert calls == [node.pk]
+
+
+def test_resolve_from_device_openbao_returns_404_for_unknown_identifier(monkeypatch):
+    module, _node = _load_device_openbao_fallback(
+        monkeypatch, resolver=lambda *a, **k: {"should": "not run"}
+    )
+    request = _fallback_request()
+
+    response = module.NodeSSHCredentialSecretsAPIView().get(request, 999999)
+
+    assert response.status_code == 404
+
+
+def test_resolve_from_device_openbao_refuses_an_ambiguous_device_id(monkeypatch):
+    """Two ProxmoxNode rows linked to the same NetBox device must fail
+    closed rather than silently resolving to an arbitrary one of them.
+    """
+
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("the resolver must not run on an ambiguous lookup")
+
+    shared_device_id = 4242
+    nodes = [
+        SimpleNamespace(
+            pk=42, netbox_device_id=shared_device_id, netbox_device=SimpleNamespace()
+        ),
+        SimpleNamespace(
+            pk=43, netbox_device_id=shared_device_id, netbox_device=SimpleNamespace()
+        ),
+    ]
+    module, _node = _load_device_openbao_fallback(
+        monkeypatch, resolver=_boom, nodes=nodes
+    )
+    request = _fallback_request()
+
+    response = module.NodeSSHCredentialSecretsAPIView().get(request, shared_device_id)
+
+    assert response.status_code == 404
+    assert "Multiple Proxmox nodes" in response.data["detail"]
+
+
+def test_resolve_from_device_openbao_refuses_a_pk_versus_device_id_collision(
+    monkeypatch,
+):
+    """42 is simultaneously node A's own pk *and* node B's linked device id,
+    for two genuinely different nodes. Silently preferring either interpretation
+    would resolve — and potentially reveal — the wrong node's SSH material.
+    """
+
+    def _boom(*_args, **_kwargs):
+        raise AssertionError("the resolver must not run on an ambiguous lookup")
+
+    node_a = SimpleNamespace(
+        pk=42, netbox_device_id=9001, netbox_device=SimpleNamespace()
+    )
+    node_b = SimpleNamespace(
+        pk=100, netbox_device_id=42, netbox_device=SimpleNamespace()
+    )
+    module, _node = _load_device_openbao_fallback(
+        monkeypatch, resolver=_boom, nodes=[node_a, node_b]
+    )
+    request = _fallback_request()
+
+    response = module.NodeSSHCredentialSecretsAPIView().get(request, 42)
+
+    assert response.status_code == 404
+    assert "matches both a Proxmox node's own id" in response.data["detail"]
+
+
+def test_resolve_from_device_openbao_refuses_pk_plus_multiple_device_matches(
+    monkeypatch,
+):
+    """One PK match plus several device-id matches must fail closed and never
+    reveal any node's secret."""
+    calls = []
+
+    def _resolver(node, *, user=None, port=None):
+        calls.append(node.pk)
+        return {"node_id": node.pk}
+
+    node_a = SimpleNamespace(
+        pk=42, netbox_device_id=9001, netbox_device=SimpleNamespace()
+    )
+    node_b = SimpleNamespace(
+        pk=100, netbox_device_id=42, netbox_device=SimpleNamespace()
+    )
+    node_c = SimpleNamespace(
+        pk=101, netbox_device_id=42, netbox_device=SimpleNamespace()
+    )
+    module, _node = _load_device_openbao_fallback(
+        monkeypatch, resolver=_resolver, nodes=[node_a, node_b, node_c]
+    )
+    request = _fallback_request()
+
+    response = module.NodeSSHCredentialSecretsAPIView().get(request, 42)
+
+    assert response.status_code == 404
+    assert calls == []
+
+
+def module_permission_denied_exception(message):
+    """Raise the same ``PermissionDenied`` class the loaded module imported."""
+    return sys.modules["django.core.exceptions"].PermissionDenied(message)
 
 
 # ---------------------------------------------------------------------------

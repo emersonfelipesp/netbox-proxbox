@@ -107,7 +107,15 @@ class _ProxboxEndpointAPIViewTestCase(_ProxboxAPIViewTestCase):
 class ProxmoxEndpointAPITest(_ProxboxEndpointAPIViewTestCase):
     __test__ = True
     model = ProxmoxEndpoint
-    brief_fields = ["display", "domain", "id", "name", "port", "url"]
+    brief_fields = [
+        "display",
+        "domain",
+        "iana_timezone",
+        "id",
+        "name",
+        "port",
+        "url",
+    ]
     bulk_update_data = {"verify_ssl": True}
     update_data = {"name": "pve-updated"}
     validation_excluded_fields = ["ip_address", "password", "token_value"]
@@ -301,6 +309,12 @@ class FastAPIEndpointAPITest(_ProxboxEndpointAPIViewTestCase):
 
     @classmethod
     def setUpTestData(cls):
+        settings = ProxboxPluginSettings.get_solo()
+        settings.credential_storage_backend = (
+            CredentialStorageBackendChoices.LEGACY_ENCRYPTED
+        )
+        settings.encryption_key = Fernet.generate_key().decode("ascii")
+        settings.save(update_fields=("credential_storage_backend", "encryption_key"))
         cls.ip_addresses = [
             IPAddress.objects.create(address="203.0.113.1/24"),
             IPAddress.objects.create(address="203.0.113.2/24"),

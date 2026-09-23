@@ -26,8 +26,9 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          # For tag events, commit screenshots back to develop; for branch events, use the triggered branch.
-          ref: ${{ startsWith(github.ref, 'refs/tags/') && 'develop' || github.ref_name }}
+          # Release validation must execute the immutable tagged source. A
+          # manual refresh may still use and update its selected branch.
+          ref: ${{ startsWith(github.ref, 'refs/tags/') && github.sha || github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Set up Python
@@ -238,6 +239,7 @@ jobs:
           python scripts/capture_screenshots.py
 
       - name: Commit and push screenshots
+        if: github.event_name == 'workflow_dispatch'
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -247,8 +249,8 @@ jobs:
             exit 0
           fi
           git commit -m "chore: update UI screenshots [skip ci]"
-          git pull --rebase origin develop
-          git push
+          git pull --rebase origin "${GITHUB_REF_NAME}"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
 
       - name: Install documentation dependencies
         run: python -m pip install -r requirements-docs.txt
