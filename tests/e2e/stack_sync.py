@@ -29,6 +29,22 @@ def _remaining_sync_timeout(deadline: float, *, context: str) -> float:
     return min(30.0, remaining)
 
 
+def _parse_positive_ascii_id(value: Any) -> int | None:
+    """Return a bounded positive ASCII identifier, or None when invalid."""
+    if isinstance(value, bool):
+        return None
+    raw_value = str(value)
+    if (
+        not raw_value
+        or len(raw_value) > 20
+        or not raw_value.isascii()
+        or not raw_value.isdecimal()
+        or raw_value.startswith("0")
+    ):
+        return None
+    return int(raw_value)
+
+
 def _validate_sync_redirect(
     trigger: requests.Response,
     *,
@@ -42,23 +58,30 @@ def _validate_sync_redirect(
             f"HTTP {trigger.status_code} {trigger.text}"
         )
     location = trigger.headers.get("Location", "")
-    redirect_url = urljoin(netbox_base_url, location)
-    expected_origin = urlsplit(netbox_base_url)[:2]
-    parsed_redirect = urlsplit(redirect_url)
+    try:
+        redirect_url = urljoin(netbox_base_url, location)
+        expected_origin = urlsplit(netbox_base_url)[:2]
+        parsed_redirect = urlsplit(redirect_url)
+    except ValueError as exc:
+        raise AssertionError(
+            f"Sync trigger {route} returned an invalid redirect destination"
+        ) from exc
     if not location or parsed_redirect[:2] != expected_origin:
         raise AssertionError(
             f"Sync trigger {route} returned an invalid redirect destination"
         )
-    if parsed_redirect.path.rstrip("/") != "/plugins/proxbox":
+    if parsed_redirect.path != "/plugins/proxbox/home/" or any(
+        delimiter in location for delimiter in ("?", "#")
+    ):
         raise AssertionError(
             f"Sync trigger {route} redirected outside the Proxbox home page: {location}"
         )
-    raw_job_id = trigger.headers.get("X-Proxbox-Job-ID", "")
-    if not str(raw_job_id).isdigit():
+    job_id = _parse_positive_ascii_id(trigger.headers.get("X-Proxbox-Job-ID", ""))
+    if job_id is None:
         raise AssertionError(
             f"Sync trigger {route} did not return an authoritative job ID"
         )
-    return int(raw_job_id)
+    return job_id
 
 
 def trigger_and_wait_sync(
@@ -117,6 +140,11 @@ def trigger_and_wait_sync(
             context=f"read sync job {job_id}",
             deadline=deadline,
         )
+        response_job_id = _parse_positive_ascii_id(job.get("id"))
+        if response_job_id != job_id:
+            raise AssertionError(
+                f"Sync trigger {route} returned mismatched job {job_id}: {job}"
+            )
         name = str(job.get("name", "")).lower()
         if expected_lower and expected_lower not in name:
             raise AssertionError(

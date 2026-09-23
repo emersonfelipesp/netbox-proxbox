@@ -63,7 +63,7 @@ def _load_stack_sync():
         sys.path.pop(0)
 
 
-def _trigger_response(*, job_id: str = "42", location: str = "/plugins/proxbox/"):
+def _trigger_response(*, job_id: str = "42", location: str = "/plugins/proxbox/home/"):
     return _Response(
         status_code=302,
         headers={"Location": location, "X-Proxbox-Job-ID": job_id},
@@ -124,9 +124,33 @@ def test_trigger_and_wait_sync_polls_authoritative_job_id(monkeypatch):
 @pytest.mark.parametrize(
     ("response", "message"),
     [
-        (_trigger_response(location="/login/?next=/plugins/proxbox/"), "outside"),
+        (_trigger_response(location=""), "invalid redirect"),
+        (_trigger_response(location="/login/?next=/plugins/proxbox/home/"), "outside"),
         (_trigger_response(location="https://attacker.example/"), "invalid redirect"),
+        (_trigger_response(location="/plugins/proxbox/"), "outside"),
+        (_trigger_response(location="/plugins/proxbox/home"), "outside"),
+        (_trigger_response(location="/plugins/proxbox/home////"), "outside"),
+        (_trigger_response(location="/plugins/proxbox/home/?"), "outside"),
+        (_trigger_response(location="/plugins/proxbox/home/#"), "outside"),
+        (_trigger_response(location="/plugins/proxbox/home/?next=/login/"), "outside"),
+        (_trigger_response(location="/plugins/proxbox/other/"), "outside"),
+        (
+            _trigger_response(location="//attacker.example/plugins/proxbox/home/"),
+            "invalid redirect",
+        ),
+        (
+            _trigger_response(
+                location="http://attacker@netbox.example/plugins/proxbox/home/"
+            ),
+            "invalid redirect",
+        ),
+        (_trigger_response(location="/plugins/proxbox/%68ome/"), "outside"),
+        (_trigger_response(location="http://[::1"), "invalid redirect"),
         (_trigger_response(job_id=""), "authoritative job ID"),
+        (_trigger_response(job_id="0"), "authoritative job ID"),
+        (_trigger_response(job_id="٠"), "authoritative job ID"),
+        (_trigger_response(job_id="²"), "authoritative job ID"),
+        (_trigger_response(job_id="9" * 1000), "authoritative job ID"),
     ],
 )
 def test_trigger_and_wait_sync_rejects_invalid_trigger_response(
@@ -148,6 +172,37 @@ def test_trigger_and_wait_sync_rejects_invalid_trigger_response(
     )
 
     with pytest.raises(AssertionError, match=message):
+        stack_sync.trigger_and_wait_sync(
+            "http://netbox.example",
+            "token-value",
+            route="/plugins/proxbox/sync/devices/",
+            expected_name_fragment="devices",
+        )
+
+
+def test_trigger_and_wait_sync_rejects_mismatched_job_resource(monkeypatch):
+    stack_sync = _load_stack_sync()
+
+    def fake_get(url: str, **_kwargs):
+        if url.endswith("/login/"):
+            return _Response(status_code=200, cookies={"csrftoken": "csrf-token"})
+        return _Response(
+            status_code=200,
+            payload={
+                "id": 99,
+                "name": "Proxbox Sync: Devices",
+                "status": {"value": "completed", "label": "Completed"},
+            },
+        )
+
+    monkeypatch.setattr(stack_sync.requests, "get", fake_get)
+    monkeypatch.setattr(
+        stack_sync.requests,
+        "post",
+        lambda *_args, **_kwargs: _trigger_response(job_id="42"),
+    )
+
+    with pytest.raises(AssertionError, match="mismatched job 42"):
         stack_sync.trigger_and_wait_sync(
             "http://netbox.example",
             "token-value",
