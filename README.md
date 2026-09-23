@@ -244,13 +244,18 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
-## What's New in v0.0.27rc12
+## What's New in v0.0.27rc13
 
-Current source pairing: netbox-proxbox 0.0.27rc12 <-> proxbox-api 0.0.23.post1 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This is the current sibling-source development stack, not a rewrite of historical release compatibility. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source pairing: netbox-proxbox 0.0.27rc13 <-> proxbox-api 0.0.23.post1 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This is the current sibling-source development stack, not a rewrite of historical release compatibility. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The current released runtime pairing for this release line is
 `proxbox-api 0.0.23.post1`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`.
 
+- **Authoritative E2E sync-job correlation.** Successful Proxbox sync enqueue
+  responses expose the exact NetBox Core Job ID, and release validation polls
+  only that record under one monotonic deadline. This prevents cache-update
+  child jobs or concurrent same-name syncs from hiding or impersonating the
+  triggered job.
 - **Mock-safe endpoint transport budget.** Disposable Page Coverage and Docker
   E2E endpoints use an explicit 60-second Proxmox request timeout with one
   bounded retry, avoiding hosted mock-server timeouts without changing
@@ -399,7 +404,8 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
-| 4.5.8-4.7.0 GA (current source) | v0.0.27rc12 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
+| 4.5.8-4.7.0 GA (current source) | v0.0.27rc13 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
+| 4.5.8-4.7.0 GA | v0.0.27rc13 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc12 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc11 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc10 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
