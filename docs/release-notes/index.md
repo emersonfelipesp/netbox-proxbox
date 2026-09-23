@@ -4,7 +4,7 @@ This section tracks the release line represented by this repository and keeps ol
 
 ## Current Release Line
 
-The plugin source in this repository is currently `0.0.27rc11` on the
+The plugin source in this repository is currently `0.0.27rc12` on the
 development line. The sibling plugins (`netbox-pbs`,
 `netbox-ceph`, and `netbox-pdm`) live in standalone repositories under
 [@emersonfelipesp](https://github.com/emersonfelipesp) and declare
@@ -36,6 +36,7 @@ part of the same plugin family.
 
 | Version | Summary |
 |---------|---------|
+| `0.0.27rc12` | Gives disposable Page Coverage and Docker E2E Proxmox endpoints a mock-safe timeout and bounded retry budget without changing production defaults. |
 | `0.0.27rc11` | Makes disposable Page Coverage and Docker E2E synchronization deterministic by bounding mock-backed Proxmox fetch concurrency without changing production defaults. |
 | `0.0.27rc10` | Validates the all-in-one OCI appliance against the released `proxbox-api 0.0.23.post1` duplicate-VM synchronization correction. |
 | `0.0.27rc9` | Exposes the endpoint credential-storage override through the REST serializer so disposable Page Coverage can use local encryption without changing the production OpenBao default. |
@@ -89,6 +90,6 @@ part of the same plugin family.
 - Older pages are intentionally brief because the repository does not preserve fuller release-note prose for those versions.
 
 
-> **Current source:** netbox-proxbox `0.0.27rc11` supports NetBox `4.5.8`-`4.7.0`, including official v4.7.0 GA. Current source pairing: netbox-proxbox 0.0.27rc11 <-> proxbox-api 0.0.23.post1 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. The current released runtime pairing uses the same backend stack. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+> **Current source:** netbox-proxbox `0.0.27rc12` supports NetBox `4.5.8`-`4.7.0`, including official v4.7.0 GA. Current source pairing: netbox-proxbox 0.0.27rc12 <-> proxbox-api 0.0.23.post1 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. The current released runtime pairing uses the same backend stack. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.27rc11 <-> proxbox-api 0.0.23.post1 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.27rc12 <-> proxbox-api 0.0.23.post1 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
