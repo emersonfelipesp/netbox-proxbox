@@ -64,7 +64,7 @@ def test_ensure_proxbox_backend_endpoints_skips_direct_proxmox_seed(monkeypatch)
     ]
 
 
-def test_netbox_e2e_endpoint_explicitly_uses_local_credential_storage(monkeypatch):
+def test_netbox_e2e_endpoint_uses_deterministic_fixture_settings(monkeypatch):
     stack_setup = _load_stack_setup()
     calls: list[tuple[str, str, dict]] = []
 
@@ -76,7 +76,10 @@ def test_netbox_e2e_endpoint_explicitly_uses_local_credential_storage(monkeypatc
         calls.append(("PATCH", url, kwargs))
         return _Response(
             status_code=200,
-            payload={"credential_storage_backend": "legacy_encrypted"},
+            payload={
+                "credential_storage_backend": "legacy_encrypted",
+                "proxbox_fetch_max_concurrency": 1,
+            },
         )
 
     def fake_post_json(url: str, payload: dict, *_args, **_kwargs) -> dict:
@@ -117,7 +120,10 @@ def test_netbox_e2e_endpoint_explicitly_uses_local_credential_storage(monkeypatc
                     "Content-Type": "application/json",
                     "Accept": "application/json",
                 },
-                "json": {"credential_storage_backend": "legacy_encrypted"},
+                "json": {
+                    "credential_storage_backend": "legacy_encrypted",
+                    "proxbox_fetch_max_concurrency": 1,
+                },
                 "timeout": 30,
                 "allow_redirects": False,
             },

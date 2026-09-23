@@ -185,8 +185,8 @@ def assert_settings_endpoint_reachable(netbox_base_url: str, netbox_token: str) 
             raise AssertionError(f"Settings runtime payload missing {key!r}: {payload}")
 
 
-def select_fixture_credential_storage(netbox_base_url: str, netbox_token: str) -> None:
-    """Select local credential storage for the disposable E2E stack."""
+def configure_fixture_plugin_settings(netbox_base_url: str, netbox_token: str) -> None:
+    """Select deterministic settings for the disposable E2E stack."""
     headers = {
         "Authorization": f"Token {netbox_token}",
         "Content-Type": "application/json",
@@ -211,7 +211,10 @@ def select_fixture_credential_storage(netbox_base_url: str, netbox_token: str) -
         requests.patch(
             f"{netbox_base_url}/api/plugins/proxbox/settings/{settings_id}/",
             headers=headers,
-            json={"credential_storage_backend": "legacy_encrypted"},
+            json={
+                "credential_storage_backend": "legacy_encrypted",
+                "proxbox_fetch_max_concurrency": 1,
+            },
             timeout=30,
             allow_redirects=False,
         ),
@@ -220,6 +223,10 @@ def select_fixture_credential_storage(netbox_base_url: str, netbox_token: str) -
     if updated.get("credential_storage_backend") != "legacy_encrypted":
         raise AssertionError(
             "Plugin settings did not retain legacy_encrypted credential storage"
+        )
+    if updated.get("proxbox_fetch_max_concurrency") != 1:
+        raise AssertionError(
+            "Plugin settings did not retain mock-safe fetch concurrency"
         )
 
 
@@ -488,7 +495,7 @@ def ensure_netbox_plugin_endpoints(
         "Content-Type": "application/json",
         "Accept": "application/json",
     }
-    select_fixture_credential_storage(netbox_base_url, netbox_token)
+    configure_fixture_plugin_settings(netbox_base_url, netbox_token)
 
     parsed_netbox = urlparse(netbox_public_url) if netbox_public_url else None
     netbox_host = (parsed_netbox.hostname if parsed_netbox else None) or "netbox"
