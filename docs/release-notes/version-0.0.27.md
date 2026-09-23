@@ -2,10 +2,13 @@
 
 ## Standalone virtual machine consoles and hardened synchronization
 
-Current backend-runtime pairing: netbox-proxbox 0.0.27rc13 <-> proxbox-api 0.0.23.post1 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.27rc14 <-> proxbox-api 0.0.23.post1 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 This release adds a permission-gated Console tab directly to synchronized NetBox virtual machines. QEMU guests support noVNC and terminal sessions, and LXC guests support terminal sessions. The browser connects through the public proxbox-api relay without receiving Proxmox credentials, private topology, or reusable upstream tickets.
 
+- Validates the canonical Proxbox home redirect during release checks, rejects
+  ambiguous redirect and job-ID forms, and requires every polled Core Job
+  resource to match the authoritative response header ID.
 - Exposes the exact NetBox Core Job ID on successful Proxbox sync enqueue
   responses and uses that identity during release validation, avoiding
   first-page loss and concurrent same-name false positives under one bounded
@@ -45,6 +48,7 @@ the previous appliance release-validation candidate.
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |---|---|---|---|---|
+| 4.5.8-4.7.0 GA | v0.0.27rc14 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc13 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc12 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc11 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
