@@ -4,7 +4,7 @@ This section tracks the release line represented by this repository and keeps ol
 
 ## Current Release Line
 
-The plugin source in this repository is currently `0.0.27rc18` on the
+The plugin source in this repository is currently `0.0.27` on the
 development line. The sibling plugins (`netbox-pbs`,
 `netbox-ceph`, and `netbox-pdm`) live in standalone repositories under
 [@emersonfelipesp](https://github.com/emersonfelipesp) and declare
@@ -36,6 +36,7 @@ part of the same plugin family.
 
 | Version | Summary |
 |---------|---------|
+| `0.0.27` | Promotes the fully validated RC18 content after Page Coverage, TestPyPI validation on Python 3.12 and 3.13, and all 66 Docker E2E cells passed, retaining the `proxbox-api 0.0.23.post2` pairing. |
 | `0.0.27rc18` | Retains the `proxbox-api 0.0.23.post2` pairing and installs `packaging` before Docker E2E backend selection, correcting RC17's pre-container failure across every matrix cell after Page Coverage and TestPyPI had passed. |
 | `0.0.27rc17` | Corrects RC16's failed node network synchronization gate by returning Proxmox-compatible list envelopes for the `pve01`, `pve02`, and `pve03` mock endpoints while retaining the `proxbox-api 0.0.23.post2` pairing. |
 | `0.0.27rc16` | Replaces RC15's `proxbox-api 0.0.23.post1` pairing after that real-stack Page Coverage gate returned no expected backup inventory record; post2 restores backup synchronization by hydrating typed virtual-machine identity before backup filtering. |
@@ -96,6 +97,6 @@ part of the same plugin family.
 - Older pages are intentionally brief because the repository does not preserve fuller release-note prose for those versions.
 
 
-> **Current source:** netbox-proxbox `0.0.27rc18` supports NetBox `4.5.8`-`4.7.0`, including official v4.7.0 GA. Current source pairing: netbox-proxbox 0.0.27rc18 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. The current released runtime pairing uses the same backend stack. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+> **Current source:** netbox-proxbox `0.0.27` supports NetBox `4.5.8`-`4.7.0`, including official v4.7.0 GA. Current source pairing: netbox-proxbox 0.0.27 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. The current released runtime pairing uses the same backend stack. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.27rc18 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.27 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.

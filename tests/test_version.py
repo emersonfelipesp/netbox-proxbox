@@ -101,12 +101,12 @@ CERTIFICATION_PATH = REPO_ROOT / "CERTIFICATION.md"
 DOCS_CERTIFICATION_PATH = REPO_ROOT / "docs" / "certification.md"
 APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
-CURRENT_PLUGIN_VERSION = "0.0.27rc18"
-CURRENT_RELEASE_VERSION = "0.0.27rc18"
-CURRENT_PACKAGE_VERSION = "0.0.27rc18"
+CURRENT_PLUGIN_VERSION = "0.0.27"
+CURRENT_RELEASE_VERSION = "0.0.27"
+CURRENT_PACKAGE_VERSION = "0.0.27"
 CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.23.post2"
 CURRENT_PAIRING_LINE = (
-    "Current backend-runtime pairing: netbox-proxbox 0.0.27rc18 <-> proxbox-api "
+    "Current backend-runtime pairing: netbox-proxbox 0.0.27 <-> proxbox-api "
     "0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST "
     "dependency only and does not provide the semantic MCP bridge."
 )

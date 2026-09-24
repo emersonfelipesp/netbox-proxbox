@@ -2,7 +2,7 @@
 
 ## Standalone virtual machine consoles and hardened synchronization
 
-Current backend-runtime pairing: netbox-proxbox 0.0.27rc18 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.27 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 This release adds a permission-gated Console tab directly to synchronized NetBox virtual machines. QEMU guests support noVNC and terminal sessions, and LXC guests support terminal sessions. The browser connects through the public proxbox-api relay without receiving Proxmox credentials, private topology, or reusable upstream tickets.
 
@@ -17,6 +17,8 @@ not installed for backend selection. RC18 installs it before that script runs.
 
 - Restores Docker E2E setup across the complete matrix by installing
   `packaging` before the backend-selection script imports it.
+- Promotes the RC18 package after Page Coverage, TestPyPI validation on Python
+  3.12 and 3.13, and all 66 Docker E2E cells passed.
 
 - Restores node network synchronization in the real-stack Page Coverage gate
   by returning list-shaped Proxmox network data for every fixture node.
@@ -69,6 +71,7 @@ restores backup records by hydrating typed VM identity before backup filtering.
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |---|---|---|---|---|
+| 4.5.8-4.7.0 GA | v0.0.27 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc18 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc17 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc16 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
