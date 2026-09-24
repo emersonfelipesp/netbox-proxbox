@@ -53,16 +53,16 @@ interfaces documented in this repository.
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.0` GA. The current
-plugin version is `0.0.27rc17`.
+plugin version is `0.0.27rc18`.
 
-Current source pairing: netbox-proxbox 0.0.27rc17 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source pairing: netbox-proxbox 0.0.27rc18 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The last documented released runtime pairing for this release line remains
 netbox-proxbox 0.0.27rc4 <-> proxbox-api 0.0.22.post1 <-> proxmox-sdk 0.0.13
 <-> netbox-sdk 0.0.13. Preserve release-note and compatibility rows as
 historical records unless a release workflow changes them.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.27rc17 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.27rc18 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 CI pairing: the E2E Docker, page-coverage, documentation-screenshot, and
 release-validation workflow defaults consume proxbox-api `0.0.23.post2`. E2E uses the
