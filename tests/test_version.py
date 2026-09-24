@@ -1271,6 +1271,20 @@ def test_e2e_defaults_to_exact_published_backend() -> None:
     )
 
 
+def test_e2e_installs_backend_selection_dependency_before_use() -> None:
+    workflow = yaml.safe_load(E2E_WORKFLOW_PATH.read_text(encoding="utf-8"))
+    steps = workflow["jobs"]["e2e-docker-stack"]["steps"]
+    step_names = [step["name"] for step in steps]
+    install_index = step_names.index("Install test dependencies")
+    selection_index = step_names.index("Resolve proxbox-api runtime source")
+
+    assert install_index < selection_index
+    assert (
+        "python -m pip install 'packaging==26.0' requests"
+        in steps[install_index]["run"]
+    )
+
+
 def test_e2e_workflow_supports_proxbox_api_package_index_runtime_modes():
     e2e_workflow = E2E_WORKFLOW_PATH.read_text(encoding="utf-8")
 
