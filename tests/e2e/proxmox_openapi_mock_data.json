@@ -63,6 +63,57 @@
       ]
     }
   },
+  "/api2/json/nodes/pve01/network": {
+    "data": [
+      {
+        "iface": "eno1",
+        "type": "eth",
+        "active": 1,
+        "autostart": 1
+      },
+      {
+        "iface": "vmbr0",
+        "type": "bridge",
+        "active": 1,
+        "autostart": 1,
+        "bridge_ports": "eno1"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve02/network": {
+    "data": [
+      {
+        "iface": "eno1",
+        "type": "eth",
+        "active": 1,
+        "autostart": 1
+      },
+      {
+        "iface": "vmbr0",
+        "type": "bridge",
+        "active": 1,
+        "autostart": 1,
+        "bridge_ports": "eno1"
+      }
+    ]
+  },
+  "/api2/json/nodes/pve03/network": {
+    "data": [
+      {
+        "iface": "eno1",
+        "type": "eth",
+        "active": 1,
+        "autostart": 1
+      },
+      {
+        "iface": "vmbr0",
+        "type": "bridge",
+        "active": 1,
+        "autostart": 1,
+        "bridge_ports": "eno1"
+      }
+    ]
+  },
   "/api2/json/cluster/resources": {
     "data": [
       {
