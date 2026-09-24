@@ -244,17 +244,24 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
-## What's New in v0.0.27rc16
+## What's New in v0.0.27rc17
 
-Current source pairing: netbox-proxbox 0.0.27rc16 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This is the current sibling-source development stack, not a rewrite of historical release compatibility. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source pairing: netbox-proxbox 0.0.27rc17 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This is the current sibling-source development stack, not a rewrite of historical release compatibility. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The current released runtime pairing for this release line is
 `proxbox-api 0.0.23.post2`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`.
 
 RC15 paired with `proxbox-api 0.0.23.post1` and failed the real-stack Page
 Coverage gate because the expected backup inventory record was missing. RC16
-pairs with post2, which hydrates typed virtual-machine identity before backup
-filtering and restores that record.
+pairs with post2, which restores that record, but its next Page Coverage run
+failed because the mock returned no list-shaped node network response. RC17
+keeps the post2 pairing and supplies Proxmox-compatible `{"data": [...]}`
+network envelopes for `pve01`, `pve02`, and `pve03`.
+
+- **Node network synchronization restored in the real-stack gate.** The
+  disposable Proxmox OpenAPI mock now returns list-shaped network data for all
+  three fixture nodes, matching the Proxmox API contract consumed by
+  proxbox-api while retaining the released `0.0.23.post2` runtime pairing.
 
 - **Backup synchronization restored in the real-stack gate.** Page Coverage now
   runs against `proxbox-api 0.0.23.post2`, which hydrates typed virtual-machine
@@ -422,6 +429,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| 4.5.8-4.7.0 GA | v0.0.27rc17 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc16 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc15 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc14 | v0.0.23.post1 | v0.0.13 | v0.0.15 |

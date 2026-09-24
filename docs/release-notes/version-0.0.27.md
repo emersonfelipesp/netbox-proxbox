@@ -2,14 +2,19 @@
 
 ## Standalone virtual machine consoles and hardened synchronization
 
-Current backend-runtime pairing: netbox-proxbox 0.0.27rc16 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.27rc17 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 This release adds a permission-gated Console tab directly to synchronized NetBox virtual machines. QEMU guests support noVNC and terminal sessions, and LXC guests support terminal sessions. The browser connects through the public proxbox-api relay without receiving Proxmox credentials, private topology, or reusable upstream tickets.
 
 RC15 paired with `proxbox-api 0.0.23.post1` and failed the real-stack Page
 Coverage gate because the expected backup inventory record was missing. RC16
-pairs with post2, which hydrates typed virtual-machine identity before backup
-filtering and restores that record.
+pairs with post2, which restores that record, but its next Page Coverage run
+failed because the mock returned no list-shaped node network response. RC17
+retains post2 and adds Proxmox-compatible `{"data": [...]}` network envelopes
+for `pve01`, `pve02`, and `pve03`.
+
+- Restores node network synchronization in the real-stack Page Coverage gate
+  by returning list-shaped Proxmox network data for every fixture node.
 
 - Restores backup synchronization in the real-stack Page Coverage gate with
   `proxbox-api 0.0.23.post2`, which hydrates typed virtual-machine identity
@@ -59,6 +64,7 @@ restores backup records by hydrating typed VM identity before backup filtering.
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |---|---|---|---|---|
+| 4.5.8-4.7.0 GA | v0.0.27rc17 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc16 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc15 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc14 | v0.0.23.post1 | v0.0.13 | v0.0.15 |
