@@ -2,7 +2,12 @@
 
 from __future__ import annotations
 
+import os
+import shutil
+import subprocess
 from pathlib import Path
+
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
@@ -1214,3 +1219,38 @@ def test_endpoint_status_script_polls_sequentially_and_pauses_when_hidden():
     assert "for (const element of badges)" in contents
     assert "await refreshBadge(element)" in contents
     assert "refreshInFlight" in contents
+
+
+def test_home_dashboard_uses_one_bounded_request_pool_and_preserves_badges():
+    contents = _read("netbox_proxbox/static/netbox_proxbox/js/home_inline.js")
+
+    assert "HOME_REQUEST_CONCURRENCY = 4" in contents
+    assert "runBounded(" in contents
+    assert "Promise.all" not in contents
+    assert 'throttled: "Throttled"' in contents
+    assert 'document.getElementById("proxmox-status-badge-"' not in contents
+    assert "retry_after" in contents
+
+
+def _require_node() -> None:
+    """Skip locally without Node, but never let CI pass without running the oracle."""
+    if shutil.which("node") is not None:
+        return
+    if os.environ.get("CI"):
+        pytest.fail("Node.js is required in CI to run the dashboard scheduler oracle")
+    pytest.skip("Node.js is not installed")
+
+
+def test_home_dashboard_request_pool_at_runtime() -> None:
+    _require_node()
+    subprocess.run(
+        [
+            "node",
+            str(REPO_ROOT / "tests/js/home_inline_runtime.cjs"),
+            str(REPO_ROOT / "netbox_proxbox/static/netbox_proxbox/js/home_inline.js"),
+        ],
+        cwd=REPO_ROOT,
+        check=True,
+        text=True,
+        capture_output=True,
+    )

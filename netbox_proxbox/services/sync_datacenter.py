@@ -116,6 +116,7 @@ def sync_datacenter(
     auth_headers: dict | None = None,
     fastapi_endpoint_id: int | None = None,
     endpoint_ids: list[int] | None = None,
+    deadline: float | None = None,
 ) -> DatacenterSyncResult:
     """Sync datacenter CPU models for the Proxmox endpoints in scope.
 
@@ -148,11 +149,13 @@ def sync_datacenter(
     if auth_headers is None:
         auth_headers = {}
 
+    from netbox_proxbox.services.sync_deadline import remaining_timeout
+
     scope_params, backend_id_by_pk, scope_error = enabled_backend_endpoint_scope(
         base_url=fastapi_url,
         auth_headers=auth_headers,
         backend_verify_ssl=verify_ssl,
-        timeout=SYNC_TIMEOUT,
+        timeout=remaining_timeout(deadline, float(SYNC_TIMEOUT)),
         endpoint_ids=endpoint_ids,
     )
     if scope_error:
@@ -179,7 +182,7 @@ def sync_datacenter(
             params=scope_params,
             headers=auth_headers,
             verify=verify_ssl,
-            timeout=SYNC_TIMEOUT,
+            timeout=remaining_timeout(deadline, float(SYNC_TIMEOUT)),
             allow_redirects=False,
         )
         resp.raise_for_status()

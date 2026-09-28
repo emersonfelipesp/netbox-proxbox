@@ -175,6 +175,7 @@
             Leave any field blank to inherit the value from the global plugin settings.
             {% endblocktrans %}
           </p>
+          {% render_field form.node_device_name_template %}
           {% render_field form.timeout %}
           {% render_field form.max_retries %}
           {% render_field form.retry_backoff %}

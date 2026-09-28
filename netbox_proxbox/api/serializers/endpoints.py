@@ -115,6 +115,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "version",
             "repoid",
             "iana_timezone",
+            "node_device_name_template",
             "username",
             "password",
             "token_name",
@@ -170,6 +171,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "domain",
             "port",
             "iana_timezone",
+            "node_device_name_template",
         )
         extra_kwargs = {
             "password": {"write_only": True, "required": False, "allow_null": True},
@@ -202,6 +204,32 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
                     "ip_address": "Provide either a domain or an IP address.",
                 }
             )
+
+        template = str(
+            attrs.get(
+                "node_device_name_template",
+                getattr(self.instance, "node_device_name_template", ""),
+            )
+            or ""
+        ).strip()
+        from django.core.exceptions import ValidationError
+
+        from netbox_proxbox.validators import (
+            validate_endpoint_node_device_name_template,
+        )
+
+        try:
+            validate_endpoint_node_device_name_template(
+                template,
+                endpoint_id=getattr(self.instance, "pk", None),
+                endpoint_name=str(
+                    attrs.get("name", getattr(self.instance, "name", ""))
+                ),
+            )
+        except ValidationError as exc:
+            raise serializers.ValidationError(
+                {"node_device_name_template": exc}
+            ) from exc
 
         self._validate_service_monitoring(attrs)
         return attrs

@@ -377,3 +377,24 @@ def test_get_proxmox_card_returns_sync_error_without_requesting_backend(
     assert response.payload["detail"] == "sync failed"
     assert response.payload["http_status"] == 502
     assert calls == []
+
+
+def test_get_proxmox_card_marks_backend_capacity_failure_as_throttled(
+    monkeypatch, fastapi_endpoint, proxmox_endpoint
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.cards",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+    monkeypatch.setattr(
+        module,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: (False, "Backend capacity is exhausted.", 429),
+    )
+
+    response = module.get_proxmox_card(None, 1)
+
+    assert response.payload["status"] == "throttled"
+    assert response.payload["http_status"] == 429

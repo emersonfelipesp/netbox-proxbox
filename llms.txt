@@ -9,6 +9,16 @@ netbox-proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data 
 ### What It Does
 
 - **Clusters and Nodes** — Proxmox cluster and node information
+- **Configurable node Device names** — a global template and optional
+  per-endpoint override render NetBox Device names from `{node}`, `{cluster}`,
+  `{cluster_slug}`, and `{endpoint}`. Proxmox paths and typed sync identity keep
+  the short node name. Managed legacy names can be renamed safely, while
+  operator-assigned names are preserved. Saving an endpoint override validates
+  it against that endpoint's synchronized nodes and clusters; saving the global
+  template validates every synchronized node whose endpoint inherits it.
+  Invalid DNS output and names longer than 64 characters are rejected with the
+  offending inventory context, while empty inventories retain representative-
+  sample validation.
 - **Virtual Machines** — VM status, resources, and configuration
 - **Containers (LXC)** — Container details and settings
 - **VM Snapshots** — Point-in-time snapshots for recovery
@@ -22,6 +32,7 @@ netbox-proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data 
   calendar day bucketing. Unresolved timing remains visibly approximate, and
   combined calendar node selection is capped at 50.
 - **Extended inventory** — guest OS interfaces, SDN, firewall, Firecracker, Proxmox metrics, service-monitoring samples, and PBS/PDM endpoint records
+- **Endpoint-isolated synchronization** — required SSE stages, firewall, and datacenter passes continue with later Proxmox endpoints after one endpoint fails, then fail the job with persisted per-endpoint evidence. Backend-key and stage retries share bounded delta-seconds and HTTP-date `Retry-After` parsing. Staged work uses one monotonic RQ-timeout deadline with a 120-second persistence reserve, records the current and remaining endpoint failures on exhaustion, and returns through finalization before the hard timeout. Successful UI enqueue redirects directly to the NetBox job detail page.
 - **OpenBao endpoint, node, and cloud-init credentials** — exact-policy password, API-token, and SSH material writes with provider-owned transactionality, UUID references, purpose-aware assignments, and shared-credential-safe unlinking. Selected node SSH password/keypair material becomes the primary `login` credential on the linked `dcim.Device`; FastAPI/PBS/PDM tokens use primary `api` assignments and Firecracker agent tokens use a primary `agent` assignment. VM cloud-init password/keypair material is assigned to the parent VM for `login`, with `ssh_pwauth` selecting the primary credential; public SSH keys never enter provider payloads. Required OpenBao reads never downgrade to Fernet, `credential_reference_id`, or an unrelated credential-provider fallback. UI/API mutations begin the provider boundary outside NetBox atomic blocks and carry the request actor; raw/bulk/cascade/downgrade bypasses refuse remaining state. Secret-free readiness and generic assignment selectors support automation while live material remains confined to authenticated consumers.
 - **OpenBao structural setup** — `proxbox_openbao_setup --check` and the settings card share a typed, secret-free composed readiness snapshot. Interactive material writes validate only the provider, default engine, and exact policy; RPC and the automation user remain composed diagnostics. Writable setup creates only an explicitly configured default engine and policy, never users or material, and rolls back every write when final readiness fails. Opt-in assignment backfill adds only missing relations, is concurrency-safe and idempotent, and refuses incomplete node ownership, unresolved references, credential-type mismatches, disabled or primary-state-drifted exact rows, and conflicting shared-owner primaries without rewriting operator-owned state or disclosing UUIDs. This structural check does not certify the broader RPC/backend protected-write rollout.
 
@@ -106,6 +117,24 @@ Use `netbox_proxbox/services/endpoint_enabled.py` for this guard. New live-read
 or write paths for PBS/PDM must call `disabled_endpoint_detail()` before
 building request contexts or invoking `requests`, SSE, WebSocket, or SDK
 clients.
+
+### Home Dashboard Status Loading
+
+The home page uses one four-worker browser request pool for FastAPI badges,
+dependent endpoint badges, and Proxmox card hydration. A card failure never
+downgrades a badge whose keepalive succeeded. Backend HTTP 429/503 responses
+render as a neutral throttled state, and card retries honor `Retry-After` when
+the response provides it. Initial requests and at most three coalesced retries
+per card use the same persistent scheduler; retry timers never bypass the pool.
+
+FastAPI probes are cached for 30 seconds by endpoint and a hash of its
+connection settings; failures use a three-second TTL. Successful Proxmox
+endpoint pushes cache a secret-safe canonical payload fingerprint and backend
+endpoint ID for five minutes. Endpoint saves invalidate that cache, while the
+sync-job preflight retains its explicit batch push behavior. The cached ID is a
+hint, not proof of remote existence: every use verifies the single backend row's
+immutable identity suffix and resolved host/port. A 404 or identity mismatch
+invalidates the hint and immediately retries full discovery and registration.
 
 ### Key Components
 
@@ -750,6 +779,8 @@ def run_sync_stream(
 | `proxmox_endpoint_ids` | Comma-separated ProxmoxEndpoint IDs |
 | `netbox_endpoint_ids` | Comma-separated NetBoxEndpoint IDs |
 | `delete_nonexistent_backup` | Delete backup records not found in Proxmox |
+
+For estates with many Proxmox clusters, see [Large multi-cluster deployments](./docs/configuration/large-multi-cluster-deployments.md): most sync stages call proxbox-api one endpoint at a time while backup-routine, replication, firewall, and datacenter operations can fan out across every endpoint in scope, raise `PROXBOX_RATE_LIMIT` on proxbox-api for large estates, keep a single active FastAPI backend API key, and treat `custom_fields_request_delay` as compatibility-only (no runtime effect).
 
 ### WebSocket Integration
 

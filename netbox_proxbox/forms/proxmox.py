@@ -40,6 +40,7 @@ from ..models.ssh_credential import (
     SSH_CRED_SOURCE_DEDICATED,
     SSH_CRED_SOURCE_REUSE,
 )
+from ..validators import validate_endpoint_node_device_name_template
 
 
 class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
@@ -424,6 +425,7 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
     fieldsets = (
         FieldSet(
             "name",
+            "node_device_name_template",
             "ip_address",
             "domain",
             "port",
@@ -497,6 +499,7 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
         model = ProxmoxEndpoint
         fields = (
             "name",
+            "node_device_name_template",
             "ip_address",
             "domain",
             "port",
@@ -524,6 +527,20 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
             "ssh_known_host_fingerprint",
             "tags",
         )
+
+    def clean_node_device_name_template(self) -> str:
+        """Validate the effective template against this endpoint's inventory."""
+
+        template = str(self.cleaned_data.get("node_device_name_template") or "").strip()
+        instance = getattr(self, "instance", None)
+        validate_endpoint_node_device_name_template(
+            template,
+            endpoint_id=getattr(instance, "pk", None),
+            endpoint_name=str(
+                self.cleaned_data.get("name") or getattr(instance, "name", "")
+            ),
+        )
+        return template
 
     def clean(self) -> dict[str, object]:
         """Require domain or IP, honour explicit credential clears, and enforce
@@ -768,6 +785,7 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
     class Meta:
         model = ProxmoxEndpoint
         fields = (
+            "node_device_name_template",
             "timeout",
             "max_retries",
             "retry_backoff",
@@ -882,6 +900,18 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
             allow_none=True,
         )
 
+    def clean_node_device_name_template(self) -> str:
+        """Apply the same inventory-aware validation as the main edit form."""
+
+        template = str(self.cleaned_data.get("node_device_name_template") or "").strip()
+        instance = self.instance
+        validate_endpoint_node_device_name_template(
+            template,
+            endpoint_id=instance.pk,
+            endpoint_name=str(instance.name),
+        )
+        return template
+
 
 class ProxmoxEndpointSSHSettingsForm(
     ProxmoxEndpointSSHCredentialFormMixin,
@@ -976,6 +1006,7 @@ class ProxmoxEndpointImportForm(NetBoxModelImportForm):
         model = ProxmoxEndpoint
         fields = (
             "name",
+            "node_device_name_template",
             "domain",
             "ip_address",
             "port",

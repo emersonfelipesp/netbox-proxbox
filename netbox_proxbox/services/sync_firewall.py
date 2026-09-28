@@ -38,6 +38,7 @@ from netbox_proxbox.models import (
 )
 from netbox_proxbox.services.backend_proxy import get_fastapi_request_context
 from netbox_proxbox.services.endpoint_scope import enabled_backend_endpoint_scope
+from netbox_proxbox.services.sync_deadline import SyncJobDeadlineReached
 
 logger = logging.getLogger(__name__)
 
@@ -491,11 +492,68 @@ def _sync_one_endpoint(
 # ---------------------------------------------------------------------------
 
 
+def _sync_resolved_endpoint_nodes(
+    resolved_endpoints: dict[int, ProxmoxEndpoint],
+    backend_id_by_pk: dict[int, int],
+    per_endpoint_by_id: dict[int, dict[str, object]],
+    endpoint_started_at: dict[int, float],
+    *,
+    fastapi_url: str,
+    auth_headers: dict[str, str],
+    verify_ssl: bool,
+    deadline: float | None,
+) -> None:
+    """Sync node firewalls while preserving deadline exceptions as terminal."""
+    if not resolved_endpoints:
+        return
+    from netbox_proxbox.models import ProxmoxNode  # noqa: PLC0415
+
+    for endpoint in resolved_endpoints.values():
+        nodes = ProxmoxNode.objects.filter(endpoint=endpoint).values_list(
+            "name", flat=True
+        )
+        backend_endpoint_id = backend_id_by_pk.get(endpoint.pk)
+        for node_name in nodes:
+            if backend_endpoint_id is None:
+                logger.warning(
+                    "Skipping node firewall sync for endpoint=%s node=%r: "
+                    "backend endpoint id not resolved",
+                    endpoint.pk,
+                    node_name,
+                )
+                continue
+            try:
+                sync_node_firewall(
+                    endpoint=endpoint,
+                    node_name=node_name,
+                    fastapi_url=fastapi_url,
+                    auth_headers=auth_headers,
+                    verify_ssl=verify_ssl,
+                    backend_endpoint_id=backend_endpoint_id,
+                    deadline=deadline,
+                )
+            except SyncJobDeadlineReached:
+                raise
+            except Exception as exc:
+                logger.warning(
+                    "Node firewall sync failed for endpoint=%s node=%r: %s",
+                    endpoint.pk,
+                    node_name,
+                    exc,
+                )
+        ep_result = per_endpoint_by_id.get(endpoint.pk)
+        if ep_result is not None:
+            ep_result["runtime_seconds"] = round(
+                time.monotonic() - endpoint_started_at[endpoint.pk], 3
+            )
+
+
 def sync_firewall(
     fastapi_url: str | None = None,
     auth_headers: dict[str, str] | None = None,
     fastapi_endpoint_id: int | None = None,
     endpoint_ids: list[int] | None = None,
+    deadline: float | None = None,
 ) -> FirewallSyncResult:
     """Sync datacenter-level firewall objects for the Proxmox endpoints in scope.
 
@@ -537,11 +595,13 @@ def sync_firewall(
     if auth_headers is None:
         auth_headers = {}
 
+    from netbox_proxbox.services.sync_deadline import remaining_timeout
+
     scope_params, backend_id_by_pk, scope_error = enabled_backend_endpoint_scope(
         base_url=fastapi_url,
         auth_headers=auth_headers,
         backend_verify_ssl=verify_ssl,
-        timeout=SYNC_TIMEOUT,
+        timeout=remaining_timeout(deadline, float(SYNC_TIMEOUT)),
         endpoint_ids=endpoint_ids,
     )
     if scope_error:
@@ -570,7 +630,7 @@ def sync_firewall(
             params=scope_params,
             headers=auth_headers,
             verify=verify_ssl,
-            timeout=SYNC_TIMEOUT,
+            timeout=remaining_timeout(deadline, float(SYNC_TIMEOUT)),
             allow_redirects=False,
         )
         resp.raise_for_status()
@@ -658,44 +718,16 @@ def sync_firewall(
     # Node-level firewall sync — runs after datacenter pass so ProxmoxNode
     # rows already exist for newly-synced endpoints.
     # -----------------------------------------------------------------------
-    if resolved_endpoints:
-        from netbox_proxbox.models import ProxmoxNode  # noqa: PLC0415
-
-        for endpoint in resolved_endpoints.values():
-            nodes = ProxmoxNode.objects.filter(endpoint=endpoint).values_list(
-                "name", flat=True
-            )
-            for node_name in nodes:
-                backend_endpoint_id = backend_id_by_pk.get(endpoint.pk)
-                if backend_endpoint_id is None:
-                    logger.warning(
-                        "Skipping node firewall sync for endpoint=%s node=%r: backend endpoint id not resolved",
-                        endpoint.pk,
-                        node_name,
-                    )
-                    continue
-                try:
-                    sync_node_firewall(
-                        endpoint=endpoint,
-                        node_name=node_name,
-                        fastapi_url=fastapi_url,
-                        auth_headers=auth_headers,
-                        verify_ssl=verify_ssl,
-                        backend_endpoint_id=backend_endpoint_id,
-                    )
-                except Exception as exc:
-                    logger.warning(
-                        "Node firewall sync failed for endpoint=%s node=%r: %s",
-                        endpoint.pk,
-                        node_name,
-                        exc,
-                    )
-            ep_result = per_endpoint_by_id.get(endpoint.pk)
-            if ep_result is not None:
-                ep_result["runtime_seconds"] = round(
-                    time.monotonic() - endpoint_started_at[endpoint.pk],
-                    3,
-                )
+    _sync_resolved_endpoint_nodes(
+        resolved_endpoints,
+        backend_id_by_pk,
+        per_endpoint_by_id,
+        endpoint_started_at,
+        fastapi_url=fastapi_url,
+        auth_headers=auth_headers,
+        verify_ssl=verify_ssl,
+        deadline=deadline,
+    )
 
     result.success = (
         all(ep.get("success", False) for ep in result.per_endpoint)
@@ -722,6 +754,7 @@ def sync_node_firewall(
     auth_headers: dict[str, str],
     verify_ssl: bool = True,
     backend_endpoint_id: int | None = None,
+    deadline: float | None = None,
 ) -> None:
     """Sync firewall rules for a single Proxmox node.
 
@@ -744,6 +777,8 @@ def sync_node_firewall(
         )
         return
 
+    from netbox_proxbox.services.sync_deadline import remaining_timeout
+
     # Fetch node rules
     try:
         resp = requests.get(
@@ -755,7 +790,7 @@ def sync_node_firewall(
             ),
             headers=auth_headers,
             verify=verify_ssl,
-            timeout=SYNC_TIMEOUT,
+            timeout=remaining_timeout(deadline, float(SYNC_TIMEOUT)),
             allow_redirects=False,
         )
         resp.raise_for_status()

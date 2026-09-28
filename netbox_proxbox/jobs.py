@@ -55,6 +55,11 @@ from netbox_proxbox.sync_ownership import (
     _claim_rq_sync_ownership,
     _release_rq_sync_ownership,
 )
+from netbox_proxbox.services.retry_after import parse_retry_after
+from netbox_proxbox.services.sync_deadline import (
+    SyncJobDeadline,
+    SyncJobDeadlineReached,
+)
 
 # Use NetBox's default RQ queue so a stock ``manage.py rqworker`` (no args) picks up jobs.
 # Plugin-only queues such as ``netbox_proxbox.sync`` are not in that default worker list.
@@ -550,6 +555,7 @@ def _resolve_backend_preflight_state(
 def _probe_backend_preflight(
     state: _BackendPreflightState,
     fastapi_endpoint_id: int | None,
+    deadline: SyncJobDeadline | None = None,
 ) -> None:
     """Record bounded reachability and API-key checks as preflight hints."""
     from netbox_proxbox.services.backend_auth import (  # noqa: PLC0415
@@ -560,14 +566,19 @@ def _probe_backend_preflight(
         wait_for_backend_ready,
     )
 
+    time_budget = deadline.remaining(time.monotonic()) if deadline else None
     ready, ready_msg = wait_for_backend_ready(
         state.context,
         max_retries=PREFLIGHT_READY_MAX_RETRIES,
         initial_delay=PREFLIGHT_READY_INITIAL_DELAY,
         max_delay=PREFLIGHT_READY_MAX_DELAY,
+        time_budget=time_budget,
     )
     _record_backend_reachability(state, ready, ready_msg)
-    key_ok, key_msg = ensure_backend_key_registered(endpoint_id=fastapi_endpoint_id)
+    timeout = deadline.timeout(15.0, time.monotonic()) if deadline else None
+    key_ok, key_msg = ensure_backend_key_registered(
+        endpoint_id=fastapi_endpoint_id, timeout=timeout
+    )
     _record_backend_key_check(state, key_ok, key_msg)
 
 
@@ -598,14 +609,17 @@ def _push_one_netbox_endpoint(
     push: _NetBoxEndpointPush,
     endpoint: object,
     push_endpoint: object,
+    deadline: SyncJobDeadline | None,
 ) -> None:
     """Push one local NetBox endpoint and record its exact outcome."""
     push.endpoints.append(endpoint)
+    timeout = deadline.timeout(30.0, time.monotonic()) if deadline else 30.0
     ok, error, _ = push_endpoint(
         endpoint,
         base_url=state.base_url,
         auth_headers=state.auth_headers,
         backend_verify_ssl=state.verify_ssl,
+        timeout=timeout,
     )
     label = getattr(endpoint, "name", endpoint.pk)
     if ok:
@@ -622,6 +636,7 @@ def _push_one_netbox_endpoint(
 
 def _push_enabled_netbox_endpoints(
     state: _BackendPreflightState,
+    deadline: SyncJobDeadline | None = None,
 ) -> _NetBoxEndpointPush:
     """Push all enabled local NetBox endpoints to the selected backend."""
     from netbox_proxbox.models import NetBoxEndpoint  # noqa: PLC0415
@@ -632,7 +647,7 @@ def _push_enabled_netbox_endpoints(
     push = _NetBoxEndpointPush()
     for endpoint in NetBoxEndpoint.objects.filter(enabled=True):
         _push_one_netbox_endpoint(
-            state, push, endpoint, sync_netbox_endpoint_to_backend
+            state, push, endpoint, sync_netbox_endpoint_to_backend, deadline
         )
     return push
 
@@ -766,6 +781,7 @@ def _verify_stored_netbox_endpoints(
 def _classify_failed_netbox_push(
     state: _BackendPreflightState,
     push: _NetBoxEndpointPush,
+    deadline: SyncJobDeadline | None = None,
 ) -> PreflightResult | None:
     """Require positive ownership evidence after any NetBox endpoint push fails."""
     from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
@@ -780,6 +796,7 @@ def _classify_failed_netbox_push(
         base_url=state.base_url,
         auth_headers=state.auth_headers,
         backend_verify_ssl=state.verify_ssl,
+        timeout=(deadline.timeout(30.0, time.monotonic()) if deadline else 30.0),
     )
     if backend_rows is None and push.succeeded:
         state.job.logger.warning(
@@ -798,12 +815,13 @@ def _classify_failed_netbox_push(
 def _verify_netbox_endpoint_push(
     state: _BackendPreflightState,
     push: _NetBoxEndpointPush,
+    deadline: SyncJobDeadline | None = None,
 ) -> PreflightResult | None:
     """Return a blocking result unless this NetBox's write identity is proven."""
     if not push.endpoints:
         return _no_enabled_netbox_endpoint(state)
     if push.failures:
-        return _classify_failed_netbox_push(state, push)
+        return _classify_failed_netbox_push(state, push, deadline)
     return None
 
 
@@ -891,6 +909,7 @@ def _push_one_proxmox_endpoint(
     state: _BackendPreflightState,
     endpoint: object,
     existing_endpoints: list[object] | None,
+    deadline: SyncJobDeadline | None,
 ) -> dict[str, object]:
     """Push one Proxmox endpoint and return its runtime phase."""
     from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
@@ -905,6 +924,8 @@ def _push_one_proxmox_endpoint(
         auth_headers=state.auth_headers,
         backend_verify_ssl=state.verify_ssl,
         existing_endpoints=existing_endpoints,
+        timeout=(deadline.timeout(30.0, time.monotonic()) if deadline else 30.0),
+        deadline=deadline.executable_expires_at if deadline else None,
     )
     if ok:
         state.job.logger.info(
@@ -950,13 +971,17 @@ def _refresh_timezone_within_budget(
     state: _BackendPreflightState,
     endpoint: object,
     elapsed: float,
+    deadline: SyncJobDeadline | None = None,
 ) -> float:
     """Refresh one timezone while bounding all discovery calls as a group."""
     remaining = PREFLIGHT_ENDPOINT_TIMEZONE_BUDGET - elapsed
     if remaining <= 0:
         return elapsed
     started = time.monotonic()
-    _refresh_proxmox_endpoint_timezone(state, endpoint, timeout=min(10.0, remaining))
+    timeout = min(10.0, remaining)
+    if deadline:
+        timeout = deadline.timeout(timeout, time.monotonic())
+    _refresh_proxmox_endpoint_timezone(state, endpoint, timeout=timeout)
     return elapsed + (time.monotonic() - started)
 
 
@@ -1008,6 +1033,7 @@ def _record_skipped_proxmox_pushes(
 def _push_proxmox_endpoints(
     state: _BackendPreflightState,
     proxmox_endpoint_ids: list[str] | None,
+    deadline: SyncJobDeadline | None = None,
 ) -> PreflightResult:
     """Push selected Proxmox endpoints within the bounded preflight budget."""
     from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
@@ -1022,6 +1048,7 @@ def _push_proxmox_endpoints(
         base_url=state.base_url,
         auth_headers=state.auth_headers,
         backend_verify_ssl=state.verify_ssl,
+        timeout=(deadline.timeout(30.0, time.monotonic()) if deadline else 30.0),
     )
     if existing is None:
         state.job.logger.warning(
@@ -1046,17 +1073,17 @@ def _push_proxmox_endpoints(
             phases.append(_skipped_proxmox_phase(endpoint, summary))
             if registered and elapsed < PREFLIGHT_ENDPOINT_PUSH_HARD_CEILING:
                 timezone_elapsed = _refresh_timezone_within_budget(
-                    state, endpoint, timezone_elapsed
+                    state, endpoint, timezone_elapsed, deadline
                 )
             continue
         _log_over_budget_unregistered(
             state, endpoint, elapsed, PREFLIGHT_ENDPOINT_PUSH_BUDGET
         )
-        phase = _push_one_proxmox_endpoint(state, endpoint, existing)
+        phase = _push_one_proxmox_endpoint(state, endpoint, existing, deadline)
         phases.append(phase)
         if phase["status"] == "success":
             timezone_elapsed = _refresh_timezone_within_budget(
-                state, endpoint, timezone_elapsed
+                state, endpoint, timezone_elapsed, deadline
             )
     _record_skipped_proxmox_pushes(
         state,
@@ -1088,37 +1115,118 @@ def _ensure_backend_endpoints(
     job: "ProxboxSyncJob",
     proxmox_endpoint_ids: list[str] | None = None,
     fastapi_endpoint_id: int | None = None,
+    deadline: SyncJobDeadline | None = None,
 ) -> PreflightResult:
     """Validate backend identity and push endpoint data before reconciliation."""
-    state, blocking = _resolve_backend_preflight_state(job, fastapi_endpoint_id)
-    if blocking is not None or state is None:
-        return blocking or _missing_backend_preflight(job, fastapi_endpoint_id)
-    _probe_backend_preflight(state, fastapi_endpoint_id)
-    netbox_push = _push_enabled_netbox_endpoints(state)
-    blocking = _verify_netbox_endpoint_push(state, netbox_push)
-    if blocking is not None:
-        return blocking
-    return _push_proxmox_endpoints(state, proxmox_endpoint_ids)
+    try:
+        state, blocking = _resolve_backend_preflight_state(job, fastapi_endpoint_id)
+        if blocking is not None or state is None:
+            return blocking or _missing_backend_preflight(job, fastapi_endpoint_id)
+        _probe_backend_preflight(state, fastapi_endpoint_id, deadline)
+        netbox_push = _push_enabled_netbox_endpoints(state, deadline)
+        blocking = _verify_netbox_endpoint_push(state, netbox_push, deadline)
+        if blocking is not None:
+            return blocking
+        return _push_proxmox_endpoints(state, proxmox_endpoint_ids, deadline)
+    except SyncJobDeadlineReached:
+        endpoint_ids = _coerce_endpoint_ids(proxmox_endpoint_ids)
+        phases = [
+            _endpoint_runtime_phase(
+                endpoint_id=value,
+                endpoint_name="",
+                kind="preflight",
+                label="Backend endpoint bootstrap",
+                runtime_seconds=0.0,
+                status="warning",
+                summary=_JOB_DEADLINE_CAUSE,
+            )
+            for value in endpoint_ids
+        ]
+        return PreflightResult(phases=phases, hint=_JOB_DEADLINE_CAUSE)
 
 
 class BackendKeyPreflightError(RuntimeError):
     """Raised when a sync job cannot prove its stored backend key."""
 
 
+BACKEND_KEY_RETRY_INITIAL_DELAY = 2.0
+BACKEND_KEY_RETRY_MAX_DELAY = 60.0
+BACKEND_KEY_RETRY_TOTAL_BUDGET = 180.0
+BACKEND_KEY_RETRY_MAX_ATTEMPTS = 10
+_BACKEND_KEY_RETRY_CODES = frozenset(
+    {
+        "backend_throttled",
+        "backend_timeout",
+        "backend_unreachable",
+        "backend_request_failed",
+    }
+)
+
+
+def _backend_key_retry_sleep(seconds: float) -> None:
+    """Sleep between backend-key verification attempts."""
+    time.sleep(seconds)
+
+
+def _backend_key_retryable(details: dict[str, object]) -> bool:
+    """Return whether key verification failed for transient capacity or transport."""
+    return (
+        details.get("status_code") in {429, 503}
+        or details.get("code") in _BACKEND_KEY_RETRY_CODES
+    )
+
+
 def _require_backend_key(
     job: "ProxboxSyncJob",
     endpoint_id: int | None = None,
+    deadline: SyncJobDeadline | None = None,
 ) -> None:
     """Abort the entire job unless one stored key authenticates read-only."""
     from netbox_proxbox.services.backend_auth import ensure_backend_key_registered  # noqa: PLC0415
 
-    key_ok, key_msg = ensure_backend_key_registered(endpoint_id=endpoint_id)
-    if not key_ok:
-        job.logger.error(f"Preflight: API key verification failed — {key_msg}")
-        raise BackendKeyPreflightError(
-            "Backend API-key preflight failed; no sync stage was started."
+    elapsed_wait = 0.0
+    delay = BACKEND_KEY_RETRY_INITIAL_DELAY
+    attempt = 0
+    while True:
+        attempt += 1
+        details: dict[str, object] = {}
+        key_ok, key_msg = ensure_backend_key_registered(
+            endpoint_id=endpoint_id,
+            failure_details=details,
+            timeout=(deadline.timeout(15.0, time.monotonic()) if deadline else None),
         )
-    job.logger.info(f"Preflight: API key verified — {key_msg}")
+        if key_ok:
+            job.logger.info(f"Preflight: API key verified — {key_msg}")
+            return
+        retry_after = parse_retry_after(
+            details.get("retry_after"), maximum=BACKEND_KEY_RETRY_MAX_DELAY
+        )
+        wait = (
+            retry_after
+            if retry_after is not None
+            else min(delay, BACKEND_KEY_RETRY_MAX_DELAY)
+        )
+        if deadline:
+            wait = deadline.cap(wait, time.monotonic())
+        if (
+            not _backend_key_retryable(details)
+            or attempt >= BACKEND_KEY_RETRY_MAX_ATTEMPTS
+            or elapsed_wait + wait > BACKEND_KEY_RETRY_TOTAL_BUDGET
+            or wait <= 0
+        ):
+            if deadline and deadline.remaining(time.monotonic()) <= 0:
+                raise SyncJobDeadlineReached("Job deadline reached.")
+            job.logger.error(f"Preflight: API key verification failed — {key_msg}")
+            raise BackendKeyPreflightError(
+                "Backend API-key preflight failed; no sync stage was started."
+            )
+        job.logger.warning(
+            f"Preflight: API key verification attempt {attempt} failed — {key_msg}; "
+            f"retrying in {wait:.0f}s"
+        )
+        _backend_key_retry_sleep(wait)
+        elapsed_wait += wait
+        delay = min(delay * 2, BACKEND_KEY_RETRY_MAX_DELAY)
 
 
 def _coerce_endpoint_ids(
@@ -1322,6 +1430,7 @@ class _SyncRunContext:
         "batch_object_type",
         "branch",
         "branch_config",
+        "deadline",
         "fastapi_endpoint_id",
         "job",
         "netbox_endpoint_ids",
@@ -1357,6 +1466,9 @@ class _SyncRunContext:
         self.batch_object_ids = batch_object_ids
         self.fastapi_endpoint_id = fastapi_endpoint_id
         self.run_started = time.monotonic()
+        self.deadline = SyncJobDeadline(
+            self.run_started + _effective_sync_job_timeout()
+        )
         self.stages = expanded_sync_stages(types)
         self.branch: object | None = None
         self.sync_state_endpoint_backfill: dict[str, object] | None = None
@@ -1477,6 +1589,20 @@ def _prepare_sync_run(
         batch_object_ids=_normalize_batch_object_ids(batch_object_ids),
         fastapi_endpoint_id=fastapi_endpoint_id,
     )
+
+
+def _effective_sync_job_timeout() -> float:
+    """Return the active RQ timeout or the enqueue default outside a worker."""
+    try:
+        from rq import get_current_job  # noqa: PLC0415
+
+        rq_job = get_current_job()
+        timeout = getattr(rq_job, "timeout", None)
+        if timeout is not None and float(timeout) > 0:
+            return float(timeout)
+    except (ImportError, TypeError, ValueError):
+        pass
+    return float(PROXBOX_SYNC_JOB_TIMEOUT)
 
 
 def _build_sync_run_params(context: _SyncRunContext) -> dict[str, object]:
@@ -1614,6 +1740,7 @@ def _bootstrap_backend_endpoints(context: _SyncRunContext) -> PreflightResult:
         context.job,
         context.proxmox_endpoint_ids or [],
         fastapi_endpoint_id=context.fastapi_endpoint_id,
+        deadline=context.deadline,
     )
     if preflight.blocking_error:
         raise ProxboxPreflightError(preflight.blocking_error)
@@ -1764,6 +1891,51 @@ def _staged_endpoint_ids(context: _SyncRunContext) -> list[int]:
     )
 
 
+_JOB_DEADLINE_CAUSE = (
+    "Job deadline reached; no time remains before the persistence reserve."
+)
+
+
+def _record_local_deadline_phases(
+    context: _SyncRunContext,
+    endpoint_ids: list[int],
+    phases: list[dict[str, object]],
+    kind: str,
+    label: str,
+) -> None:
+    """Record the current and remaining endpoint work after deadline expiry."""
+    for endpoint_id in endpoint_ids:
+        context.job.logger.error(
+            f"Skipping {label} for endpoint {endpoint_id}: {_JOB_DEADLINE_CAUSE}"
+        )
+        phases.append(
+            _endpoint_runtime_phase(
+                endpoint_id=endpoint_id,
+                endpoint_name="",
+                kind=kind,
+                label=label,
+                runtime_seconds=0.0,
+                status="warning",
+                summary=_JOB_DEADLINE_CAUSE,
+            )
+        )
+
+
+def _record_local_deadline_if_exhausted(
+    context: _SyncRunContext,
+    endpoint_ids: list[int],
+    phases: list[dict[str, object]],
+    kind: str,
+    label: str,
+) -> bool:
+    """Record remaining local work and report whether its deadline expired."""
+    deadline = getattr(context, "deadline", None)
+    if deadline is None or deadline.remaining(time.monotonic()) > 0:
+        return False
+    _record_local_deadline_phases(context, endpoint_ids, phases, kind, label)
+    return True
+
+
 def _sync_cluster_phase(
     context: _SyncRunContext,
     endpoint_ids: list[int],
@@ -1786,13 +1958,26 @@ def _sync_cluster_endpoints(
 ) -> list[dict[str, object]]:
     """Run cluster/node reconciliation while its caller holds branch activation."""
     phases: list[dict[str, object]] = []
-    for endpoint_id in endpoint_ids:
+    for index, endpoint_id in enumerate(endpoint_ids):
+        if _record_local_deadline_if_exhausted(
+            context, endpoint_ids[index:], phases, "cluster", "Cluster/node sync"
+        ):
+            break
         context.job.logger.info(f"Syncing cluster/nodes for endpoint {endpoint_id}")
         started = time.monotonic()
-        result = sync_cluster_and_nodes(
-            endpoint_id=endpoint_id,
-            fastapi_endpoint_id=context.fastapi_endpoint_id,
-        )
+        try:
+            result = sync_cluster_and_nodes(
+                endpoint_id=endpoint_id,
+                fastapi_endpoint_id=context.fastapi_endpoint_id,
+                deadline=getattr(
+                    getattr(context, "deadline", None), "executable_expires_at", None
+                ),
+            )
+        except SyncJobDeadlineReached:
+            _record_local_deadline_phases(
+                context, endpoint_ids[index:], phases, "cluster", "Cluster/node sync"
+            )
+            break
         summary = _cluster_result_summary(context.job, endpoint_id, result)
         phases.append(
             _endpoint_runtime_phase(
@@ -1843,14 +2028,53 @@ def sync_firewall(
         sync_firewall as run_firewall_sync,
     )
 
-    context.job.logger.info("Syncing firewall objects from proxbox-api")
+    phases: list[dict[str, object]] = []
     with activate_sync_branch(branch):
-        result = run_firewall_sync(
-            fastapi_endpoint_id=context.fastapi_endpoint_id,
-            endpoint_ids=endpoint_ids,
-        )
-    _log_firewall_result(context.job, result)
-    return _phases_from_service_result(result, kind="firewall", label="Firewall sync")
+        for index, endpoint_id in enumerate(endpoint_ids):
+            if _record_local_deadline_if_exhausted(
+                context, endpoint_ids[index:], phases, "firewall", "Firewall sync"
+            ):
+                break
+            context.job.logger.info(
+                f"Syncing firewall objects for endpoint {endpoint_id}"
+            )
+            started = time.monotonic()
+            try:
+                result = run_firewall_sync(
+                    fastapi_endpoint_id=context.fastapi_endpoint_id,
+                    endpoint_ids=[endpoint_id],
+                    deadline=getattr(
+                        getattr(context, "deadline", None),
+                        "executable_expires_at",
+                        None,
+                    ),
+                )
+            except SyncJobDeadlineReached:
+                _record_local_deadline_phases(
+                    context,
+                    endpoint_ids[index:],
+                    phases,
+                    "firewall",
+                    "Firewall sync",
+                )
+                break
+            except Exception as exc:  # noqa: BLE001 - isolate endpoint failures
+                phases.append(
+                    _failed_service_endpoint_phase(
+                        endpoint_id, "firewall", "Firewall sync", started, exc
+                    )
+                )
+                continue
+            _log_firewall_result(context.job, result)
+            phases.extend(
+                _phases_for_service_endpoint(
+                    result,
+                    endpoint_id=endpoint_id,
+                    kind="firewall",
+                    label="Firewall sync",
+                )
+            )
+    return phases
 
 
 def _log_firewall_result(job: "ProxboxSyncJob", result: object) -> None:
@@ -1883,18 +2107,100 @@ def sync_datacenter(
         sync_datacenter as run_datacenter_sync,
     )
 
-    context.job.logger.info("Syncing datacenter CPU models from proxbox-api")
+    phases: list[dict[str, object]] = []
     with activate_sync_branch(branch):
-        result = run_datacenter_sync(
-            fastapi_endpoint_id=context.fastapi_endpoint_id,
-            endpoint_ids=endpoint_ids,
-        )
-    _log_datacenter_result(context.job, result)
-    return _phases_from_service_result(
-        result,
-        kind="datacenter",
-        label="Datacenter sync",
+        for index, endpoint_id in enumerate(endpoint_ids):
+            if _record_local_deadline_if_exhausted(
+                context,
+                endpoint_ids[index:],
+                phases,
+                "datacenter",
+                "Datacenter sync",
+            ):
+                break
+            context.job.logger.info(
+                f"Syncing datacenter CPU models for endpoint {endpoint_id}"
+            )
+            started = time.monotonic()
+            try:
+                result = run_datacenter_sync(
+                    fastapi_endpoint_id=context.fastapi_endpoint_id,
+                    endpoint_ids=[endpoint_id],
+                    deadline=getattr(
+                        getattr(context, "deadline", None),
+                        "executable_expires_at",
+                        None,
+                    ),
+                )
+            except SyncJobDeadlineReached:
+                _record_local_deadline_phases(
+                    context,
+                    endpoint_ids[index:],
+                    phases,
+                    "datacenter",
+                    "Datacenter sync",
+                )
+                break
+            except Exception as exc:  # noqa: BLE001 - isolate endpoint failures
+                phases.append(
+                    _failed_service_endpoint_phase(
+                        endpoint_id,
+                        "datacenter",
+                        "Datacenter sync",
+                        started,
+                        exc,
+                    )
+                )
+                continue
+            _log_datacenter_result(context.job, result)
+            phases.extend(
+                _phases_for_service_endpoint(
+                    result,
+                    endpoint_id=endpoint_id,
+                    kind="datacenter",
+                    label="Datacenter sync",
+                )
+            )
+    return phases
+
+
+def _failed_service_endpoint_phase(
+    endpoint_id: int,
+    kind: str,
+    label: str,
+    started: float,
+    exc: Exception,
+) -> dict[str, object]:
+    """Build a failed local phase without losing the endpoint identity."""
+    return _endpoint_runtime_phase(
+        endpoint_id=endpoint_id,
+        endpoint_name="",
+        kind=kind,
+        label=label,
+        runtime_seconds=_runtime_seconds_since(started),
+        status="warning",
+        summary=str(exc),
     )
+
+
+def _phases_for_service_endpoint(
+    result: object,
+    *,
+    endpoint_id: int,
+    kind: str,
+    label: str,
+) -> list[dict[str, object]]:
+    """Attach the requested endpoint to singleton service result phases."""
+    all_phases = _phases_from_service_result(result, kind=kind, label=label)
+    phases = [
+        phase
+        for phase in all_phases
+        if phase.get("endpoint_id") in {None, endpoint_id, str(endpoint_id)}
+    ]
+    for phase in phases:
+        if phase.get("endpoint_id") is None:
+            phase["endpoint_id"] = endpoint_id
+    return phases
 
 
 def _log_datacenter_result(job: "ProxboxSyncJob", result: object) -> None:
@@ -1946,13 +2252,30 @@ def _sync_vm_templates_for_endpoints(
     from netbox_proxbox.services.sync_vm_template import sync_vm_templates  # noqa: PLC0415
 
     phases: list[dict[str, object]] = []
-    for endpoint_id in endpoint_ids:
+    for index, endpoint_id in enumerate(endpoint_ids):
+        if _record_local_deadline_if_exhausted(
+            context, endpoint_ids[index:], phases, "vm_template", "VM template sync"
+        ):
+            break
         context.job.logger.info(f"Syncing VM templates for endpoint {endpoint_id}")
         started = time.monotonic()
-        result = sync_vm_templates(
-            endpoint_id=endpoint_id,
-            fastapi_endpoint_id=context.fastapi_endpoint_id,
-        )
+        try:
+            result = sync_vm_templates(
+                endpoint_id=endpoint_id,
+                fastapi_endpoint_id=context.fastapi_endpoint_id,
+                deadline=getattr(
+                    getattr(context, "deadline", None), "executable_expires_at", None
+                ),
+            )
+        except SyncJobDeadlineReached:
+            _record_local_deadline_phases(
+                context,
+                endpoint_ids[index:],
+                phases,
+                "vm_template",
+                "VM template sync",
+            )
+            break
         summary = _vm_template_result_summary(context.job, endpoint_id, result)
         phases.append(
             _endpoint_runtime_phase(
@@ -2198,7 +2521,21 @@ def _begin_sync_run(context: _SyncRunContext) -> None:
         "schema_id",
         None,
     )
-    _require_backend_key(context.job, context.fastapi_endpoint_id)
+    try:
+        _require_backend_key(
+            context.job, context.fastapi_endpoint_id, deadline=context.deadline
+        )
+    except SyncJobDeadlineReached:
+        phases: list[dict[str, object]] = []
+        _record_local_deadline_phases(
+            context,
+            _staged_endpoint_ids(context),
+            phases,
+            "preflight",
+            "Backend key verification",
+        )
+        _persist_staged_result(context, [], phases)
+        raise RuntimeError(_JOB_DEADLINE_CAUSE) from None
 
 
 def _extend_and_checkpoint_local_phases(
@@ -2238,6 +2575,7 @@ def _run_sse_stages(
                 context.stages,
                 context.params,
                 context.run_started,
+                context.deadline,
                 preflight_hint=state.preflight.hint,
             )
     except BaseException:
@@ -2251,6 +2589,22 @@ def _run_sse_stages(
         raise
     state.backend_id_by_plugin_pk = backend_id_by_plugin_pk or None
     return stages
+
+
+def _deadline_sse_stages(context: _SyncRunContext) -> list[dict[str, object]]:
+    """Record every selected endpoint whose SSE work was skipped at deadline."""
+    endpoint_ids = _staged_endpoint_ids(context)
+    return [
+        {
+            "sync_type": "endpoint-scope",
+            "endpoint_id": endpoint_id,
+            "endpoint_name": _endpoint_name_map([endpoint_id]).get(endpoint_id, ""),
+            "stream_path": None,
+            "runtime_seconds": _runtime_seconds_since(context.run_started),
+            "result_summary": {"ok": False, "error": _JOB_DEADLINE_CAUSE},
+        }
+        for endpoint_id in endpoint_ids
+    ]
 
 
 def _backfill_sync_state_endpoints(
@@ -2281,11 +2635,27 @@ def _finish_staged_sync(
     state: _StagedSyncState,
 ) -> None:
     """Run SSE stages, persist their results, classify errors, and merge."""
-    stages = _run_sse_stages(context, state)
-    _backfill_sync_state_endpoints(context, state.backend_id_by_plugin_pk)
+    deadline_reached = context.deadline.remaining(time.monotonic()) <= 0
+    stages = (
+        _deadline_sse_stages(context)
+        if deadline_reached
+        else _run_sse_stages(context, state)
+    )
+    if not deadline_reached:
+        _backfill_sync_state_endpoints(context, state.backend_id_by_plugin_pk)
     state.phases.extend(_phases_from_stage_results(stages))
     _warn_for_missing_stage_runtimes(context.job, stages)
-    runtime_seconds = _persist_staged_result(context, stages, state.phases)
+    disposition = (
+        _sse_failure_disposition(context, state.phases)
+        if _failed_endpoint_scopes(stages)
+        else None
+    )
+    runtime_seconds = _persist_staged_result(
+        context,
+        stages,
+        state.phases,
+        branch_disposition=disposition,
+    )
     _check_stored_stage_runtimes(context.job, _stored_stages(context.job))
     _raise_for_failed_endpoint_scopes(context.job, stages)
     _raise_for_failed_local_phases(context, state.phases)
@@ -2293,6 +2663,16 @@ def _finish_staged_sync(
         f"All sync stages completed ({len(stages)}), runtime {runtime_seconds:.3f}s"
     )
     _merge_sync_branch(context)
+
+
+def _run_local_sync_phases(
+    context: _SyncRunContext,
+    state: _StagedSyncState,
+) -> None:
+    """Run and checkpoint each endpoint-local reconciliation phase."""
+    for sync_phase in (sync_firewall, sync_datacenter, sync_vm_templates):
+        phases = sync_phase(context, state.endpoint_ids, context.branch)
+        _extend_and_checkpoint_local_phases(context, state, phases)
 
 
 def _pop_enqueued_sync_types(kwargs: dict[str, object]) -> list[str]:
@@ -2437,23 +2817,7 @@ class ProxboxSyncJob(JobRunner):
                     f"({target_ids})"
                 )
             else:
-                _extend_and_checkpoint_local_phases(
-                    context,
-                    staged_state,
-                    sync_firewall(context, staged_state.endpoint_ids, context.branch),
-                )
-                _extend_and_checkpoint_local_phases(
-                    context,
-                    staged_state,
-                    sync_datacenter(context, staged_state.endpoint_ids, context.branch),
-                )
-                _extend_and_checkpoint_local_phases(
-                    context,
-                    staged_state,
-                    sync_vm_templates(
-                        context, staged_state.endpoint_ids, context.branch
-                    ),
-                )
+                _run_local_sync_phases(context, staged_state)
             _finish_staged_sync(context, staged_state)
         except BranchingUnavailableError as exc:
             message = str(exc)

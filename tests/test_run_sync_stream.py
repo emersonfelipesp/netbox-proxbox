@@ -111,6 +111,21 @@ class _FailingStreamResponse(_StreamResponse):
         raise requests.exceptions.ReadTimeout("stream read timed out")
 
 
+class _ContinuousStreamResponse(_StreamResponse):
+    """A stream that keeps producing frames while advancing the monotonic clock."""
+
+    def __init__(self, clock: dict[str, float]):
+        super().__init__([])
+        self._clock = clock
+
+    def iter_lines(self, decode_unicode: bool = True):
+        for frame_number in range(10):
+            self._clock["now"] += 1.0
+            yield "event: progress"
+            yield f'data: {{"frame": {frame_number}}}'
+            yield ""
+
+
 def _sse_complete_ok() -> list[str]:
     return [
         "event: step",
@@ -311,11 +326,13 @@ def test_connection_failure_after_selection_never_reissues_mutating_stream(
     assert len(calls) == 1
     assert calls[0][0].startswith(context.http_url + "/")
     for _url, kwargs in calls:
+        timeout = kwargs.pop("timeout")
+        assert timeout[0] == bp._SYNC_STREAM_READ_TIMEOUT[0]
+        assert 0 < timeout[1] <= bp._SYNC_STREAM_READ_TIMEOUT[1]
         assert kwargs == {
             "params": params,
             "headers": context.headers,
             "verify": True,
-            "timeout": bp._SYNC_STREAM_READ_TIMEOUT,
             "stream": True,
             "allow_redirects": False,
         }
@@ -331,7 +348,7 @@ def test_readiness_is_checked_against_each_exact_candidate(
     readiness_contexts = []
     stream_urls: list[str] = []
 
-    def fake_ready(candidate_context):
+    def fake_ready(candidate_context, **kwargs):
         readiness_contexts.append(candidate_context)
         if candidate_context.http_url == context.http_url:
             return False, "Backend not reachable after bounded attempts"
@@ -431,6 +448,37 @@ def test_read_timeout_after_first_frame_never_reissues_mutating_stream(
     assert len(stream_urls) == 1
     assert len(payload["requested_urls"]) == 1
     assert payload["failure_kind"] == bp.STAGE_FAILURE_TRANSPORT
+
+
+def test_continuous_frames_stop_at_shared_job_deadline(
+    backend_proxy_module, monkeypatch
+):
+    """An active SSE feed cannot run through the result-persistence reserve."""
+    bp = backend_proxy_module
+    clock = {"now": 0.0}
+    response = _ContinuousStreamResponse(clock)
+    observed_frames: list[int] = []
+
+    monkeypatch.setattr(bp.time, "monotonic", lambda: clock["now"])
+    monkeypatch.setattr(
+        bp, "wait_for_backend_ready", lambda *_a, **_kw: (True, "ready")
+    )
+    monkeypatch.setattr(bp.requests, "get", lambda *_a, **_kw: response)
+    monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
+
+    deadline = bp.SyncJobDeadline(expires_at=125.0, reserve_seconds=120.0)
+    payload, status = bp.run_sync_stream(
+        "dcim/devices/create/stream",
+        deadline=deadline,
+        on_frame=lambda _event, data: observed_frames.append(data["frame"]),
+    )
+
+    assert status == 504
+    assert payload["detail"] == (
+        "Job deadline reached while consuming the backend stream."
+    )
+    assert observed_frames == [0, 1, 2, 3]
+    assert response.closed is True
 
 
 @pytest.mark.parametrize("status_code", [400, 401, 403, 429])
@@ -966,7 +1014,7 @@ def test_backend_not_ready_is_transport_provenance(backend_proxy_module, monkeyp
     bp = backend_proxy_module
     monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: _stream_context(bp))
     monkeypatch.setattr(
-        bp, "wait_for_backend_ready", lambda ctx: (False, "init_ok=false")
+        bp, "wait_for_backend_ready", lambda ctx, **kwargs: (False, "init_ok=false")
     )
 
     payload, status = bp.run_sync_stream("dcim/devices/create/stream")

@@ -58,7 +58,7 @@ def test_sync_devices_enqueues_job_with_device_stage(monkeypatch, fastapi_endpoi
     response = module.sync_devices(_post_request())
 
     assert response == {
-        "redirect": "plugins:netbox_proxbox:home",
+        "redirect": "/core/jobs/1/",
         "X-Proxbox-Job-ID": "1",
     }
     assert len(calls) == 1

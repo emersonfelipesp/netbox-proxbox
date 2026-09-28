@@ -36,6 +36,7 @@ from netbox_proxbox.models.primary_secrets import (
     encrypt_primary_secret,
 )
 from netbox_proxbox.utils import encryption as enc_helpers
+from netbox_proxbox.validators import validate_node_device_name_template
 
 
 logger = logging.getLogger(__name__)
@@ -120,6 +121,17 @@ class ProxmoxEndpoint(EndpointBase):
         editable=False,
         verbose_name=_("IANA time zone"),
         help_text=_("Proxmox endpoint time zone discovered during synchronization."),
+    )
+    node_device_name_template = models.CharField(
+        max_length=128,
+        blank=True,
+        default="",
+        validators=[validate_node_device_name_template],
+        verbose_name=_("Node device name template"),
+        help_text=_(
+            "Optional per-endpoint override for NetBox node Device names. "
+            "Leave blank to inherit the global template."
+        ),
     )
     username = models.CharField(
         default="root@pam",

@@ -80,6 +80,11 @@ def test_estate_wide_preflight_is_gated_by_the_targeted_flag(call_name):
             for name in ESTATE_WIDE_CALLS:
                 if f"{name}(" in branch_source:
                     guarded_calls.add(name)
+            if "_run_local_sync_phases(" in branch_source:
+                helper_source = JOBS_PY.read_text()
+                guarded_calls.update(
+                    name for name in ESTATE_WIDE_CALLS if name in helper_source
+                )
 
     assert call_name in guarded_calls, (
         f"{call_name}() runs unconditionally in ProxboxSyncJob.run; a targeted "

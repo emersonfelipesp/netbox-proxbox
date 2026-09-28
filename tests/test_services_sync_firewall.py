@@ -249,6 +249,7 @@ def sync_fw_module(monkeypatch):
 
     # ---- services.backend_proxy ----
     services_pkg = types.ModuleType("netbox_proxbox.services")
+    services_pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox" / "services")]
     monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_pkg)
     backend_proxy = types.ModuleType("netbox_proxbox.services.backend_proxy")
     backend_proxy.get_fastapi_request_context = lambda: None
@@ -666,6 +667,41 @@ def test_empty_summary_succeeds_with_zero_counts(sync_fw_module, monkeypatch):
     assert result.success is True
     assert result.endpoints_processed == 0
     assert result.rules_created == 0
+
+
+def test_node_firewall_deadline_expiry_aborts_remaining_nodes(
+    sync_fw_module, monkeypatch
+):
+    """A deadline exception is terminal and cannot be downgraded to a node warning."""
+    monkeypatch.setattr(
+        sync_fw_module,
+        "_resolve_endpoint_by_cluster_name",
+        lambda _name: sync_fw_module._endpoint_obj,
+    )
+    models = sys.modules["netbox_proxbox.models"]
+    monkeypatch.setattr(
+        models.ProxmoxNode.objects,
+        "values_list",
+        lambda *_a, **_kw: ["node-a", "node-b"],
+    )
+    calls: list[str] = []
+
+    def expire_deadline(**kwargs):
+        calls.append(kwargs["node_name"])
+        raise sync_fw_module.SyncJobDeadlineReached("Job deadline reached.")
+
+    monkeypatch.setattr(sync_fw_module, "sync_node_firewall", expire_deadline)
+    response = MagicMock()
+    response.raise_for_status.return_value = None
+    response.json.return_value = MINIMAL_SUMMARY
+
+    with patch("requests.get", return_value=response):
+        with pytest.raises(
+            sync_fw_module.SyncJobDeadlineReached, match="Job deadline reached"
+        ):
+            sync_fw_module.sync_firewall(fastapi_url="http://backend:8000")
+
+    assert calls == ["node-a"]
 
 
 def test_options_without_enable_does_not_crash(sync_fw_module, monkeypatch):

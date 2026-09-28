@@ -14,6 +14,11 @@
  */
 (function () {
     "use strict";
+    var HOME_REQUEST_CONCURRENCY = 4;
+    var HOME_CARD_MAX_RETRIES = 3;
+    var homeRequestQueue = [];
+    var homeRequestsInFlight = 0;
+    var cardRetryState = new WeakMap();
 
     function setBadgeState(element, status, detail) {
         if (!element) {
@@ -22,12 +27,14 @@
         var styles = {
             success: "badge text-bg-green",
             error: "badge text-bg-red",
+            throttled: "badge text-bg-secondary",
             disabled: "badge text-bg-secondary",
             unknown: "badge text-bg-grey",
         };
         var labels = {
             success: "Successful!",
             error: "Error!",
+            throttled: "Throttled",
             disabled: "Disabled",
             unknown: "Unknown",
         };
@@ -57,9 +64,56 @@
             payload = {};
         }
         if (!response.ok) {
-            throw new Error(payload.detail || ("Request failed with status " + response.status));
+            var requestError = new Error(
+                payload.detail || ("Request failed with status " + response.status),
+            );
+            requestError.status = response.status;
+            requestError.payload = payload;
+            requestError.retryAfter = response.headers.get("Retry-After");
+            throw requestError;
         }
         return payload;
+    }
+
+    function drainHomeRequestQueue() {
+        while (
+            homeRequestsInFlight < HOME_REQUEST_CONCURRENCY &&
+            homeRequestQueue.length > 0
+        ) {
+            var queued = homeRequestQueue.shift();
+            homeRequestsInFlight += 1;
+            Promise.resolve()
+                .then(queued.task)
+                .then(queued.resolve, queued.reject)
+                .finally(function () {
+                    homeRequestsInFlight -= 1;
+                    drainHomeRequestQueue();
+                });
+        }
+    }
+
+    function scheduleHomeRequest(task) {
+        return new Promise(function (resolve, reject) {
+            homeRequestQueue.push({ task: task, resolve: resolve, reject: reject });
+            drainHomeRequestQueue();
+        });
+    }
+
+    function runBounded(tasks) {
+        if (tasks.length === 0) {
+            return Promise.resolve();
+        }
+        return new Promise(function (resolve, reject) {
+            var completed = 0;
+            tasks.forEach(function (task) {
+                scheduleHomeRequest(task).then(function () {
+                    completed += 1;
+                    if (completed === tasks.length) {
+                        resolve();
+                    }
+                }, reject);
+            });
+        });
     }
 
     function wireSelectAllCheckboxes() {
@@ -143,22 +197,24 @@
             return !isFastapiStatusElement(element);
         });
         var fastapiConnected = fastapiElements.length === 0;
-        await Promise.all(
-            fastapiElements.map(async function (element) {
-                try {
-                    var payload = await fetchJson(element.dataset.serviceStatusUrl);
-                    setBadgeState(element, payload.status, statusDetail(payload));
-                    renderServiceStatusMessage(element, payload);
-                    if (payload.status === "success") {
-                        fastapiConnected = true;
+        await runBounded(
+            fastapiElements.map(function (element) {
+                return async function () {
+                    try {
+                        var payload = await fetchJson(element.dataset.serviceStatusUrl);
+                        setBadgeState(element, payload.status, statusDetail(payload));
+                        renderServiceStatusMessage(element, payload);
+                        if (payload.status === "success") {
+                            fastapiConnected = true;
+                        }
+                    } catch (error) {
+                        setBadgeState(element, "error", error.message || "Unknown error");
+                        renderServiceStatusMessage(element, {
+                            status: "error",
+                            detail: error.message || "Unknown error",
+                        });
                     }
-                } catch (error) {
-                    setBadgeState(element, "error", error.message || "Unknown error");
-                    renderServiceStatusMessage(element, {
-                        status: "error",
-                        detail: error.message || "Unknown error",
-                    });
-                }
+                };
             }),
         );
         if (!fastapiConnected) {
@@ -175,19 +231,21 @@
             }
             return false;
         }
-        await Promise.all(
-            dependentElements.map(async function (element) {
-                try {
-                    var payload = await fetchJson(element.dataset.serviceStatusUrl);
-                    setBadgeState(element, payload.status, statusDetail(payload));
-                    renderServiceStatusMessage(element, payload);
-                } catch (error) {
-                    setBadgeState(element, "error", error.message || "Unknown error");
-                    renderServiceStatusMessage(element, {
-                        status: "error",
-                        detail: error.message || "Unknown error",
-                    });
-                }
+        await runBounded(
+            dependentElements.map(function (element) {
+                return async function () {
+                    try {
+                        var payload = await fetchJson(element.dataset.serviceStatusUrl);
+                        setBadgeState(element, payload.status, statusDetail(payload));
+                        renderServiceStatusMessage(element, payload);
+                    } catch (error) {
+                        setBadgeState(element, "error", error.message || "Unknown error");
+                        renderServiceStatusMessage(element, {
+                            status: "error",
+                            detail: error.message || "Unknown error",
+                        });
+                    }
+                };
             }),
         );
         return true;
@@ -225,44 +283,92 @@
         container.replaceChildren(alert);
     }
 
+    function retryDetail(payload) {
+        var detail = payload.detail || "Backend capacity is temporarily limited; retrying.";
+        if (payload.retry_after) {
+            return detail + " Retrying after " + payload.retry_after + " seconds.";
+        }
+        return detail;
+    }
+
+    function retryDelayMs(retryAfter) {
+        var seconds = Number(retryAfter);
+        if (Number.isFinite(seconds)) {
+            return Math.max(0, seconds * 1000);
+        }
+        var retryAt = Date.parse(retryAfter);
+        return Number.isFinite(retryAt) ? Math.max(0, retryAt - Date.now()) : null;
+    }
+
+    function scheduleCardRetry(card, retryAfter) {
+        var delay = retryDelayMs(retryAfter);
+        var state = cardRetryState.get(card) || { retries: 0, timer: null };
+        if (delay === null || state.timer !== null || state.retries >= HOME_CARD_MAX_RETRIES) {
+            return;
+        }
+        state.retries += 1;
+        state.timer = window.setTimeout(function () {
+            state.timer = null;
+            scheduleHomeRequest(function () {
+                return hydrateProxmoxCard(card);
+            });
+        }, delay);
+        cardRetryState.set(card, state);
+    }
+
+    async function hydrateProxmoxCard(card) {
+        var cardId = card.dataset.proxmoxCardId;
+        var errorContainer = cardId
+            ? document.getElementById("proxmox-connection-error-" + cardId)
+            : null;
+        try {
+            var payload = await fetchJson(card.dataset.proxmoxCardUrl);
+            var clusterData = payload.cluster_data || {};
+            renderProxmoxField(card, "mode", clusterData.mode);
+            renderProxmoxField(card, "version", clusterData.version);
+            renderProxmoxField(card, "repoid", clusterData.repoid);
+            if (errorContainer) {
+                renderProxmoxAlert(
+                    errorContainer,
+                    "alert-warning",
+                    payload.status === "throttled" ? retryDetail(payload) : payload.detail,
+                );
+            }
+            if (payload.status === "throttled" && payload.retry_after) {
+                scheduleCardRetry(card, payload.retry_after);
+            }
+        } catch (error) {
+            renderProxmoxField(card, "mode", null);
+            renderProxmoxField(card, "version", null);
+            renderProxmoxField(card, "repoid", null);
+            if (errorContainer) {
+                var throttled = error.status === 429 || error.status === 503;
+                renderProxmoxAlert(
+                    errorContainer,
+                    throttled ? "alert-warning" : "alert-danger",
+                    throttled
+                        ? retryDetail({
+                            detail: error.message,
+                            retry_after: error.retryAfter,
+                        })
+                        : error.message || "Unable to load Proxmox card data.",
+                );
+            }
+            if ((error.status === 429 || error.status === 503) && error.retryAfter) {
+                scheduleCardRetry(card, error.retryAfter);
+            }
+        }
+    }
+
     async function hydrateProxmoxCards() {
-        var cards = document.querySelectorAll("[data-proxmox-card-url]");
-        await Promise.all(
-            Array.prototype.slice.call(cards).map(async function (card) {
-                var cardId = card.dataset.proxmoxCardId;
-                var badge = cardId ? document.getElementById("proxmox-status-badge-" + cardId) : null;
-                var errorContainer = cardId
-                    ? document.getElementById("proxmox-connection-error-" + cardId)
-                    : null;
-                try {
-                    var payload = await fetchJson(card.dataset.proxmoxCardUrl);
-                    var clusterData = payload.cluster_data || {};
-                    renderProxmoxField(card, "mode", clusterData.mode);
-                    renderProxmoxField(card, "version", clusterData.version);
-                    renderProxmoxField(card, "repoid", clusterData.repoid);
-                    if (payload.detail && badge) {
-                        setBadgeState(badge, "error", payload.detail);
-                    }
-                    if (errorContainer) {
-                        renderProxmoxAlert(errorContainer, "alert-warning", payload.detail);
-                    }
-                } catch (error) {
-                    renderProxmoxField(card, "mode", null);
-                    renderProxmoxField(card, "version", null);
-                    renderProxmoxField(card, "repoid", null);
-                    if (badge) {
-                        setBadgeState(badge, "error", error.message || "Unknown error");
-                    }
-                    if (errorContainer) {
-                        renderProxmoxAlert(
-                            errorContainer,
-                            "alert-danger",
-                            error.message || "Unable to load Proxmox card data.",
-                        );
-                    }
-                }
-            }),
+        var cards = Array.prototype.slice.call(
+            document.querySelectorAll("[data-proxmox-card-url]"),
         );
+        await runBounded(cards.map(function (card) {
+            return function () {
+                return hydrateProxmoxCard(card);
+            };
+        }));
     }
 
     document.addEventListener("DOMContentLoaded", async function () {

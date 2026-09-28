@@ -52,19 +52,19 @@ def test_resolvers_read_every_identity_value_from_typed_state(vm_identity):
     assert vm_identity.resolve_vm_cluster_name(vm) == "cluster-sidecar"
 
 
-def test_node_prefers_device_then_sidecar_fk_then_sidecar_name(vm_identity):
+def test_node_prefers_sidecar_fk_then_sidecar_name_then_device(vm_identity):
     vm = _vm(
         proxmox_node=SimpleNamespace(name="pve-fk"),
         proxmox_node_name="pve-name",
     )
     vm.device = SimpleNamespace(name="pve-device")
-    assert vm_identity.resolve_vm_node(vm) == "pve-device"
-
-    vm.device = None
     assert vm_identity.resolve_vm_node(vm) == "pve-fk"
 
     vm.proxbox_sync_state.proxmox_node = None
     assert vm_identity.resolve_vm_node(vm) == "pve-name"
+
+    vm.proxbox_sync_state.proxmox_node_name = ""
+    assert vm_identity.resolve_vm_node(vm) == "pve-device"
 
 
 def test_cluster_and_type_use_typed_fallbacks_without_custom_fields(vm_identity):

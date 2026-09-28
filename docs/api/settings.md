@@ -132,7 +132,7 @@ These fields are set by the system and cannot be modified via PATCH:
 | `backup_batch_delay_ms` | integer | Milliseconds to pause between backup batches. Default `200`. |
 | `reconciliation_engine` | string | VM operation-queue engine used by proxbox-api: `python`, `compare`, or `rust`. Controlled by ProxboxPluginSettings, not backend environment variables. |
 | `reconciliation_compare_strict` | boolean | In `compare` mode, fail the sync on Rust/Python mismatch instead of only logging it. |
-| `custom_fields_request_delay` | decimal | Delay in seconds between custom field update requests |
+| `custom_fields_request_delay` | decimal | Compatibility-only; not consumed by netbox-proxbox or proxbox-api (no effect on sync) |
 | `delete_orphans` | boolean | When `true`, full-update marks Proxbox-discovered QEMU VMs and LXC containers whose typed sync state has a stale or missing `last_run_id` with the `proxbox-soft-deleted` tag and `decommissioning` status. It never deletes NetBox records. |
 
 ### NetBox Client

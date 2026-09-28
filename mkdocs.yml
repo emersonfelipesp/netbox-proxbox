@@ -88,6 +88,7 @@ nav:
     - Overview: 'configuration/index.md'
     - Required Parameters: 'configuration/required-parameters.md'
     - Plugin Settings: 'configuration/plugin-settings.md'
+    - Large Multi-Cluster Deployments: 'configuration/large-multi-cluster-deployments.md'
     - Sync Overwrite Flags: 'configuration/sync-overwrite-flags.md'
     - Sync Mode Controls: 'configuration/sync-modes.md'
     - Reusing Existing Objects: 'configuration/reusing-existing-objects.md'

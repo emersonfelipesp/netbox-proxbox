@@ -57,6 +57,8 @@ from netbox_proxbox.sync_types import (
     expanded_sync_stages,
     normalize_sync_types,
 )
+from netbox_proxbox.services.retry_after import parse_retry_after
+from netbox_proxbox.services.sync_deadline import SyncJobDeadline
 from netbox_proxbox.sync_params import (
     _normalize_batch_object_ids,
     _resolve_vm_batch_params,
@@ -84,7 +86,8 @@ if TYPE_CHECKING:
 
 _HEARTBEAT_SECONDS = 20.0
 _STAGE_RETRY_MAX = 2
-_STAGE_RETRY_DELAY = 8.0
+_STAGE_RETRY_INITIAL_DELAY = 8.0
+_STAGE_RETRY_MAX_DELAY = 60.0
 _SDN_SYNC_TYPE = getattr(SyncTypeChoices, "SDN", "sdn")
 _WIRE_ENDPOINT_ID_CAPTURE: ContextVar[dict[str, str] | None] = ContextVar(
     "proxbox_wire_endpoint_id_capture",
@@ -798,6 +801,28 @@ def _is_retryable_stage_failure(status: int, payload: object) -> bool:
     return _names_transport_failure(payload)
 
 
+def _stage_retry_after(payload: object) -> float | None:
+    """Return a bounded Retry-After delta from a stream failure payload."""
+    if not isinstance(payload, dict):
+        return None
+    value = payload.get("retry_after")
+    headers = payload.get("headers")
+    if value is None and isinstance(headers, dict):
+        value = headers.get("Retry-After") or headers.get("retry-after")
+    return parse_retry_after(value, maximum=_STAGE_RETRY_MAX_DELAY)
+
+
+def _stage_retry_delay(payload: object, retry_index: int) -> float:
+    """Prefer Retry-After, otherwise return bounded exponential backoff."""
+    retry_after = _stage_retry_after(payload)
+    if retry_after is not None:
+        return retry_after
+    return min(
+        _STAGE_RETRY_INITIAL_DELAY * (2**retry_index),
+        _STAGE_RETRY_MAX_DELAY,
+    )
+
+
 # Causes that identify a transport failure for *attribution* only. They are
 # deliberately kept apart from ``_TRANSPORT_FAILURE_MARKERS`` so that adding a
 # phrase here never widens which failures are retried.
@@ -872,6 +897,7 @@ def _execute_stage_sync(
     on_frame: Callable[[str, dict[str, object]], None],
     endpoint_id: int | None = None,
     preflight_hint: str | None = None,
+    deadline: SyncJobDeadline | None = None,
 ) -> tuple[dict[str, object], float]:
     """Execute a single stage sync and return payload.
 
@@ -906,6 +932,9 @@ def _execute_stage_sync(
 
     attempts: list[_StageFailureAttempt] = []
     for _attempt in range(_STAGE_RETRY_MAX + 1):
+        remaining = deadline.remaining(time.monotonic()) if deadline else 3600.0
+        if remaining <= 0:
+            raise RuntimeError("Job deadline reached before the stage could finish.")
         job.logger.info(f"Checking backend readiness for stage '{sync_type}'...")
         attempt_started = time.monotonic()
         payload, status = run_sync_stream(
@@ -913,6 +942,8 @@ def _execute_stage_sync(
             query_params=query_params,
             on_frame=lambda e, d: _on_frame_with_heartbeat(e, d, on_frame),
             endpoint_id=endpoint_id,
+            timeout=min(3600.0, remaining),
+            deadline=deadline,
         )
         if status >= 400:
             attempts.append(
@@ -937,13 +968,20 @@ def _execute_stage_sync(
 
         if _is_retryable_stage_failure(status, payload) and _attempt < _STAGE_RETRY_MAX:
             retry_detail = attempts[-1].detail
+            retry_delay = _stage_retry_delay(payload, _attempt)
+            if deadline:
+                retry_delay = deadline.cap(retry_delay, time.monotonic())
+                if retry_delay <= 0:
+                    raise RuntimeError(
+                        "Job deadline reached before the stage could be retried."
+                    )
             job.logger.warning(
                 f"Stage {sync_type} failed (HTTP {status}): {retry_detail} "
-                f"-- retrying in {_STAGE_RETRY_DELAY:.0f}s "
+                f"-- retrying in {retry_delay:.0f}s "
                 f"(attempt {_attempt + 1}/{_STAGE_RETRY_MAX})"
             )
             job.job.save(update_fields=["log_entries"])
-            time.sleep(_STAGE_RETRY_DELAY)
+            time.sleep(retry_delay)
             continue
 
         # 4xx (not retryable) or all retries exhausted
@@ -1018,6 +1056,22 @@ def _proxmox_endpoint_scopes(
     # still had registered, instead of stopping it. The caller turns an empty
     # scope list into a fail-loud endpoint-scope record.
     return [[endpoint_id] for endpoint_id in endpoint_ids]
+
+
+def _endpoint_display_name(endpoint_id: str | None) -> str:
+    """Return the configured endpoint name for failure summaries."""
+    if endpoint_id is None:
+        return ""
+    from netbox_proxbox.models import ProxmoxEndpoint
+
+    try:
+        names = ProxmoxEndpoint.objects.filter(pk=endpoint_id).values_list(
+            "name", flat=True
+        )
+        name = names.first() if hasattr(names, "first") else next(iter(names), "")
+    except (AttributeError, TypeError):
+        return ""
+    return str(name or "")
 
 
 def _resolve_wire_endpoint_ids(
@@ -1279,11 +1333,61 @@ def _owner_endpoint_pks_by_cluster_id(cluster_ids: list[int]) -> dict[int, set[s
     return seen
 
 
+def _record_unresolved_endpoint(
+    job: "ProxboxSyncJob",
+    endpoint_id: str | None,
+    stages: list[str],
+    stages_out: list[dict[str, object]],
+    wire_resolve_error: str | None,
+) -> None:
+    """Record disabled-stage skips or one fail-loud unresolved scope."""
+    _set_sync_mode_vars(effective_sync_modes_for_endpoint(endpoint_id))
+    mode_skips = {stage: _stage_skip_reason(stage) for stage in stages}
+    if all(reason is not None for reason in mode_skips.values()):
+        job.logger.info(
+            f"Proxmox endpoint {endpoint_id} is not registered on the ProxBox "
+            "backend, but every selected stage is disabled by its sync modes — "
+            "recording skips instead of failing"
+        )
+        for stage, skip_reason in mode_skips.items():
+            stages_out.append(
+                {
+                    "sync_type": stage,
+                    "endpoint_id": endpoint_id,
+                    "stream_path": None,
+                    "runtime_seconds": 0.0,
+                    "result_summary": {
+                        "ok": True,
+                        "skipped": True,
+                        "reason": skip_reason,
+                    },
+                }
+            )
+        return
+    reason = wire_resolve_error or (
+        f"Proxmox endpoint {endpoint_id} could not be resolved to a current "
+        "ProxBox backend endpoint (not registered, or the backend's stored copy "
+        "points at a different host or port); skipping to avoid syncing the "
+        "wrong endpoint"
+    )
+    job.logger.error(f"Skipping SSE sync for Proxmox endpoint {endpoint_id}: {reason}")
+    stages_out.append(
+        {
+            "sync_type": "endpoint-scope",
+            "endpoint_id": endpoint_id,
+            "stream_path": None,
+            "runtime_seconds": 0.0,
+            "result_summary": {"ok": False, "error": reason},
+        }
+    )
+
+
 def _run_all_stages_sync(
     job: "ProxboxSyncJob",
     stages: list[str],
     params: dict[str, object],
     run_started: float,
+    deadline: SyncJobDeadline | None = None,
     preflight_hint: str | None = None,
 ) -> list[dict[str, object]]:
     """Run all sync stages in order and return stage results.
@@ -1298,17 +1402,7 @@ def _run_all_stages_sync(
         # an empty ``stages_out`` finishes green, having synced nothing, which is
         # the silent no-op this preflight work exists to eliminate. The caller
         # turns this record into a "No sync stage ran" error.
-        reason = _no_endpoint_scope_reason(params.get("proxmox_endpoint_ids"))
-        job.logger.error(f"Skipping SSE sync entirely: {reason}")
-        return [
-            {
-                "sync_type": "endpoint-scope",
-                "endpoint_id": None,
-                "stream_path": None,
-                "runtime_seconds": 0.0,
-                "result_summary": {"ok": False, "error": reason},
-            }
-        ]
+        return _empty_endpoint_scope_result(job, params)
 
     # Read before resolving: the backend-local ids below are only valid against
     # the backend the stages will actually run on.
@@ -1343,82 +1437,21 @@ def _run_all_stages_sync(
     target_vm_ids = [str(x) for x in list(params.get("netbox_vm_ids") or []) if str(x)]
     netbox_branch_schema_id = params.get("netbox_branch_schema_id")
     sync_run_id = str(params.get("run_id") or "").strip() or None
-    for endpoint_scope in endpoint_scopes:
+    for endpoint_scope in _iter_scopes_before_deadline(
+        job, endpoint_scopes, stages_out, run_started, deadline
+    ):
         endpoint_id = endpoint_scope[0] if endpoint_scope else None
-        wire_scope: list[str] | None = None
-        if endpoint_scope:
-            # Translate the plugin endpoint pk to the backend's own database id so
-            # the SSE stages sync ONLY this endpoint. Failing to resolve must skip
-            # this endpoint, never fall back to an unscoped (all-endpoint) request.
-            backend_id = backend_id_by_pk.get(str(endpoint_id))
-            if backend_id is None:
-                # An unresolved endpoint is only a *failure* if it had work to do.
-                # Sync modes are normally applied further down, inside the stage
-                # loop — which this branch never reaches — so resolve them here
-                # first. Otherwise a run whose every selected stage is disabled
-                # (``sync_type=sdn`` with the default ``sync_mode_sdn=disabled``,
-                # say) would hard-fail as "No sync stage ran" on an endpoint that
-                # was never going to sync anything. Nothing was lost, so nothing
-                # is wrong. ``_build_base_query_params()`` re-sets these globals
-                # for every endpoint that does run, so scribbling on them here is
-                # the established pattern, not a leak.
-                _set_sync_mode_vars(effective_sync_modes_for_endpoint(endpoint_id))
-                mode_skips = {st: _stage_skip_reason(st) for st in stages}
-                if all(reason is not None for reason in mode_skips.values()):
-                    job.logger.info(
-                        f"Proxmox endpoint {endpoint_id} is not registered on the "
-                        "ProxBox backend, but every selected stage is disabled by "
-                        "its sync modes — recording skips instead of failing"
-                    )
-                    for st, skip_reason in mode_skips.items():
-                        stages_out.append(
-                            {
-                                "sync_type": st,
-                                "endpoint_id": endpoint_id,
-                                "stream_path": None,
-                                "runtime_seconds": 0.0,
-                                "result_summary": {
-                                    "ok": True,
-                                    "skipped": True,
-                                    "reason": skip_reason,
-                                },
-                            }
-                        )
-                    continue
-                reason = (
-                    wire_resolve_error
-                    # Two distinct causes land here and the message covers both:
-                    # the backend has never seen this endpoint, or it holds a row
-                    # under this endpoint's name that points at a *different*
-                    # host — a retarget whose preflight push failed. The second
-                    # is why "skipping to avoid syncing the wrong endpoint" is
-                    # literal rather than defensive phrasing. The specific cause
-                    # is logged by resolve_backend_endpoint_ids().
-                    or f"Proxmox endpoint {endpoint_id} could not be resolved to "
-                    "a current ProxBox backend endpoint (not registered, or the "
-                    "backend's stored copy points at a different host or port); "
-                    "skipping to avoid syncing the wrong endpoint"
-                )
-                job.logger.error(
-                    f"Skipping SSE sync for Proxmox endpoint {endpoint_id}: {reason}"
-                )
-                stages_out.append(
-                    {
-                        "sync_type": "endpoint-scope",
-                        "endpoint_id": endpoint_id,
-                        "stream_path": None,
-                        "runtime_seconds": 0.0,
-                        "result_summary": {"ok": False, "error": reason},
-                    }
-                )
-                continue
-            wire_scope = [backend_id]
-            job.logger.info(
-                f"Running SSE sync for Proxmox endpoint {endpoint_id} "
-                f"(backend id {backend_id})"
-            )
-        else:
-            job.logger.info("Running SSE sync with no Proxmox endpoint filter")
+        endpoint_failed = False
+        wire_scope, unresolved = _wire_scope_for_stage_endpoint(
+            job,
+            endpoint_scope,
+            backend_id_by_pk,
+            stages,
+            stages_out,
+            wire_resolve_error,
+        )
+        if unresolved:
+            continue
         base_query = _build_base_query_params(
             endpoint_scope,
             params.get("netbox_endpoint_ids"),
@@ -1427,19 +1460,12 @@ def _run_all_stages_sync(
         if netbox_branch_schema_id:
             base_query["netbox_branch_schema_id"] = str(netbox_branch_schema_id)
 
-        iface_disabled = (
-            _sync_mode_for_resource("vm_interface") == SyncModeChoices.DISABLED
-        )
-        ip_disabled = _sync_mode_for_resource("ip_address") == SyncModeChoices.DISABLED
-        mac_disabled = _sync_mode_for_resource("mac") == SyncModeChoices.DISABLED
-        dedicated_network_stage_present = (
-            SyncTypeChoices.VM_INTERFACES in stages
-            or SyncTypeChoices.IP_ADDRESSES in stages
-        )
-        disable_vm_network_on_vm_stage = (
-            SyncTypeChoices.VIRTUAL_MACHINES in stages
-            and (dedicated_network_stage_present or iface_disabled)
-        )
+        (
+            iface_disabled,
+            ip_disabled,
+            mac_disabled,
+            disable_vm_network_on_vm_stage,
+        ) = _network_stage_options(stages)
 
         for st in stages:
             skip_reason = _stage_skip_reason(st)
@@ -1448,19 +1474,7 @@ def _run_all_stages_sync(
                     f"Skipping stage {st} for endpoint "
                     f"{endpoint_id or 'unscoped'}: {skip_reason}"
                 )
-                stages_out.append(
-                    {
-                        "sync_type": st,
-                        "endpoint_id": endpoint_id,
-                        "stream_path": None,
-                        "runtime_seconds": 0.0,
-                        "result_summary": {
-                            "ok": True,
-                            "skipped": True,
-                            "reason": skip_reason,
-                        },
-                    }
-                )
+                stages_out.append(_skipped_stage_result(st, endpoint_id, skip_reason))
                 continue
             query_params = _build_stage_query_params(
                 base_query,
@@ -1484,15 +1498,37 @@ def _run_all_stages_sync(
                         on_frame,
                         fastapi_endpoint_id,
                         preflight_hint=preflight_hint,
+                        deadline=deadline,
                     )
                 except RuntimeError as exc:
-                    if st in _SKIPPABLE_STAGES:
+                    if _optional_stage_can_skip(st, exc):
                         job.logger.warning(
                             f"Optional stage '{st}' failed and was skipped: {exc}"
                         )
                         job.job.save(update_fields=["log_entries"])
                         continue
-                    raise
+                    cause = str(exc)
+                    job.logger.error(
+                        f"Stopping remaining stages for Proxmox endpoint "
+                        f"{endpoint_id or 'unscoped'} after required stage '{st}' "
+                        f"failed: {cause}"
+                    )
+                    stages_out.append(
+                        {
+                            "sync_type": "endpoint-scope",
+                            "endpoint_id": endpoint_id,
+                            "endpoint_name": _endpoint_display_name(endpoint_id),
+                            "stream_path": stream_path,
+                            "runtime_seconds": round(time.monotonic() - run_started, 3),
+                            "result_summary": {
+                                "ok": False,
+                                "stage": st,
+                                "error": cause,
+                            },
+                        }
+                    )
+                    endpoint_failed = True
+                    break
                 response = payload.get("response") or {}
                 stages_out.append(
                     {
@@ -1506,5 +1542,128 @@ def _run_all_stages_sync(
                         },
                     }
                 )
+            if endpoint_failed:
+                break
 
     return stages_out
+
+
+def _empty_endpoint_scope_result(
+    job: "ProxboxSyncJob", params: dict[str, object]
+) -> list[dict[str, object]]:
+    """Build the fatal no-endpoint result used by whole-stage orchestration."""
+    reason = _no_endpoint_scope_reason(params.get("proxmox_endpoint_ids"))
+    job.logger.error(f"Skipping SSE sync entirely: {reason}")
+    return [
+        {
+            "sync_type": "endpoint-scope",
+            "endpoint_id": None,
+            "stream_path": None,
+            "runtime_seconds": 0.0,
+            "result_summary": {"ok": False, "error": reason},
+        }
+    ]
+
+
+def _wire_scope_for_stage_endpoint(
+    job: "ProxboxSyncJob",
+    endpoint_scope: list[str],
+    backend_id_by_pk: dict[str, str],
+    stages: list[str],
+    stages_out: list[dict[str, object]],
+    wire_resolve_error: str | None,
+) -> tuple[list[str] | None, bool]:
+    """Resolve and log one endpoint's backend-local stage scope."""
+    if not endpoint_scope:
+        job.logger.info("Running SSE sync with no Proxmox endpoint filter")
+        return None, False
+    endpoint_id = endpoint_scope[0]
+    backend_id = backend_id_by_pk.get(str(endpoint_id))
+    if backend_id is None:
+        _record_unresolved_endpoint(
+            job, endpoint_id, stages, stages_out, wire_resolve_error
+        )
+        return None, True
+    job.logger.info(
+        f"Running SSE sync for Proxmox endpoint {endpoint_id} (backend id {backend_id})"
+    )
+    return [backend_id], False
+
+
+def _optional_stage_can_skip(sync_type: str, exc: RuntimeError) -> bool:
+    """Return whether a failed optional stage may continue before deadline."""
+    return sync_type in _SKIPPABLE_STAGES and "Job deadline reached" not in str(exc)
+
+
+def _network_stage_options(stages: list[str]) -> tuple[bool, bool, bool, bool]:
+    """Return network-mode flags shared by each endpoint stage loop."""
+    iface_disabled = _sync_mode_for_resource("vm_interface") == SyncModeChoices.DISABLED
+    ip_disabled = _sync_mode_for_resource("ip_address") == SyncModeChoices.DISABLED
+    mac_disabled = _sync_mode_for_resource("mac") == SyncModeChoices.DISABLED
+    dedicated = bool(
+        {SyncTypeChoices.VM_INTERFACES, SyncTypeChoices.IP_ADDRESSES}.intersection(
+            stages
+        )
+    )
+    disable_on_vm = SyncTypeChoices.VIRTUAL_MACHINES in stages and (
+        dedicated or iface_disabled
+    )
+    return iface_disabled, ip_disabled, mac_disabled, disable_on_vm
+
+
+def _skipped_stage_result(
+    sync_type: str,
+    endpoint_id: str | None,
+    reason: str,
+) -> dict[str, object]:
+    """Build one successful stage record for a configured skip."""
+    return {
+        "sync_type": sync_type,
+        "endpoint_id": endpoint_id,
+        "stream_path": None,
+        "runtime_seconds": 0.0,
+        "result_summary": {"ok": True, "skipped": True, "reason": reason},
+    }
+
+
+def _record_deadline_endpoints(
+    job: "ProxboxSyncJob",
+    endpoint_scopes: list[list[str]],
+    stages_out: list[dict[str, object]],
+    run_started: float,
+) -> None:
+    """Persist one clear failure record for every endpoint left at deadline."""
+    cause = "Job deadline reached; no time remains before the persistence reserve."
+    for endpoint_scope in endpoint_scopes:
+        endpoint_id = endpoint_scope[0] if endpoint_scope else None
+        job.logger.error(
+            f"Skipping remaining stages for Proxmox endpoint "
+            f"{endpoint_id or 'unscoped'}: {cause}"
+        )
+        stages_out.append(
+            {
+                "sync_type": "endpoint-scope",
+                "endpoint_id": endpoint_id,
+                "endpoint_name": _endpoint_display_name(endpoint_id),
+                "stream_path": None,
+                "runtime_seconds": round(time.monotonic() - run_started, 3),
+                "result_summary": {"ok": False, "error": cause},
+            }
+        )
+
+
+def _iter_scopes_before_deadline(
+    job: "ProxboxSyncJob",
+    endpoint_scopes: list[list[str]],
+    stages_out: list[dict[str, object]],
+    run_started: float,
+    deadline: SyncJobDeadline | None,
+) -> Iterator[list[str]]:
+    """Yield endpoint scopes until the executable budget is exhausted."""
+    for index, endpoint_scope in enumerate(endpoint_scopes):
+        if deadline and deadline.remaining(time.monotonic()) <= 0:
+            _record_deadline_endpoints(
+                job, endpoint_scopes[index:], stages_out, run_started
+            )
+            return
+        yield endpoint_scope

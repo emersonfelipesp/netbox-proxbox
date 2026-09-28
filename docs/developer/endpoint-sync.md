@@ -275,7 +275,7 @@ flowchart TD
     D -- No --> E["raise ProxboxPreflightError\n'no usable proxbox-api backend'"]
 
     D -- Yes --> R["wait_for_backend_ready()\nbounded cold-start wait"]
-    R --> K["ensure_backend_key_registered(endpoint_id=…)"]
+    R --> K["ensure_backend_key_registered(endpoint_id=…)\nretry 429/503/transport failures\nbounded by Retry-After and 180s total"]
     K --> W{"Any enabled\nNetBoxEndpoint?"}
     W -- "No — zero enabled rows" --> XG["raise ProxboxPreflightError\nbackend list NOT consulted"]
     W -- Yes --> F["For each enabled NetBoxEndpoint:\nsync_netbox_endpoint_to_backend()"]
@@ -709,6 +709,14 @@ it fails with `No sync stage ran` when *nothing* resolved, or names how many end
 skipped when only some did. `job.data` is persisted **before** the failure is raised, so the
 per-endpoint runtime breakdown stays readable on the failed row.
 
+**A required-stage failure is isolated to its endpoint.** The failed endpoint records its id,
+name, stage, and redacted cause, then skips its remaining stages. Later endpoints still run.
+After all endpoint scopes finish, the same persisted endpoint-scope summary fails the job. The
+firewall and datacenter local phases use the same isolation rule: each backend request carries
+one endpoint id, so a throttled, unavailable, or invalid cluster cannot prevent the other
+clusters from reconciling. Any failed local phase still prevents a branch merge and fails the
+job after the other endpoints have been attempted.
+
 **Unless every selected stage was disabled anyway.** Wire-id resolution happens before the
 per-stage sync-mode checks, so an endpoint whose selected stages are *all* sync-mode-disabled
 used to hard-fail on a missing wire id it would never have used. That case is now recorded as
@@ -764,6 +772,20 @@ to say "bad gateway" cannot demote a rejection to transport. Only payloads produ
 The backend-readiness advisory (`init_ok`) is evaluated against every attempt, independently of
 which one became the primary cause.
 
+Retry delays use exponential backoff from 8 seconds and are capped at 60 seconds. The shared
+`Retry-After` parser accepts delta-seconds and RFC 7231 HTTP-dates, treats negative or past
+values as zero, rejects malformed and non-finite values, and caps accepted delays at the
+caller's limit. Backend-key verification separately retries HTTP 429, HTTP 503, connection
+failures, and timeouts within a 180-second total wait budget; HTTP 401/403 and invalid-key
+failures remain immediately fatal.
+
+Every staged run has one monotonic deadline derived from the active RQ job timeout (7200
+seconds by default) and reserves the final 120 seconds for checkpointing and result persistence.
+Backend readiness probes, SSE read timeouts, retry sleeps, and retry decisions consume only the
+remaining executable budget. If it expires, the current endpoint and every endpoint not yet
+attempted receive an explicit `Job deadline reached` failure record; the runner returns normally
+to the finalization path so the complete per-endpoint summary is saved before RQ's hard timeout.
+
 After retries finish, the first application-level failure is the primary operator-facing
 cause. If every failure is transport-level, the final attempt is primary instead. The primary
 line retains `_format_stage_sync_error()` exactly, while divergent attempt details append one
@@ -772,6 +794,10 @@ error and raised `RuntimeError` carry the same composed message, so a later tran
 failure cannot replace an earlier deterministic backend rejection in the job's Error field.
 
 ### Full Sync Job Sequence
+
+After enqueue succeeds, the initiating UI action redirects directly to the NetBox core job
+detail page. This avoids reloading the Proxbox home dashboard and issuing its status-request
+burst while the backend is beginning the sync. Enqueue failures still return to the home page.
 
 ```mermaid
 sequenceDiagram

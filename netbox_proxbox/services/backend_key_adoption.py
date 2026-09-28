@@ -65,9 +65,18 @@ class BackendKeyEndpoint(Protocol):
 class BackendKeyAdoptionError(Exception):
     """Secret-safe validation failure raised before token persistence."""
 
-    def __init__(self, code: str, user_message: str) -> None:
+    def __init__(
+        self,
+        code: str,
+        user_message: str,
+        *,
+        status_code: int | None = None,
+        retry_after: str | None = None,
+    ) -> None:
         self.code = code
         self.user_message = user_message
+        self.status_code = status_code
+        self.retry_after = retry_after
         super().__init__(user_message)
 
 
@@ -362,7 +371,12 @@ def _transport_error(exc: HttpError) -> BackendKeyAdoptionError:
     )
 
 
-def _http_rejection(status_code: int, *, phase: str) -> BackendKeyAdoptionError:
+def _http_rejection(
+    status_code: int,
+    *,
+    phase: str,
+    retry_after: str | None = None,
+) -> BackendKeyAdoptionError:
     if phase == "bootstrap" and status_code == 409:
         return BackendKeyAdoptionError(
             "bootstrap_conflict",
@@ -372,6 +386,7 @@ def _http_rejection(status_code: int, *, phase: str) -> BackendKeyAdoptionError:
         return BackendKeyAdoptionError(
             "candidate_rejected",
             "The candidate API key was rejected; the previous key was kept unchanged.",
+            status_code=status_code,
         )
     if status_code == 409:
         return BackendKeyAdoptionError(
@@ -382,10 +397,14 @@ def _http_rejection(status_code: int, *, phase: str) -> BackendKeyAdoptionError:
         return BackendKeyAdoptionError(
             "backend_throttled",
             "The backend throttled validation; wait before trying again. The previous key was kept unchanged.",
+            status_code=status_code,
+            retry_after=retry_after,
         )
     return BackendKeyAdoptionError(
         f"{phase}_http_{status_code}",
         f"The backend rejected API-key {phase} with HTTP {status_code}; the previous key was kept unchanged.",
+        status_code=status_code,
+        retry_after=retry_after,
     )
 
 
@@ -442,6 +461,7 @@ def adopt_backend_key_at_url(
     label: str,
     bootstrap_if_needed: bool = False,
     http_client: HttpClient | None = None,
+    timeout: float | None = None,
 ) -> BackendKeyAdoptionProof:
     """Authenticate a candidate, optionally allowing explicit first bootstrap."""
     client = http_client or get_default_http_client()
@@ -450,6 +470,7 @@ def adopt_backend_key_at_url(
         verify_ssl,
         candidate,
         http_client=client,
+        timeout=timeout,
     )
     if inspection.state == "accepted":
         return BackendKeyAdoptionProof(
@@ -580,6 +601,7 @@ def inspect_backend_key_at_url(
     candidate: str,
     *,
     http_client: HttpClient | None = None,
+    timeout: float | None = None,
 ) -> BackendKeyInspection:
     """Read bootstrap state and authenticate a candidate when initialized."""
     normalized_candidate = (candidate or "").strip()
@@ -598,14 +620,20 @@ def inspect_backend_key_at_url(
         status_response = client.get(
             f"{normalized_base_url}/auth/bootstrap-status",
             verify=verify_ssl,
-            timeout=BOOTSTRAP_STATUS_TIMEOUT,
+            timeout=min(BOOTSTRAP_STATUS_TIMEOUT, timeout)
+            if timeout
+            else BOOTSTRAP_STATUS_TIMEOUT,
             allow_redirects=False,
         )
     except HttpError as exc:
         raise _transport_error(exc) from None
 
     if status_response.status_code != 200:
-        raise _http_rejection(status_response.status_code, phase="bootstrap_status")
+        raise _http_rejection(
+            status_response.status_code,
+            phase="bootstrap_status",
+            retry_after=getattr(status_response, "headers", {}).get("Retry-After"),
+        )
     try:
         status_payload = status_response.json()
     except (TypeError, ValueError):
@@ -642,13 +670,21 @@ def inspect_backend_key_at_url(
             f"{normalized_base_url}/auth/keys",
             headers={"X-Proxbox-API-Key": normalized_candidate},
             verify=verify_ssl,
-            timeout=AUTHENTICATED_KEY_LIST_TIMEOUT,
+            timeout=min(AUTHENTICATED_KEY_LIST_TIMEOUT, timeout)
+            if timeout
+            else AUTHENTICATED_KEY_LIST_TIMEOUT,
             allow_redirects=False,
         )
     except HttpError as exc:
         raise _transport_error(exc) from None
     if authenticated_response.status_code != 200:
-        raise _http_rejection(authenticated_response.status_code, phase="validation")
+        raise _http_rejection(
+            authenticated_response.status_code,
+            phase="validation",
+            retry_after=getattr(authenticated_response, "headers", {}).get(
+                "Retry-After"
+            ),
+        )
     try:
         authenticated_payload = authenticated_response.json()
     except (TypeError, ValueError):

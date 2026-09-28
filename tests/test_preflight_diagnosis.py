@@ -331,8 +331,8 @@ def test_preflight_auth_timeouts_absorb_a_cold_start() -> None:
     assert auth_constants["PREFLIGHT_READY_MAX_RETRIES"] <= 10
     assert auth_constants["PREFLIGHT_READY_MAX_DELAY"] <= 15
 
-    assert "timeout=BOOTSTRAP_STATUS_TIMEOUT" in adoption_source
-    assert "timeout=AUTHENTICATED_KEY_LIST_TIMEOUT" in adoption_source
+    assert "min(BOOTSTRAP_STATUS_TIMEOUT, timeout)" in adoption_source
+    assert "min(AUTHENTICATED_KEY_LIST_TIMEOUT, timeout)" in adoption_source
     assert "timeout=REGISTER_KEY_TIMEOUT" in adoption_source
 
 
@@ -369,7 +369,15 @@ def test_key_registration_uses_named_budgets_not_literals() -> None:
     assert len(budgets) == 3, (
         "expected bootstrap-status, authenticated-key-list, and register-key calls"
     )
-    assert sorted(node.id for node in budgets if isinstance(node, ast.Name)) == [
+    budget_names = sorted(
+        {
+            node.id
+            for budget in budgets
+            for node in ast.walk(budget)
+            if isinstance(node, ast.Name) and node.id.endswith("_TIMEOUT")
+        }
+    )
+    assert budget_names == [
         "AUTHENTICATED_KEY_LIST_TIMEOUT",
         "BOOTSTRAP_STATUS_TIMEOUT",
         "REGISTER_KEY_TIMEOUT",
@@ -574,7 +582,9 @@ class TestRetryableStageFailure:
         module = sync_stages_module
         calls = {"count": 0}
 
-        def _run_sync_stream(path, query_params=None, on_frame=None, endpoint_id=None):
+        def _run_sync_stream(
+            path, query_params=None, on_frame=None, endpoint_id=None, **kwargs
+        ):
             calls["count"] += 1
             return {"detail": "Read timed out."}, 400
 
@@ -599,7 +609,9 @@ class TestRetryableStageFailure:
         module = sync_stages_module
         calls = {"count": 0}
 
-        def _run_sync_stream(path, query_params=None, on_frame=None, endpoint_id=None):
+        def _run_sync_stream(
+            path, query_params=None, on_frame=None, endpoint_id=None, **kwargs
+        ):
             calls["count"] += 1
             return {"message": "Error ensuring Proxbox tag"}, 400
 
@@ -621,7 +633,9 @@ class TestRetryableStageFailure:
 
 
 def _fail_stage(module, monkeypatch, *, preflight_hint):
-    def _run_sync_stream(path, query_params=None, on_frame=None, endpoint_id=None):
+    def _run_sync_stream(
+        path, query_params=None, on_frame=None, endpoint_id=None, **kwargs
+    ):
         return {"message": "Error ensuring Proxbox tag"}, 400
 
     services_mod = types.ModuleType("netbox_proxbox.services")

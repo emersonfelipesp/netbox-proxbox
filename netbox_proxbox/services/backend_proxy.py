@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
+import time
+from contextvars import ContextVar
 from collections.abc import Callable, Generator, Iterable
 from dataclasses import dataclass
 from typing import Literal
@@ -27,6 +29,7 @@ from netbox_proxbox.services.backend_context import (
     _handle_auth_registration_and_retry,
     get_fastapi_request_context,
 )
+from netbox_proxbox.services.sync_deadline import SyncJobDeadline
 from netbox_proxbox.views.error_utils import (
     extract_backend_error_detail,
     parse_requests_response_json,
@@ -48,6 +51,10 @@ def _safe_exception_text(exc: BaseException) -> str:
 
 
 logger = logging.getLogger(__name__)
+
+_STREAM_RETRY_AFTER: ContextVar[str | None] = ContextVar(
+    "proxbox_stream_retry_after", default=None
+)
 
 _SYNC_STREAM_READ_TIMEOUT = (5, 3600)
 
@@ -201,11 +208,21 @@ def _consume_sse_until_complete(
     response: requests.Response,
     *,
     on_frame: Callable[[str, dict[str, object]], None] | None = None,
+    deadline: SyncJobDeadline | None = None,
 ) -> tuple[dict[str, object], int]:
     """Read one SSE body without inferring that an unseen frame permits replay."""
     last_complete: SseCompletePayload | None = None
     try:
         for frame in _iter_sse_frames(response.iter_lines(decode_unicode=True)):
+            if deadline is not None and deadline.remaining(time.monotonic()) <= 0:
+                return (
+                    {
+                        "stream": True,
+                        "detail": "Job deadline reached while consuming the backend stream.",
+                        "failure_kind": STAGE_FAILURE_TRANSPORT,
+                    },
+                    504,
+                )
             _event = frame.event
             data = frame.data
             if on_frame is not None:
@@ -662,12 +679,14 @@ def _consume_stream_response(
     path: str,
     requested_urls: list[str],
     on_frame: Callable[[str, dict[str, object]], None] | None,
+    deadline: SyncJobDeadline | None,
 ) -> tuple[dict[str, object], int]:
     """Consume and close one open stream response."""
     try:
         payload, status = _consume_sse_until_complete(
             response,
             on_frame=on_frame,
+            deadline=deadline,
         )
     finally:
         response.close()
@@ -686,8 +705,11 @@ def _run_stream_candidate_pass(
     endpoint_id: int | None,
     auth_register_attempted: bool,
     requested_urls: list[str],
+    timeout: float,
+    deadline: SyncJobDeadline | None,
 ) -> _StreamCandidatePass:
     """Select a ready candidate, then issue exactly one mutating request."""
+    started = time.monotonic()
     failures: list[_StreamFailure] = []
     if not context.http_url:
         return _StreamCandidatePass(
@@ -713,7 +735,8 @@ def _run_stream_candidate_pass(
                 url=url,
                 path=path,
                 verify_ssl=verify,
-            )
+            ),
+            time_budget=timeout,
         )
         if not ready:
             logger.error("Backend candidate not ready: %s", ready_msg)
@@ -733,6 +756,7 @@ def _run_stream_candidate_pass(
             on_frame=on_frame,
             endpoint_id=endpoint_id,
             auth_register_attempted=auth_register_attempted,
+            timeout=max(timeout - (time.monotonic() - started), 0.001),
         )
         if not isinstance(result, tuple):
             payload, status = _consume_stream_response(
@@ -740,6 +764,7 @@ def _run_stream_candidate_pass(
                 path=path,
                 requested_urls=requested_urls,
                 on_frame=on_frame,
+                deadline=deadline,
             )
             return _StreamCandidatePass(payload=payload, status=status)
 
@@ -757,6 +782,8 @@ def run_sync_stream(
     *,
     on_frame: Callable[[str, dict[str, object]], None] | None = None,
     endpoint_id: int | None = None,
+    timeout: float = _SYNC_STREAM_READ_TIMEOUT[1],
+    deadline: SyncJobDeadline | None = None,
 ) -> tuple[dict[str, object], int]:
     """GET a backend SSE sync URL to completion (for NetBox background jobs).
 
@@ -764,6 +791,8 @@ def run_sync_stream(
     ``dcim/devices/create/stream``). Uses the same URL fallback as
     :func:`iter_backend_sse_lines` and a long read timeout.
     """
+    _STREAM_RETRY_AFTER.set(None)
+    started = time.monotonic()
     if endpoint_id is None:
         context = get_fastapi_request_context()
     else:
@@ -787,6 +816,18 @@ def run_sync_stream(
     auth_register_attempted = False
 
     while True:
+        remaining = timeout - (time.monotonic() - started)
+        if deadline is not None:
+            remaining = min(remaining, deadline.remaining(time.monotonic()))
+        if remaining <= 0:
+            candidate_failures.append(
+                (
+                    "Job deadline reached during backend stream setup.",
+                    504,
+                    STAGE_FAILURE_TRANSPORT,
+                )
+            )
+            break
         candidate_pass = _run_stream_candidate_pass(
             active_context,
             path=path,
@@ -795,6 +836,8 @@ def run_sync_stream(
             endpoint_id=endpoint_id,
             auth_register_attempted=auth_register_attempted,
             requested_urls=requested_urls,
+            timeout=remaining,
+            deadline=deadline,
         )
         if candidate_pass.payload is not None and candidate_pass.status is not None:
             return candidate_pass.payload, candidate_pass.status
@@ -809,13 +852,17 @@ def run_sync_stream(
         break
 
     detail, http_status, failure_kind = _select_stream_failure(candidate_failures)
-    return {
+    failure_payload: dict[str, object] = {
         "stream": True,
         "path": path,
         "requested_urls": requested_urls,
         "detail": detail or "Unable to reach the ProxBox backend stream.",
         "failure_kind": failure_kind,
-    }, http_status or 503
+    }
+    retry_after = _STREAM_RETRY_AFTER.get()
+    if retry_after is not None:
+        failure_payload["retry_after"] = retry_after
+    return failure_payload, http_status or 503
 
 
 def _select_stream_failure(
@@ -845,6 +892,7 @@ def _try_sync_stream_url(
     on_frame: Callable[[str, dict[str, object]], None] | None,
     endpoint_id: int | None = None,
     auth_register_attempted: bool = False,
+    timeout: float = _SYNC_STREAM_READ_TIMEOUT[1],
 ) -> (
     tuple[str | None, bool, BackendRequestContext | None, int | None, str]
     | requests.Response
@@ -872,7 +920,7 @@ def _try_sync_stream_url(
             params=query_params,
             headers=context.headers or {},
             verify=verify,
-            timeout=_SYNC_STREAM_READ_TIMEOUT,
+            timeout=(min(_SYNC_STREAM_READ_TIMEOUT[0], timeout), timeout),
             stream=True,
             allow_redirects=False,
         )
@@ -957,6 +1005,9 @@ def _stream_http_error(
     request, not about reaching it.
     """
     actual_status = response.status_code
+    retry_after = getattr(response, "headers", {}).get("Retry-After")
+    if retry_after is not None:
+        _STREAM_RETRY_AFTER.set(retry_after)
     last_detail = f"HTTP {actual_status}"
     failure_kind = STAGE_FAILURE_TRANSPORT
     try:

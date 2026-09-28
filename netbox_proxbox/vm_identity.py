@@ -46,16 +46,15 @@ def resolve_vm_cluster_name(vm: object) -> str:
 
 
 def resolve_vm_node(vm: object) -> str:
-    """Return the VM's Proxmox node, preferring its assigned NetBox device."""
-    device = _value(vm, "device")
-    device_name = _value(device, "name")
-    if device_name:
-        return str(device_name)
-
+    """Return the short Proxmox node identity from typed state when available."""
     sync_state = _sync_state(vm)
     proxmox_node = _value(sync_state, "proxmox_node")
     node_name = _value(proxmox_node, "name") or _value(sync_state, "proxmox_node_name")
-    return str(node_name or "")
+    if node_name:
+        return str(node_name)
+
+    device = _value(vm, "device")
+    return str(_value(device, "name") or "")
 
 
 def resolve_known_vm_type(vm: object) -> str:

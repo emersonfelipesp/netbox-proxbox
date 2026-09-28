@@ -115,9 +115,25 @@ curl -H "Authorization: Token <token>" \
 | `token_value` | string (write-only) | Proxmox API token secret |
 | `verify_ssl` | boolean | Whether to verify the Proxmox TLS certificate (default `false`) |
 | `enabled` | boolean | Local inventory toggle. Disabled endpoints remain visible but are excluded from operational reads, registration, keepalive, status, and sync paths. |
+| `node_device_name_template` | string | Optional per-endpoint NetBox Device naming template. Blank inherits the global setting. Supported placeholders: `{node}`, `{cluster}`, `{cluster_slug}`, and `{endpoint}`. |
 | `allowed_tenants` | nested Tenant list | Tenant allow-list for endpoint visibility. Empty means default/global visibility. |
 | `allow_writes` | boolean | Gate for the operational verb routes on the paired `proxbox-api` (start/stop/snapshot/migrate). Defaults to `false`. When `false`, `proxbox-api` returns `403 {"reason": "writes_disabled_for_endpoint"}` for verb POSTs against this endpoint even with a valid API key and `X-Proxbox-Actor` header. Flip to `true` per-endpoint to opt that Proxmox cluster into write access. |
 | `allow_packer_template_builds` | boolean | Separate, default-off capability for netbox-packer Cloud-Init template-image creation. It is effective only when the endpoint is enabled and `allow_writes` is also true, authorizes no other Proxmox mutation, and is propagated to proxbox-api so the backend can recheck it at the final write boundary. |
+
+### Node Device names
+
+The global `ProxboxPluginSettings.node_device_name_template` defaults to
+`{node}`. A non-empty endpoint value overrides it; blank means inherit. The
+template must include `{node}` and may use `{cluster}`, `{cluster_slug}`, and
+`{endpoint}`. Format specs, conversions, attribute access, and index access are
+rejected. A representative render must be DNS-safe, with labels no longer than
+63 characters and a complete name no longer than the NetBox Device limit of 64.
+
+For example, `{node}.{cluster}.example.com` lets two clusters both expose a
+short node named `prox01` without colliding in NetBox. Sync state and Proxmox
+API paths retain `prox01`; only the NetBox Device name is rendered. Template
+changes rename a legacy short name or a name previously managed by Proxbox,
+including a switch back to `{node}`. Operator-assigned names are preserved.
 | `packer_template_builds_backend_authorized` | boolean (read-only) | Last effective Packer template-build grant successfully confirmed on proxbox-api. Endpoint deletion remains blocked while this is true, including after a local revocation whose backend update failed. |
 | `ssh_credential_source` | choice | Browser terminal endpoint SSH source. `dedicated` (default) uses the encrypted endpoint `ssh_*` fields. `reuse_endpoint` sends the realm-stripped endpoint username plus endpoint plaintext password to `proxbox-api` as password SSH auth. |
 | `ssh_username` / `ssh_port` / `ssh_auth_method` / `ssh_known_host_fingerprint` | mixed | Dedicated endpoint SSH credential metadata for browser terminal sessions. The pinned host-key fingerprint is also required when `ssh_credential_source=reuse_endpoint`. |

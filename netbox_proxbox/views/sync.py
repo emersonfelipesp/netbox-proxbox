@@ -67,6 +67,7 @@ class _ProxboxSyncEnqueueView(_ProxboxSyncViewBase):
     ) -> HttpResponse:
         """Handle post."""
         job_id: object | None = None
+        job_url: str | None = None
         try:
             job = ProxboxSyncJob.enqueue(
                 instance=None,
@@ -84,9 +85,10 @@ class _ProxboxSyncEnqueueView(_ProxboxSyncViewBase):
                 ),
             )
             job_id = getattr(job, "pk", None) or getattr(job, "id", None)
+            job_url = job.get_absolute_url()
         except Exception as e:  # noqa: BLE001 — surface any enqueue failure to the user
             notify_sync_error(request, e)
-        response = redirect("plugins:netbox_proxbox:home")
+        response = redirect(job_url or "plugins:netbox_proxbox:home")
         if job_id is not None:
             response["X-Proxbox-Job-ID"] = str(job_id)
         return response

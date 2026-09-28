@@ -44,6 +44,20 @@ The `Mode` field on the endpoint detail page uses colour-coded badges:
 
 ## Syncing Cluster Data
 
+### NetBox Device names
+
+Each node's NetBox Device name is rendered from the effective node Device name
+template. The endpoint override wins when non-empty, otherwise the global
+plugin value applies; the default is `{node}`. Available placeholders are
+`{node}`, `{cluster}`, `{cluster_slug}`, and `{endpoint}`. For clusters that
+reuse short node names, use a value such as
+`{node}.{cluster}.example.com`.
+
+Proxmox requests continue to use the original short node name. Typed sync state
+also stores the short node and cluster names, so VM and interface attachment is
+stable across template changes. Managed legacy names are renamed in place;
+operator-assigned Device names are not overwritten.
+
 ### Programmatic Sync
 
 Call `sync_cluster_and_nodes()` from anywhere in the NetBox Django environment:

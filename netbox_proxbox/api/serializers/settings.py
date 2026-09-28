@@ -1,5 +1,6 @@
 """API serializer for ProxboxPluginSettings."""
 
+from django.core.exceptions import ValidationError
 from django.views.decorators.debug import sensitive_variables
 from netbox.api.serializers import NetBoxModelSerializer
 from rest_framework import serializers
@@ -7,6 +8,7 @@ from rest_framework import serializers
 from netbox_proxbox.constants import OVERWRITE_FIELDS, SYNC_MODE_FIELDS
 from netbox_proxbox.models import ProxboxPluginSettings
 from netbox_proxbox.models.plugin_settings import CEPH_POLL_INTERVAL_TIMEOUT_ERROR
+from netbox_proxbox.validators import validate_global_node_device_name_template
 
 
 class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
@@ -51,6 +53,16 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
                     {"encryption_key": str(exc)}
                 ) from None
         validated = super().validate(attrs)
+        template = validated.get(
+            "node_device_name_template",
+            getattr(self.instance, "node_device_name_template", "{node}"),
+        )
+        try:
+            validate_global_node_device_name_template(str(template))
+        except ValidationError as exc:
+            raise serializers.ValidationError(
+                {"node_device_name_template": exc}
+            ) from exc
         timeout = validated.get(
             "ceph_task_timeout",
             getattr(
@@ -108,6 +120,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "singleton_key",
             "use_guest_agent_interface_name",
             "vm_interface_sync_strategy",
+            "node_device_name_template",
             "proxbox_fetch_max_concurrency",
             "ignore_ipv6_link_local_addresses",
             "ensure_netbox_objects",

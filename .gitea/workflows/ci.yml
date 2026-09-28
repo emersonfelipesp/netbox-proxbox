@@ -110,6 +110,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # The dashboard scheduler oracle executes home_inline.js under Node;
+          # fail setup here rather than let that test skip.
+          node --version
           .venv/bin/python -m pytest -p no:django -q -rs tests
 
       - name: Clean quality environment

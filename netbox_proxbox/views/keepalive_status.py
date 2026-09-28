@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 import time
 
@@ -13,13 +15,82 @@ from django.views import View
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
 from netbox_proxbox.services.endpoint_enabled import disabled_endpoint_detail
 from netbox_proxbox.services.service_status import ServiceStatus
-from netbox_proxbox.utils import get_ip_address_host
+from netbox_proxbox.utils import (
+    get_backend_auth_headers,
+    get_fastapi_url,
+    get_ip_address_host,
+)
 from utilities.views import TokenConditionalLoginRequiredMixin
 
 logger = logging.getLogger(__name__)
 
+try:
+    from django.core.cache import cache as _django_cache
+except (ImportError, ModuleNotFoundError):  # pragma: no cover - lightweight stubs
+    _django_cache = None
+
 DEPENDENT_SERVICES = ("netbox", "proxmox", "pbs")
 KNOWN_SERVICES = ("fastapi", *DEPENDENT_SERVICES)
+FASTAPI_PROBE_SUCCESS_TTL = 30
+FASTAPI_PROBE_FAILURE_TTL = 3
+
+
+def _fastapi_probe_cache_key(endpoint: FastAPIEndpoint) -> str:
+    """Key probes by endpoint settings without exposing connection data."""
+    url_info = get_fastapi_url(endpoint) or {}
+    headers = get_backend_auth_headers(endpoint)
+    settings_payload = {
+        "url": url_info,
+        "headers_hash": hashlib.sha256(
+            json.dumps(headers, sort_keys=True).encode()
+        ).hexdigest(),
+        "enabled": bool(getattr(endpoint, "enabled", True)),
+    }
+    digest = hashlib.sha256(
+        json.dumps(settings_payload, sort_keys=True, default=str).encode()
+    ).hexdigest()
+    endpoint_id = getattr(endpoint, "pk", getattr(endpoint, "id", "unknown"))
+    return f"netbox_proxbox:fastapi_probe:{endpoint_id}:{digest}"
+
+
+def _cached_fastapi_status(
+    service_status: ServiceStatus, endpoint: FastAPIEndpoint
+) -> object:
+    """Return a short-lived backend probe and restore its connection context."""
+    key = _fastapi_probe_cache_key(endpoint)
+    cached = _django_cache.get(key) if _django_cache is not None else None
+    if isinstance(cached, dict) and cached.get("result") is not None:
+        service_status.connected_url = cached.get("connected_url")
+        service_status.connected_verify_ssl = bool(cached.get("verify_ssl", True))
+        service_status.last_error_detail = cached.get("error_detail")
+        service_status.last_error_http_status = cached.get("error_http_status")
+        return cached["result"]
+
+    endpoint_id = int(getattr(endpoint, "pk", getattr(endpoint, "id")))
+    result = service_status.fastapi_status(endpoint_id)
+    timeout = (
+        FASTAPI_PROBE_SUCCESS_TTL
+        if result.connected and result.api_access != "error"
+        else FASTAPI_PROBE_FAILURE_TTL
+    )
+    if _django_cache is not None:
+        _django_cache.set(
+            key,
+            {
+                "result": result,
+                "connected_url": service_status.connected_url,
+                "verify_ssl": service_status.connected_verify_ssl,
+                "error_detail": service_status.last_error_detail,
+                "error_http_status": service_status.last_error_http_status,
+            },
+            timeout=timeout,
+        )
+    return result
+
+
+def _throttled_payload(payload: dict[str, object], http_status: int | None) -> None:
+    if http_status in {429, 503}:
+        payload["status"] = "throttled"
 
 
 def _visible_pbs_server(request: HttpRequest, pk: int) -> object | None:
@@ -97,7 +168,7 @@ def _fastapi_status_response(
     if disabled_detail:
         return JsonResponse({"status": "error", "detail": disabled_detail})
 
-    fastapi_response = service_status.fastapi_status(pk)
+    fastapi_response = _cached_fastapi_status(service_status, fastapi_endpoint)
     status = (
         "success"
         if fastapi_response.connected and fastapi_response.api_access != "error"
@@ -117,6 +188,9 @@ def _fastapi_status_response(
             payload["detail"] = " ".join(fastapi_response.warnings)
     if fastapi_response.detail:
         payload["detail"] = fastapi_response.detail
+    if fastapi_response.http_status is not None:
+        payload["http_status"] = fastapi_response.http_status
+    _throttled_payload(payload, fastapi_response.http_status)
     return JsonResponse(payload)
 
 
@@ -227,16 +301,17 @@ def _build_service_status_response(
             status=503,
         )
 
-    fastapi_response = service_status.fastapi_status(fastapi_object.id)
+    fastapi_response = _cached_fastapi_status(service_status, fastapi_object)
     if not fastapi_response.connected:
-        return JsonResponse(
-            {
-                "status": "error",
-                "detail": fastapi_response.detail
-                or "Unable to connect to configured FastAPI endpoint.",
-            },
-            status=503,
-        )
+        payload = {
+            "status": "error",
+            "detail": fastapi_response.detail
+            or "Unable to connect to configured FastAPI endpoint.",
+        }
+        if fastapi_response.http_status is not None:
+            payload["http_status"] = fastapi_response.http_status
+        _throttled_payload(payload, fastapi_response.http_status)
+        return JsonResponse(payload, status=503)
 
     auth_headers = service_status.backend_auth_headers(fastapi_object)
 
@@ -286,6 +361,7 @@ def _build_service_status_response(
         payload["detail"] = service_status.last_error_detail
     if status != "success" and service_status.last_error_http_status is not None:
         payload["http_status"] = service_status.last_error_http_status
+    _throttled_payload(payload, service_status.last_error_http_status)
 
     return JsonResponse(payload)
 

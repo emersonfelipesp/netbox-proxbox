@@ -174,6 +174,7 @@ def _fetch_template_config(
     node_name: str,
     proxmox_type: str,
     vmid: int,
+    timeout: float = SYNC_TIMEOUT,
 ) -> dict[str, Any]:
     if not node_name:
         return {}
@@ -186,7 +187,7 @@ def _fetch_template_config(
             },
             headers=auth_headers,
             verify=verify_ssl,
-            timeout=SYNC_TIMEOUT,
+            timeout=timeout,
             allow_redirects=False,
         )
         response.raise_for_status()
@@ -200,6 +201,89 @@ def _fetch_template_config(
         )
         return {}
     return payload if isinstance(payload, dict) else {}
+
+
+def _collect_template_rows(
+    resources_payload: object,
+    *,
+    fastapi_url: str,
+    auth_headers: dict[str, str],
+    verify_ssl: bool,
+    backend_endpoint_id: int,
+    deadline: float | None,
+) -> list[tuple[str | None, dict[str, Any], dict[str, Any]]]:
+    """Fetch configuration for each valid template resource before DB writes."""
+    from netbox_proxbox.services.sync_deadline import remaining_timeout
+
+    rows: list[tuple[str | None, dict[str, Any], dict[str, Any]]] = []
+    for cluster_name, resource in _iter_cluster_resource_rows(resources_payload):
+        if not _coerce_bool(resource.get("template")):
+            continue
+        proxmox_type = _template_type(resource)
+        vmid = _coerce_int(resource.get("vmid"))
+        if proxmox_type not in {"qemu", "lxc"} or vmid is None:
+            continue
+        config = _fetch_template_config(
+            fastapi_url=fastapi_url,
+            auth_headers=auth_headers,
+            verify_ssl=verify_ssl,
+            backend_endpoint_id=backend_endpoint_id,
+            node_name=str(resource.get("node") or ""),
+            proxmox_type=proxmox_type,
+            vmid=vmid,
+            timeout=remaining_timeout(deadline, float(SYNC_TIMEOUT)),
+        )
+        rows.append((cluster_name, resource, config))
+    return rows
+
+
+def _persist_template_rows(
+    endpoint: ProxmoxEndpoint,
+    mode: str,
+    template_rows: list[tuple[str | None, dict[str, Any], dict[str, Any]]],
+    result: VMTemplateSyncResult,
+) -> int:
+    """Upsert live templates, delete stale rows, and return the processed count."""
+    processed = 0
+    with transaction.atomic():
+        existing_keys = set(
+            ProxmoxVMTemplate.objects.filter(proxmox_endpoint=endpoint).values_list(
+                "vmid", "proxmox_type"
+            )
+        )
+        synced_keys: set[tuple[int, str]] = set()
+        for cluster_name, resource, config in template_rows:
+            defaults = _template_defaults(
+                endpoint=endpoint,
+                cluster_name=cluster_name,
+                resource=resource,
+                config=config,
+            )
+            if defaults is None:
+                continue
+            template = _upsert_template(
+                endpoint=endpoint, defaults=defaults, mode=mode, result=result
+            )
+            if template is None:
+                continue
+            synced_keys.add((int(defaults["vmid"]), str(defaults["proxmox_type"])))
+            processed += 1
+        stale_keys = existing_keys - synced_keys
+        if stale_keys:
+            stale_ids = [
+                template.pk
+                for template in ProxmoxVMTemplate.objects.filter(
+                    proxmox_endpoint=endpoint
+                )
+                if (template.vmid, template.proxmox_type) in stale_keys
+                and not _has_bootstrap_only_tag(template)
+            ]
+            if stale_ids:
+                deleted_count, _ = ProxmoxVMTemplate.objects.filter(
+                    pk__in=stale_ids
+                ).delete()
+                result.templates_deleted += deleted_count
+    return processed
 
 
 def _template_defaults(
@@ -283,6 +367,7 @@ def sync_vm_templates(
     fastapi_url: str | None = None,
     auth_headers: dict[str, str] | None = None,
     fastapi_endpoint_id: int | None = None,
+    deadline: float | None = None,
 ) -> VMTemplateSyncResult:
     """Sync Proxmox template VMs for one Proxmox endpoint.
 
@@ -347,11 +432,14 @@ def sync_vm_templates(
     if auth_headers is None:
         auth_headers = {}
 
+    from netbox_proxbox.services.sync_deadline import remaining_timeout
+
     backend_endpoint_id, resolve_error = resolve_backend_endpoint_id(
         endpoint,
         base_url=fastapi_url,
         auth_headers=auth_headers,
         backend_verify_ssl=verify_ssl,
+        timeout=remaining_timeout(deadline, float(SYNC_TIMEOUT)),
     )
     if backend_endpoint_id is None:
         result.error = resolve_error or "Could not resolve backend Proxmox endpoint id"
@@ -373,7 +461,7 @@ def sync_vm_templates(
             },
             headers=auth_headers,
             verify=verify_ssl,
-            timeout=SYNC_TIMEOUT,
+            timeout=remaining_timeout(deadline, float(SYNC_TIMEOUT)),
             allow_redirects=False,
         )
         response.raise_for_status()
@@ -383,72 +471,15 @@ def sync_vm_templates(
         logger.error(result.error)
         return result
 
-    template_rows: list[tuple[str | None, dict[str, Any], dict[str, Any]]] = []
-    for cluster_name, resource in _iter_cluster_resource_rows(resources_payload):
-        if not _coerce_bool(resource.get("template")):
-            continue
-        proxmox_type = _template_type(resource)
-        if proxmox_type not in {"qemu", "lxc"}:
-            continue
-        vmid = _coerce_int(resource.get("vmid"))
-        if vmid is None:
-            continue
-
-        node_name = str(resource.get("node") or "")
-        config = _fetch_template_config(
-            fastapi_url=fastapi_url,
-            auth_headers=auth_headers,
-            verify_ssl=verify_ssl,
-            backend_endpoint_id=backend_endpoint_id,
-            node_name=node_name,
-            proxmox_type=proxmox_type,
-            vmid=vmid,
-        )
-        template_rows.append((cluster_name, resource, config))
-
-    processed = 0
-    with transaction.atomic():
-        existing_keys = set(
-            ProxmoxVMTemplate.objects.filter(proxmox_endpoint=endpoint).values_list(
-                "vmid", "proxmox_type"
-            )
-        )
-        synced_keys: set[tuple[int, str]] = set()
-
-        for cluster_name, resource, config in template_rows:
-            defaults = _template_defaults(
-                endpoint=endpoint,
-                cluster_name=cluster_name,
-                resource=resource,
-                config=config,
-            )
-            if defaults is None:
-                continue
-            template = _upsert_template(
-                endpoint=endpoint,
-                defaults=defaults,
-                mode=mode,
-                result=result,
-            )
-            if template is not None:
-                synced_keys.add((int(defaults["vmid"]), str(defaults["proxmox_type"])))
-                processed += 1
-
-        stale_keys = existing_keys - synced_keys
-        if stale_keys:
-            stale_ids = [
-                template.pk
-                for template in ProxmoxVMTemplate.objects.filter(
-                    proxmox_endpoint=endpoint
-                )
-                if (template.vmid, template.proxmox_type) in stale_keys
-                and not _has_bootstrap_only_tag(template)
-            ]
-            if stale_ids:
-                deleted_count, _ = ProxmoxVMTemplate.objects.filter(
-                    pk__in=stale_ids
-                ).delete()
-                result.templates_deleted += deleted_count
+    template_rows = _collect_template_rows(
+        resources_payload,
+        fastapi_url=fastapi_url,
+        auth_headers=auth_headers,
+        verify_ssl=verify_ssl,
+        backend_endpoint_id=backend_endpoint_id,
+        deadline=deadline,
+    )
+    processed = _persist_template_rows(endpoint, mode, template_rows, result)
 
     runtime_seconds = round(time.monotonic() - started, 3)
     result.success = True

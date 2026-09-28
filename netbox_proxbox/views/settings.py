@@ -111,6 +111,9 @@ class SettingsView(
                 "vm_interface_sync_strategy",
                 "guest_os_model",
             ),
+            "node_device_name_template": getattr(
+                settings_obj, "node_device_name_template", "{node}"
+            ),
             "proxbox_fetch_max_concurrency": settings_obj.proxbox_fetch_max_concurrency,
             "ignore_ipv6_link_local_addresses": settings_obj.ignore_ipv6_link_local_addresses,
             "ensure_netbox_objects": settings_obj.ensure_netbox_objects,
@@ -284,6 +287,10 @@ class SettingsView(
             settings_obj.use_guest_agent_interface_name = form.cleaned_data[
                 "use_guest_agent_interface_name"
             ]
+            settings_obj.node_device_name_template = form.cleaned_data.get(
+                "node_device_name_template",
+                getattr(settings_obj, "node_device_name_template", "{node}"),
+            )
             settings_obj.vm_interface_sync_strategy = form.cleaned_data.get(
                 "vm_interface_sync_strategy",
                 "guest_os_model",
@@ -488,6 +495,7 @@ class SettingsView(
                 update_fields=[
                     "use_guest_agent_interface_name",
                     "vm_interface_sync_strategy",
+                    "node_device_name_template",
                     "proxbox_fetch_max_concurrency",
                     "ignore_ipv6_link_local_addresses",
                     "ensure_netbox_objects",

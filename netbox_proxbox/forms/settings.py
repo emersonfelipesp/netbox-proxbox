@@ -26,6 +26,7 @@ from netbox_proxbox.models.plugin_settings import (
     NETBOX_TO_PROXMOX_TYPED_PHRASE,
     RECONCILIATION_ENGINE_CHOICES,
 )
+from netbox_proxbox.validators import validate_global_node_device_name_template
 
 
 def _sync_mode_choice_options(
@@ -139,6 +140,17 @@ class ProxboxPluginSettingsForm(forms.Form):
             "the older single-interface rename behavior."
         ),
     )
+    node_device_name_template = forms.CharField(
+        required=True,
+        max_length=128,
+        initial="{node}",
+        label="Node device name template",
+        help_text=(
+            "NetBox Device name template for Proxmox nodes. Supported placeholders: "
+            "{node}, {cluster}, {cluster_slug}, and {endpoint}."
+        ),
+    )
+
     proxbox_fetch_max_concurrency = forms.IntegerField(
         required=True,
         min_value=1,
@@ -150,6 +162,7 @@ class ProxboxPluginSettingsForm(forms.Form):
             "Use lower values to reduce backend/API pressure."
         ),
     )
+
     ignore_ipv6_link_local_addresses = forms.BooleanField(
         required=False,
         label="Ignore IPv6 link-local addresses",
@@ -342,7 +355,10 @@ class ProxboxPluginSettingsForm(forms.Form):
         max_value=60,
         initial="0.00",
         label="Custom fields request delay (seconds)",
-        help_text="Optional sleep between custom-field API operations to throttle requests.",
+        help_text=(
+            "Reserved for compatibility. Stored and exposed on the API, but neither "
+            "netbox-proxbox nor proxbox-api consumes this value today; it has no effect."
+        ),
     )
     backend_log_file_path = forms.CharField(
         required=True,
@@ -493,6 +509,11 @@ class ProxboxPluginSettingsForm(forms.Form):
             self.cleaned_data.get("vm_interface_sync_strategy")
             or VMInterfaceSyncStrategyChoices.GUEST_OS_MODEL
         )
+
+    def clean_node_device_name_template(self) -> str:
+        value = str(self.cleaned_data["node_device_name_template"] or "").strip()
+        validate_global_node_device_name_template(value)
+        return value
 
     proxmox_timeout = forms.IntegerField(
         required=True,

@@ -29,6 +29,32 @@ PREFLIGHT_READY_INITIAL_DELAY = 1.0
 PREFLIGHT_READY_MAX_DELAY = 8.0
 
 
+def _remaining_budget(time_budget: float | None, started: float) -> float | None:
+    """Return the current remaining readiness budget when one was supplied."""
+    if time_budget is None:
+        return None
+    return max(time_budget - (time_module.monotonic() - started), 0.0)
+
+
+def _health_response_result(response: requests.Response) -> tuple[bool, str] | None:
+    """Classify terminal readiness responses and leave retryable ones open."""
+    if 300 <= response.status_code < 400:
+        return False, "Backend redirects are not permitted."
+    if response.status_code != 200:
+        return None
+    try:
+        init_status = response.json().get("status", "unknown")
+    except Exception:
+        init_status = "unknown"
+    if init_status != "ready":
+        logger.info(
+            "Backend reachable but status=%s (init may be incomplete); "
+            "proceeding — SSE endpoint will report errors if needed",
+            init_status,
+        )
+    return True, "Backend is reachable"
+
+
 def http_timeout_for_sync_path(path: str) -> float | tuple[int, int]:
     """Return read timeout for a backend sync path (long for bulk/full-update ops).
 
@@ -46,7 +72,13 @@ def http_timeout_for_sync_path(path: str) -> float | tuple[int, int]:
     return 5
 
 
-def _try_register_key(context: BackendRequestContext, token: str) -> tuple[bool, str]:
+def _try_register_key(
+    context: BackendRequestContext,
+    token: str,
+    *,
+    failure_details: dict[str, object] | None = None,
+    timeout: float | None = None,
+) -> tuple[bool, str]:
     """Authenticate a stored API key without changing backend state.
 
     Returns (success, message) tuple.
@@ -68,8 +100,15 @@ def _try_register_key(context: BackendRequestContext, token: str) -> tuple[bool,
             verify_ssl,
             token,
             label="netbox-proxbox-plugin",
+            timeout=timeout,
         )
     except BackendKeyAdoptionError as exc:
+        if failure_details is not None:
+            failure_details.update(
+                code=exc.code,
+                status_code=exc.status_code,
+                retry_after=exc.retry_after,
+            )
         return False, f"Backend key check failed ({exc.code})"
     return True, "Key authenticated successfully"
 
@@ -127,6 +166,7 @@ def wait_for_backend_ready(
     max_retries: int = 30,
     initial_delay: float = 1.0,
     max_delay: float = 30.0,
+    time_budget: float | None = None,
 ) -> tuple[bool, str]:
     """Wait for the FastAPI backend to be ready before starting sync.
 
@@ -141,40 +181,23 @@ def wait_for_backend_ready(
     verify_ssl = bool(context.verify_ssl)
     headers = context.headers or {}
 
+    started = time_module.monotonic()
     delay = initial_delay
     for attempt in range(max_retries):
+        remaining = _remaining_budget(time_budget, started)
+        if remaining is not None and remaining <= 0:
+            return False, "Job deadline reached while checking backend readiness."
         try:
             response = requests.get(
                 health_url,
                 headers=headers,
                 verify=verify_ssl,
-                timeout=5,
+                timeout=min(5, remaining) if remaining is not None else 5,
                 allow_redirects=False,
             )
-            if 300 <= response.status_code < 400:
-                # A redirecting backend is an untrustworthy target, not a
-                # slow one — retrying would spin against an origin that will
-                # never stop redirecting, so fail terminally like every other
-                # credentialed path.
-                return False, "Backend redirects are not permitted."
-            if response.status_code == 200:
-                # Backend is reachable — that is enough.  Whether its
-                # bootstrap completed (``init_ok``) is not our concern;
-                # the actual SSE endpoint will return its own error if
-                # it cannot fulfil the request.
-                init_status = "unknown"
-                try:
-                    data = response.json()
-                    init_status = data.get("status", "unknown")
-                except Exception:
-                    pass
-                if init_status != "ready":
-                    logger.info(
-                        "Backend reachable but status=%s (init may be incomplete); "
-                        "proceeding — SSE endpoint will report errors if needed",
-                        init_status,
-                    )
-                return True, "Backend is reachable"
+            result = _health_response_result(response)
+            if result is not None:
+                return result
 
             if attempt < max_retries - 1:
                 logger.info(
@@ -184,7 +207,9 @@ def wait_for_backend_ready(
                     max_retries,
                     delay,
                 )
-                time_module.sleep(delay)
+                remaining = _remaining_budget(time_budget, started)
+                sleep_for = min(delay, remaining) if remaining is not None else delay
+                time_module.sleep(sleep_for)
                 delay = min(delay * 1.5, max_delay)
                 continue
         except requests.exceptions.RequestException as exc:
@@ -196,14 +221,21 @@ def wait_for_backend_ready(
                     f"{type(exc).__name__}: {redact_sensitive_text(str(exc))}"[:160],
                     delay,
                 )
-                time_module.sleep(delay)
+                remaining = _remaining_budget(time_budget, started)
+                sleep_for = min(delay, remaining) if remaining is not None else delay
+                time_module.sleep(sleep_for)
                 delay = min(delay * 1.5, max_delay)
                 continue
 
     return False, f"Backend not reachable after {max_retries} attempts"
 
 
-def ensure_backend_key_registered(endpoint_id: int | None = None) -> tuple[bool, str]:
+def ensure_backend_key_registered(
+    endpoint_id: int | None = None,
+    *,
+    failure_details: dict[str, object] | None = None,
+    timeout: float | None = None,
+) -> tuple[bool, str]:
     """Check whether the stored API key authenticates with the backend.
 
     The historical public name is retained for compatibility. This helper is
@@ -220,14 +252,23 @@ def ensure_backend_key_registered(endpoint_id: int | None = None) -> tuple[bool,
     if context is None or not context.http_url:
         return False, "No FastAPI URL configured"
 
-    return authenticate_backend_request_context(context)
+    return authenticate_backend_request_context(
+        context,
+        failure_details=failure_details,
+        timeout=timeout,
+    )
 
 
 def authenticate_backend_request_context(
     context: BackendRequestContext,
+    *,
+    failure_details: dict[str, object] | None = None,
+    timeout: float | None = None,
 ) -> tuple[bool, str]:
     """Authenticate the exact URL/key pair captured in one request context."""
     token = (context.headers or {}).get("X-Proxbox-API-Key", "").strip()
     if not token:
         return False, "No API token configured on FastAPI endpoint"
-    return _try_register_key(context, token)
+    return _try_register_key(
+        context, token, failure_details=failure_details, timeout=timeout
+    )

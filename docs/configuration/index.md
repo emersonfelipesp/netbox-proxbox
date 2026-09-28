@@ -18,7 +18,9 @@ The plugin exposes a singleton-style **Proxbox plugin settings** object for runt
 - **NetBox integration** — concurrency limits, retry policy, GET cache TTL, bulk-batch tuning, VM sync parallelism, and plugin-controlled VM reconciliation-engine selection.
 - **SSRF protection** — enable/disable endpoint IP validation, private IP allowances, and explicit CIDR block/allow lists.
 
-See [Plugin Settings](./plugin-settings.md) for the full field reference.
+See [Plugin Settings](./plugin-settings.md) for the full field reference. For
+estates with many Proxmox clusters, start with
+[Large multi-cluster deployments](./large-multi-cluster-deployments.md).
 
 ## Sync Overwrite Flags
 

@@ -1961,3 +1961,87 @@ def test_successful_push_keeps_throttle_slot(monkeypatch):
     assert ss._maybe_push_netbox_endpoints_to_backend(**_PUSH_KWARGS) is True
     assert pushes == ["nb-main"]
     assert f"{_PUSH_KEY}:3" in cache.store
+
+
+def test_fastapi_probe_cache_uses_success_and_failure_ttls(
+    monkeypatch, fastapi_endpoint
+):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+
+    class FakeCache:
+        def __init__(self):
+            self.value = None
+            self.timeouts = []
+
+        def get(self, key):
+            return self.value
+
+        def set(self, key, value, timeout):
+            self.value = value
+            self.timeouts.append(timeout)
+
+    class Result:
+        def __init__(self, connected, api_access):
+            self.connected = connected
+            self.api_access = api_access
+
+    class Probe:
+        connected_url = "https://backend.example.invalid"
+        connected_verify_ssl = True
+        last_error_detail = None
+        last_error_http_status = None
+
+        def __init__(self, result):
+            self.result = result
+            self.calls = 0
+
+        def fastapi_status(self, pk):
+            self.calls += 1
+            return self.result
+
+    fake_cache = FakeCache()
+    monkeypatch.setattr(module, "_django_cache", fake_cache)
+    success_probe = Probe(Result(True, "success"))
+
+    first = module._cached_fastapi_status(success_probe, fastapi_endpoint)
+    second = module._cached_fastapi_status(success_probe, fastapi_endpoint)
+
+    assert first is second
+    assert success_probe.calls == 1
+    assert fake_cache.timeouts == [module.FASTAPI_PROBE_SUCCESS_TTL]
+
+    fake_cache.value = None
+    failure_probe = Probe(Result(False, "error"))
+    module._cached_fastapi_status(failure_probe, fastapi_endpoint)
+    assert fake_cache.timeouts[-1] == module.FASTAPI_PROBE_FAILURE_TTL
+
+
+def test_fastapi_keepalive_maps_backend_429_to_throttled(monkeypatch, fastapi_endpoint):
+    module = load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+    )
+    result = SimpleNamespace(
+        connected=False,
+        api_access="error",
+        backend_version=None,
+        target_address=None,
+        target_port=None,
+        authentication="error",
+        warnings=[],
+        detail="Rate limit exceeded.",
+        http_status=429,
+    )
+    monkeypatch.setattr(module, "_cached_fastapi_status", lambda *args: result)
+
+    response = module._fastapi_status_response(
+        _keepalive_request(), 1, SimpleNamespace()
+    )
+
+    assert response.payload["status"] == "throttled"
+    assert response.payload["http_status"] == 429

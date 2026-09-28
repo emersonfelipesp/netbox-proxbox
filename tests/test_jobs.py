@@ -12,6 +12,8 @@ import sys
 import types
 import uuid
 from decimal import Decimal
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
 from pathlib import Path
 from types import SimpleNamespace
 from unittest.mock import MagicMock
@@ -836,8 +838,8 @@ def test_run_with_branching_enabled_creates_syncs_and_merges_the_branch(
     job.job = MagicMock(pk=325, user=user)
     job.job.data = None
 
-    def require_backend_key(job_runner, endpoint_id):
-        del endpoint_id
+    def require_backend_key(job_runner, endpoint_id, deadline=None):
+        del endpoint_id, deadline
         assert job_runner.job.data["proxbox_sync"]["branch"] == {
             "id": 902,
             "name": "proxbox-sync-branch",
@@ -2373,7 +2375,7 @@ def test_run_recoerces_an_unusable_backend_pin_before_any_lookup(
     services_mod.run_sync_stream = lambda path, **kwargs: ({"response": {}}, 200)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
 
-    def _preflight(job, ids=None, fastapi_endpoint_id=None):
+    def _preflight(job, ids=None, fastapi_endpoint_id=None, **kwargs):
         seen.append(fastapi_endpoint_id)
         return module.PreflightResult(blocking_error="stop here")
 
@@ -4050,6 +4052,58 @@ def test_backend_key_preflight_accepts_the_selected_endpoint_without_default_loo
     assert checked == [42]
 
 
+def test_backend_key_preflight_retries_429_and_honours_retry_after(
+    monkeypatch, proxbox_sync_job_module
+):
+    backend_auth = sys.modules["netbox_proxbox.services.backend_auth"]
+    calls = 0
+    sleeps: list[float] = []
+
+    def verify(*args, failure_details=None, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            failure_details.update(
+                code="backend_throttled", status_code=429, retry_after="17"
+            )
+            return False, "throttled"
+        return True, "verified"
+
+    monkeypatch.setattr(backend_auth, "ensure_backend_key_registered", verify)
+    monkeypatch.setattr(
+        proxbox_sync_job_module, "_backend_key_retry_sleep", sleeps.append
+    )
+    job = SimpleNamespace(logger=MagicMock())
+
+    proxbox_sync_job_module._require_backend_key(job, endpoint_id=42)
+
+    assert calls == 2
+    assert sleeps == [17.0]
+
+
+def test_backend_key_preflight_does_not_retry_401(monkeypatch, proxbox_sync_job_module):
+    backend_auth = sys.modules["netbox_proxbox.services.backend_auth"]
+    calls = 0
+    sleep = MagicMock()
+
+    def verify(*args, failure_details=None, **kwargs):
+        nonlocal calls
+        calls += 1
+        failure_details.update(code="candidate_rejected", status_code=401)
+        return False, "rejected"
+
+    monkeypatch.setattr(backend_auth, "ensure_backend_key_registered", verify)
+    monkeypatch.setattr(proxbox_sync_job_module, "_backend_key_retry_sleep", sleep)
+
+    with pytest.raises(proxbox_sync_job_module.BackendKeyPreflightError):
+        proxbox_sync_job_module._require_backend_key(
+            SimpleNamespace(logger=MagicMock()), endpoint_id=42
+        )
+
+    assert calls == 1
+    sleep.assert_not_called()
+
+
 def test_stage_retries_on_502_then_succeeds(monkeypatch, proxbox_sync_job_module):
     """A 502 stream error on first attempt should trigger a retry that succeeds."""
     call_count = 0
@@ -4474,6 +4528,51 @@ def test_run_all_stages_fails_loud_when_no_proxmox_endpoint_is_enabled(
         "the message must say why syncing unscoped is not the safe degradation"
     )
     assert any("Skipping SSE sync entirely" in entry for entry in records["error"])
+
+
+def test_required_stage_failure_skips_only_that_endpoint(
+    monkeypatch, proxbox_sync_job_module
+):
+    sync_stages = proxbox_sync_job_module.sync_stages
+    calls: list[str] = []
+    monkeypatch.setattr(
+        sync_stages,
+        "_proxmox_endpoint_scopes",
+        lambda _ids: [["1"], ["2"]],
+    )
+    monkeypatch.setattr(
+        sync_stages,
+        "_resolve_wire_endpoint_ids",
+        lambda scopes, **kwargs: ({"1": "101", "2": "102"}, None),
+    )
+    monkeypatch.setattr(
+        sync_stages,
+        "effective_sync_modes_for_endpoint",
+        lambda endpoint_id: {},
+    )
+
+    def execute(job, stage, path, query_params, *args, **kwargs):
+        endpoint = query_params["proxmox_endpoint_ids"]
+        calls.append(endpoint)
+        if endpoint == "101":
+            raise RuntimeError("endpoint one failed")
+        return {"path": path, "response": {"ok": True}}, 0.1
+
+    monkeypatch.setattr(sync_stages, "_execute_stage_sync", execute)
+    job, _records = _preflight_job()
+
+    stages = sync_stages._run_all_stages_sync(
+        job,
+        [proxbox_sync_job_module.SyncTypeChoices.DEVICES],
+        {"proxmox_endpoint_ids": ["1", "2"]},
+        0.0,
+    )
+
+    assert calls == ["101", "102"]
+    failed = [stage for stage in stages if stage["sync_type"] == "endpoint-scope"]
+    assert len(failed) == 1
+    assert failed[0]["endpoint_id"] == "1"
+    assert failed[0]["result_summary"]["stage"] == "devices"
 
 
 def _run_with_unresolvable_endpoints(
@@ -6531,7 +6630,7 @@ def test_run_passes_the_selected_backend_to_the_preflight(
     services_mod.run_sync_stream = lambda path, **kwargs: ({"response": {}}, 200)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
 
-    def _preflight(job, ids=None, fastapi_endpoint_id=None):
+    def _preflight(job, ids=None, fastapi_endpoint_id=None, **kwargs):
         seen["ids"] = ids
         seen["fastapi_endpoint_id"] = fastapi_endpoint_id
         return module.PreflightResult(blocking_error="stop here")
@@ -6739,6 +6838,58 @@ def test_run_scopes_firewall_and_datacenter_to_the_runs_endpoints(
     )
 
 
+@pytest.mark.parametrize(
+    ("wrapper_name", "service_module", "service_name"),
+    [
+        ("sync_firewall", "sync_firewall", "sync_firewall"),
+        ("sync_datacenter", "sync_datacenter", "sync_datacenter"),
+    ],
+)
+def test_local_service_failure_does_not_stop_later_endpoints(
+    monkeypatch,
+    proxbox_sync_job_module,
+    wrapper_name,
+    service_module,
+    service_name,
+):
+    module = proxbox_sync_job_module
+    calls: list[list[int]] = []
+
+    def service(*args, endpoint_ids=None, **kwargs):
+        calls.append(endpoint_ids)
+        endpoint_id = endpoint_ids[0]
+        return SimpleNamespace(
+            success=endpoint_id == 2,
+            error="endpoint failed" if endpoint_id == 1 else None,
+            endpoint_id=endpoint_id,
+            endpoint_name=f"pve-{endpoint_id}",
+            endpoints_processed=1,
+            security_groups_created=0,
+            security_groups_updated=0,
+            rules_created=0,
+            ipsets_created=0,
+            aliases_created=0,
+            cpu_models_created=0,
+            cpu_models_updated=0,
+            cpu_models_stale=0,
+            per_endpoint=[],
+        )
+
+    monkeypatch.setattr(
+        sys.modules[f"netbox_proxbox.services.{service_module}"],
+        service_name,
+        service,
+    )
+    context = SimpleNamespace(
+        job=SimpleNamespace(logger=MagicMock()), fastapi_endpoint_id=9
+    )
+
+    phases = getattr(module, wrapper_name)(context, [1, 2], None)
+
+    assert calls == [[1], [2]]
+    assert [phase["status"] for phase in phases] == ["warning", "success"]
+
+
 def test_run_raises_on_a_blocking_preflight(monkeypatch, proxbox_sync_job_module):
     """The blocking error must actually stop `run()`, not just be returned."""
     module = proxbox_sync_job_module
@@ -6772,3 +6923,233 @@ def test_preflight_result_defaults_are_not_shared(proxbox_sync_job_module):
     first.phases.append({"kind": "preflight"})
 
     assert second.phases == []
+
+
+def _retry_after_cases() -> list[object]:
+    now = datetime.now(timezone.utc)
+    return [
+        format_datetime(now + timedelta(seconds=30), usegmt=True),
+        format_datetime(now - timedelta(seconds=30), usegmt=True),
+        "NaN",
+        "inf",
+        "-inf",
+        "-3",
+        "not-a-delay",
+        "999999999999999999999",
+    ]
+
+
+@pytest.mark.parametrize("retry_after", _retry_after_cases())
+def test_stage_retry_after_inputs_remain_bounded_and_terminal(
+    monkeypatch, proxbox_sync_job_module, retry_after
+):
+    """Every supported or hostile Retry-After form stays inside the stage cap."""
+    sync_stages = proxbox_sync_job_module.sync_stages
+    sleeps: list[float] = []
+    services_mod = types.ModuleType("netbox_proxbox.services")
+    services_mod.run_sync_stream = lambda *args, **kwargs: (
+        {"detail": "temporarily unavailable", "retry_after": retry_after},
+        503,
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+    monkeypatch.setattr(sync_stages.time, "sleep", sleeps.append)
+    job, _records = _preflight_job()
+    job.job = MagicMock()
+
+    with pytest.raises(RuntimeError, match="temporarily unavailable"):
+        sync_stages._execute_stage_sync(
+            job, "devices", "dcim/devices/stream", {}, lambda *args: None
+        )
+
+    assert len(sleeps) == 2
+    assert all(0 <= delay <= sync_stages._STAGE_RETRY_MAX_DELAY for delay in sleeps)
+    assert sum(sleeps) <= 2 * sync_stages._STAGE_RETRY_MAX_DELAY
+
+
+@pytest.mark.parametrize("retry_after", _retry_after_cases())
+def test_backend_key_retry_after_inputs_remain_bounded_and_terminal(
+    monkeypatch, proxbox_sync_job_module, retry_after
+):
+    """Backend-key retries share the HTTP-date and hostile-value parser."""
+    backend_auth = sys.modules["netbox_proxbox.services.backend_auth"]
+    sleeps: list[float] = []
+
+    def verify(*args, failure_details=None, **kwargs):
+        failure_details.update(
+            code="backend_throttled", status_code=429, retry_after=retry_after
+        )
+        return False, "throttled"
+
+    monkeypatch.setattr(backend_auth, "ensure_backend_key_registered", verify)
+    monkeypatch.setattr(
+        proxbox_sync_job_module, "_backend_key_retry_sleep", sleeps.append
+    )
+
+    with pytest.raises(proxbox_sync_job_module.BackendKeyPreflightError):
+        proxbox_sync_job_module._require_backend_key(
+            SimpleNamespace(logger=MagicMock()), endpoint_id=42
+        )
+
+    assert sum(sleeps) <= proxbox_sync_job_module.BACKEND_KEY_RETRY_TOTAL_BUDGET
+    assert all(
+        0 <= delay <= proxbox_sync_job_module.BACKEND_KEY_RETRY_MAX_DELAY
+        for delay in sleeps
+    )
+
+
+def test_degraded_thirty_endpoint_run_stops_and_records_deadline_failures(
+    monkeypatch, proxbox_sync_job_module
+):
+    """A degraded estate returns all endpoint failures before the RQ deadline."""
+    sync_stages = proxbox_sync_job_module.sync_stages
+    clock = SimpleNamespace(now=0.0)
+    calls: list[float] = []
+
+    def monotonic():
+        return clock.now
+
+    def sleep(seconds):
+        clock.now += seconds
+
+    def run_sync_stream(*args, **kwargs):
+        calls.append(kwargs["timeout"])
+        clock.now += 100.0
+        return {"detail": "degraded backend"}, 503
+
+    services_mod = types.ModuleType("netbox_proxbox.services")
+    services_mod.run_sync_stream = run_sync_stream
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+    monkeypatch.setattr(sync_stages.time, "monotonic", monotonic)
+    monkeypatch.setattr(sync_stages.time, "sleep", sleep)
+    scopes = [[str(endpoint_id)] for endpoint_id in range(1, 31)]
+    monkeypatch.setattr(sync_stages, "_proxmox_endpoint_scopes", lambda ids: scopes)
+    monkeypatch.setattr(
+        sync_stages,
+        "_resolve_wire_endpoint_ids",
+        lambda endpoint_scopes, **kwargs: (
+            {scope[0]: f"wire-{scope[0]}" for scope in endpoint_scopes},
+            None,
+        ),
+    )
+    monkeypatch.setattr(
+        sync_stages, "effective_sync_modes_for_endpoint", lambda endpoint_id: {}
+    )
+    job, _records = _preflight_job()
+    job.job = MagicMock()
+    deadline = sync_stages.SyncJobDeadline(expires_at=300.0, reserve_seconds=120.0)
+
+    stages = sync_stages._run_all_stages_sync(
+        job,
+        [proxbox_sync_job_module.SyncTypeChoices.DEVICES],
+        {"proxmox_endpoint_ids": [str(value) for value in range(1, 31)]},
+        run_started=0.0,
+        deadline=deadline,
+    )
+
+    failures = [stage for stage in stages if stage["sync_type"] == "endpoint-scope"]
+    assert clock.now == 208.0
+    assert calls == [180.0, 72.0]
+    assert len(failures) == 30
+    assert all(
+        "deadline reached" in stage["result_summary"]["error"].lower()
+        for stage in failures
+    )
+
+
+@pytest.mark.parametrize(
+    ("phase_name", "service_module", "service_name", "kind", "label"),
+    [
+        (
+            "_sync_cluster_phase",
+            "sync_cluster",
+            "sync_cluster_and_nodes",
+            "cluster",
+            "Cluster/node sync",
+        ),
+        (
+            "sync_firewall",
+            "sync_firewall",
+            "sync_firewall",
+            "firewall",
+            "Firewall sync",
+        ),
+        (
+            "sync_datacenter",
+            "sync_datacenter",
+            "sync_datacenter",
+            "datacenter",
+            "Datacenter sync",
+        ),
+        (
+            "sync_vm_templates",
+            "sync_vm_template",
+            "sync_vm_templates",
+            "vm_template",
+            "VM template sync",
+        ),
+    ],
+)
+def test_deadline_during_each_local_phase_persists_failure_and_fails_job(
+    monkeypatch,
+    proxbox_sync_job_module,
+    phase_name,
+    service_module,
+    service_name,
+    kind,
+    label,
+):
+    """Every pre-SSE network phase returns to finalization at the shared deadline."""
+    module = proxbox_sync_job_module
+    clock = SimpleNamespace(now=0.0)
+    monkeypatch.setattr(module.time, "monotonic", lambda: clock.now)
+    monkeypatch.setattr(module.sync_stages.time, "monotonic", lambda: clock.now)
+
+    def expire(*args, **kwargs):
+        del args, kwargs
+        clock.now = 2.0
+        raise module.SyncJobDeadlineReached("Job deadline reached.")
+
+    monkeypatch.setattr(
+        sys.modules[f"netbox_proxbox.services.{service_module}"],
+        service_name,
+        expire,
+    )
+    monkeypatch.setattr(module, "_vm_template_sync_disabled", lambda: False)
+    monkeypatch.setattr(module, "_staged_endpoint_ids", lambda context: [1, 2])
+    monkeypatch.setattr(
+        module,
+        "_run_sse_stages",
+        MagicMock(side_effect=AssertionError("SSE work started after deadline")),
+    )
+    job = SimpleNamespace(job=MagicMock(data=None), logger=MagicMock())
+    context = SimpleNamespace(
+        job=job,
+        deadline=module.SyncJobDeadline(expires_at=1.0, reserve_seconds=0.0),
+        fastapi_endpoint_id=7,
+        branch=None,
+        branch_config=None,
+        params={},
+        run_started=0.0,
+        proxmox_endpoint_ids=["1", "2"],
+        sync_state_endpoint_backfill=None,
+    )
+    phases = getattr(module, phase_name)(context, [1, 2], None)
+    state = module._StagedSyncState(
+        endpoint_ids=[1, 2], phases=phases, preflight=module.PreflightResult()
+    )
+
+    with pytest.raises(RuntimeError, match="deadline reached"):
+        module._finish_staged_sync(context, state)
+
+    persisted = job.job.data["proxbox_sync"]["response"]
+    assert [phase["kind"] for phase in persisted["local_phases"]] == [kind, kind]
+    assert all(phase["label"] == label for phase in persisted["local_phases"])
+    assert all(
+        "deadline reached" in phase["summary"].lower()
+        for phase in persisted["local_phases"]
+    )
+    assert len(persisted["stages"]) == 2
+    assert all(
+        "deadline reached" in stage["result_summary"]["error"].lower()
+        for stage in persisted["stages"]
+    )

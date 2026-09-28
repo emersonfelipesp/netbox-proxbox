@@ -221,7 +221,9 @@ def test_run_sync_stream_refuses_redirect_without_fallback(
     calls: list[tuple[str, dict[str, object]]] = []
 
     monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: context)
-    monkeypatch.setattr(bp, "wait_for_backend_ready", lambda _context: (True, "ok"))
+    monkeypatch.setattr(
+        bp, "wait_for_backend_ready", lambda _context, **kwargs: (True, "ok")
+    )
 
     def fake_get(url: str, **kwargs):
         calls.append((url, kwargs))
@@ -417,7 +419,9 @@ def test_run_sync_stream_401_retry_restarts_from_fresh_context(
     calls: list[tuple[str, dict[str, object]]] = []
 
     monkeypatch.setattr(bp, "get_fastapi_request_context", lambda: context_a)
-    monkeypatch.setattr(bp, "wait_for_backend_ready", lambda _context: (True, "ok"))
+    monkeypatch.setattr(
+        bp, "wait_for_backend_ready", lambda _context, **kwargs: (True, "ok")
+    )
     monkeypatch.setattr(
         bp,
         "_handle_auth_registration_and_retry",

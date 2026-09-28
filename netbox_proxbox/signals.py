@@ -149,6 +149,11 @@ def ensure_proxmox_endpoint_has_fastapi_token(
     """
     after_commit = bool(kwargs.pop("_after_commit", False))
     if not after_commit:
+        from netbox_proxbox.views.backend_sync import (  # noqa: PLC0415
+            invalidate_proxmox_endpoint_push_cache,
+        )
+
+        invalidate_proxmox_endpoint_push_cache(instance)
         endpoint_pk = getattr(instance, "pk", None)
         using = kwargs.get("using")
 

@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import hmac
+import hashlib
+import json
 import logging
 import time
 from typing import TYPE_CHECKING
@@ -23,6 +25,11 @@ if TYPE_CHECKING:
     from netbox_proxbox.models import NetBoxEndpoint
 
 logger = logging.getLogger(__name__)
+
+try:
+    from django.core.cache import cache as _django_cache
+except (ImportError, ModuleNotFoundError):  # pragma: no cover - lightweight stubs
+    _django_cache = None
 
 # HTTP budget for pushing an endpoint record into proxbox-api's own database.
 # A cold backend (first request after a container start) needs noticeably longer
@@ -51,6 +58,165 @@ PREFLIGHT_ENDPOINT_PUSH_BUDGET = 600.0
 # 7200 s ``PROXBOX_SYNC_JOB_TIMEOUT`` so a stuck backend still leaves three
 # quarters of the job budget for the stages that can run.
 PREFLIGHT_ENDPOINT_PUSH_HARD_CEILING = 1800.0
+PROXMOX_ENDPOINT_PUSH_CACHE_TTL = 300
+_PROXMOX_PUSH_CACHE_PREFIX = "netbox_proxbox:proxmox_endpoint_push"
+
+
+def _proxmox_push_cache_key(endpoint: ProxmoxEndpoint, base_url: str) -> str:
+    """Return a cache key that reveals neither backend URL nor endpoint fields."""
+    endpoint_id = getattr(endpoint, "pk", getattr(endpoint, "id", "unknown"))
+    backend_hash = hashlib.sha256(base_url.rstrip("/").encode()).hexdigest()[:16]
+    return f"{_PROXMOX_PUSH_CACHE_PREFIX}:{endpoint_id}:{backend_hash}"
+
+
+def _proxmox_push_cache_index_key(endpoint_id: object) -> str:
+    return f"{_PROXMOX_PUSH_CACHE_PREFIX}:{endpoint_id}:keys"
+
+
+def _proxmox_payload_fingerprint(payload: dict[str, object]) -> str:
+    """Hash canonical endpoint data while separately hashing secret fields."""
+    safe_payload = dict(payload)
+    for field in ("password", "token_name", "token_value"):
+        value = safe_payload.pop(field, None)
+        safe_payload[f"{field}_hash"] = hashlib.sha256(
+            str(value or "").encode()
+        ).hexdigest()
+    canonical = json.dumps(
+        safe_payload, sort_keys=True, separators=(",", ":"), default=str
+    )
+    return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def invalidate_proxmox_endpoint_push_cache(endpoint: ProxmoxEndpoint) -> None:
+    """Invalidate recent push records for an endpoint after it is saved."""
+    endpoint_id = getattr(endpoint, "pk", getattr(endpoint, "id", None))
+    if endpoint_id is None:
+        return
+    if _django_cache is None:
+        return
+    index_key = _proxmox_push_cache_index_key(endpoint_id)
+    cached_keys = _django_cache.get(index_key)
+    if isinstance(cached_keys, list):
+        _django_cache.delete_many([*cached_keys, index_key])
+        return
+    try:
+        _django_cache.delete_pattern(f"{_PROXMOX_PUSH_CACHE_PREFIX}:{endpoint_id}:*")
+    except AttributeError:
+        # LocMemCache has no delete_pattern. The changed fingerprint prevents a
+        # stale skip; old entries expire after the short TTL.
+        return
+
+
+def _cached_proxmox_push(
+    endpoint: ProxmoxEndpoint, base_url: str, fingerprint: str
+) -> int | None:
+    if _django_cache is None:
+        return None
+    cached = _django_cache.get(_proxmox_push_cache_key(endpoint, base_url))
+    if not isinstance(cached, dict) or cached.get("fingerprint") != fingerprint:
+        return None
+    return _int_or_none(cached.get("backend_id"))
+
+
+def _cache_proxmox_push(
+    endpoint: ProxmoxEndpoint, base_url: str, fingerprint: str, backend_id: object
+) -> None:
+    parsed_id = _int_or_none(backend_id)
+    if parsed_id is None:
+        return
+    if _django_cache is None:
+        return
+    cache_key = _proxmox_push_cache_key(endpoint, base_url)
+    _django_cache.set(
+        cache_key,
+        {"fingerprint": fingerprint, "backend_id": parsed_id},
+        timeout=PROXMOX_ENDPOINT_PUSH_CACHE_TTL,
+    )
+    endpoint_id = getattr(endpoint, "pk", getattr(endpoint, "id", "unknown"))
+    index_key = _proxmox_push_cache_index_key(endpoint_id)
+    cached_keys = _django_cache.get(index_key)
+    keys = cached_keys if isinstance(cached_keys, list) else []
+    if cache_key not in keys:
+        _django_cache.set(
+            index_key,
+            [*keys, cache_key],
+            timeout=PROXMOX_ENDPOINT_PUSH_CACHE_TTL,
+        )
+
+
+def _prepare_proxmox_push(
+    endpoint: ProxmoxEndpoint,
+    base_url: str,
+    existing_endpoints: list[dict[str, object]] | None,
+    disabled_detail: str | None,
+) -> tuple[dict[str, object] | None, str | None, int | None]:
+    """Build the payload and return the backend ID hinted by the push cache."""
+    if disabled_detail:
+        return None, None, None
+    payload = _proxmox_backend_payload(endpoint)
+    fingerprint = _proxmox_payload_fingerprint(payload)
+    cached_id = existing_endpoints is None and _cached_proxmox_push(
+        endpoint, base_url, fingerprint
+    )
+    return payload, fingerprint, cached_id or None
+
+
+def _confirmed_cached_proxmox_row(
+    endpoint: ProxmoxEndpoint,
+    *,
+    base_url: str,
+    backend_id: int,
+    auth_headers: dict[str, str],
+    backend_verify_ssl: bool,
+    timeout: float,
+) -> tuple[dict[str, object] | None, str | None]:
+    """Confirm a cached backend ID still belongs to this endpoint."""
+    try:
+        response = requests.get(  # nosec B113
+            f"{base_url}/proxmox/endpoints/{backend_id}",
+            headers=auth_headers,
+            verify=backend_verify_ssl,
+            timeout=timeout,
+            allow_redirects=False,
+        )
+        if response.status_code == 404:
+            invalidate_proxmox_endpoint_push_cache(endpoint)
+            return None, None
+        response.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        detail, _ = extract_backend_error_detail(exc)
+        return None, f"Failed to verify cached ProxBox backend endpoint: {detail}"
+
+    row, json_err = parse_requests_response_json(
+        response, log_label="proxmox/endpoints cached lookup"
+    )
+    resolved_id, _ = _resolve_backend_row_id(
+        [row] if isinstance(row, dict) else [], endpoint
+    )
+    if json_err or resolved_id != backend_id:
+        invalidate_proxmox_endpoint_push_cache(endpoint)
+        return None, None
+    return row, None
+
+
+def _cache_successful_proxmox_push(
+    endpoint: ProxmoxEndpoint,
+    base_url: str,
+    payload: dict[str, object],
+    fingerprint: str,
+    existing: dict[str, object] | None,
+    response: requests.Response,
+) -> None:
+    """Record a successful push when its backend row ID is available."""
+    backend_id = existing.get("id") if existing else None
+    if backend_id is None:
+        response_payload, _ = parse_requests_response_json(
+            response, log_label="proxmox/endpoints push"
+        )
+        if isinstance(response_payload, dict):
+            backend_id = response_payload.get("id")
+    _cache_proxmox_push(endpoint, base_url, fingerprint, backend_id)
+    _record_pushed_proxmox_credential_fingerprint(endpoint, payload)
 
 
 def _remaining_request_timeout(timeout: float, deadline: float | None) -> float:
@@ -148,6 +314,9 @@ def _proxmox_backend_payload(endpoint: ProxmoxEndpoint) -> dict[str, object]:
     tuning = endpoint.effective_connection_tuning()
     return {
         "name": proxmox_backend_name(endpoint),
+        "node_device_name_template": (
+            getattr(endpoint, "node_device_name_template", "") or ""
+        ).strip(),
         "ip_address": get_ip_address_host(getattr(endpoint, "ip_address", None)),
         "domain": (getattr(endpoint, "domain", "") or "").strip() or None,
         "port": int(getattr(endpoint, "port", 8006) or 8006),
@@ -203,6 +372,22 @@ def sync_proxmox_endpoint_to_backend(
 
     list_url = f"{base_url}/proxmox/endpoints"
     headers = auth_headers or {}
+    payload, fingerprint, cached_id = _prepare_proxmox_push(
+        endpoint, base_url, existing_endpoints, disabled_detail
+    )
+    if cached_id is not None:
+        cached_row, cache_error = _confirmed_cached_proxmox_row(
+            endpoint,
+            base_url=base_url,
+            backend_id=cached_id,
+            auth_headers=headers,
+            backend_verify_ssl=backend_verify_ssl,
+            timeout=_remaining_request_timeout(timeout, deadline),
+        )
+        if cache_error:
+            return False, cache_error, None
+        if cached_row is not None:
+            return True, None, None
 
     try:
         if existing_endpoints is not None:
@@ -294,7 +479,7 @@ def sync_proxmox_endpoint_to_backend(
             _record_confirmed_packer_template_authorization(endpoint, False)
             return True, None, None
 
-        payload = _proxmox_backend_payload(endpoint)
+        assert payload is not None and fingerprint is not None
 
         if existing and existing.get("id") is not None:
             response = requests.put(  # nosec B113
@@ -316,7 +501,9 @@ def sync_proxmox_endpoint_to_backend(
             )
 
         response.raise_for_status()
-        _record_pushed_proxmox_credential_fingerprint(endpoint, payload)
+        _cache_successful_proxmox_push(
+            endpoint, base_url, payload, fingerprint, existing, response
+        )
         _record_confirmed_packer_template_authorization(
             endpoint,
             bool(payload["enabled"] and payload["allow_packer_template_builds"]),
@@ -642,6 +829,27 @@ def resolve_backend_endpoint_id(
     disabled_detail = _disabled_endpoint_detail(endpoint)
     if disabled_detail:
         return None, disabled_detail
+
+    try:
+        payload = _proxmox_backend_payload(endpoint)
+        cached_id = _cached_proxmox_push(
+            endpoint, base_url, _proxmox_payload_fingerprint(payload)
+        )
+    except Exception:  # noqa: BLE001
+        cached_id = None
+    if cached_id is not None:
+        cached_row, cache_error = _confirmed_cached_proxmox_row(
+            endpoint,
+            base_url=base_url,
+            backend_id=cached_id,
+            auth_headers=auth_headers or {},
+            backend_verify_ssl=backend_verify_ssl,
+            timeout=timeout,
+        )
+        if cache_error:
+            return None, cache_error
+        if cached_row is not None:
+            return cached_id, None
 
     endpoints, list_error = _list_backend_proxmox_endpoints(
         base_url=base_url,

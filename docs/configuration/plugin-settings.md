@@ -5,6 +5,11 @@ Proxbox exposes a singleton **Plugin Settings** object for runtime behavior togg
 !!! tip "Programmatic access"
     Every field below is also readable and writable through the [Plugin Settings API](../api/settings.md) (GET + PATCH).
 
+!!! tip "Many Proxmox clusters"
+    See [Large multi-cluster deployments](./large-multi-cluster-deployments.md) for
+    rate-limit, timeout, and concurrency guidance when syncing roughly thirty or
+    more clusters from one NetBox install.
+
 ## Runtime tunable resolution
 
 Most fields below are also readable by the paired `proxbox-api` backend through
@@ -107,7 +112,7 @@ These fields control batching, concurrency, and pacing for the Proxmox-to-NetBox
 | **Backup batch delay (ms)** | `200` | `PROXBOX_BACKUP_BATCH_DELAY_MS` | Milliseconds to pause between backup batches. |
 | **Interface batch size** | `5` | `PROXBOX_INTERFACE_BATCH_SIZE` | Number of VM interfaces (and their IP addresses, subnets, VLANs) synced per batch. Large VMs (50+ interfaces) may time out if synced all at once; batching prevents overwhelming NetBox with concurrent API calls. |
 | **Interface batch delay (ms)** | `100` | `PROXBOX_INTERFACE_BATCH_DELAY_MS` | Milliseconds to wait between interface batches to throttle NetBox load. |
-| **Custom fields request delay (s)** | `0.00` | `PROXBOX_CUSTOM_FIELDS_REQUEST_DELAY` | Optional sleep between custom-field API operations to throttle requests. |
+| **Custom fields request delay (s)** | `0.00` | _(none; compatibility only)_ | **Compatibility only.** Persisted and exposed on the API, but netbox-proxbox and proxbox-api do not read this field today; changing it has no effect. |
 
 ---
 
@@ -160,6 +165,34 @@ these Django decimal fields as JSON numbers because
 | Field | Default | Env override | Description |
 |---|---|---|---|
 | **Backend log file path** | `/var/log/proxbox.log` | _(plugin only)_ | Absolute path for proxbox-api rotated log archive output. Changes take effect after proxbox-api restart. |
+
+---
+
+## Node Device name template
+
+`node_device_name_template` controls how Proxmox nodes are named as NetBox
+Devices and defaults to `{node}`. The endpoint Settings tab may provide a
+non-empty override; blank endpoint values inherit this global value. The
+backend environment override is `PROXBOX_NODE_DEVICE_NAME_TEMPLATE`.
+
+Allowed placeholders are `{node}`, `{cluster}`, `{cluster_slug}`, and
+`{endpoint}`. The template must contain `{node}` and cannot use format specs,
+conversions, attribute access, or index access. Its sample output must contain
+only DNS-safe letters, digits, hyphens, and dots; labels are limited to 63
+characters and the whole Device name to 64. A typical multi-cluster value is
+`{node}.{cluster}.example.com`.
+
+When an endpoint override is saved, Proxbox renders it against every already-
+synchronized node and its cluster for that endpoint. When the global template
+is saved, Proxbox checks nodes from every endpoint with a blank, inherited
+override. A value that would exceed the 64-character Device name limit or
+produce an invalid DNS name is rejected with the offending node, cluster, and
+rendered length. Before any inventory has synchronized, the representative
+sample validation remains in effect.
+
+Proxbox retains short node names for Proxmox requests and typed sync identity.
+It renames only legacy short names and names it previously managed when the
+template changes, and preserves operator-assigned Device names.
 
 ---
 

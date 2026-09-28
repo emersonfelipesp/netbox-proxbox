@@ -17,6 +17,7 @@ from netbox_proxbox.choices import (
     SyncModeChoices,
     VMInterfaceSyncStrategyChoices,
 )
+from netbox_proxbox.validators import validate_node_device_name_template
 
 DEFAULT_BACKEND_LOG_FILE_PATH = "/var/log/proxbox.log"
 
@@ -77,6 +78,16 @@ class ProxboxPluginSettings(NetBoxModel):
             "Proxmox netX NICs as core VMInterface rows and writes guest OS names to "
             "GuestVMInterface rows. Legacy rename keeps the older single-interface "
             "rename behavior."
+        ),
+    )
+    node_device_name_template = models.CharField(
+        max_length=128,
+        default="{node}",
+        validators=[validate_node_device_name_template],
+        verbose_name=_("Node device name template"),
+        help_text=_(
+            "Template for synchronized Proxmox node Device names. Supported "
+            "placeholders: {node}, {cluster}, {cluster_slug}, and {endpoint}."
         ),
     )
     proxbox_fetch_max_concurrency = models.PositiveSmallIntegerField(
@@ -353,7 +364,9 @@ class ProxboxPluginSettings(NetBoxModel):
         default=Decimal("0.00"),
         verbose_name=_("Custom fields request delay (seconds)"),
         help_text=_(
-            "Optional sleep between custom-field API operations to throttle requests."
+            "Reserved for compatibility. This value is stored and exposed on the "
+            "Plugin Settings API, but netbox-proxbox and proxbox-api do not read it; "
+            "changing it has no effect on sync behavior."
         ),
     )
     backend_log_file_path = models.CharField(

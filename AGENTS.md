@@ -34,6 +34,11 @@ facts that an agent must have even when `@CLAUDE.md` expansion is unavailable:
 - Convert exact Data Protection schedules through the source endpoint's
   discovered IANA timezone; keep unresolved timing visibly approximate and cap
   combined calendar node selection at 50.
+- Keep home dashboard badge and card hydration on one bounded four-worker pool;
+  route initial requests and at most three coalesced retries per card through that
+  pool, keep successful badge state independent from card errors, and render
+  backend capacity responses as throttled rather than failed. Treat the Proxmox
+  push cache as a hint and verify the cached backend endpoint identity before use.
 - Update MkDocs sources, this wrapper, `CLAUDE.md`, and generated `llms.txt`
   together when architecture or operator behavior changes.
 - Run focused tests, `mkdocs build --strict`, the public-boundary scanner, and
@@ -78,7 +83,10 @@ Current backend-runtime pairing: netbox-proxbox 0.0.27 <-> proxbox-api 0.0.23.po
 ## Current implementation surfaces
 
 The current schema tip is migration
-`0102_vm_cloudinit_openbao_references`.
+`0104_node_device_name_template`.
+Proxmox node Device names use the effective endpoint/global
+`node_device_name_template`; keep the original short node name in Proxmox API
+paths and typed sync-state identity.
 The plugin provides endpoint and synchronized inventory models, typed sync
 state, guest interfaces, SDN/firewall/Firecracker inventory, service
 monitoring, metrics, browser consoles, intent/apply audit records, deletion
@@ -86,6 +94,13 @@ requests, and PBS/PDM companion endpoint records. `ProxboxSyncJob` owns staged
 SSE synchronization; `ProxmoxServiceMonitoringJob` is the one-minute system
 job. The `pxb` CLI provides configuration, backend and inventory inspection,
 headless synchronization, and deterministic CLI documentation capture.
+Staged runs isolate required-stage, firewall, and datacenter failures per
+Proxmox endpoint, continue later endpoints, persist each failed scope, and fail
+after all selected endpoints have been attempted. Backend-key and stage
+throttling retries share bounded delta-seconds and HTTP-date `Retry-After`
+parsing. Staged work uses one monotonic RQ-timeout deadline with a 120-second
+persistence reserve; deadline exhaustion records the current and remaining
+endpoint failures before finalization.
 
 OpenBao endpoint writes select the exact configured policy slug and use
 netbox-openbao's provider-owned transaction for UUID references, assignments,

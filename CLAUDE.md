@@ -82,8 +82,12 @@ field creation route.
   inventory, Firecracker inventory, service-monitoring collections, metrics,
   intent/apply records, deletion requests, cloud-init records, and companion
   PBS/PDM endpoint records. Migration
-  `0102_vm_cloudinit_openbao_references`
+  `0104_node_device_name_template`
   is the current schema tip.
+
+  Proxmox node Device names use the effective endpoint/global
+  `node_device_name_template`; Proxmox API paths and typed sync identity retain
+  the original short node name.
 - UI routes include the home/dashboard, data-protection calendar, HA, endpoint
   and inventory views, model-scoped Sync Now actions, repair/recovery flows,
   soft-deleted VM review, and standalone VM console sessions. Cluster and node
@@ -93,6 +97,12 @@ field creation route.
   discovered IANA timezone and convert exact wall-clock occurrences to
   NetBox's active timezone before day bucketing. Fail-open cases remain visibly
   approximate, and combined node selection is capped at 50.
+- Home dashboard status and card hydration uses one four-worker request pool.
+  FastAPI probes have a short settings-hashed cache, successful Proxmox pushes
+  have a secret-safe fingerprint cache whose backend ID is verified before use,
+  card failures never downgrade successful keepalive badges, and backend capacity
+  responses remain visibly throttled. Initial requests and at most three retries
+  per card use the same persistent pool.
 - REST routes expose typed endpoint and inventory viewsets, sync-state
   sidecars, SDN/firewall/Firecracker resources, service monitoring, jobs,
   settings, semantic MCP manifest discovery, browser-console session creation,
@@ -101,6 +111,13 @@ field creation route.
   `ProxboxSyncJob` owns the staged SSE synchronization pipeline. The standalone
   `pxb` CLI covers local configuration, backend inspection, NetBox/Proxmox
   resources, headless sync, and deterministic CLI documentation capture.
+  Staged runs isolate required-stage, firewall, and datacenter failures per
+  Proxmox endpoint, continue later endpoints, persist each failed scope, and
+  fail after all selected endpoints have been attempted. Backend-key and stage
+  throttling retries share bounded delta-seconds and HTTP-date `Retry-After`
+  parsing. Staged work uses one monotonic RQ-timeout deadline with a 120-second
+  persistence reserve; deadline exhaustion records the current and remaining
+  endpoint failures before finalization.
 - Gitea workflows own CI, package publication, final-tag promotion, artifact
   compatibility, and the approved GitHub mirror. GitHub workflows own public
   CI, the real-Django matrix, documentation, screenshots, E2E contracts,

@@ -455,6 +455,7 @@ jobs:
             tests/test_proxbox_job_filter_django.py
             tests/test_sync_jobs_api_django.py
             tests/test_sync_state_endpoint_backfill_django.py
+            tests/test_node_device_name_template_django.py
             tests/test_vm_intent_django.py
             tests/test_soft_deleted_vm_purge_django.py
           )

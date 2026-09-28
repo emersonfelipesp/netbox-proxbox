@@ -294,6 +294,18 @@ def test_endpoint_serializers_do_not_override_create_semantics():
         assert "create" not in _class_methods(class_node)
 
 
+def test_endpoint_serializer_validates_create_rename_and_inherited_node_names():
+    source = (SERIALIZERS_PACKAGE / "endpoints.py").read_text(encoding="utf-8")
+    validate_source = source.split(
+        "    def validate(self, attrs: dict[str, object])", 1
+    )[1].split("    def _validate_service_monitoring", 1)[0]
+
+    assert "if template" not in validate_source
+    assert 'endpoint_id=getattr(self.instance, "pk", None)' in validate_source
+    assert 'attrs.get("name", getattr(self.instance, "name", ""))' in validate_source
+    assert "validate_endpoint_node_device_name_template(" in validate_source
+
+
 def test_overwrite_fields_exposed_in_endpoint_and_settings_serializers():
     """Every flag in `OVERWRITE_FIELDS` must round-trip through the REST API.
 

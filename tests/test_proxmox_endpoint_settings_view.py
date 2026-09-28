@@ -188,6 +188,34 @@ def test_overwrite_vm_tags_uses_merge_label():
     )
 
 
+def test_endpoint_forms_expose_node_device_name_template() -> None:
+    module = ast.parse(PROXMOX_FORM_PATH.read_text(encoding="utf-8"))
+    for class_name in (
+        "ProxmoxEndpointForm",
+        "ProxmoxEndpointSettingsForm",
+        "ProxmoxEndpointImportForm",
+    ):
+        form = _find_class(module, class_name)
+        source = ast.unparse(form)
+        assert "node_device_name_template" in source
+
+
+def test_endpoint_settings_form_uses_inventory_aware_template_validation() -> None:
+    module = ast.parse(PROXMOX_FORM_PATH.read_text(encoding="utf-8"))
+    settings_form = _find_class(module, "ProxmoxEndpointSettingsForm")
+    method = next(
+        node
+        for node in settings_form.body
+        if isinstance(node, ast.FunctionDef)
+        and node.name == "clean_node_device_name_template"
+    )
+    source = ast.unparse(method)
+
+    assert "validate_endpoint_node_device_name_template" in source
+    assert "endpoint_id=instance.pk" in source
+    assert "endpoint_name=str(instance.name)" in source
+
+
 # ── Object tab strip active-highlight (both edit sub-views expose `tab`) ──────
 
 

@@ -34,6 +34,17 @@ from utilities.views import (
 logger = logging.getLogger(__name__)
 
 
+def _mark_throttled(
+    payload: dict[str, object], http_status: int | None, retry_after: object = None
+) -> None:
+    """Expose backend capacity responses as a retryable dashboard state."""
+    if http_status not in {429, 503}:
+        return
+    payload["status"] = "throttled"
+    if retry_after not in (None, ""):
+        payload["retry_after"] = str(retry_after)
+
+
 def _merge_cluster_payloads(
     version_payload: object, cluster_payload: object
 ) -> dict[str, object]:
@@ -52,6 +63,73 @@ def _merge_cluster_payloads(
     if isinstance(cluster_data, dict) and isinstance(version_data, dict):
         return cluster_data | version_data
     return {}
+
+
+def _fetch_proxmox_card_data(
+    *,
+    pk: int,
+    version_endpoint: str,
+    cluster_endpoint: str,
+    query_params: dict[str, str],
+    backend_headers: dict[str, str],
+    backend_verify_ssl: bool,
+    proxmox_host: str,
+    proxmox_port: int,
+) -> tuple[object, object, str | None, int | None, object]:
+    """Fetch and normalize the two backend responses used by a dashboard card."""
+    try:
+        version_response = requests.get(
+            version_endpoint,
+            params=query_params,
+            headers=backend_headers,
+            verify=backend_verify_ssl,
+            timeout=5,
+            allow_redirects=False,
+        )
+        cluster_response = requests.get(
+            cluster_endpoint,
+            params=query_params,
+            headers=backend_headers,
+            verify=backend_verify_ssl,
+            timeout=5,
+            allow_redirects=False,
+        )
+        version_response.raise_for_status()
+        cluster_response.raise_for_status()
+        version_data, version_error = parse_requests_response_json(
+            version_response, log_label="proxmox/version"
+        )
+        cluster_data, cluster_error = parse_requests_response_json(
+            cluster_response, log_label="proxmox/sessions"
+        )
+        detail = version_error or cluster_error
+        if detail:
+            logger.error(
+                "Unable to hydrate Proxmox card for endpoint %s: %s", pk, detail
+            )
+            return [], [], detail, 502, None
+        return version_data or [], cluster_data or [], None, None, None
+    except requests.exceptions.RequestException as exc:
+        response = getattr(exc, "response", None)
+        response_url = getattr(response, "url", "") if response is not None else ""
+        failed_endpoint = (
+            cluster_endpoint
+            if "/proxmox/sessions" in (response_url or str(exc))
+            else version_endpoint
+        )
+        detail, http_status = extract_proxmox_backend_error_detail(
+            exc,
+            proxmox_host=proxmox_host,
+            proxmox_port=proxmox_port,
+            backend_url=failed_endpoint,
+        )
+        logger.error("Unable to hydrate Proxmox card for endpoint %s: %s", pk, detail)
+        retry_after = (
+            getattr(response, "headers", {}).get("Retry-After")
+            if response is not None
+            else None
+        )
+        return [], [], detail, http_status, retry_after
 
 
 class ProxboxProxmoxCardView(
@@ -135,11 +213,6 @@ class ProxboxProxmoxCardView(
         version_endpoint = f"{fastapi_url}/proxmox/version"
         cluster_endpoint = f"{fastapi_url}/proxmox/sessions"
 
-        version_data = []
-        cluster_data = []
-        detail = None
-        http_status = None
-
         sync_ok, sync_detail, sync_http_status = sync_proxmox_endpoint_to_backend(
             proxmox_object,
             base_url=fastapi_url,
@@ -164,6 +237,7 @@ class ProxboxProxmoxCardView(
             }
             if sync_http_status is not None:
                 payload["http_status"] = sync_http_status
+            _mark_throttled(payload, sync_http_status)
             return JsonResponse(payload)
 
         backend_endpoint_id, resolve_error = resolve_backend_endpoint_id(
@@ -199,63 +273,18 @@ class ProxboxProxmoxCardView(
             "proxmox_endpoint_ids": str(backend_endpoint_id),
         }
 
-        try:
-            version_response = requests.get(
-                version_endpoint,
-                params=query_params,
-                headers=backend_headers,
-                verify=backend_verify_ssl,
-                timeout=5,
-                allow_redirects=False,
-            )
-            cluster_response = requests.get(
-                cluster_endpoint,
-                params=query_params,
-                headers=backend_headers,
-                verify=backend_verify_ssl,
-                timeout=5,
-                allow_redirects=False,
-            )
-            version_response.raise_for_status()
-            cluster_response.raise_for_status()
-            version_parsed, ver_err = parse_requests_response_json(
-                version_response, log_label="proxmox/version"
-            )
-            cluster_parsed, cl_err = parse_requests_response_json(
-                cluster_response, log_label="proxmox/sessions"
-            )
-            if ver_err or cl_err:
-                detail = ver_err or cl_err
-                http_status = 502
-                logger.error(
-                    "Unable to hydrate Proxmox card for endpoint %s: %s", pk, detail
-                )
-            else:
-                version_data = version_parsed if version_parsed is not None else []
-                cluster_data = cluster_parsed if cluster_parsed is not None else []
-        except requests.exceptions.RequestException as exc:
-            failed_endpoint = version_endpoint
-            response = getattr(exc, "response", None)
-            if response is not None:
-                response_url = getattr(response, "url", "") or ""
-                if "/proxmox/sessions" in response_url:
-                    failed_endpoint = cluster_endpoint
-                elif "/proxmox/version" in response_url:
-                    failed_endpoint = version_endpoint
-            elif "/proxmox/sessions" in str(exc):
-                failed_endpoint = cluster_endpoint
-            detail, http_status = extract_proxmox_backend_error_detail(
-                exc,
+        version_data, cluster_data, detail, http_status, retry_after = (
+            _fetch_proxmox_card_data(
+                pk=pk,
+                version_endpoint=version_endpoint,
+                cluster_endpoint=cluster_endpoint,
+                query_params=query_params,
+                backend_headers=backend_headers,
+                backend_verify_ssl=backend_verify_ssl,
                 proxmox_host=proxmox_host,
-                proxmox_port=proxmox_object.port,
-                backend_url=failed_endpoint,
+                proxmox_port=getattr(proxmox_object, "port", 8006) or 8006,
             )
-            # The redacted detail, not the raw exception — a transport error can
-            # echo request content, and this handler runs on every dashboard
-            # card refresh.
-            logger.error(
-                "Unable to hydrate Proxmox card for endpoint %s: %s", pk, detail
-            )
+        )
 
         payload: dict[str, object] = {
             "cluster_data": _merge_cluster_payloads(version_data, cluster_data),
@@ -274,6 +303,7 @@ class ProxboxProxmoxCardView(
             payload["detail"] = detail
         if http_status is not None:
             payload["http_status"] = http_status
+        _mark_throttled(payload, http_status, retry_after)
 
         return JsonResponse(payload)
 

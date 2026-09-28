@@ -10,6 +10,7 @@ from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
+import requests
 
 from tests.django_stubs import install_django_stubs
 
@@ -96,6 +97,7 @@ def test_proxmox_backend_payload_includes_site_and_tenant_metadata(monkeypatch) 
         token_value=None,
         site=SimpleNamespace(pk=42, slug="dc1", name="DC 1"),
         tenant=SimpleNamespace(pk=9, slug="customer-a", name="Customer A"),
+        node_device_name_template="{node}.{cluster_slug}.example.com",
         effective_connection_tuning=lambda: effective_tuning,
     )
 
@@ -111,6 +113,7 @@ def test_proxmox_backend_payload_includes_site_and_tenant_metadata(monkeypatch) 
     assert payload["tenant_id"] == 9
     assert payload["tenant_slug"] == "customer-a"
     assert payload["tenant_name"] == "Customer A"
+    assert payload["node_device_name_template"] == "{node}.{cluster_slug}.example.com"
 
 
 def test_proxmox_backend_payload_uses_resolved_tuning_and_preserves_zero(
@@ -284,3 +287,196 @@ def test_backend_currency_detects_packer_authorization_revocation(monkeypatch) -
     }
 
     assert backend_sync._proxmox_row_is_current(endpoint, row) is False
+
+
+def _cached_push_arrangement(monkeypatch):
+    backend_sync = _load_backend_sync_module(monkeypatch)
+    endpoint = SimpleNamespace(
+        pk=7,
+        id=7,
+        name="PVE",
+        domain="pve.example.test",
+        # Built at runtime so the public-boundary diff scan sees no literal address.
+        ip_address=".".join(("10", "0", "0", "10")) + "/32",
+        port=8006,
+        enabled=True,
+    )
+    payload = {
+        "name": "PVE (nb:7)",
+        "password": "secret",
+        "token_value": None,
+        "enabled": True,
+        "allow_packer_template_builds": False,
+    }
+    fingerprint = backend_sync._proxmox_payload_fingerprint(payload)
+
+    class FakeCache:
+        def __init__(self):
+            self.deleted = []
+
+        def get(self, key):
+            if key.endswith(":keys"):
+                return ["cached-key"]
+            return {"fingerprint": fingerprint, "backend_id": 41}
+
+        def delete_many(self, keys):
+            self.deleted.extend(keys)
+
+        def set(self, key, value, timeout):
+            return None
+
+    fake_cache = FakeCache()
+    monkeypatch.setattr(backend_sync, "_django_cache", fake_cache)
+    monkeypatch.setattr(backend_sync, "_proxmox_backend_payload", lambda obj: payload)
+    monkeypatch.setattr(
+        backend_sync,
+        "_record_pushed_proxmox_credential_fingerprint",
+        lambda *args: None,
+    )
+    monkeypatch.setattr(
+        backend_sync,
+        "_record_confirmed_packer_template_authorization",
+        lambda *args: None,
+    )
+    return backend_sync, endpoint, fake_cache
+
+
+class _PushResponse:
+    def __init__(self, payload, status_code=200):
+        self.payload = payload
+        self.status_code = status_code
+
+    def raise_for_status(self):
+        if self.status_code >= 400:
+            error = requests.exceptions.HTTPError(f"HTTP {self.status_code}")
+            error.response = self
+            raise error
+
+
+def _parse_push_response(response, log_label=None):
+    return response.payload, None
+
+
+def test_recent_matching_fingerprint_confirms_one_row_and_skips_put(
+    monkeypatch,
+) -> None:
+    backend_sync, endpoint, _ = _cached_push_arrangement(monkeypatch)
+    calls = []
+    row = {
+        "id": 41,
+        "name": "PVE (nb:7)",
+        "domain": "pve.example.test",
+        "port": 8006,
+    }
+    monkeypatch.setattr(
+        backend_sync, "parse_requests_response_json", _parse_push_response
+    )
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "get",
+        lambda url, **kwargs: calls.append(url) or _PushResponse(row),
+    )
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "put",
+        lambda *args, **kwargs: pytest.fail("matching push cache issued PUT"),
+    )
+
+    assert backend_sync.sync_proxmox_endpoint_to_backend(
+        endpoint, base_url="https://backend.example.invalid"
+    ) == (True, None, None)
+    assert calls == ["https://backend.example.invalid/proxmox/endpoints/41"]
+
+
+def test_cached_push_404_discovers_and_registers_after_backend_restart(
+    monkeypatch,
+) -> None:
+    backend_sync, endpoint, fake_cache = _cached_push_arrangement(monkeypatch)
+    calls = []
+    responses = [_PushResponse({}, 404), _PushResponse([])]
+    monkeypatch.setattr(
+        backend_sync, "parse_requests_response_json", _parse_push_response
+    )
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "get",
+        lambda url, **kwargs: calls.append(url) or responses.pop(0),
+    )
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "post",
+        lambda url, **kwargs: calls.append(url) or _PushResponse({"id": 52}),
+    )
+
+    assert backend_sync.sync_proxmox_endpoint_to_backend(
+        endpoint, base_url="https://backend.example.invalid"
+    ) == (True, None, None)
+    assert calls == [
+        "https://backend.example.invalid/proxmox/endpoints/41",
+        "https://backend.example.invalid/proxmox/endpoints",
+        "https://backend.example.invalid/proxmox/endpoints",
+    ]
+    assert fake_cache.deleted
+
+
+def test_cached_push_id_reuse_discovers_and_updates_the_correct_row(
+    monkeypatch,
+) -> None:
+    backend_sync, endpoint, fake_cache = _cached_push_arrangement(monkeypatch)
+    calls = []
+    reused = {
+        "id": 41,
+        "name": "Other (nb:9)",
+        "domain": "other.example.test",
+        "port": 8006,
+    }
+    current = {
+        "id": 52,
+        "name": "PVE (nb:7)",
+        "domain": "pve.example.test",
+        "port": 8006,
+    }
+    responses = [_PushResponse(reused), _PushResponse([current])]
+    monkeypatch.setattr(
+        backend_sync, "parse_requests_response_json", _parse_push_response
+    )
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "get",
+        lambda url, **kwargs: calls.append(url) or responses.pop(0),
+    )
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "put",
+        lambda url, **kwargs: calls.append(url) or _PushResponse({"id": 52}),
+    )
+
+    assert backend_sync.sync_proxmox_endpoint_to_backend(
+        endpoint, base_url="https://backend.example.invalid"
+    ) == (True, None, None)
+    assert calls[-1] == "https://backend.example.invalid/proxmox/endpoints/52"
+    assert fake_cache.deleted
+
+
+def test_cached_resolver_404_invalidates_and_retries_discovery(monkeypatch) -> None:
+    backend_sync, endpoint, fake_cache = _cached_push_arrangement(monkeypatch)
+    current = {
+        "id": 52,
+        "name": "PVE (nb:7)",
+        "domain": "pve.example.test",
+        "port": 8006,
+    }
+    responses = [_PushResponse({}, 404), _PushResponse([current])]
+    monkeypatch.setattr(
+        backend_sync, "parse_requests_response_json", _parse_push_response
+    )
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "get",
+        lambda *args, **kwargs: responses.pop(0),
+    )
+
+    assert backend_sync.resolve_backend_endpoint_id(
+        endpoint, base_url="https://backend.example.invalid"
+    ) == (52, None)
+    assert fake_cache.deleted

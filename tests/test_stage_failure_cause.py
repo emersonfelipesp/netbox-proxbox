@@ -17,7 +17,9 @@ def _run_failed_stage(module, monkeypatch, responses):
     pending = iter(responses)
     calls: list[str] = []
 
-    def _run_sync_stream(path, query_params=None, on_frame=None, endpoint_id=None):
+    def _run_sync_stream(
+        path, query_params=None, on_frame=None, endpoint_id=None, **kwargs
+    ):
         calls.append(path)
         return next(pending)
 
@@ -455,3 +457,27 @@ def test_hostname_answer_is_terminal_end_to_end(  # noqa: F811
     ), "identical attempts collapse to the single backend-authored line"
     assert "TLS" not in message
     assert records["error"][-1] == message
+
+
+def test_stage_retry_honours_retry_after(sync_stages_module, monkeypatch):
+    module = sync_stages_module
+    responses = iter(
+        [
+            ({"detail": "busy", "retry_after": "23"}, 429),
+            ({"response": {"ok": True}}, 200),
+        ]
+    )
+    sleeps: list[float] = []
+    services_mod = types.ModuleType("netbox_proxbox.services")
+    services_mod.run_sync_stream = lambda *a, **k: next(responses)
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services",
+        services_mod,
+    )
+    monkeypatch.setattr(module.time, "sleep", sleeps.append)
+    job, _records = preflight_diagnosis._make_job()
+
+    module._execute_stage_sync(job, "devices", "/devices/stream", {}, lambda *a: None)
+
+    assert sleeps == [23.0]
