@@ -63,9 +63,9 @@ topology.
 
 ### Version
 
-- Plugin version: `0.0.27`
+- Plugin version: `0.0.27.post1`
 - NetBox compatibility: `4.5.8` through `4.7.0`
-- Current source pairing: `netbox-proxbox 0.0.27`, `proxbox-api 0.0.23.post2`,
+- Current source pairing: `netbox-proxbox 0.0.27.post1`, `proxbox-api 0.0.23.post3`,
   `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`
 - Last documented released runtime pairing: `netbox-proxbox 0.0.27rc4`,
   `proxbox-api 0.0.22.post1`, `proxmox-sdk 0.0.13`, and `netbox-sdk 0.0.13`
@@ -697,7 +697,7 @@ class ProxboxSyncJob(JobRunner):
     
     Meta.name = "Proxbox Sync"
     
-    # Job timeout: 7200 seconds (2 hours)
+    # Job timeout: UI-backed, 7200 seconds (2 hours) by default
     # Uses NetBox's default RQ queue
 ```
 
@@ -1360,7 +1360,9 @@ python manage.py rqworker
 
 ### Job Timeout
 
-Default job timeout: **7200 seconds (2 hours)**
+Default job timeout: **7200 seconds (2 hours)**. Configure 3600–604800 seconds
+under **Proxbox > Settings > Synchronization job timeout (seconds)**. Changes
+apply only to newly enqueued jobs.
 
 Override per-job:
 ```python
@@ -1373,7 +1375,7 @@ job = ProxboxSyncJob.enqueue(sync_types=["all"], job_timeout=10800)
 |---------|-------|----------|
 | Job stuck in "pending" | No RQ worker running | Start `rqworker` |
 | Job stuck in "running" | Backend slow or buffered stream | Wait or check proxbox-api logs |
-| Job shows "JobTimeoutException" | RQ timeout exceeded | Increase `job_timeout` parameter |
+| Job shows "JobTimeoutException" | RQ timeout exceeded | Increase **Synchronization job timeout (seconds)** in Proxbox Settings and enqueue a new job |
 | Job shows "cancelled by user" | User canceled | Normal behavior |
 
 ---

@@ -17,6 +17,11 @@ from netbox_proxbox.choices import (
     SyncModeChoices,
     VMInterfaceSyncStrategyChoices,
 )
+from netbox_proxbox.constants import (
+    SYNC_JOB_TIMEOUT_DEFAULT,
+    SYNC_JOB_TIMEOUT_MAX,
+    SYNC_JOB_TIMEOUT_MIN,
+)
 from netbox_proxbox.validators import validate_node_device_name_template
 
 DEFAULT_BACKEND_LOG_FILE_PATH = "/var/log/proxbox.log"
@@ -321,6 +326,19 @@ class ProxboxPluginSettings(NetBoxModel):
         default=4,
         verbose_name=_("VM sync max concurrency"),
         help_text=_("Maximum number of VMs synced in parallel during a full update."),
+    )
+    sync_job_timeout = models.PositiveIntegerField(
+        default=SYNC_JOB_TIMEOUT_DEFAULT,
+        validators=[
+            MinValueValidator(SYNC_JOB_TIMEOUT_MIN),
+            MaxValueValidator(SYNC_JOB_TIMEOUT_MAX),
+        ],
+        verbose_name=_("Synchronization job timeout (seconds)"),
+        help_text=_(
+            "RQ wall-clock limit for a complete Proxbox synchronization job. "
+            "Increase this for large estates whose valid syncs exceed two hours. "
+            "Changes apply only to jobs enqueued after the setting is saved."
+        ),
     )
     interface_batch_size = models.PositiveSmallIntegerField(
         default=5,

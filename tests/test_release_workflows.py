@@ -1622,9 +1622,12 @@ def test_candidate_build_source_must_be_passive_hatchling_metadata(
     safe_metadata = pyproject.read_text(encoding="utf-8")
     for unsafe_metadata in (
         safe_metadata.replace(
-            '\n[tool.hatch.build.targets.sdist]\nexclude = ["/.ci-site"]\n', "\n"
+            '\n[tool.hatch.build.targets.sdist]\nexclude = ["/.ci-site", "/site"]\n',
+            "\n",
         ),
-        safe_metadata.replace('exclude = ["/.ci-site"]', 'exclude = ["/site"]'),
+        safe_metadata.replace(
+            'exclude = ["/.ci-site", "/site"]', 'exclude = ["/.ci-site"]'
+        ),
     ):
         pyproject.write_text(unsafe_metadata, encoding="utf-8")
         with pytest.raises(

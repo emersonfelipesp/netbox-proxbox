@@ -15,6 +15,57 @@ import pytest
 from django.core.management.base import CommandError
 
 
+def _install_django_rq_stub(monkeypatch):
+    """Install the worker-probe stub and return its mutable module state."""
+    django_rq_mod = types.ModuleType("django_rq")
+    django_rq_mod.worker_count = 1
+    django_rq_mod.rq_timeout = 7200
+    django_rq_mod.fetch_calls = []
+
+    class _Queue:
+        @property
+        def workers(self):
+            return [object()] * django_rq_mod.worker_count
+
+        @staticmethod
+        def fetch_job(job_id):
+            django_rq_mod.fetch_calls.append(job_id)
+            return SimpleNamespace(timeout=django_rq_mod.rq_timeout)
+
+    def _get_queue(_name):
+        return _Queue()
+
+    django_rq_mod.get_queue = _get_queue
+    monkeypatch.setitem(sys.modules, "django_rq", django_rq_mod)
+    return django_rq_mod
+
+
+def _install_branch_lifecycle_stub(monkeypatch):
+    """Install the branch-isolation stub and return its mutable module state."""
+    branch_lifecycle_mod = types.ModuleType("netbox_proxbox.services.branch_lifecycle")
+    branch_lifecycle_mod.BranchingUnavailableError = type(
+        "BranchingUnavailableError", (RuntimeError,), {}
+    )
+    branch_lifecycle_mod.error = None
+
+    def _require_branch_isolation_or_raise():
+        if branch_lifecycle_mod.error is not None:
+            raise branch_lifecycle_mod.BranchingUnavailableError(
+                branch_lifecycle_mod.error
+            )
+        return SimpleNamespace(state="disabled")
+
+    branch_lifecycle_mod.require_branch_isolation_or_raise = (
+        _require_branch_isolation_or_raise
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        branch_lifecycle_mod,
+    )
+    return branch_lifecycle_mod
+
+
 @pytest.fixture
 def proxbox_sync_command(monkeypatch):
     """Load proxbox_sync.py with stubs for plugin internals.
@@ -33,6 +84,7 @@ def proxbox_sync_command(monkeypatch):
     jobs_mod = types.ModuleType("netbox_proxbox.jobs")
     jobs_mod.PROXBOX_SYNC_QUEUE_NAME = "default"
     jobs_mod.PROXBOX_SYNC_JOB_TIMEOUT = 7200
+    jobs_mod.configured_sync_job_timeout = lambda: 7200
 
     enqueue_calls: list[dict] = []
     enqueue_once_calls: list[dict] = []
@@ -43,12 +95,20 @@ def proxbox_sync_command(monkeypatch):
         next_job_pk: int = 42
 
         @classmethod
+        def _next_job(cls):
+            return SimpleNamespace(
+                pk=cls.next_job_pk,
+                job_id="rq-job-42",
+                queue_name="default",
+            )
+
+        @classmethod
         def enqueue(cls, **kwargs):
             cls.last_kwargs = kwargs
             enqueue_calls.append(kwargs)
             if cls.raise_on_enqueue is not None:
                 raise cls.raise_on_enqueue
-            return SimpleNamespace(pk=cls.next_job_pk)
+            return cls._next_job()
 
         @classmethod
         def enqueue_once(cls, **kwargs):
@@ -56,7 +116,7 @@ def proxbox_sync_command(monkeypatch):
             enqueue_once_calls.append(kwargs)
             if cls.raise_on_enqueue is not None:
                 raise cls.raise_on_enqueue
-            return SimpleNamespace(pk=cls.next_job_pk)
+            return cls._next_job()
 
     jobs_mod.ProxboxSyncJob = _ProxboxSyncJob
     monkeypatch.setitem(sys.modules, "netbox_proxbox.jobs", jobs_mod)
@@ -105,28 +165,7 @@ def proxbox_sync_command(monkeypatch):
     models_mod.ProxmoxEndpoint = _ProxmoxEndpoint
     monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_mod)
 
-    # netbox_proxbox.services.branch_lifecycle
-    branch_lifecycle_mod = types.ModuleType("netbox_proxbox.services.branch_lifecycle")
-    branch_lifecycle_mod.BranchingUnavailableError = type(
-        "BranchingUnavailableError", (RuntimeError,), {}
-    )
-    branch_lifecycle_mod.error = None
-
-    def _require_branch_isolation_or_raise():
-        if branch_lifecycle_mod.error is not None:
-            raise branch_lifecycle_mod.BranchingUnavailableError(
-                branch_lifecycle_mod.error
-            )
-        return SimpleNamespace(state="disabled")
-
-    branch_lifecycle_mod.require_branch_isolation_or_raise = (
-        _require_branch_isolation_or_raise
-    )
-    monkeypatch.setitem(
-        sys.modules,
-        "netbox_proxbox.services.branch_lifecycle",
-        branch_lifecycle_mod,
-    )
+    branch_lifecycle_mod = _install_branch_lifecycle_stub(monkeypatch)
 
     # netbox_proxbox.services.backend_auth
     backend_auth_mod = types.ModuleType("netbox_proxbox.services.backend_auth")
@@ -215,15 +254,7 @@ def proxbox_sync_command(monkeypatch):
         "django.contrib.auth.get_user_model", _get_user_model, raising=True
     )
 
-    # django_rq stub (worker probe)
-    django_rq_mod = types.ModuleType("django_rq")
-    django_rq_mod.worker_count = 1
-
-    def _get_queue(_name):
-        return SimpleNamespace(workers=[object()] * django_rq_mod.worker_count)
-
-    django_rq_mod.get_queue = _get_queue
-    monkeypatch.setitem(sys.modules, "django_rq", django_rq_mod)
+    django_rq_mod = _install_django_rq_stub(monkeypatch)
 
     # Load the command module fresh
     root = Path(__file__).resolve().parents[2]
@@ -402,6 +433,49 @@ def test_wait_happy_path_returns_on_completion(proxbox_sync_command):
     proxbox_sync_command.job_objects.reset()
     _run(proxbox_sync_command.module, wait=True, timeout=5, poll_interval=0.0)
     assert len(proxbox_sync_command.enqueue_calls) == 1
+
+
+def test_wait_uses_reused_jobs_captured_timeout(monkeypatch, proxbox_sync_command):
+    """The implicit wait deadline follows an enqueue-once job's RQ timeout."""
+    proxbox_sync_command.django_rq_mod.rq_timeout = 14400
+    captured: dict[str, object] = {}
+
+    def capture_wait(self, **kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(
+        proxbox_sync_command.module.Command, "_wait_for_job", capture_wait
+    )
+
+    _run(proxbox_sync_command.module, wait=True, timeout=None, enqueue_once=True)
+
+    assert captured["timeout"] == 14400
+    assert proxbox_sync_command.django_rq_mod.fetch_calls == ["rq-job-42"]
+
+
+def test_wait_falls_back_to_configured_timeout_when_rq_lookup_fails(
+    monkeypatch, proxbox_sync_command
+):
+    """An unavailable RQ record must not prevent waiting for the NetBox job."""
+    proxbox_sync_command.jobs_mod.configured_sync_job_timeout = lambda: 9000
+    captured: dict[str, object] = {}
+
+    def unavailable_queue(_name):
+        raise RuntimeError("Redis unavailable")
+
+    def capture_wait(self, **kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(
+        proxbox_sync_command.django_rq_mod, "get_queue", unavailable_queue
+    )
+    monkeypatch.setattr(
+        proxbox_sync_command.module.Command, "_wait_for_job", capture_wait
+    )
+
+    _run(proxbox_sync_command.module, wait=True, timeout=None, enqueue_once=True)
+
+    assert captured["timeout"] == 9000
 
 
 def test_wait_failed_status_raises_command_error(proxbox_sync_command):

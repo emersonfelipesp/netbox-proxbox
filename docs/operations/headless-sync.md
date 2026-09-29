@@ -14,7 +14,7 @@ and runbook automation.
 - Queue: NetBox's default RQ queue (`default`).
 - Sync types: `[SyncTypeChoices.ALL]` — all stages.
 - Endpoints: every configured `ProxmoxEndpoint`.
-- Job timeout: `PROXBOX_SYNC_JOB_TIMEOUT` (7200 seconds).
+- Job timeout: the **Synchronization job timeout (seconds)** plugin setting (7200 seconds by default).
 
 The job appears under **Background Jobs** in NetBox identical to a
 UI-triggered sync, so the existing job-detail page, log stream, and
@@ -35,7 +35,7 @@ python manage.py proxbox_sync --wait
 # Run as a specific user (overrides the default oldest active superuser).
 python manage.py proxbox_sync --user automation
 
-# Bound the wait loop (default: 7200s).
+# Bound the wait loop (default: the configured synchronization job timeout).
 python manage.py proxbox_sync --wait --timeout 1800
 
 # Poll less aggressively while waiting (default: 2.0s).
@@ -51,7 +51,7 @@ python manage.py proxbox_sync --wait --worker-grace 10
 |---|---|---|
 | `--user USERNAME` | oldest active superuser | Username to attribute the job to. Used for audit and job ownership. |
 | `--wait` | off | Block until the job reaches a terminal state; exit code mirrors the job's status. |
-| `--timeout SECONDS` | `7200` | Upper bound on the `--wait` loop. Matches `PROXBOX_SYNC_JOB_TIMEOUT`. |
+| `--timeout SECONDS` | Enqueued RQ job's captured timeout, then plugin setting `sync_job_timeout` (`7200`) | Upper bound on the `--wait` loop. An explicit value remains authoritative; `--enqueue-once` resolves a reused job through its NetBox queue name and RQ job ID. If Redis no longer exposes that job, the command safely falls back to the current plugin setting. |
 | `--poll-interval SECONDS` | `2.0` | Seconds between job-status polls while `--wait` is set. |
 | `--worker-grace SECONDS` | `30.0` | Maximum seconds the job may stay pending before the command checks for an active RQ worker and fast-fails if none is found. |
 | `--enqueue-once` | off | Route through `JobRunner.enqueue_once()` so the command reuses an already-pending recurring schedule instead of duplicating it. Designed for the [`proxbox-scheduler`](../scheduler/README.md) container so it coexists with the NetBox-side **Schedule Sync** form. |

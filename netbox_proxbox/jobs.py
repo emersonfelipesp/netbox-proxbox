@@ -31,6 +31,11 @@ except ImportError:  # pragma: no cover - test stubs expose only JobRunner
     Job = Any  # type: ignore[misc,assignment]
 
 from netbox_proxbox.choices import SyncModeChoices, SyncTypeChoices
+from netbox_proxbox.constants import (
+    SYNC_JOB_TIMEOUT_DEFAULT,
+    SYNC_JOB_TIMEOUT_MAX,
+    SYNC_JOB_TIMEOUT_MIN,
+)
 from netbox_proxbox.models import ProxmoxEndpoint
 from netbox_proxbox.schemas import SyncJobData
 from netbox_proxbox.sync_types import (
@@ -68,16 +73,17 @@ PROXBOX_SYNC_QUEUE_NAME = RQ_QUEUE_DEFAULT
 # Rows created before this change may still have ``queue_name`` set to the legacy queue.
 LEGACY_PROXBOX_RQ_QUEUE = "netbox_proxbox.sync"
 
-# RQ wall-clock limit for the whole job. Must exceed NetBox's default ``RQ_DEFAULT_TIMEOUT``
-# (often 300s) and the HTTP stream read budget between chunks (3600s in ``run_sync_stream``).
-# Override per enqueue via ``job_timeout=...`` if needed.
-PROXBOX_SYNC_JOB_TIMEOUT = 7200
+# Compatibility fallback for the UI-configurable RQ wall-clock limit. The persisted
+# setting is resolved when each job is enqueued; explicit ``job_timeout`` remains
+# authoritative. Running jobs retain the immutable timeout stored by RQ.
+PROXBOX_SYNC_JOB_TIMEOUT = SYNC_JOB_TIMEOUT_DEFAULT
 PREFLIGHT_ENDPOINT_TIMEZONE_BUDGET = 30.0
 
 __all__ = (
     "LEGACY_PROXBOX_RQ_QUEUE",
     "PROXBOX_SYNC_QUEUE_NAME",
     "PROXBOX_SYNC_JOB_TIMEOUT",
+    "configured_sync_job_timeout",
     "PreflightResult",
     "ProxboxPreflightError",
     "ProxboxSyncJob",
@@ -1605,6 +1611,38 @@ def _effective_sync_job_timeout() -> float:
     return float(PROXBOX_SYNC_JOB_TIMEOUT)
 
 
+def configured_sync_job_timeout() -> int:
+    """Return the persisted enqueue default or the compatibility fallback."""
+    settings_exceptions: list[type[BaseException]] = [
+        AttributeError,
+        ImportError,
+        RuntimeError,
+        TypeError,
+        ValueError,
+    ]
+    try:
+        from django.core.exceptions import AppRegistryNotReady  # noqa: PLC0415
+
+        settings_exceptions.append(AppRegistryNotReady)
+    except ImportError:  # pragma: no cover - lightweight test environments
+        pass
+    try:
+        from django.db import DatabaseError  # noqa: PLC0415
+
+        settings_exceptions.append(DatabaseError)
+    except ImportError:  # pragma: no cover - lightweight test environments
+        pass
+    try:
+        from netbox_proxbox.models import ProxboxPluginSettings  # noqa: PLC0415
+
+        timeout = int(ProxboxPluginSettings.get_solo().sync_job_timeout)
+    except tuple(settings_exceptions):
+        return PROXBOX_SYNC_JOB_TIMEOUT
+    if SYNC_JOB_TIMEOUT_MIN <= timeout <= SYNC_JOB_TIMEOUT_MAX:
+        return timeout
+    return PROXBOX_SYNC_JOB_TIMEOUT
+
+
 def _build_sync_run_params(context: _SyncRunContext) -> dict[str, object]:
     """Build persisted and backend parameters shared by batch and staged runs."""
     return {
@@ -2743,7 +2781,8 @@ class ProxboxSyncJob(JobRunner):
     @classmethod
     def enqueue(cls, *args: object, **kwargs: object) -> Job:
         """Enqueue like other ``JobRunner`` jobs, but with a long RQ ``job_timeout`` by default."""
-        kwargs.setdefault("job_timeout", PROXBOX_SYNC_JOB_TIMEOUT)
+        if "job_timeout" not in kwargs:
+            kwargs["job_timeout"] = configured_sync_job_timeout()
         normalized = _pop_enqueued_sync_types(kwargs)
         kwargs["sync_types"] = normalized
         _normalize_enqueued_batch(kwargs)

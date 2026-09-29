@@ -190,11 +190,11 @@ All Proxbox-specific environment variables for `proxbox-api`:
 | `PROXBOX_SKIP_NETBOX_BOOTSTRAP` | `false` | Skip default NetBox bootstrap at startup |
 | `PROXBOX_RATE_LIMIT` | `60` req/min | Max API requests per minute per IP |
 
-Plugin-side environment controls (in NetBox's `configuration.py`):
+Plugin-side synchronization controls:
 
 | Setting | Default | Description |
 |---|---|---|
-| `PROXBOX_SYNC_JOB_TIMEOUT` | `7200` s | RQ wall-clock limit for `ProxboxSyncJob` |
+| `ProxboxPluginSettings.sync_job_timeout` | `7200` s | UI-configurable RQ wall-clock limit for newly enqueued `ProxboxSyncJob` jobs (`3600`–`604800`) |
 
 ---
 

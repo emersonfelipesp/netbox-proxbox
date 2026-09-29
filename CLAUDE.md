@@ -1,5 +1,7 @@
 # netbox-proxbox Repository Guide
 
+Current backend-runtime pairing: netbox-proxbox 0.0.27.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+
 > **LLM Agent Safety:** Before any destruction-adjacent operation, read
 > `AGENTS.md` § "LLM Agent Safety Guardrails". Automated agents may inspect and
 > explain protected workflows, but they may not supply human confirmation or
@@ -40,6 +42,9 @@ interfaces documented in this repository.
 - `netbox_proxbox/jobs.py` and `netbox_proxbox/sync/` own asynchronous sync
   orchestration. NetBox remains the local system of record; Proxmox remains the
   source of truth for reflected infrastructure state.
+- `ProxboxPluginSettings.sync_job_timeout` is the UI-backed RQ wall-clock limit
+  for newly enqueued synchronization jobs. It defaults to 7200 seconds, accepts
+  3600–604800 seconds, and never changes an already-running job's captured timeout.
 - `proxbox_cli/` is a standalone client and must not import Django or NetBox.
 - `docs/` is the source for the MkDocs site; `llms.txt` is committed generated
   documentation and must remain consistent with the source documentation.
@@ -53,24 +58,24 @@ interfaces documented in this repository.
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.0` GA. The current
-plugin version is `0.0.27`.
+plugin version is `0.0.27.post1`.
 
-Current source pairing: netbox-proxbox 0.0.27 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source pairing: netbox-proxbox 0.0.27.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The last documented released runtime pairing for this release line remains
-netbox-proxbox 0.0.27rc4 <-> proxbox-api 0.0.22.post1 <-> proxmox-sdk 0.0.13
+netbox-proxbox 0.0.27 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15
 <-> netbox-sdk 0.0.13. Preserve release-note and compatibility rows as
 historical records unless a release workflow changes them.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.27 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.27.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 CI pairing: the E2E Docker, page-coverage, documentation-screenshot, and
-release-validation workflow defaults consume proxbox-api `0.0.23.post2`. E2E uses the
+release-validation workflow defaults consume proxbox-api `0.0.23.post3`. E2E uses the
 exact published image by default; GitHub source-head builds require explicit
 `dependency_mode: dev`. Repository variables are equality-checked configuration:
 release preparation fails closed when an implicit value does not equal the
 checked-in current default, and a coordinated candidate requires an explicit
-workflow input. TestPyPI plugin candidates use stable proxbox-api `0.0.23.post2` from
+workflow input. TestPyPI plugin candidates use stable proxbox-api `0.0.23.post3` from
 PyPI because that backend version is not published on TestPyPI. The E2E harness
 uses typed sync-state sidecars and must not call the removed proxbox-api custom-
 field creation route.
@@ -82,7 +87,7 @@ field creation route.
   inventory, Firecracker inventory, service-monitoring collections, metrics,
   intent/apply records, deletion requests, cloud-init records, and companion
   PBS/PDM endpoint records. Migration
-  `0104_node_device_name_template`
+  `0103_custom_fields_request_delay_help_text`
   is the current schema tip.
 
   Proxmox node Device names use the effective endpoint/global

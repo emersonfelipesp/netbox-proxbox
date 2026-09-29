@@ -1,6 +1,6 @@
 [project]
 name = "netbox-proxbox"
-version = "0.0.27"
+version = "0.0.27.post1"
 description = "Netbox Plugin - Integrate Proxmox and Netbox"
 readme = "README.md"
 authors = [
@@ -98,7 +98,7 @@ build-backend = "hatchling.build"
 packages = ["netbox_proxbox", "proxbox_cli"]
 
 [tool.hatch.build.targets.sdist]
-exclude = ["/.ci-site"]
+exclude = ["/.ci-site", "/site"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

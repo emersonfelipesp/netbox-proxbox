@@ -199,7 +199,7 @@ sequenceDiagram
 ### Key Properties
 
 - **Queue**: `default` RQ queue (`RQ_QUEUE_DEFAULT`) — picked up by a stock `manage.py rqworker` with no queue arguments
-- **Timeout**: 7200 s (`PROXBOX_SYNC_JOB_TIMEOUT`) — overrides NetBox's default 300 s `RQ_DEFAULT_TIMEOUT`
+- **Timeout**: the UI-backed `sync_job_timeout` setting (7200 s by default, 3600–604800) — overrides NetBox's default 300 s `RQ_DEFAULT_TIMEOUT` for newly enqueued jobs
 - **Ownership guard**: `_claim_rq_sync_ownership()` prevents two jobs for the same endpoint from running concurrently
 
 ```python title="netbox_proxbox/jobs.py (simplified)"
@@ -234,7 +234,7 @@ The plugin supports scheduled sync via NetBox's built-in job scheduling. The `Pr
 |---|---|---|
 | `pending` | No RQ worker running, or worker not listening to `default` queue | Start/restart `manage.py rqworker` |
 | `running` (long time) | proxbox-api is still syncing; check Job log for SSE progress | Wait or inspect proxbox-api logs |
-| `errored: JobTimeoutException` | RQ wall-clock limit hit | Increase `PROXBOX_SYNC_JOB_TIMEOUT`; check why sync is slow |
+| `errored: JobTimeoutException` | RQ wall-clock limit hit | Increase **Synchronization job timeout (seconds)** in Proxbox Settings; check why sync is slow |
 | `errored: ProxboxException` | proxbox-api returned an error SSE event | Check Job log for `error_detail` event with suggestion |
 | `failed` (after Cancel) | User cancelled; normal | Use "Run now" on the finished row to re-queue |
 

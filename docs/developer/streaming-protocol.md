@@ -11,7 +11,7 @@ Proxbox uses **Server-Sent Events (SSE)** as the primary transport for real-time
 
     - **Used by**: `ProxboxSyncJob.run()` via `run_sync_stream()`, browser-facing `StreamingHttpResponse` proxy views
     - **Advantages**: real-time per-object progress, no polling needed, works through proxies with `X-Accel-Buffering: no`
-    - **Timeout**: HTTP between-chunk read timeout is **3600 s** (`_SYNC_STREAM_READ_TIMEOUT`). RQ job wall-clock limit is **7200 s**.
+    - **Timeout**: HTTP between-chunk read timeout is **3600 s** (`_SYNC_STREAM_READ_TIMEOUT`). The UI-backed RQ job wall-clock limit defaults to **7200 s**.
 
 === "JSON Polling (legacy)"
     The plugin sends a GET to `proxbox-api/full-update` and waits for a single JSON response containing all sync results.
@@ -279,13 +279,13 @@ Proxbox involves three distinct timeout layers that must all be longer than the 
 
 | Timeout | Value | Location | Controls |
 |---|---|---|---|
-| RQ job wall-clock | **7200 s** | `PROXBOX_SYNC_JOB_TIMEOUT` in `jobs.py` | Max time for an RQ worker to hold the job before killing it |
+| RQ job wall-clock | **7200 s default** | `ProxboxPluginSettings.sync_job_timeout` | Max time for an RQ worker to hold a newly enqueued job before killing it; UI range 3600–604800 s |
 | HTTP read (between chunks) | **3600 s** | `_SYNC_STREAM_READ_TIMEOUT` in `backend_proxy.py` | Max time to wait for the next SSE chunk from proxbox-api |
 | NetBox API request | **120 s** | `PROXBOX_NETBOX_TIMEOUT` env var | Per-request timeout for netbox-sdk calls inside proxbox-api |
 
 !!! warning "Stuck jobs"
     - **`pending` forever**: no RQ worker is running, or the worker does not listen to the `default` queue.
     - **`running` for a long time**: proxbox-api is still processing — check the Job log for SSE progress events.
-    - **`errored` with `JobTimeoutException`**: the RQ wall-clock limit was hit — increase `PROXBOX_SYNC_JOB_TIMEOUT`.
+    - **`errored` with `JobTimeoutException`**: the RQ wall-clock limit was hit — increase **Synchronization job timeout (seconds)** in Proxbox Settings and enqueue a new job.
 
     See [Backend Integration](backend-integration.md) for diagnosis steps.

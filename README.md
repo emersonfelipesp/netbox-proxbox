@@ -244,12 +244,12 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
-## What's New in v0.0.27
+## What's New in v0.0.27.post1
 
-Current source pairing: netbox-proxbox 0.0.27 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This is the current sibling-source development stack, not a rewrite of historical release compatibility. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.27.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The current released runtime pairing for this release line is
-`proxbox-api 0.0.23.post2`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`.
+`proxbox-api 0.0.23.post3`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`.
 
 RC15 paired with `proxbox-api 0.0.23.post1` and failed the real-stack Page
 Coverage gate because the expected backup inventory record was missing. RC16
@@ -315,7 +315,7 @@ installs that dependency before selection.
 - **Actionable console recovery.** Console failures now distinguish a healthy backend API from missing or invalid synchronized NetBox endpoint and node relations, provide stable diagnostic codes and exact remedies, and offer the existing full synchronization repair only to authorized operators with an explicit estate-wide scope warning.
 - **Feature retention.** Retains the browser-console handoff, Proxmox metrics, and human-only soft-deleted VM purge surface from earlier `0.0.26.post` releases.
 
-Full notes: [Release Notes - v0.0.27](docs/release-notes/version-0.0.27.md).
+Full notes: [Release Notes - v0.0.27.post1](docs/release-notes/version-0.0.27.post1.md).
 
 ## What's New in v0.0.26.post2
 
@@ -439,6 +439,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| 4.5.8-4.7.0 GA | v0.0.27.post1 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc18 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc17 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
@@ -710,7 +711,7 @@ Track job status under **Proxbox > Sync Jobs** or **Operations > Background Jobs
 
 ### Job timeout
 
-Proxbox sync jobs default to a **7200-second (2-hour) RQ wall-clock limit** (`PROXBOX_SYNC_JOB_TIMEOUT`). NetBox's default `RQ_DEFAULT_TIMEOUT` is only 300 s, which would kill long syncs. No configuration is needed unless your syncs routinely take longer than two hours; if they do, override the constant in `netbox_proxbox/jobs.py`.
+Proxbox sync jobs default to a **7200-second (2-hour) RQ wall-clock limit**. NetBox's default `RQ_DEFAULT_TIMEOUT` is only 300 s, which would kill long syncs. If valid synchronization runs take longer than two hours, open **Proxbox > Settings** and increase **Synchronization job timeout (seconds)**. The setting accepts 3600–604800 seconds and applies only to jobs enqueued after it is saved; already-running jobs retain their original RQ timeout.
 
 ### Troubleshooting
 
@@ -718,7 +719,7 @@ Proxbox sync jobs default to a **7200-second (2-hour) RQ wall-clock limit** (`PR
 |---------|-------------|-----|
 | Job stays **`pending`** | No RQ worker running, or worker not listening to `default` queue | Start/restart `manage.py rqworker` |
 | Job stays **`running`** for a long time | Proxbox API is still syncing or stream is slow | Check the job **Log** tab; wait or inspect the backend |
-| Job **`errored: JobTimeoutException`** | RQ wall-clock limit exceeded | Increase `PROXBOX_SYNC_JOB_TIMEOUT` in `netbox_proxbox/jobs.py` |
+| Job **`errored: JobTimeoutException`** | RQ wall-clock limit exceeded | Increase **Synchronization job timeout (seconds)** under **Proxbox > Settings**, then enqueue a new job |
 | Disabled endpoint still appears in `/api/plugins/proxbox/endpoints/proxmox/` | Expected API behavior; disabled rows remain inventory records | Leave it disabled to prevent all connection attempts. Re-enable only when the endpoint should participate in cards, checks, and sync jobs again. |
 | VM IP addresses stay empty after upgrade | The separate `proxbox-api` backend is too old, is on the v0.0.13/v0.0.14 agent-flag warning window, existing VMs still lack `proxmox_vm_id`, or the Proxmox role lacks guest-agent privileges | Check the FastAPI card warning on the Proxbox home page. Run `proxbox-api >= 0.0.13` at minimum; if the warning references PR #156, install a backend build containing that fix or the next fixed backend release. Then run **Full Update** so existing VMs get `proxmox_vm_id` before the IP-address stage runs. For PVE 9, also confirm `VM.GuestAgent.Audit`. |
 | **HTTP 401 Authentication failed!** against Proxmox VE 9.x | A stale stored token is overriding fresh password credentials, or the role is missing PVE 9 permissions | On the Proxmox endpoint edit page, tick **"Clear stored API token on save"** (and/or **"Clear stored password on save"**) to wipe the unused secret. The form rejects rows that end up with neither a password nor a complete `(token name, token value)` pair. Confirm the role on Proxmox grants `Datastore.Audit`, `Sys.Audit`, `VM.Audit`, and on PVE 9 also `VM.GuestAgent.Audit`. The plugin now surfaces the upstream PVE 9 error message in the UI instead of `"Unknown error."`, which makes "no such realm" / "expired token" / "missing privilege" failures self-diagnosing. |

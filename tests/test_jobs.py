@@ -182,6 +182,8 @@ def load_real_backend_sync() -> types.ModuleType:
 @pytest.fixture
 def proxbox_sync_job_module(monkeypatch):
     """Load jobs.py with stubs for netbox.jobs and netbox_proxbox.choices."""
+    monkeypatch.setitem(sys.modules, "django.db", django_stub_modules()["django.db"])
+
     netbox_constants = types.ModuleType("netbox.constants")
     netbox_constants.RQ_QUEUE_DEFAULT = "default"
     monkeypatch.setitem(sys.modules, "netbox.constants", netbox_constants)
@@ -232,6 +234,7 @@ def proxbox_sync_job_module(monkeypatch):
                 proxbox_fetch_max_concurrency=8,
                 ignore_ipv6_link_local_addresses=True,
                 primary_ip_preference="ipv4",
+                sync_job_timeout=7200,
             )
 
     class _EndpointQuerySet(list):
@@ -2119,6 +2122,71 @@ def test_proxbox_sync_job_enqueue_default_job_timeout(
     assert captured.get("sync_types") == ["all"]
 
 
+def test_proxbox_sync_job_enqueue_uses_configured_job_timeout(
+    monkeypatch, proxbox_sync_job_module
+):
+    """The persisted UI setting supplies the default for newly enqueued jobs."""
+    captured: dict[str, object] = {}
+
+    @classmethod
+    def fake_enqueue(cls, *args, **kwargs):
+        captured.update(kwargs)
+        return MagicMock()
+
+    settings_model = sys.modules["netbox_proxbox.models"].ProxboxPluginSettings
+    monkeypatch.setattr(
+        settings_model,
+        "get_solo",
+        classmethod(lambda cls: SimpleNamespace(sync_job_timeout=14400)),
+    )
+    monkeypatch.setattr(
+        sys.modules["netbox.jobs"].JobRunner,
+        "enqueue",
+        fake_enqueue,
+        raising=False,
+    )
+
+    proxbox_sync_job_module.ProxboxSyncJob.enqueue(name="t", user=None, sync_type="all")
+
+    assert captured.get("job_timeout") == 14400
+    assert captured.get("sync_types") == ["all"]
+
+
+@pytest.mark.parametrize("configured", [None, 0, 3599, 604801, "invalid"])
+def test_configured_sync_job_timeout_falls_back_for_unusable_values(
+    monkeypatch, proxbox_sync_job_module, configured
+):
+    settings_model = sys.modules["netbox_proxbox.models"].ProxboxPluginSettings
+    monkeypatch.setattr(
+        settings_model,
+        "get_solo",
+        classmethod(lambda cls: SimpleNamespace(sync_job_timeout=configured)),
+    )
+
+    assert (
+        proxbox_sync_job_module.configured_sync_job_timeout()
+        == proxbox_sync_job_module.PROXBOX_SYNC_JOB_TIMEOUT
+    )
+
+
+def test_configured_sync_job_timeout_falls_back_when_settings_database_is_unavailable(
+    monkeypatch, proxbox_sync_job_module
+):
+    from django.db import DatabaseError
+
+    settings_model = sys.modules["netbox_proxbox.models"].ProxboxPluginSettings
+
+    def unavailable(cls):
+        raise DatabaseError("settings database unavailable")
+
+    monkeypatch.setattr(settings_model, "get_solo", classmethod(unavailable))
+
+    assert (
+        proxbox_sync_job_module.configured_sync_job_timeout()
+        == proxbox_sync_job_module.PROXBOX_SYNC_JOB_TIMEOUT
+    )
+
+
 def test_proxbox_sync_job_enqueue_respects_explicit_job_timeout(
     monkeypatch, proxbox_sync_job_module
 ):
@@ -2134,6 +2202,16 @@ def test_proxbox_sync_job_enqueue_respects_explicit_job_timeout(
         "enqueue",
         fake_enqueue,
         raising=False,
+    )
+    settings_model = sys.modules["netbox_proxbox.models"].ProxboxPluginSettings
+    monkeypatch.setattr(
+        settings_model,
+        "get_solo",
+        classmethod(
+            lambda cls: pytest.fail(
+                "explicit job_timeout must not resolve plugin settings"
+            )
+        ),
     )
     proxbox_sync_job_module.ProxboxSyncJob.enqueue(
         name="t", user=None, sync_type="all", job_timeout=99999
