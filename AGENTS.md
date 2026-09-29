@@ -28,6 +28,9 @@ facts that an agent must have even when `@CLAUDE.md` expansion is unavailable:
 - Keep companion-plugin imports optional and lazy; enabled-but-broken
   companions fail at startup rather than degrading silently.
 - Keep historical migrations immutable and add a migration for schema changes.
+- Keep `ProxboxPluginSettings.sync_job_timeout` UI-backed and bounded to
+  3600–604800 seconds. Resolve it when enqueueing a sync job, preserve explicit
+  per-enqueue overrides, and never mutate the timeout of an already-running job.
 - Keep `Dockerfile.oci` testing-only, preserve its separate NetBox and
   proxbox-api Python runtimes, and keep its OCI entrypoint equivalent to the
   Proxmox LXC `/sbin/init` path.

@@ -26,9 +26,11 @@ generally do **not** need to raise concurrency settings simply because the
 estate grew; watch NetBox and Proxmox health, job duration, and backend rate
 limits, and prefer smaller endpoint subsets per job for very large estates.
 
-If a full sync over every enabled endpoint exceeds the NetBox job timeout, split
-work into several jobs that each target a subset of endpoints (scheduled or
-manual), rather than chasing unbounded parallelism.
+If a valid full sync over every enabled endpoint exceeds two hours, increase
+**Synchronization job timeout (seconds)** under **Proxbox > Settings**. The
+setting accepts 3600–604800 seconds and applies to newly enqueued jobs. Continue
+to split exceptionally large estates into jobs that target endpoint subsets
+rather than chasing unbounded parallelism.
 
 ---
 
@@ -142,13 +144,14 @@ Apply on top of defaults; adjust after observing job duration and error rates.
 | `proxmox_retry_backoff` | `1.0` s |
 | `netbox_timeout` | `180` s |
 | `netbox_max_concurrent` | `1`–`2` unless the NetBox DB pool clearly allows more |
+| `sync_job_timeout` | Raise above `7200` only when measured valid runs need more than two hours |
 | Concurrency & batch fields | Leave at defaults unless profiling shows a specific bottleneck |
 
 Operational habits:
 
 - Avoid hammering the Proxbox home page while a sync is starting.
-- Split very large estates into multiple sync jobs over endpoint subsets so each
-  run stays within the configured job timeout.
+- Set the UI job timeout above the measured worst-case duration, then split very
+  large estates into endpoint subsets when one monolithic run remains unwieldy.
 - Prefer raising `PROXBOX_RATE_LIMIT` and modest timeout/retry adjustments over
   increasing many concurrency knobs at once.
 

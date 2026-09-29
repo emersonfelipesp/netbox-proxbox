@@ -61,6 +61,7 @@ These fields tune how aggressively Proxbox calls the NetBox REST API during sync
 | Field | Default | Env override | Description |
 |---|---|---|---|
 | **NetBox client timeout (s)** | `120` | `PROXBOX_NETBOX_TIMEOUT` | Per-request timeout for NetBox API calls. |
+| **Synchronization job timeout (s)** | `7200` | _(plugin only)_ | RQ wall-clock limit for a complete sync job. Accepts `3600`–`604800`; changes apply only to newly enqueued jobs. |
 | **NetBox max concurrent requests** | `1` | `PROXBOX_NETBOX_MAX_CONCURRENT` | Semaphore cap on simultaneous in-flight NetBox API calls. Increase carefully — PostgreSQL connection pool may exhaust at high values. |
 | **NetBox write concurrency** | `8` | `PROXBOX_NETBOX_WRITE_CONCURRENCY` | Cap on parallel writes during create/update fan-out (lower than reads to avoid PostgreSQL row-lock contention). |
 | **NetBox max retries** | `5` | `PROXBOX_NETBOX_MAX_RETRIES` | Retry attempts for transient NetBox API failures. |

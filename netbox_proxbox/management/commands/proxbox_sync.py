@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import logging
 import time
+from collections.abc import Callable
 from argparse import ArgumentParser
 
 from django.core.management.base import BaseCommand, CommandError
@@ -34,6 +35,27 @@ DEFAULT_POLL_INTERVAL = 2.0
 DEFAULT_WORKER_GRACE = 30.0
 TERMINAL_JOB_STATUSES = {"completed", "errored", "failed"}
 SUCCESS_JOB_STATUSES = {"completed"}
+
+
+def _default_wait_timeout(job, configured_timeout: Callable[[], int]) -> int:
+    """Prefer the RQ timeout captured by a newly enqueued or reused NetBox job."""
+    job_id = getattr(job, "job_id", None)
+    queue_name = getattr(job, "queue_name", None)
+    if job_id and queue_name:
+        try:
+            import django_rq  # noqa: PLC0415
+
+            rq_job = django_rq.get_queue(queue_name).fetch_job(str(job_id))
+            timeout = int(getattr(rq_job, "timeout"))
+            if timeout > 0:
+                return timeout
+        except (AttributeError, TypeError, ValueError):
+            pass
+        except Exception:  # noqa: BLE001 — Redis lookup is best-effort
+            logger.debug(
+                "Could not resolve the enqueued RQ job timeout.", exc_info=True
+            )
+    return configured_timeout()
 
 
 class Command(BaseCommand):
@@ -66,7 +88,7 @@ class Command(BaseCommand):
             default=None,
             help=(
                 "Maximum seconds to wait when --wait is set. "
-                "Defaults to PROXBOX_SYNC_JOB_TIMEOUT (7200)."
+                "Defaults to the synchronization job timeout configured in the UI."
             ),
         )
         parser.add_argument(
@@ -100,9 +122,9 @@ class Command(BaseCommand):
         """Handle handle."""
         from netbox_proxbox.choices import SyncTypeChoices
         from netbox_proxbox.jobs import (
-            PROXBOX_SYNC_JOB_TIMEOUT,
             PROXBOX_SYNC_QUEUE_NAME,
             ProxboxSyncJob,
+            configured_sync_job_timeout,
         )
         from netbox_proxbox.models import ProxmoxEndpoint
         from netbox_proxbox.services.branch_lifecycle import (
@@ -117,8 +139,6 @@ class Command(BaseCommand):
         username = options.get("username")
         wait = bool(options.get("wait"))
         timeout = options.get("timeout")
-        if timeout is None:
-            timeout = PROXBOX_SYNC_JOB_TIMEOUT
         poll_interval_raw = options.get("poll_interval")
         poll_interval = (
             DEFAULT_POLL_INTERVAL
@@ -197,6 +217,9 @@ class Command(BaseCommand):
 
         if not wait:
             return
+
+        if timeout is None:
+            timeout = _default_wait_timeout(job, configured_sync_job_timeout)
 
         self._wait_for_job(
             job=job,

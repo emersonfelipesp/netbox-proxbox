@@ -110,7 +110,7 @@ def run_sync(
             "--timeout",
             help=(
                 "Max seconds to wait when --wait is set. "
-                "Defaults to the management command's PROXBOX_SYNC_JOB_TIMEOUT (7200)."
+                "Defaults to the synchronization job timeout configured in NetBox."
             ),
         ),
     ] = None,

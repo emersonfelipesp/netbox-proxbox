@@ -135,6 +135,7 @@ class SettingsView(
             "interface_batch_size": settings_obj.interface_batch_size,
             "interface_batch_delay_ms": settings_obj.interface_batch_delay_ms,
             "vm_sync_max_concurrency": settings_obj.vm_sync_max_concurrency,
+            "sync_job_timeout": settings_obj.sync_job_timeout,
             "reconciliation_engine": settings_obj.reconciliation_engine,
             "reconciliation_compare_strict": (
                 settings_obj.reconciliation_compare_strict
@@ -359,6 +360,7 @@ class SettingsView(
             settings_obj.vm_sync_max_concurrency = form.cleaned_data[
                 "vm_sync_max_concurrency"
             ]
+            settings_obj.sync_job_timeout = form.cleaned_data["sync_job_timeout"]
             settings_obj.reconciliation_engine = form.cleaned_data[
                 "reconciliation_engine"
             ]
@@ -517,6 +519,7 @@ class SettingsView(
                     "interface_batch_size",
                     "interface_batch_delay_ms",
                     "vm_sync_max_concurrency",
+                    "sync_job_timeout",
                     "reconciliation_engine",
                     "reconciliation_compare_strict",
                     "custom_fields_request_delay",

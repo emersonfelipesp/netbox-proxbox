@@ -805,6 +805,9 @@ def parser_module(monkeypatch):
     constants_mod.OVERWRITE_FIELDS = ()
     constants_mod.OVERWRITE_DEFAULTS = {}
     constants_mod.SYNC_MODE_FIELDS = ()
+    constants_mod.SYNC_JOB_TIMEOUT_DEFAULT = 7200
+    constants_mod.SYNC_JOB_TIMEOUT_MIN = 3600
+    constants_mod.SYNC_JOB_TIMEOUT_MAX = 604800
     monkeypatch.setitem(sys.modules, "netbox_proxbox.constants", constants_mod)
 
     # Stub dcim.models so `from dcim.models import DeviceRole` succeeds —
@@ -871,6 +874,11 @@ def parser_module(monkeypatch):
         "netbox_proxbox.models.plugin_settings",
         plugin_settings_mod,
     )
+
+    validators_mod = types.ModuleType("netbox_proxbox.validators")
+    validators_mod.validate_global_node_device_name_template = lambda value: value
+    validators_mod.validate_node_device_name_template = lambda value: value
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.validators", validators_mod)
 
     pkg = types.ModuleType("netbox_proxbox")
     pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox")]

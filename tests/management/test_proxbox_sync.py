@@ -33,6 +33,7 @@ def proxbox_sync_command(monkeypatch):
     jobs_mod = types.ModuleType("netbox_proxbox.jobs")
     jobs_mod.PROXBOX_SYNC_QUEUE_NAME = "default"
     jobs_mod.PROXBOX_SYNC_JOB_TIMEOUT = 7200
+    jobs_mod.configured_sync_job_timeout = lambda: 7200
 
     enqueue_calls: list[dict] = []
     enqueue_once_calls: list[dict] = []
@@ -43,12 +44,20 @@ def proxbox_sync_command(monkeypatch):
         next_job_pk: int = 42
 
         @classmethod
+        def _next_job(cls):
+            return SimpleNamespace(
+                pk=cls.next_job_pk,
+                job_id="rq-job-42",
+                queue_name="default",
+            )
+
+        @classmethod
         def enqueue(cls, **kwargs):
             cls.last_kwargs = kwargs
             enqueue_calls.append(kwargs)
             if cls.raise_on_enqueue is not None:
                 raise cls.raise_on_enqueue
-            return SimpleNamespace(pk=cls.next_job_pk)
+            return cls._next_job()
 
         @classmethod
         def enqueue_once(cls, **kwargs):
@@ -56,7 +65,7 @@ def proxbox_sync_command(monkeypatch):
             enqueue_once_calls.append(kwargs)
             if cls.raise_on_enqueue is not None:
                 raise cls.raise_on_enqueue
-            return SimpleNamespace(pk=cls.next_job_pk)
+            return cls._next_job()
 
     jobs_mod.ProxboxSyncJob = _ProxboxSyncJob
     monkeypatch.setitem(sys.modules, "netbox_proxbox.jobs", jobs_mod)
@@ -218,9 +227,21 @@ def proxbox_sync_command(monkeypatch):
     # django_rq stub (worker probe)
     django_rq_mod = types.ModuleType("django_rq")
     django_rq_mod.worker_count = 1
+    django_rq_mod.rq_timeout = 7200
+    django_rq_mod.fetch_calls = []
+
+    class _Queue:
+        @property
+        def workers(self):
+            return [object()] * django_rq_mod.worker_count
+
+        @staticmethod
+        def fetch_job(job_id):
+            django_rq_mod.fetch_calls.append(job_id)
+            return SimpleNamespace(timeout=django_rq_mod.rq_timeout)
 
     def _get_queue(_name):
-        return SimpleNamespace(workers=[object()] * django_rq_mod.worker_count)
+        return _Queue()
 
     django_rq_mod.get_queue = _get_queue
     monkeypatch.setitem(sys.modules, "django_rq", django_rq_mod)
@@ -402,6 +423,49 @@ def test_wait_happy_path_returns_on_completion(proxbox_sync_command):
     proxbox_sync_command.job_objects.reset()
     _run(proxbox_sync_command.module, wait=True, timeout=5, poll_interval=0.0)
     assert len(proxbox_sync_command.enqueue_calls) == 1
+
+
+def test_wait_uses_reused_jobs_captured_timeout(monkeypatch, proxbox_sync_command):
+    """The implicit wait deadline follows an enqueue-once job's RQ timeout."""
+    proxbox_sync_command.django_rq_mod.rq_timeout = 14400
+    captured: dict[str, object] = {}
+
+    def capture_wait(self, **kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(
+        proxbox_sync_command.module.Command, "_wait_for_job", capture_wait
+    )
+
+    _run(proxbox_sync_command.module, wait=True, timeout=None, enqueue_once=True)
+
+    assert captured["timeout"] == 14400
+    assert proxbox_sync_command.django_rq_mod.fetch_calls == ["rq-job-42"]
+
+
+def test_wait_falls_back_to_configured_timeout_when_rq_lookup_fails(
+    monkeypatch, proxbox_sync_command
+):
+    """An unavailable RQ record must not prevent waiting for the NetBox job."""
+    proxbox_sync_command.jobs_mod.configured_sync_job_timeout = lambda: 9000
+    captured: dict[str, object] = {}
+
+    def unavailable_queue(_name):
+        raise RuntimeError("Redis unavailable")
+
+    def capture_wait(self, **kwargs):
+        captured.update(kwargs)
+
+    monkeypatch.setattr(
+        proxbox_sync_command.django_rq_mod, "get_queue", unavailable_queue
+    )
+    monkeypatch.setattr(
+        proxbox_sync_command.module.Command, "_wait_for_job", capture_wait
+    )
+
+    _run(proxbox_sync_command.module, wait=True, timeout=None, enqueue_once=True)
+
+    assert captured["timeout"] == 9000
 
 
 def test_wait_failed_status_raises_command_error(proxbox_sync_command):

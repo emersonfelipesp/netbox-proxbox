@@ -33,7 +33,7 @@ This page documents the internal architecture of each of the four Proxbox reposi
 ### Key Classes
 
 `ProxboxSyncJob` (`jobs.py`)
-:   A `JobRunner` subclass that enqueues on NetBox's `default` RQ queue. Its `run()` method calls `run_sync_stream()` to consume the FastAPI SSE endpoint and writes progress to the Job record. Ownership guards prevent concurrent duplicate runs. Default RQ wall-clock timeout: **7200 s**.
+:   A `JobRunner` subclass that enqueues on NetBox's `default` RQ queue. Its `run()` method calls `run_sync_stream()` to consume the FastAPI SSE endpoint and writes progress to the Job record. Ownership guards prevent concurrent duplicate runs. The UI-backed RQ wall-clock timeout defaults to **7200 s** and is captured when the job is enqueued.
 
 `get_fastapi_request_context()` (`services/backend_context.py`)
 :   Resolves the first enabled `FastAPIEndpoint`, builds the HTTP URL and auth headers, and returns a `BackendRequestContext` dataclass used by backend HTTP helpers. Disabled rows return before URL/header construction.

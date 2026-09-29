@@ -40,6 +40,9 @@ interfaces documented in this repository.
 - `netbox_proxbox/jobs.py` and `netbox_proxbox/sync/` own asynchronous sync
   orchestration. NetBox remains the local system of record; Proxmox remains the
   source of truth for reflected infrastructure state.
+- `ProxboxPluginSettings.sync_job_timeout` is the UI-backed RQ wall-clock limit
+  for newly enqueued synchronization jobs. It defaults to 7200 seconds, accepts
+  3600–604800 seconds, and never changes an already-running job's captured timeout.
 - `proxbox_cli/` is a standalone client and must not import Django or NetBox.
 - `docs/` is the source for the MkDocs site; `llms.txt` is committed generated
   documentation and must remain consistent with the source documentation.

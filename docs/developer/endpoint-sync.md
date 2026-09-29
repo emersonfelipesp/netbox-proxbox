@@ -598,7 +598,8 @@ flowchart TD
     Those per-call ceilings are generous by design, which means an estate with many Proxmox
     endpoints and an unresponsive backend would serialize into (endpoints × timeout) seconds
     *before the first stage runs* — the preflight alone could consume the whole
-    `PROXBOX_SYNC_JOB_TIMEOUT`. Two limits in `views/backend_sync.py` bound the loop:
+    configured RQ synchronization job timeout. Two limits in `views/backend_sync.py`
+    bound the loop:
 
     - `PREFLIGHT_ENDPOINT_PUSH_BUDGET` (600 s) is a **soft** budget. Past it the loop skips
       only endpoints whose backend row is already **current** — decided by
@@ -779,8 +780,10 @@ caller's limit. Backend-key verification separately retries HTTP 429, HTTP 503, 
 failures, and timeouts within a 180-second total wait budget; HTTP 401/403 and invalid-key
 failures remain immediately fatal.
 
-Every staged run has one monotonic deadline derived from the active RQ job timeout (7200
-seconds by default) and reserves the final 120 seconds for checkpointing and result persistence.
+Every staged run has one monotonic deadline derived from the active RQ job timeout
+(`sync_job_timeout`, 7200 seconds by default) and reserves the final 120 seconds for
+checkpointing and result persistence. The timeout is captured when the job is enqueued,
+so editing the setting cannot move the deadline of an already-running job.
 Backend readiness probes, SSE read timeouts, retry sleeps, and retry decisions consume only the
 remaining executable budget. If it expires, the current endpoint and every endpoint not yet
 attempted receive an explicit `Job deadline reached` failure record; the runner returns normally

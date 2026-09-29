@@ -132,3 +132,7 @@ RPC_FIELD_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
 RPC_FIELDS: tuple[str, ...] = tuple(
     field for _, fields in RPC_FIELD_GROUPS for field in fields
 )
+
+SYNC_JOB_TIMEOUT_DEFAULT = 7200
+SYNC_JOB_TIMEOUT_MIN = 3600
+SYNC_JOB_TIMEOUT_MAX = 604800

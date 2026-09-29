@@ -76,6 +76,7 @@ curl -X PATCH \
   "backup_batch_size": 5,
   "backup_batch_delay_ms": 200,
   "vm_sync_max_concurrency": 4,
+  "sync_job_timeout": 7200,
   "reconciliation_engine": "python",
   "reconciliation_compare_strict": false,
   "ceph_task_timeout": 300.0,
@@ -125,6 +126,7 @@ These fields are set by the system and cannot be modified via PATCH:
 |---|---|---|
 | `proxbox_fetch_max_concurrency` | integer | Maximum number of concurrent Proxmox API fetch operations |
 | `vm_sync_max_concurrency` | integer | Maximum number of VMs synced in parallel per sync run |
+| `sync_job_timeout` | integer | RQ wall-clock limit for a complete synchronization job, from `3600` through `604800` seconds. Default `7200`; changes apply only to newly enqueued jobs. |
 | `reconciliation_engine` | string | VM operation-queue engine used by proxbox-api: `python`, `compare`, or `rust` |
 | `bulk_batch_size` | integer | Number of objects per batch in bulk NetBox write operations |
 | `bulk_batch_delay_ms` | integer | Delay in milliseconds between bulk write batches |

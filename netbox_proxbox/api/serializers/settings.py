@@ -152,6 +152,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "backup_batch_size",
             "backup_batch_delay_ms",
             "vm_sync_max_concurrency",
+            "sync_job_timeout",
             "interface_batch_size",
             "interface_batch_delay_ms",
             "reconciliation_engine",

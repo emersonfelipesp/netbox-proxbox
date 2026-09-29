@@ -108,7 +108,7 @@ plugin installed, and the management command must run inside that one.
 | Flag | Default | Effect |
 |---|---|---|
 | `--wait` | off | Block until the job is in a terminal state. |
-| `--timeout SECONDS` | `PROXBOX_SYNC_JOB_TIMEOUT` (7200) | Max wait when `--wait` is set. |
+| `--timeout SECONDS` | Enqueued RQ job's captured timeout, then plugin setting `sync_job_timeout` (`7200`) | Max wait when `--wait` is set. An explicit value changes only the CLI wait loop; `--enqueue-once` resolves a reused job through its NetBox queue name and RQ job ID. If Redis no longer exposes that job, the command safely falls back to the current plugin setting. |
 | `--poll-interval SECONDS` | `2.0` | Seconds between status polls. |
 | `--worker-grace SECONDS` | `30.0` | Fast-fail when no worker takes the job. |
 | `--user USERNAME` | oldest active superuser | Owner attribution for the enqueued job. |
