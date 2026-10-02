@@ -1,5 +1,5 @@
 colorama==0.4.6
-Django==6.1
+Django==6.1.1
 django-cors-headers==4.9.0
 django-debug-toolbar==7.1.1
 django-filter==26.1
@@ -36,7 +36,10 @@ redis==7.4.1
 requests==2.34.2
 rq==2.12.0
 social-auth-app-django==6.0.1
+oauthlib==4.0.0
+PyJWT==2.15.0
 social-auth-core==5.1.0
+urllib3==2.8.0
 sorl-thumbnail==13.1.0
 strawberry-graphql==0.327.1
 strawberry-graphql-django==0.88.0

@@ -5,6 +5,7 @@ packaging>=23.0
 cryptography>=50.0.0
 pydantic>=2.13.3,<2.14.0
 requests>=2.33.0
+urllib3>=2.8.0
 websockets>=16.0
 PyYAML>=6.0.3
 pytest>=9.0.2

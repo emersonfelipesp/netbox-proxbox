@@ -677,9 +677,9 @@ detect-installer==0.2.1 \
     --hash=sha256:85f889d4d19c1caf5bef89ef389eb920cd8c6c2a868e1eeceec24527b93021e7 \
     --hash=sha256:87e2ce7d05cb108b178f8e45bb80d3d88c0cb4b397983345c18ad6562e02e620
     # via fastapi-cloud-cli
-django==6.1 \
-    --hash=sha256:6c132cd980c9392b06807d4ca52d72530d631dc65a85d9dacede00a780cefbbe \
-    --hash=sha256:86a2aacd59b817e4d6ac2ebfe22356c58f66f7b24e503f71b7c2fead677ee48b
+django==6.1.1 \
+    --hash=sha256:585fb82bf15053c42cf52e67c2f1b54a032dca384759315fd6678ab1870d1d72 \
+    --hash=sha256:7ab93536d8e677aa14554c56426290c69480bf2ee68d7513d4a22f57d6bfeb84
     # via
     #   -r ci/netbox-requirements/v4.7.0-py312-linux-x86_64.in
     #   django-cors-headers
@@ -1636,10 +1636,11 @@ nh3==0.3.7 \
     --hash=sha256:f266d3f1b3647449923a8e406524632220dd5d8b647078dfe45b885d33d10479 \
     --hash=sha256:fd4a70efb45d5372174f718878eb7a35c12677626a63b2f103b23b833457dcac
     # via -r ci/netbox-requirements/v4.7.0-py312-linux-x86_64.in
-oauthlib==3.3.1 \
-    --hash=sha256:0f0f8aa759826a193cf66c12ea1af1637f87b9b4622d46e866952bb022e538c9 \
-    --hash=sha256:88119c938d2b8fb88561af5f6ee0eec8cc8d552b7bb1f712743136eb7523b7a1
+oauthlib==4.0.0 \
+    --hash=sha256:624c28c13a0a59cabf9747dfa52af63be3e512a7f2714df16e91b5b3a145e6cd \
+    --hash=sha256:efb274799819440f95b4ab3b818869f1ce9ae26c5beacba0201d1a1b76b54f86
     # via
+    #   -r ci/netbox-requirements/v4.7.0-py312-linux-x86_64.in
     #   requests-oauthlib
     #   social-auth-core
 packaging==26.3 \
@@ -2081,10 +2082,12 @@ pygments==2.21.0 \
     #   pytest
     #   rich
     #   zensical
-pyjwt==2.14.0 \
-    --hash=sha256:77283c83fb56ecf566a886c757a714bc83668e38156de2cce8263302f42e0b86 \
-    --hash=sha256:ad0cef71c756a56e74863c2919cf0985f72decbcfcb550ee2f422e7c62b5eedc
-    # via social-auth-core
+pyjwt==2.15.0 \
+    --hash=sha256:7a3742debf6b879e912dbb9819ceec1594be812452b78c5f2e2dfc56564954f8 \
+    --hash=sha256:b11c5f9791d7bf51c2b39a81ed669f6b2dbbd669df2942f6c60167e9e3d1abe4
+    # via
+    #   -r ci/netbox-requirements/v4.7.0-py312-linux-x86_64.in
+    #   social-auth-core
 pymdown-extensions==12.0.1 \
     --hash=sha256:15d629e8035892b93d788a8424ccea754d4aa3cec247a64cbfe7b15089c9ad7f \
     --hash=sha256:88fe2c97fb9153b9f2cc1da59f1d7c7cb74971110daf33cccb2a5514e0f7e970
@@ -2727,6 +2730,8 @@ urllib3==2.8.0 \
     --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3 \
     --hash=sha256:63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63
     # via
+    #   -r ci/netbox-requirements/netbox-proxbox-test-py312.in
+    #   -r ci/netbox-requirements/v4.7.0-py312-linux-x86_64.in
     #   requests
     #   sentry-sdk
 uvicorn==0.53.0 \

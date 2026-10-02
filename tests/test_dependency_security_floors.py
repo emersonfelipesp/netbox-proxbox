@@ -133,6 +133,31 @@ SECURITY_FLOORS: dict[str, SecurityFloor] = {
         advisories=("GHSA-xvg9-69gf-fjrf",),
         declared_in=(DEV_GROUP, DOCS_REQUIREMENTS),
     ),
+    "virtualenv": SecurityFloor(
+        name="virtualenv",
+        floor="21.7.13",
+        # The activation-script issue covers <= 21.7.12; the seed-wheel and
+        # prompt-injection advisories cover earlier subsets of the same range.
+        affected=("20.36.1", "21.7.10", "21.7.11", "21.7.12"),
+        advisories=(
+            "GHSA-94p9-xgh2-xp45",
+            "GHSA-9h9j-4vrj-gf7g",
+            "GHSA-p58f-9548-mpm2",
+            "GHSA-x78j-v8h9-3j2q",
+        ),
+        declared_in=(DEV_GROUP,),
+    ),
+    "urllib3": SecurityFloor(
+        name="urllib3",
+        floor="2.8.0",
+        affected=("1.26.20", "2.6.2", "2.7.0"),
+        advisories=(
+            "GHSA-8988-9cw3-xx77",
+            "GHSA-gh4c-6fx4-qh6g",
+            "GHSA-vxq7-64xx-v4gw",
+        ),
+        declared_in=(RUNTIME_DEPENDENCIES,),
+    ),
 }
 
 
@@ -143,10 +168,12 @@ SECURITY_FLOORS: dict[str, SecurityFloor] = {
 _COMMON_NETBOX_MATRIX_FLOORS = {
     "djangorestframework": "3.17.2",
     "mkdocs-material": "9.7.7",
+    "oauthlib": "4.0.0",
     "pillow": "12.3.0",
-    "pyjwt": "2.13.0",
+    "pyjwt": "2.15.0",
     "strawberry-graphql": "0.315.7",
     "tablib": "3.10.0",
+    "urllib3": "2.8.0",
 }
 NETBOX_MATRIX_SECURITY_FLOORS = {
     "v4.5.8-py312-linux-x86_64.in": {
@@ -165,31 +192,63 @@ NETBOX_MATRIX_SECURITY_FLOORS = {
         "django": "6.0.8",
         **_COMMON_NETBOX_MATRIX_FLOORS,
     },
+    "v4.7.0-beta2-py312-linux-x86_64.in": {
+        "django": "6.1.1",
+        **_COMMON_NETBOX_MATRIX_FLOORS,
+    },
+    "v4.7.0-py312-linux-x86_64.in": {
+        "django": "6.1.1",
+        **_COMMON_NETBOX_MATRIX_FLOORS,
+    },
 }
 NETBOX_MATRIX_AUTH_CHAINS = {
     "v4.5.8-py312-linux-x86_64.in": {
-        "pyjwt": "2.13.0",
-        "requests": "2.33.1",
-        "social-auth-app-django": "5.7.0",
-        "social-auth-core": "4.8.5",
+        "oauthlib": "4.0.0",
+        "pyjwt": "2.15.0",
+        "requests": "2.34.2",
+        "social-auth-app-django": "6.0.1",
+        "social-auth-core": "5.1.0",
+        "urllib3": "2.8.0",
     },
     "v4.5.10-py312-linux-x86_64.in": {
-        "pyjwt": "2.13.0",
+        "oauthlib": "4.0.0",
+        "pyjwt": "2.15.0",
         "requests": "2.34.2",
         "social-auth-app-django": "6.0.1",
         "social-auth-core": "5.1.0",
+        "urllib3": "2.8.0",
     },
     "v4.6.0-py312-linux-x86_64.in": {
-        "pyjwt": "2.13.0",
+        "oauthlib": "4.0.0",
+        "pyjwt": "2.15.0",
         "requests": "2.34.2",
         "social-auth-app-django": "6.0.1",
         "social-auth-core": "5.1.0",
+        "urllib3": "2.8.0",
     },
     "v4.6.6-py312-linux-x86_64.in": {
-        "pyjwt": "2.13.0",
+        "oauthlib": "4.0.0",
+        "pyjwt": "2.15.0",
         "requests": "2.34.2",
         "social-auth-app-django": "6.0.1",
         "social-auth-core": "5.1.0",
+        "urllib3": "2.8.0",
+    },
+    "v4.7.0-beta2-py312-linux-x86_64.in": {
+        "oauthlib": "4.0.0",
+        "pyjwt": "2.15.0",
+        "requests": "2.34.2",
+        "social-auth-app-django": "6.0.1",
+        "social-auth-core": "5.1.0",
+        "urllib3": "2.8.0",
+    },
+    "v4.7.0-py312-linux-x86_64.in": {
+        "oauthlib": "4.0.0",
+        "pyjwt": "2.15.0",
+        "requests": "2.34.2",
+        "social-auth-app-django": "6.0.1",
+        "social-auth-core": "5.1.0",
+        "urllib3": "2.8.0",
     },
 }
 NETBOX_MATRIX_SECURITY_ADVISORIES = {
@@ -209,6 +268,7 @@ NETBOX_MATRIX_SECURITY_ADVISORIES = {
     ),
     "djangorestframework": ("GHSA-2m8g-3cmr-wg3w", "GHSA-g47c-3xmw-q6m2"),
     "mkdocs-material": ("GHSA-xvg9-69gf-fjrf",),
+    "oauthlib": ("GHSA-hj66-6f7g-4r5v", "GHSA-xpv3-w29h-x7cv"),
     "pillow": (
         "GHSA-45hq-cxwh-f6vc",
         "GHSA-4x4j-2g7c-83w6",
@@ -225,11 +285,19 @@ NETBOX_MATRIX_SECURITY_ADVISORIES = {
         "GHSA-xj96-63gp-2gmr",
     ),
     "pyjwt": (
-        "GHSA-993g-76c3-p5m4",
-        "GHSA-fhv5-28vv-h8m8",
-        "GHSA-jq35-7prp-9v3f",
-        "GHSA-w7vc-732c-9m39",
-        "GHSA-xgmm-8j9v-c9wx",
+        "GHSA-2gx3-rcp4-g85q",
+        "GHSA-42vr-xj54-vc7v",
+        "GHSA-8wjv-2p76-3863",
+        "GHSA-9j54-fg26-wv3r",
+        "GHSA-9v7f-9g4p-ffgj",
+        "GHSA-ffc3-869f-jxw9",
+        "GHSA-gvp8-978c-rx2q",
+        "GHSA-hxm8-2xgr-2p9m",
+        "GHSA-jwrc-g2q2-pq5p",
+        "GHSA-p4g4-x82p-q773",
+        "GHSA-r6x4-923q-g947",
+        "GHSA-w2cx-738m-mc7w",
+        "GHSA-w6j9-cwv2-h6wq",
     ),
     "strawberry-graphql": (
         "GHSA-fr49-mhgj-crfc",
@@ -237,6 +305,11 @@ NETBOX_MATRIX_SECURITY_ADVISORIES = {
         "GHSA-x97m-qp5c-w9xj",
     ),
     "tablib": ("GHSA-gqgw-jghv-mxwx",),
+    "urllib3": (
+        "GHSA-8988-9cw3-xx77",
+        "GHSA-gh4c-6fx4-qh6g",
+        "GHSA-vxq7-64xx-v4gw",
+    ),
 }
 
 
