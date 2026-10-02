@@ -42,6 +42,10 @@ facts that an agent must have even when `@CLAUDE.md` expansion is unavailable:
   pool, keep successful badge state independent from card errors, and render
   backend capacity responses as throttled rather than failed. Treat the Proxmox
   push cache as a hint and verify the cached backend endpoint identity before use.
+- Keep the cluster Virtual Machines tab's selected-row Delete action routed to
+  NetBox's core `VirtualMachine` bulk-delete endpoint. Never route selected VM
+  IDs to the parent cluster delete action; preserve the version-checked action
+  adapter and its real-Django regression.
 - Update MkDocs sources, this wrapper, `CLAUDE.md`, and generated `llms.txt`
   together when architecture or operator behavior changes.
 - Run focused tests, `mkdocs build --strict`, the public-boundary scanner, and

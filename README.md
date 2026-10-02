@@ -557,7 +557,7 @@ Choose the installation path that matches your NetBox deployment:
 
 - **Standard NetBox install (venv on host):** follow steps below.
 - **NetBox Docker install (`netbox-docker`):** use the Docker-specific workflow in [Installing the Plugin in Docker-Based NetBox Deployments](./docs/installation/3-installing-plugin-docker.md).
-- **Disposable Proxmox VE test LXC:** use the [all-in-one OCI testing appliance](./docs/installation/proxmox-oci-appliance.md), which bundles NetBox, the latest stable PyPI plugin, proxbox-api, PostgreSQL, and Redis.
+- **Disposable Proxmox VE test LXC:** use the [validated all-in-one OCI testing appliance](./docs/installation/proxmox-oci-appliance.md), which bundles NetBox, the latest stable PyPI plugin, proxbox-api, PostgreSQL, and Redis and includes an immutable reference for reproducible Proxmox pulls.
 
 1. **Install the plugin** into your NetBox virtual environment (host/venv deployment):
 

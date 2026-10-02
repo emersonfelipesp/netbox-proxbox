@@ -19,6 +19,22 @@ In the storage content view, select **Pull from OCI Registry** and use:
 docker.io/emersonfelipesp/netbox-proxbox:oci
 ```
 
+The moving `oci` tag is convenient for testing the newest published appliance.
+For reproducible testing of the NetBox Proxbox 0.0.27 release, use the validated
+immutable reference:
+
+```text
+docker.io/emersonfelipesp/netbox-proxbox:netbox-4.7.0-proxbox-0.0.27-api-0.0.23.post2-e5e8500524f71ffd2ec3a2577ae6380defd40313
+```
+
+That reference and the `oci` tag resolve to OCI index digest
+`sha256:b381a746264ecb0cb4ff8e94e55f8a776c887b08bdeb63fef6e3187efb5141da`.
+The index publishes `linux/amd64` and `linux/arm64` images. The immutable image
+was successfully validated with the Proxmox VE **Pull from OCI Registry**
+workflow and stored as an LXC template artifact. This validation proves the
+registry-to-Proxmox transfer path; it does not change the appliance's
+testing-only support boundary.
+
 Create an LXC from the downloaded artifact. The image provides `/sbin/init`, so
 the default OCI entrypoint selected by Proxmox starts the complete appliance.
 Map or allow TCP `8080` for NetBox. If direct backend access is required, set

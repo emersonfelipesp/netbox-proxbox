@@ -458,6 +458,7 @@ jobs:
             tests/test_node_device_name_template_django.py
             tests/test_vm_intent_django.py
             tests/test_soft_deleted_vm_purge_django.py
+            tests/test_bulk_vm_delete_django.py
           )
           openbao_tests=(
             tests/test_openbao_assignments_django.py

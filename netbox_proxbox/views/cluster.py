@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+from django.core.exceptions import ImproperlyConfigured
 from django.http import HttpRequest
-from netbox.object_actions import BulkExport, BulkDelete
+from netbox.object_actions import BulkDelete, BulkExport, DeleteObject
 from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 from virtualization.models import Cluster
+from virtualization.views import ClusterVirtualMachinesView
 
 from netbox_proxbox.filtersets import ProxmoxStorageFilterSet
 from netbox_proxbox.forms import ProxmoxStorageFilterForm
@@ -18,7 +20,34 @@ from netbox_proxbox.views.mixins import TableConfigOverrideMixin
 __all__ = (
     "ClusterStoragesTabView",
     "ClusterSummaryTabView",
+    "enable_cluster_vm_bulk_delete",
 )
+
+
+def enable_cluster_vm_bulk_delete() -> None:
+    """Expose VM bulk deletion on NetBox's cluster child-object tab.
+
+    NetBox 4.5 through 4.7 declare the cluster VM tab's actions as
+    ``(EditObject, DeleteObject, BulkEdit)``. ``DeleteObject`` is a row action,
+    not a multi-object action, so the selected-row toolbar renders only bulk
+    edit. Replace that misplaced action with ``BulkDelete`` while preserving
+    NetBox's core bulk-delete view, permissions, confirmation, changelog, and
+    protected-object handling.
+    """
+    actions = ClusterVirtualMachinesView.actions
+    if BulkDelete in actions:
+        return
+    if DeleteObject not in actions:
+        raise ImproperlyConfigured(
+            "netbox-proxbox cannot safely enable cluster VM bulk deletion: "
+            "NetBox's ClusterVirtualMachinesView action contract changed."
+        )
+    ClusterVirtualMachinesView.actions = tuple(
+        BulkDelete if action is DeleteObject else action for action in actions
+    )
+
+
+enable_cluster_vm_bulk_delete()
 
 
 @register_model_view(Cluster, "proxbox-storages", path="storages")

@@ -98,6 +98,10 @@ field creation route.
   soft-deleted VM review, and standalone VM console sessions. Cluster and node
   detail routes are mounted through NetBox model URLs so their Sync Now actions
   resolve correctly.
+  The core cluster Virtual Machines child tab must expose `BulkDelete`, not the
+  misplaced single-object `DeleteObject` declared by NetBox 4.5–4.7. Keep the
+  compatibility adapter version-checked and retain the core VM bulk-delete
+  permission, confirmation, changelog, transaction, and protected-object path.
   Data Protection scheduled events use the source endpoint's best-effort
   discovered IANA timezone and convert exact wall-clock occurrences to
   NetBox's active timezone before day bucketing. Fail-open cases remain visibly
@@ -259,6 +263,10 @@ difference and must be verified in the affected and adjacent matrix lanes.
 - Configuration ownership stays local: Proxbox settings own plugin behavior,
   NetBox owns permissions and inventory, and companion plugins own their own
   backend selection and credentials.
+- Keep cluster-tab selected-row deletion routed to
+  `virtualization:virtualmachine_bulk_delete`. The cluster page's top-level
+  Delete action targets the parent cluster and must never be presented as a VM
+  bulk action. Preserve this distinction with the real-Django regression.
 
 ## Change workflow
 
