@@ -19,7 +19,10 @@ netbox-proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data 
   Invalid DNS output and names longer than 64 characters are rejected with the
   offending inventory context, while empty inventories retain representative-
   sample validation.
-- **Virtual Machines** — VM status, resources, and configuration
+- **Virtual Machines** — VM status, resources, and configuration. The NetBox
+  cluster Virtual Machines tab exposes selected-row deletion through the core
+  VM bulk-delete endpoint; the cluster page's top-level Delete action remains
+  parent-cluster deletion and correctly refuses while VMs depend on it.
 - **Containers (LXC)** — Container details and settings
 - **VM Snapshots** — Point-in-time snapshots for recovery
 - **VM Backups** — Backup jobs and restore points

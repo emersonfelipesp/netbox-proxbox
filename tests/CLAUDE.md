@@ -89,6 +89,12 @@ endpoints without requiring an OpenBao deployment for tenant behavior.
   permission, and no-script source contracts. Its real-NetBox complement,
   `test_data_protection_views_django.py`, renders all four list pages and the
   combined page with real model rows and calendar navigation.
+- `test_bulk_vm_delete_django.py` renders the core cluster Virtual Machines tab,
+  requires its selected-row delete control to target the core VM bulk-delete
+  endpoint, and submits a real multi-VM deletion while proving same-cluster and
+  other-cluster rows remain. This guards the compatibility adapter that replaces
+  NetBox 4.5–4.7's misplaced single-object `DeleteObject` action with
+  `BulkDelete`; do not weaken it to a source-string assertion.
 - `conftest.py`: shared fixtures and compatibility stubs for Django/NetBox/requests so tests can run without a full NetBox install. Includes `StreamingHttpResponse` stubs and mock request helpers.
 - `django_support.py`: shared real-NetBox helpers. `make_user()` creates the
   user through NetBox's restricted manager before persisting supported
