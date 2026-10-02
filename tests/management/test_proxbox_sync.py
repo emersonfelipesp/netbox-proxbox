@@ -15,6 +15,57 @@ import pytest
 from django.core.management.base import CommandError
 
 
+def _install_django_rq_stub(monkeypatch):
+    """Install the worker-probe stub and return its mutable module state."""
+    django_rq_mod = types.ModuleType("django_rq")
+    django_rq_mod.worker_count = 1
+    django_rq_mod.rq_timeout = 7200
+    django_rq_mod.fetch_calls = []
+
+    class _Queue:
+        @property
+        def workers(self):
+            return [object()] * django_rq_mod.worker_count
+
+        @staticmethod
+        def fetch_job(job_id):
+            django_rq_mod.fetch_calls.append(job_id)
+            return SimpleNamespace(timeout=django_rq_mod.rq_timeout)
+
+    def _get_queue(_name):
+        return _Queue()
+
+    django_rq_mod.get_queue = _get_queue
+    monkeypatch.setitem(sys.modules, "django_rq", django_rq_mod)
+    return django_rq_mod
+
+
+def _install_branch_lifecycle_stub(monkeypatch):
+    """Install the branch-isolation stub and return its mutable module state."""
+    branch_lifecycle_mod = types.ModuleType("netbox_proxbox.services.branch_lifecycle")
+    branch_lifecycle_mod.BranchingUnavailableError = type(
+        "BranchingUnavailableError", (RuntimeError,), {}
+    )
+    branch_lifecycle_mod.error = None
+
+    def _require_branch_isolation_or_raise():
+        if branch_lifecycle_mod.error is not None:
+            raise branch_lifecycle_mod.BranchingUnavailableError(
+                branch_lifecycle_mod.error
+            )
+        return SimpleNamespace(state="disabled")
+
+    branch_lifecycle_mod.require_branch_isolation_or_raise = (
+        _require_branch_isolation_or_raise
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.branch_lifecycle",
+        branch_lifecycle_mod,
+    )
+    return branch_lifecycle_mod
+
+
 @pytest.fixture
 def proxbox_sync_command(monkeypatch):
     """Load proxbox_sync.py with stubs for plugin internals.
@@ -114,28 +165,7 @@ def proxbox_sync_command(monkeypatch):
     models_mod.ProxmoxEndpoint = _ProxmoxEndpoint
     monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_mod)
 
-    # netbox_proxbox.services.branch_lifecycle
-    branch_lifecycle_mod = types.ModuleType("netbox_proxbox.services.branch_lifecycle")
-    branch_lifecycle_mod.BranchingUnavailableError = type(
-        "BranchingUnavailableError", (RuntimeError,), {}
-    )
-    branch_lifecycle_mod.error = None
-
-    def _require_branch_isolation_or_raise():
-        if branch_lifecycle_mod.error is not None:
-            raise branch_lifecycle_mod.BranchingUnavailableError(
-                branch_lifecycle_mod.error
-            )
-        return SimpleNamespace(state="disabled")
-
-    branch_lifecycle_mod.require_branch_isolation_or_raise = (
-        _require_branch_isolation_or_raise
-    )
-    monkeypatch.setitem(
-        sys.modules,
-        "netbox_proxbox.services.branch_lifecycle",
-        branch_lifecycle_mod,
-    )
+    branch_lifecycle_mod = _install_branch_lifecycle_stub(monkeypatch)
 
     # netbox_proxbox.services.backend_auth
     backend_auth_mod = types.ModuleType("netbox_proxbox.services.backend_auth")
@@ -224,27 +254,7 @@ def proxbox_sync_command(monkeypatch):
         "django.contrib.auth.get_user_model", _get_user_model, raising=True
     )
 
-    # django_rq stub (worker probe)
-    django_rq_mod = types.ModuleType("django_rq")
-    django_rq_mod.worker_count = 1
-    django_rq_mod.rq_timeout = 7200
-    django_rq_mod.fetch_calls = []
-
-    class _Queue:
-        @property
-        def workers(self):
-            return [object()] * django_rq_mod.worker_count
-
-        @staticmethod
-        def fetch_job(job_id):
-            django_rq_mod.fetch_calls.append(job_id)
-            return SimpleNamespace(timeout=django_rq_mod.rq_timeout)
-
-    def _get_queue(_name):
-        return _Queue()
-
-    django_rq_mod.get_queue = _get_queue
-    monkeypatch.setitem(sys.modules, "django_rq", django_rq_mod)
+    django_rq_mod = _install_django_rq_stub(monkeypatch)
 
     # Load the command module fresh
     root = Path(__file__).resolve().parents[2]

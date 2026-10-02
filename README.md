@@ -244,12 +244,12 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
-## What's New in v0.0.27
+## What's New in v0.0.27.post1
 
-Current source pairing: netbox-proxbox 0.0.27 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This is the current sibling-source development stack, not a rewrite of historical release compatibility. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.27.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The current released runtime pairing for this release line is
-`proxbox-api 0.0.23.post2`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`.
+`proxbox-api 0.0.23.post3`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`.
 
 RC15 paired with `proxbox-api 0.0.23.post1` and failed the real-stack Page
 Coverage gate because the expected backup inventory record was missing. RC16
@@ -315,7 +315,7 @@ installs that dependency before selection.
 - **Actionable console recovery.** Console failures now distinguish a healthy backend API from missing or invalid synchronized NetBox endpoint and node relations, provide stable diagnostic codes and exact remedies, and offer the existing full synchronization repair only to authorized operators with an explicit estate-wide scope warning.
 - **Feature retention.** Retains the browser-console handoff, Proxmox metrics, and human-only soft-deleted VM purge surface from earlier `0.0.26.post` releases.
 
-Full notes: [Release Notes - v0.0.27](docs/release-notes/version-0.0.27.md).
+Full notes: [Release Notes - v0.0.27.post1](docs/release-notes/version-0.0.27.post1.md).
 
 ## What's New in v0.0.26.post2
 
@@ -439,6 +439,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| 4.5.8-4.7.0 GA | v0.0.27.post1 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc18 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc17 | v0.0.23.post2 | v0.0.13 | v0.0.15 |

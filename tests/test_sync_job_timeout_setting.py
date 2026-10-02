@@ -27,7 +27,7 @@ def test_sync_job_timeout_is_wired_through_settings_boundaries():
     serializer = _read("netbox_proxbox/api/serializers/settings.py")
     template = _read("netbox_proxbox/templates/netbox_proxbox/settings.html")
     migration = _read(
-        "netbox_proxbox/migrations/0105_proxboxpluginsettings_sync_job_timeout.py"
+        "netbox_proxbox/migrations/0103_custom_fields_request_delay_help_text.py"
     )
 
     assert "sync_job_timeout = models.PositiveIntegerField(" in model
@@ -38,7 +38,7 @@ def test_sync_job_timeout_is_wired_through_settings_boundaries():
     assert "max_value=SYNC_JOB_TIMEOUT_MAX" in form
     assert '"sync_job_timeout"' in serializer
     assert "{% render_field form.sync_job_timeout %}" in template
-    assert 'name="sync_job_timeout"' in migration
+    assert '"sync_job_timeout",' in migration
     assert "default=7200" in migration
 
 

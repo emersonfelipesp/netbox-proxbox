@@ -77,6 +77,9 @@ RELEASE_NOTES_026_POST6_PATH = (
 RELEASE_NOTES_026_POST7_PATH = (
     REPO_ROOT / "docs" / "release-notes" / "version-0.0.27.md"
 )
+RELEASE_NOTES_027_POST1_PATH = (
+    REPO_ROOT / "docs" / "release-notes" / "version-0.0.27.post1.md"
+)
 E2E_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "e2e-docker.yml"
 PUBLISH_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "publish-testpypi.yml"
 NIGHTLY_WORKFLOW_PATH = REPO_ROOT / ".github" / "workflows" / "nightly-contracts.yml"
@@ -101,16 +104,16 @@ CERTIFICATION_PATH = REPO_ROOT / "CERTIFICATION.md"
 DOCS_CERTIFICATION_PATH = REPO_ROOT / "docs" / "certification.md"
 APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
-CURRENT_PLUGIN_VERSION = "0.0.27"
-CURRENT_RELEASE_VERSION = "0.0.27"
-CURRENT_PACKAGE_VERSION = "0.0.27"
-CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.23.post2"
+CURRENT_PLUGIN_VERSION = "0.0.27.post1"
+CURRENT_RELEASE_VERSION = "0.0.27.post1"
+CURRENT_PACKAGE_VERSION = "0.0.27.post1"
+CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.23.post3"
 CURRENT_PAIRING_LINE = (
-    "Current backend-runtime pairing: netbox-proxbox 0.0.27 <-> proxbox-api "
-    "0.0.23.post2 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST "
+    "Current backend-runtime pairing: netbox-proxbox 0.0.27.post1 <-> proxbox-api "
+    "0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST "
     "dependency only and does not provide the semantic MCP bridge."
 )
-PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.23.post2"
+PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.23.post3"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
 # Ceiling of the backward-compatible stable tier, including NetBox 4.7 GA.
 CURRENT_NETBOX_STABLE_MAX_VERSION = "4.7.0"
@@ -267,7 +270,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
 )
 PREVIOUS_PLUGIN_VERSION = "0.0.22"
 PREVIOUS_PROXBOX_API_VERSION = "0.0.19.post5"
-CURRENT_RELEASE_NOTES_PATH = RELEASE_NOTES_026_POST7_PATH
+CURRENT_RELEASE_NOTES_PATH = RELEASE_NOTES_027_POST1_PATH
 
 
 def _class_constants(class_name: str) -> dict[str, str]:
@@ -1212,7 +1215,7 @@ def _assert_release_workflow_e2e_counts(publish_workflow: str) -> None:
 def test_release_workflow_uses_matching_package_indexes_for_e2e() -> None:
     # The release workflow pairs each E2E gate with the same package index the
     # plugin is being validated against: the TestPyPI plugin candidate uses the
-    # stable proxbox-api from PyPI because proxbox-api 0.0.23.post2 is not published
+    # stable proxbox-api from PyPI because proxbox-api 0.0.23.post3 is not published
     # on TestPyPI. PyPI candidate and final gates use that same PyPI source.
     # `dependency_mode: dev` clones
     # proxbox-api main HEAD and must not appear here — main may sit on a
@@ -1231,12 +1234,18 @@ def test_release_workflow_uses_matching_package_indexes_for_e2e() -> None:
 
 def test_release_workflow_defaults_to_current_proxbox_api() -> None:
     publish_workflow = PUBLISH_WORKFLOW_PATH.read_text(encoding="utf-8")
-    assert "vars.PROXBOX_API_RELEASE_VERSION || '0.0.23.post2'" in publish_workflow
     assert (
-        "vars.PROXBOX_API_PYPI_VERSION || vars.PROXBOX_API_RELEASE_VERSION || '0.0.23.post2'"
+        f"vars.PROXBOX_API_RELEASE_VERSION || '{PROXBOX_API_WORKFLOW_DEFAULT_VERSION}'"
         in publish_workflow
     )
-    assert "PROXBOX_API_REQUIRED_DEFAULT_VERSION: 0.0.23.post2" in publish_workflow
+    assert (
+        f"vars.PROXBOX_API_PYPI_VERSION || vars.PROXBOX_API_RELEASE_VERSION || '{PROXBOX_API_WORKFLOW_DEFAULT_VERSION}'"
+        in publish_workflow
+    )
+    assert (
+        f"PROXBOX_API_REQUIRED_DEFAULT_VERSION: {PROXBOX_API_WORKFLOW_DEFAULT_VERSION}"
+        in publish_workflow
+    )
     assert (
         "from scripts.e2e_backend_selection import resolve_release_version"
         in publish_workflow

@@ -76,7 +76,7 @@ def validate_build_source(*, source: Path, package: str, version: str) -> None:
     expected_hatch_build = {
         "targets": {
             "wheel": {"packages": ["netbox_proxbox", "proxbox_cli"]},
-            "sdist": {"exclude": ["/.ci-site"]},
+            "sdist": {"exclude": ["/.ci-site", "/site"]},
         }
     }
     expected_project_fields = {

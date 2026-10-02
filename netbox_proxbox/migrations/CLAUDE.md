@@ -411,14 +411,15 @@ fake historical models for both generations.
   `add_field_idempotent`. It performs no data or provider migration; the
   existing `credential_reference_id`, `sshkeys`, and `sshkeys_enc` values are
   preserved unchanged.
-- Migration `0103_custom_fields_request_delay_help_text` only rewrites the
-  help text of `ProxboxPluginSettings.custom_fields_request_delay` to mark it
-  compatibility-only; no data change.
-- Migration `0104_node_device_name_template` adds the global
+- Migration `0103_custom_fields_request_delay_help_text` rewrites the help text
+  of `ProxboxPluginSettings.custom_fields_request_delay` to mark it
+  compatibility-only and adds the global
   `ProxboxPluginSettings.node_device_name_template` (default `{node}`) and the
   per-endpoint blank-means-inherit `ProxmoxEndpoint.node_device_name_template`.
-  No data migration; existing devices keep their names until the next sync
-  applies a non-default template.
+  It also adds `ProxboxPluginSettings.sync_job_timeout`, defaulting to 7,200
+  seconds and bounded to 3,600–604,800 seconds. No data migration; existing
+  devices keep their names until the next sync applies a non-default template,
+  and existing installations retain the historical two-hour job limit.
 
 ## Links
 
