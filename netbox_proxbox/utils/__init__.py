@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import subprocess
 from typing import TYPE_CHECKING
 from urllib.parse import urlsplit
 
@@ -335,31 +333,6 @@ def get_fastapi_url(endpoint: FastAPIUrlSource) -> dict[str, object]:
             server_websocket_url = f"{websocket_scheme}://{parsed_http.netloc}/ws"
     except (BackendKeyAdoptionError, TypeError, ValueError):
         return {}
-
-    if (
-        use_https
-        and verify_ssl
-        and any(
-            host in http_url
-            for host in ("proxbox.backend.local", "localhost", "127.0.0.1")
-        )
-    ):
-        try:
-            ca_root_folder = subprocess.run(
-                ["mkcert", "-CAROOT"],
-                capture_output=True,
-                text=True,
-                check=True,
-            ).stdout.strip()
-            os.environ["REQUESTS_CA_BUNDLE"] = f"/{ca_root_folder}/rootCA.pem"
-        except (subprocess.CalledProcessError, FileNotFoundError):
-            pass
-        except OSError as exc:
-            import logging
-
-            logging.getLogger(__name__).debug(
-                "Unexpected error checking mkcert CA: %s", exc
-            )
 
     return {
         "domain": getattr(endpoint, "domain", None) or None,

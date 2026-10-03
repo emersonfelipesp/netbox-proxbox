@@ -8,9 +8,16 @@ from netbox.views import generic
 from utilities.views import ViewTab, register_model_view
 from virtualization.models import VirtualMachine
 
+from netbox_proxbox.services.backend_path import (
+    UnsafeBackendPathSegment,
+    safe_vmid,
+)
 from netbox_proxbox.services._endpoint_errors import translate_request_exception
 from netbox_proxbox.services.backend_context import get_fastapi_request_context
-from netbox_proxbox.services.endpoint_scope import enabled_backend_endpoint_scope
+from netbox_proxbox.services.endpoint_scope import (
+    enabled_backend_endpoint_scope,
+    viewable_enabled_endpoint_ids,
+)
 from netbox_proxbox.vm_identity import resolve_vm_vmid
 
 
@@ -61,8 +68,14 @@ class ProxmoxVMHATabView(generic.ObjectView):
             context["detail"] = "No FastAPI backend endpoint is configured."
             return context
 
-        url = f"{ctx.http_url}/proxmox/cluster/ha/resources/by-vm/{vmid}"
+        try:
+            vmid_segment = safe_vmid(vmid)
+        except UnsafeBackendPathSegment:
+            context["detail"] = "The Proxmox VM ID recorded for this VM is not valid."
+            return context
+        url = f"{ctx.http_url}/proxmox/cluster/ha/resources/by-vm/{vmid_segment}"
         scope_params, _, scope_error = enabled_backend_endpoint_scope(
+            endpoint_ids=viewable_enabled_endpoint_ids(request.user),
             base_url=ctx.http_url,
             auth_headers=ctx.headers or {},
             backend_verify_ssl=ctx.verify_ssl,

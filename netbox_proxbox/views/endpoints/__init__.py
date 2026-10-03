@@ -7,7 +7,6 @@ from .fastapi import (
     FastAPIEndpointExportView,
     FastAPIEndpointListView,
     FastAPIEndpointView,
-    FastAPIExportQuickAddTokenView,
     FastAPIOpenAPIView,
 )
 from .netbox import (
@@ -17,7 +16,6 @@ from .netbox import (
     NetBoxEndpointExportView,
     NetBoxEndpointListView,
     NetBoxEndpointView,
-    NetBoxExportQuickAddTokenView,
 )
 from .proxmox import (
     ProxmoxEndpointBulkDeleteView,
@@ -30,6 +28,5 @@ from .proxmox import (
     ProxmoxEndpointListView,
     ProxmoxEndpointServicesView,
     ProxmoxEndpointView,
-    ProxmoxExportQuickAddTokenView,
 )
 from .proxmox_sync_now import ProxmoxEndpointSyncNowView

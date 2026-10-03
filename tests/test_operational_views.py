@@ -325,3 +325,31 @@ def test_migrate_get_renders_picker_with_targets(monkeypatch):
     assert rendered["template"].endswith("vm_migrate_picker.html")
     assert rendered["context"]["resolvable"] is True
     assert [n.name for n in rendered["context"]["targets"]] == ["node-1", "node-2"]
+
+
+def test_verb_post_refuses_invalid_guest_type_without_backend_call(monkeypatch):
+    operational = _load(monkeypatch)
+    vm = _make_vm()
+    _bind_vm(monkeypatch, operational, vm)
+    monkeypatch.setattr(
+        operational, "resolve_vm_endpoint_context", lambda _vm: (7, 100, "../extras")
+    )
+    posts: list[object] = []
+    monkeypatch.setattr(
+        operational.requests, "post", lambda *a, **kw: posts.append((a, kw))
+    )
+    monkeypatch.setattr(
+        operational,
+        "get_fastapi_request_context",
+        lambda endpoint_id=None: SimpleNamespace(
+            http_url="https://backend.example.com:8800",
+            headers={},
+            verify_ssl=True,
+        ),
+    )
+
+    request = SimpleNamespace(user=SimpleNamespace(username="ops"), POST={})
+    response = operational.OperationalStartView().post(request, pk=vm.pk)
+
+    assert posts == []
+    assert response.url == "/virtualization/virtual-machines/42/"

@@ -1,6 +1,6 @@
 [project]
 name = "netbox-proxbox"
-version = "0.0.27.post1"
+version = "0.0.29rc1"
 description = "Netbox Plugin - Integrate Proxmox and Netbox"
 readme = "README.md"
 authors = [
@@ -36,6 +36,11 @@ dependencies = [
     "cryptography>=50.0.0",
     "pydantic>=2.13.3,<2.14.0",
     "requests>=2.33.0",
+    # Security floor: 2.8.0 fixes HTTPS proxy TLS policy bypass and two
+    # unbounded/infinite streaming denial-of-service paths. The package is
+    # otherwise transitive through requests, whose range admits 2.7.0.
+    # tests/test_dependency_security_floors.py enforces this.
+    "urllib3>=2.8.0",
     "websockets>=16.0",
 ]
 
@@ -66,6 +71,10 @@ dev = [
     "black>=26.3.1",
     "invoke>=2.2.1",
     "pre-commit>=4.0.0",
+    # Security floor: pre-commit admits virtualenv>=20.10.0, which includes
+    # releases with activation-script command injection; 21.7.13 fixes it.
+    # tests/test_dependency_security_floors.py enforces this.
+    "virtualenv>=21.7.13",
     "pylint>=4.0.5",
     "pylint-django>=2.7.0",
     "pydocstyle>=6.3.0",
@@ -180,6 +189,10 @@ dev = [
     # for >=10.2, which admits both ranges.
     # tests/test_dependency_security_floors.py enforces this.
     "pymdown-extensions>=11.0.1",
+    # Security floor: 21.7.13 fixes activation-script command injection and
+    # also includes the seed-wheel integrity and prompt-sanitization fixes.
+    # tests/test_dependency_security_floors.py enforces this.
+    "virtualenv>=21.7.13",
 ]
 publish = [
     "build==1.5.0",

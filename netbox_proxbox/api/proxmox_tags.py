@@ -14,6 +14,11 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from virtualization.models import VirtualMachine
 
+from netbox_proxbox.services.backend_path import (
+    UnsafeBackendPathSegment,
+    safe_vm_type,
+    safe_vmid,
+)
 from netbox_proxbox.services._endpoint_errors import translate_request_exception
 from netbox_proxbox.services.backend_context import get_fastapi_request_context
 from netbox_proxbox.utils import resolve_vm_type
@@ -125,7 +130,16 @@ def _forward_tags_request(
         )
 
     body = {"node": node, **payload}
-    url = f"{ctx.http_url.rstrip('/')}/proxmox/{vm_type}/{vmid}/tags"
+    try:
+        url = (
+            f"{ctx.http_url.rstrip('/')}/proxmox/"
+            f"{safe_vm_type(vm_type)}/{safe_vmid(vmid)}/tags"
+        )
+    except UnsafeBackendPathSegment:
+        return Response(
+            {"detail": "The guest type or VM ID is not a valid Proxmox identifier."},
+            status=status.HTTP_400_BAD_REQUEST,
+        )
     headers = dict(ctx.headers or {})
     headers.setdefault("Content-Type", "application/json")
     headers["X-Proxbox-Actor"] = _actor_from_request(request)

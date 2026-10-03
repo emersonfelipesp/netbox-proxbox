@@ -22,6 +22,11 @@ import requests
 
 from django.db import transaction
 
+from netbox_proxbox.services.backend_path import (
+    UnsafeBackendPathSegment,
+    safe_path_segment,
+    safe_vmid,
+)
 from netbox_proxbox.choices import (
     FirewallSyncStatusChoices,
     FirewallZoneChoices,
@@ -779,10 +784,20 @@ def sync_node_firewall(
 
     from netbox_proxbox.services.sync_deadline import remaining_timeout
 
+    try:
+        node_segment = safe_path_segment(node_name)
+    except UnsafeBackendPathSegment:
+        logger.warning(
+            "Skipping node firewall sync for endpoint %s: node name is not a "
+            "valid Proxmox identifier",
+            endpoint.pk,
+        )
+        return
+
     # Fetch node rules
     try:
         resp = requests.get(
-            f"{fastapi_url}/proxmox/firewall/nodes/{node_name}/rules",
+            f"{fastapi_url}/proxmox/firewall/nodes/{node_segment}/rules",
             params=(
                 {"source": "database", "proxmox_endpoint_ids": str(backend_endpoint_id)}
                 if backend_endpoint_id is not None
@@ -931,7 +946,7 @@ def sync_vm_firewall(
 
     try:
         resp = requests.get(
-            f"{fastapi_url}/proxmox/firewall/vms/{vmid}/rules",
+            f"{fastapi_url}/proxmox/firewall/vms/{safe_vmid(vmid)}/rules",
             headers=auth_headers,
             verify=verify_ssl,
             timeout=SYNC_TIMEOUT,

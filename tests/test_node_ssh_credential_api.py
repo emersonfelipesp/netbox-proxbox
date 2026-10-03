@@ -21,12 +21,19 @@ import sys
 import types
 from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 API_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "ssh_credentials.py"
 URLS_PATH = REPO_ROOT / "netbox_proxbox" / "api" / "urls.py"
+
+
+def _sensitive_user(**overrides) -> SimpleNamespace:
+    fields = dict(pk=17, is_authenticated=True, is_active=True, is_superuser=False)
+    fields.update(overrides)
+    return SimpleNamespace(**fields)
 
 
 # ---------------------------------------------------------------------------
@@ -47,9 +54,13 @@ def _stub_for_ssh_credentials(
     django_conf = types.ModuleType("django.conf")
     django_conf.settings = SimpleNamespace(DEBUG=False)
     django_exceptions = types.ModuleType("django.core.exceptions")
+    django_exceptions.ObjectDoesNotExist = type("ObjectDoesNotExist", (Exception,), {})
     django_exceptions.ValidationError = type("ValidationError", (Exception,), {})
     django_exceptions.PermissionDenied = type("PermissionDenied", (Exception,), {})
     monkeypatch.setitem(sys.modules, "django.core.exceptions", django_exceptions)
+    django_db = types.ModuleType("django.db")
+    django_db.DatabaseError = type("DatabaseError", (Exception,), {})
+    monkeypatch.setitem(sys.modules, "django.db", django_db)
 
     django_shortcuts = types.ModuleType("django.shortcuts")
     django_shortcuts.get_object_or_404 = lambda queryset, **kw: queryset.get(**kw)
@@ -74,7 +85,7 @@ def _stub_for_ssh_credentials(
             if header not in accepted_headers:
                 return None
 
-            user = SimpleNamespace(is_authenticated=authenticated)
+            user = _sensitive_user(is_authenticated=authenticated)
 
             def _has_perm(permission):
                 return has_perm and permission in (
@@ -118,9 +129,10 @@ def _stub_for_ssh_credentials(
     rf_request.Request = _Request
 
     class _Response:
-        def __init__(self, data=None, status=None):
+        def __init__(self, data=None, status=None, headers=None):
             self.data = data
             self.status_code = status or 200
+            self.headers = headers or {}
 
     rf_response = types.ModuleType("rest_framework.response")
     rf_response.Response = _Response
@@ -192,7 +204,7 @@ def _stub_for_ssh_credentials(
     np_openbao.node_uses_openbao_storage = lambda credential: False
     np_openbao.node_openbao_assignment_lookup = lambda credential: None
     np_openbao.node_openbao_assignment_readiness = lambda credential: (False, "")
-    np_openbao.resolve_endpoint_api_secret = lambda endpoint, field: getattr(
+    np_openbao.resolve_endpoint_api_secret = lambda endpoint, field, **kwargs: getattr(
         endpoint, field
     )
     np_openbao.resolve_node_ssh_password = lambda credential, *, key, user=None: (
@@ -231,7 +243,20 @@ def _stub_for_ssh_credentials(
     ]:
         monkeypatch.setitem(sys.modules, name, mod)
 
+    grant_manager = Mock()
+    grant_manager.filter.return_value.exists.return_value = True
+    grant_models = types.ModuleType("netbox_proxbox.models.sensitive_data_access")
+    grant_models.ProxboxSensitiveDataAccess = SimpleNamespace(objects=grant_manager)
+    monkeypatch.setitem(sys.modules, grant_models.__name__, grant_models)
+    policy_spec = importlib.util.spec_from_file_location(
+        "netbox_proxbox.sensitive_data", REPO_ROOT / "netbox_proxbox/sensitive_data.py"
+    )
+    policy = importlib.util.module_from_spec(policy_spec)
+    monkeypatch.setitem(sys.modules, policy_spec.name, policy)
+    policy_spec.loader.exec_module(policy)
+
     return SimpleNamespace(
+        grant_manager=grant_manager,
         NodeSSHCredential=_NodeSSHCredential,
         ProxboxPluginSettings=_ProxboxPluginSettings,
         ProxmoxEndpoint=_ProxmoxEndpoint,
@@ -498,11 +523,17 @@ def _node_credential_queryset(credential, *, node_ssh_credential_stub):
     """
 
     class _QuerySet:
+        def restrict(self, user, action):
+            assert action == "view"
+            return self
+
         def select_related(self, *_fields):
             return self
 
         def get(self, **kwargs):
             if kwargs == {"node_id": credential.node_id}:
+                return credential
+            if kwargs == {"pk": credential.pk}:
                 return credential
             if "node__netbox_device_id" in kwargs:
                 raise node_ssh_credential_stub.DoesNotExist()
@@ -513,7 +544,7 @@ def _node_credential_queryset(credential, *, node_ssh_credential_stub):
 
 def test_node_secrets_view_resolves_openbao_with_authenticated_actor(monkeypatch):
     module, stubs = _load_ssh_credentials_view(monkeypatch)
-    actor = SimpleNamespace(username="proxbox-api")
+    actor = _sensitive_user(username="proxbox-api")
     credential = SimpleNamespace(
         pk=7,
         node_id=42,
@@ -575,7 +606,7 @@ def test_node_secrets_view_sanitizes_openbao_failure(monkeypatch):
         raise module.ValidationError("provider-internal-secret-path")
 
     openbao.resolve_node_ssh_password = _fail
-    request = SimpleNamespace(user=object(), is_secure=lambda: True)
+    request = SimpleNamespace(user=_sensitive_user(), is_secure=lambda: True)
 
     response = module.NodeSSHCredentialSecretsAPIView().get(request, 42)
 
@@ -661,7 +692,7 @@ def _endpoint_secret_request():
     return SimpleNamespace(
         headers={"Authorization": "Token expected-token"},
         is_secure=lambda: True,
-        user=SimpleNamespace(username="proxbox-api"),
+        user=_sensitive_user(username="proxbox-api"),
     )
 
 
@@ -973,7 +1004,7 @@ def _load_device_openbao_fallback(monkeypatch, *, resolver, nodes: list | None =
 
 def _fallback_request(*, port: str | None = None):
     return SimpleNamespace(
-        user=SimpleNamespace(),
+        user=_sensitive_user(),
         is_secure=lambda: True,
         query_params={} if port is None else {"port": port},
     )
@@ -1267,13 +1298,13 @@ def test_node_scan_success_forwards_host_and_port(monkeypatch):
     assert captured["params"] == {"host": "10.0.0.5", "port": 2222}
 
 
-def test_node_scan_invalid_port_defaults_to_22(monkeypatch):
+def test_node_scan_invalid_port_defaults_to_22(monkeypatch) -> None:
     module, _ = _load_node_scan(monkeypatch)
     captured = {}
 
     def fake_get(
         url, params=None, headers=None, verify=None, timeout=None, allow_redirects=True
-    ):
+    ) -> None:
         captured["params"] = params
         return SimpleNamespace(
             status_code=200, ok=True, json=lambda: {"fingerprint": "SHA256:z"}
@@ -1287,14 +1318,170 @@ def test_node_scan_invalid_port_defaults_to_22(monkeypatch):
     assert captured["params"]["port"] == 22
 
 
-def test_node_scan_503_when_backend_lacks_route(monkeypatch):
+def test_node_scan_503_when_backend_lacks_route(monkeypatch) -> None:
     module, _ = _load_node_scan(monkeypatch)
 
     def fake_get(
         url, params=None, headers=None, verify=None, timeout=None, allow_redirects=True
-    ):
+    ) -> None:
         return SimpleNamespace(status_code=404, ok=False, json=lambda: {})
 
     monkeypatch.setattr(module.requests, "get", fake_get)
     resp = module.NodeHostKeyFingerprintAPIView().get(_scan_request(), 15)
     assert resp.status_code == 503
+
+
+@pytest.mark.parametrize(
+    "view_name",
+    ["NodeSSHCredentialSecretsAPIView", "ProxmoxEndpointSSHCredentialSecretsAPIView"],
+)
+@pytest.mark.parametrize(
+    "user_fields,grant",
+    [
+        ({}, False),
+        ({"is_staff": True}, False),
+        ({"is_active": False, "is_superuser": True}, True),
+        ({"is_authenticated": False, "is_superuser": True}, True),
+    ],
+)
+def test_secret_views_deny_before_lookup_or_resolution(
+    monkeypatch, view_name, user_fields, grant
+) -> None:
+    module, stubs = _load_ssh_credentials_view(monkeypatch)
+    stubs.grant_manager.filter.return_value.exists.return_value = grant
+    local_lookup = Mock(side_effect=AssertionError("credential lookup must not run"))
+    monkeypatch.setattr(module, "_credential_for_node_identifier", local_lookup)
+    endpoint_lookup = Mock(side_effect=AssertionError("endpoint lookup must not run"))
+    monkeypatch.setattr(module, "get_object_or_404", endpoint_lookup)
+    request = SimpleNamespace(
+        user=_sensitive_user(**user_fields), is_secure=lambda: True
+    )
+
+    response = getattr(module, view_name)().get(request, 42)
+
+    assert response.status_code == 403
+    assert response.data == {"detail": "Sensitive data access is not authorized."}
+    local_lookup.assert_not_called()
+    endpoint_lookup.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "permission_name",
+    [
+        "_NetBoxTokenCanViewNodeSSHCredential",
+        "_NetBoxTokenCanReadEndpointSSHCredential",
+    ],
+)
+def test_valid_api_token_without_sensitive_grant_is_denied(
+    monkeypatch, permission_name
+) -> None:
+    module, stubs = _load_ssh_credentials_view(monkeypatch)
+    stubs.grant_manager.filter.return_value.exists.return_value = False
+    permission = getattr(module, permission_name)()
+    assert (
+        permission.has_permission(_request(header="Token expected-token"), object())
+        is False
+    )
+
+
+def test_device_fallback_grant_revocation_stops_provider_resolution(
+    monkeypatch,
+) -> None:
+    resolver = Mock(return_value={"node_id": 42, "password": "synthetic-secret"})
+    module, _ = _load_device_openbao_fallback(monkeypatch, resolver=resolver)
+    manager = sys.modules[
+        "netbox_proxbox.models.sensitive_data_access"
+    ].ProxboxSensitiveDataAccess.objects
+    request = _fallback_request()
+    request.user.proxbox_sensitive_data_access = SimpleNamespace(
+        can_access_sensitive_data=True
+    )
+    assert module.NodeSSHCredentialSecretsAPIView().get(request, 42).status_code == 200
+    manager.filter.return_value.exists.return_value = False
+    response = module.NodeSSHCredentialSecretsAPIView().get(request, 42)
+    assert response.status_code == 403
+    assert resolver.call_count == 1
+
+
+def test_active_superuser_passes_sensitive_gate_without_grant_lookup(
+    monkeypatch,
+) -> None:
+    module, stubs = _load_ssh_credentials_view(monkeypatch)
+    request = _endpoint_secret_request()
+    request.user = _sensitive_user(is_superuser=True)
+    stubs.grant_manager.filter.side_effect = AssertionError(
+        "no grant lookup for an active superuser"
+    )
+    # The independent transport gate is still required.
+    request.is_secure = lambda: False
+    response = module.ProxmoxEndpointSSHCredentialSecretsAPIView().get(request, 42)
+    assert response.status_code == 403
+    assert response.data["detail"] == "HTTPS required to retrieve SSH credentials."
+
+
+def test_hidden_local_credential_does_not_resolve_or_select_device_fallback(
+    monkeypatch,
+) -> None:
+    module, _ = _load_ssh_credentials_view(monkeypatch)
+    credential = SimpleNamespace(pk=7)
+    monkeypatch.setattr(
+        module, "_credential_for_node_identifier", lambda node_id: credential
+    )
+    module.NodeSSHCredential.objects = SimpleNamespace(
+        restrict=Mock(return_value=object())
+    )
+    forbidden = module.PermissionDenied("synthetic object denial")
+    monkeypatch.setattr(module, "get_object_or_404", Mock(side_effect=forbidden))
+    resolver = Mock(side_effect=AssertionError("material must not be read"))
+    monkeypatch.setattr(module, "_resolved_node_secrets", resolver)
+    with pytest.raises(module.PermissionDenied, match="synthetic object denial"):
+        module.NodeSSHCredentialSecretsAPIView().get(_fallback_request(), 42)
+    resolver.assert_not_called()
+
+
+@pytest.mark.parametrize("mode", ["missing-key", "undecryptable", "provider-denied"])
+def test_dedicated_endpoint_failures_are_secret_safe(monkeypatch, mode) -> None:
+    module, stubs = _load_ssh_credentials_view(monkeypatch)
+    endpoint = SimpleNamespace(
+        pk=11,
+        ssh_credential_source="dedicated",
+        ssh_access_enabled=True,
+        has_ssh_terminal_credentials=True,
+        has_ssh_password=True,
+        has_ssh_private_key=False,
+        ssh_password_enc="ciphertext",
+        ssh_private_key_enc="",
+    )
+    if mode == "provider-denied":
+        sys.modules[
+            "netbox_proxbox.integrations.openbao"
+        ].endpoint_uses_openbao_storage = lambda endpoint: True
+        endpoint.get_ssh_password = Mock(
+            side_effect=module.ValidationError("provider-secret-canary")
+        )
+    elif mode == "undecryptable":
+        stubs.ProxboxPluginSettings.get_solo = lambda: SimpleNamespace(
+            encryption_key="synthetic-key"
+        )
+        endpoint.get_ssh_password = Mock(
+            side_effect=module.enc_helpers.EncryptionError("ciphertext-secret-canary")
+        )
+    else:
+        endpoint.get_ssh_password = Mock(
+            side_effect=AssertionError("no key must not resolve material")
+        )
+    stubs.ProxmoxEndpoint.objects = _EndpointQuerySet(endpoint)
+    response = module.ProxmoxEndpointSSHCredentialSecretsAPIView().get(
+        _endpoint_secret_request(), 11
+    )
+    assert response.status_code == 503
+    assert "secret-canary" not in str(response.data)
+    assert "password" not in response.data
+    if mode == "missing-key":
+        endpoint.get_ssh_password.assert_not_called()
+
+
+def test_endpoint_secret_response_is_not_cacheable(monkeypatch) -> None:
+    module, _ = _load_ssh_credentials_view(monkeypatch)
+    response = module._ssh_secret_response({"password": "synthetic-secret"})
+    assert response.headers["Cache-Control"] == "no-store"

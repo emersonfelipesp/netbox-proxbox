@@ -59,6 +59,17 @@ set:
 Earlier releases coupled them, which made the `*-nginx` + self-signed-cert combo
 unreachable from the UI.
 
+New endpoints default to **Use HTTPS** and **Verify SSL** enabled; a backend
+served over plain HTTP must be configured with **Use HTTPS** turned off
+explicitly. NetBox no longer changes its process-wide trust store for local
+backends (earlier releases set `REQUESTS_CA_BUNDLE` to the mkcert root when
+the backend URL contained `localhost`). To verify an mkcert certificate,
+install the mkcert root CA into the system trust store of the NetBox host, or
+set `REQUESTS_CA_BUNDLE` in the NetBox service environment yourself; otherwise
+keep **Verify SSL** off for the bundled self-signed certificate. Existing
+endpoints that still use plain HTTP or unverified TLS are reported by the
+`netbox_proxbox.W101`–`W103` system checks (`W100` if they cannot inspect the settings) (`manage.py check --database default`).
+
 ### Custom certificates
 
 If you supply your own CA-signed, Let's Encrypt, or corporate certificates,

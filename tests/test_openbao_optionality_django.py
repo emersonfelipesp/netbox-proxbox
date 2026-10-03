@@ -191,13 +191,22 @@ def test_backend_and_export_support_single_openbao_auth_method(
 ):
     from netbox_proxbox.integrations import openbao
     from netbox_proxbox.views.backend_sync import _proxmox_backend_payload
+    from netbox_proxbox.services.connection_authority import (
+        approve_connection_target,
+        connection_target_fingerprint,
+    )
     from netbox_proxbox.views.endpoints.proxmox_export import (
         _serialize_proxmox_endpoint,
     )
+    from tests.django_support import make_user
 
     _, Endpoint = optionality_models
+    actor = make_user("single-auth-export-superuser", is_superuser=True)
     endpoint = Endpoint(
-        name="single-auth", enabled=False, credential_storage_backend="openbao"
+        name="single-auth",
+        domain="pve.example.test",
+        enabled=True,
+        credential_storage_backend="openbao",
     )
     endpoint.token_name = "token-name" if token_selected else ""
     endpoint.openbao_password_credential_uuid = (
@@ -214,8 +223,15 @@ def test_backend_and_export_support_single_openbao_auth_method(
         patch.object(openbao, "_credential_for_uuid", return_value=object()),
         patch.object(openbao, "reveal_credential_material", return_value=payload),
     ):
+        approve_connection_target(
+            endpoint,
+            user=actor,
+            fingerprint=connection_target_fingerprint(endpoint),
+        )
         backend = _proxmox_backend_payload(endpoint)
-        exported = _serialize_proxmox_endpoint(endpoint, include_sensitive=True)
+        exported = _serialize_proxmox_endpoint(
+            endpoint, include_sensitive=True, user=actor
+        )
     assert backend["password"] == (None if token_selected else "password-secret")
     assert backend["token_value"] == ("token-secret" if token_selected else None)
     assert exported["password"] == ("" if token_selected else "password-secret")

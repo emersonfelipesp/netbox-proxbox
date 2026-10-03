@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+from django.core.exceptions import ObjectDoesNotExist
+from django.db import DatabaseError
 from django.db.models import Q
+from django.http import Http404
 from django.views.decorators.debug import sensitive_variables
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
@@ -112,6 +115,7 @@ from netbox_proxbox.api.mcp_bridge import (
     mcp_bridge_is_active,
 )
 from netbox_proxbox.services.metrics_influx import MetricsProxyError, query_metrics
+from netbox_proxbox.api.connection_authority import ConnectionAuthorityViewSetMixin
 
 
 class _SingleSecretOwnerViewSetMixin:
@@ -385,34 +389,52 @@ class ProxboxPluginSettingsViewSet(NetBoxModelViewSet):
     queryset = models.ProxboxPluginSettings.objects.all().order_by("id")
     serializer_class = ProxboxPluginSettingsSerializer
     http_method_names = ["get", "patch", "head", "options"]
-
-    def get_permissions(self):
-        if self.request.method in ("GET", "HEAD", "OPTIONS"):
-            return [IsAuthenticated()]
-        return super().get_permissions()
+    # Reads use NetBox's standard object permissions (view_proxboxpluginsettings).
+    # The settings hold SSRF allow/block ranges, log paths, and storage policy,
+    # so they are not readable by every authenticated user. Grant the NetBox
+    # token that proxbox-api uses view_proxboxpluginsettings; system check
+    # netbox_proxbox.W105 reports a configured backend token that cannot read
+    # them, because released proxbox-api clients fall back to permissive
+    # defaults when this read is denied.
 
     @action(detail=False, methods=["get"], url_path="runtime")
+    @sensitive_variables()
     def runtime(self, request: Request) -> Response:
         """Return the singleton settings row in the backend runtime shape."""
         settings_obj = models.ProxboxPluginSettings.get_solo()
+        if not (
+            models.ProxboxPluginSettings.objects.restrict(request.user, "view")
+            .filter(pk=settings_obj.pk)
+            .exists()
+        ):
+            raise Http404
         data = dict(self.get_serializer(settings_obj).data)
         encryption_key = settings_obj.encryption_key or ""
         data["encryption_key_configured"] = bool(encryption_key)
         data["encryption_key"] = (
-            encryption_key if _user_can_read_runtime_secret(request.user) else ""
+            encryption_key
+            if _user_can_read_runtime_secret(request.user, settings_pk=settings_obj.pk)
+            else ""
         )
-        return Response(data)
+        response = Response(data)
+        response["Cache-Control"] = "no-store"
+        return response
 
 
-def _user_can_read_runtime_secret(user: object) -> bool:
-    """Return whether the API caller may read backend-only sensitive settings."""
-    if getattr(user, "is_superuser", False):
-        return True
-    has_perm = getattr(user, "has_perm", None)
-    return bool(
-        callable(has_perm)
-        and has_perm(get_permission_for_model(models.ProxboxPluginSettings, "change"))
-    )
+def _user_can_read_runtime_secret(user: object, *, settings_pk: int | None) -> bool:
+    """Require sensitive authority and independent visibility of this settings row."""
+    from netbox_proxbox.sensitive_data import can_access_sensitive_data
+
+    if settings_pk is None or not can_access_sensitive_data(user):
+        return False
+    try:
+        return (
+            models.ProxboxPluginSettings.objects.restrict(user, "view")
+            .filter(pk=settings_pk)
+            .exists()
+        )
+    except (DatabaseError, ObjectDoesNotExist):
+        return False
 
 
 class VMBackupViewSet(NetBoxModelViewSet):
@@ -876,7 +898,7 @@ class _PackerTemplateBuildActionPermission(BasePermission):
         )
 
 
-class ProxmoxEndpointViewSet(NetBoxModelViewSet):
+class ProxmoxEndpointViewSet(ConnectionAuthorityViewSetMixin, NetBoxModelViewSet):
     """REST API for Proxmox VE API endpoint credentials and targets."""
 
     queryset = models.ProxmoxEndpoint.objects.select_related(
@@ -1097,7 +1119,7 @@ class ProxmoxServiceStatusViewSet(NetBoxModelViewSet):
     http_method_names = ["get", "head", "options"]
 
 
-class NetBoxEndpointViewSet(NetBoxModelViewSet):
+class NetBoxEndpointViewSet(ConnectionAuthorityViewSetMixin, NetBoxModelViewSet):
     """REST API for remote NetBox API endpoint configuration."""
 
     queryset = models.NetBoxEndpoint.objects.select_related("ip_address", "token")
@@ -2393,15 +2415,7 @@ class _FirewallPushActionMixin:
         try:
             result = push_firewall_object(obj, actor=actor)
         except FirewallPushError as exc:
-            return Response(
-                {
-                    "status": "error",
-                    "reason": exc.reason,
-                    "detail": exc.detail,
-                    "response": exc.response,
-                },
-                status=exc.status_code,
-            )
+            return _firewall_error_response(exc)
         return Response(result.to_response(), status=drf_status.HTTP_200_OK)
 
     @extend_schema(responses={200: OpenApiTypes.OBJECT})
@@ -2418,8 +2432,26 @@ class _FirewallPushActionMixin:
                 },
                 status=drf_status.HTTP_403_FORBIDDEN,
             )
-        result = preview_firewall_object(self.get_object())
+        try:
+            result = preview_firewall_object(self.get_object())
+        except FirewallPushError as exc:
+            # For example an object whose node name is not a valid Proxmox
+            # identifier: report it instead of failing with HTTP 500.
+            return _firewall_error_response(exc)
         return Response(result.to_response(), status=drf_status.HTTP_200_OK)
+
+
+def _firewall_error_response(exc: FirewallPushError) -> Response:
+    """Render a firewall push/preview refusal as a structured API error."""
+    return Response(
+        {
+            "status": "error",
+            "reason": exc.reason,
+            "detail": exc.detail,
+            "response": exc.response,
+        },
+        status=exc.status_code,
+    )
 
 
 def _actor_from_request(request: Request) -> str:

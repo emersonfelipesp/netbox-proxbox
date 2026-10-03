@@ -18,6 +18,18 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 PROXMOX_TAGS_API = REPO_ROOT / "netbox_proxbox" / "api" / "proxmox_tags.py"
+BACKEND_PATH_MODULE = REPO_ROOT / "netbox_proxbox" / "services" / "backend_path.py"
+
+
+def _load_backend_path_module() -> types.ModuleType:
+    """Path-load the dependency-free path validator used by the API module."""
+    spec = importlib.util.spec_from_file_location(
+        "netbox_proxbox.services.backend_path", BACKEND_PATH_MODULE
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
 
 
 def _load(monkeypatch: pytest.MonkeyPatch):
@@ -93,6 +105,7 @@ def _load(monkeypatch: pytest.MonkeyPatch):
         "requests.exceptions": requests_exceptions,
         "netbox_proxbox.services._endpoint_errors": endpoint_errors_mod,
         "netbox_proxbox.services.backend_context": backend_context_mod,
+        "netbox_proxbox.services.backend_path": _load_backend_path_module(),
         "netbox_proxbox.views.operational": operational_mod,
         "netbox_proxbox.views.proxbox_access": proxbox_access_mod,
         "netbox_proxbox.utils": utils_mod,
@@ -229,3 +242,48 @@ def test_patch_rejects_missing_add_and_remove(monkeypatch: pytest.MonkeyPatch) -
 
     assert response.status_code == 400
     assert response.data["reason"] == "invalid_payload"
+
+
+@pytest.mark.parametrize(
+    "resolved",
+    [(7, 100, "../extras"), (7, "100/../1", "qemu"), (7, 0, "qemu")],
+)
+def test_invalid_identifiers_are_rejected_without_backend_call(
+    monkeypatch: pytest.MonkeyPatch, resolved: tuple
+) -> None:
+    module = _load(monkeypatch)
+    vm = _make_vm()
+
+    class _Manager:
+        def restrict(self, _user, _action):
+            return self
+
+        def select_related(self, *_args, **_kwargs):
+            return self
+
+        def get(self, pk):
+            return vm
+
+    module.VirtualMachine = SimpleNamespace(objects=_Manager(), DoesNotExist=Exception)
+    monkeypatch.setattr(module, "resolve_vm_endpoint_context", lambda _vm: resolved)
+    calls: list[object] = []
+    monkeypatch.setattr(
+        module.requests, "request", lambda *args, **kwargs: calls.append(args)
+    )
+    monkeypatch.setattr(
+        module,
+        "get_fastapi_request_context",
+        lambda endpoint_id=None: SimpleNamespace(
+            http_url="https://backend.example.com:8800",
+            headers={},
+            verify_ssl=True,
+        ),
+    )
+
+    response = module.VirtualMachineProxmoxTagsAPIView().put(
+        _request(data={"tags": ["alpha"]}),
+        pk=vm.pk,
+    )
+
+    assert response.status_code == 400
+    assert calls == []

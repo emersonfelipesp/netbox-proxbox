@@ -87,7 +87,10 @@ def _node_ssh_access_disabled(node: Any) -> bool:
     proxmox_endpoint = getattr(node, "endpoint", None)
     if proxmox_endpoint is None:
         return False
-    return not proxmox_endpoint.ssh_access_enabled
+    return (
+        not getattr(proxmox_endpoint, "enabled", True)
+        or not proxmox_endpoint.ssh_access_enabled
+    )
 
 
 def _match_openbao_endpoint(device: Any, *, port: int | None = None) -> Any | None:

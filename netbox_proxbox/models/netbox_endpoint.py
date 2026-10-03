@@ -78,6 +78,16 @@ class NetBoxEndpoint(EndpointBase):
         verbose_name=_("Verify SSL"),
         help_text=_("Verify the TLS certificate presented by the NetBox API."),
     )
+    approved_connection_target_fingerprint = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        editable=False,
+        help_text=_(
+            "Internal approval of the exact connection target. Target edits require explicit reapproval before credentials may be sent."
+        ),
+    )
+
     pushed_credential_fingerprint = models.CharField(
         max_length=64,
         blank=True,

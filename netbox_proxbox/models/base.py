@@ -10,6 +10,7 @@ from django.utils.translation import gettext_lazy as _
 
 from netbox.models import NetBoxModel
 
+
 from utilities.views import get_viewname
 
 from netbox_proxbox.fields import DomainField
@@ -69,6 +70,23 @@ class EndpointBase(CommonProperties, NetBoxModel):
     class Meta:
         abstract = True
         ordering = ("name", "pk")
+
+    def save(self, *args: object, **kwargs: object) -> None:
+        """Keep connection approval outside ordinary endpoint field writes."""
+        if self._meta.model_name in {"proxmoxendpoint", "netboxendpoint"}:
+            from netbox_proxbox.services.connection_authority import save_bound_endpoint
+
+            save_bound_endpoint(self, super().save, *args, **kwargs)
+            return
+        super().save(*args, **kwargs)
+
+    def serialize_object(self, exclude=None) -> dict[str, object]:
+        """Redact sensitive fields in every NetBox change-log snapshot."""
+        from netbox_proxbox.models.changelog_redaction import redact_snapshot_data
+
+        return redact_snapshot_data(
+            self._meta.model_name, super().serialize_object(exclude=exclude)
+        )
 
     @classmethod
     def _get_action_url(

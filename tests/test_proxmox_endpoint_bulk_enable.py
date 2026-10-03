@@ -158,7 +158,9 @@ def test_authorized_endpoints_require_normal_save_before_delete() -> None:
     source = VIEW_PATH.read_text(encoding="utf-8")
     delete_start = source.index("class ProxmoxEndpointDeleteView")
     delete_end = source.index("class ProxmoxEndpointBulkDeleteView")
-    bulk_end = source.index("@register_model_view(", delete_end + 1)
+    bulk_end = source.find("@register_model_view(", delete_end + 1)
+    if bulk_end == -1:
+        bulk_end = len(source)
 
     assert "allow_packer_template_builds=False" in source[delete_start:delete_end]
     assert (

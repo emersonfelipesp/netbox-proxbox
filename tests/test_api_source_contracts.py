@@ -6,6 +6,8 @@ import ast
 import importlib.util
 from pathlib import Path
 
+import pytest
+
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -329,20 +331,42 @@ def test_overwrite_fields_exposed_in_endpoint_and_settings_serializers():
 def test_settings_runtime_action_preserves_secret_gate():
     """Backend runtime settings retain their explicit permission boundary."""
     views_contents = VIEWS_PATH.read_text()
-    serializers_contents = _serializers_package_source_text()
-
     assert (
         '@action(detail=False, methods=["get"], url_path="runtime")' in views_contents
     )
     assert "def runtime(self, request: Request) -> Response:" in views_contents
     assert "encryption_key_configured" in views_contents
-    assert "_user_can_read_runtime_secret(request.user)" in views_contents
     assert (
-        'get_permission_for_model(models.ProxboxPluginSettings, "change")'
+        "_user_can_read_runtime_secret(request.user, settings_pk=settings_obj.pk)"
         in views_contents
     )
-    assert "return [IsAuthenticated()]" in views_contents
+    assert "not can_access_sensitive_data(user)" in views_contents
+    assert (
+        'models.ProxboxPluginSettings.objects.restrict(user, "view")' in views_contents
+    )
+    assert ".filter(pk=settings_pk)" in views_contents
+    # Settings reads use NetBox object permissions, never authentication alone.
+    assert 'if self.request.method in ("GET", "HEAD", "OPTIONS"):' not in views_contents
+    assert (
+        "return [IsAuthenticated()]"
+        not in views_contents.split("class ProxboxPluginSettingsViewSet", 1)[1].split(
+            "\nclass ", 1
+        )[0]
+    )
+    assert (
+        'models.ProxboxPluginSettings.objects.restrict(request.user, "view")'
+        in views_contents
+    )
 
+
+@pytest.mark.parametrize(
+    ("keyword_name", "expected"),
+    [("write_only", True), ("required", False), ("allow_blank", True)],
+)
+def test_settings_serializer_keeps_root_key_write_only(
+    keyword_name: str, expected: bool
+) -> None:
+    """The normal settings serializer never returns root material."""
     module = _parse_serializers_package()
     settings = _classdef(module, "ProxboxPluginSettingsSerializer")
     field = next(
@@ -356,9 +380,12 @@ def test_settings_runtime_action_preserves_secret_gate():
     keywords = {
         keyword.arg: ast.literal_eval(keyword.value) for keyword in field.value.keywords
     }
-    assert keywords["write_only"] is True
-    assert keywords["required"] is False
-    assert keywords["allow_blank"] is True
+    assert keywords[keyword_name] is expected
+
+
+def test_settings_serializer_preserves_root_key_mutation_guard() -> None:
+    """Ordinary settings updates cannot bypass the independent key transition guard."""
+    serializers_contents = _serializers_package_source_text()
     assert "assert_ordinary_key_mutation_allowed" in serializers_contents
 
 
@@ -541,7 +568,13 @@ def test_nested_writable_serializers_define_brief_fields():
     class_node = _classdef(module, "NestedTokenSerializer")
     brief_fields = _meta_brief_fields(class_node)
     assert brief_fields is not None
-    assert set(brief_fields) == {"id", "url", "display", "key"}
+    assert set(brief_fields) == {"id", "url", "display"}
+    get_display = next(
+        node
+        for node in class_node.body
+        if isinstance(node, ast.FunctionDef) and node.name == "get_display"
+    )
+    assert "return f'Token {instance.pk}'" in ast.unparse(get_display)
 
 
 def test_plugin_api_routes_register_all_plugin_objects():
@@ -605,6 +638,7 @@ def test_plugin_api_routes_register_all_plugin_objects():
         "sdn-vnets",
         "sdn-zones",
         "settings",
+        "sensitive-data-access",
         "ssh-credentials",
         "storage",
         "sync-jobs",
@@ -646,11 +680,12 @@ def test_proxmox_endpoint_views_register_bulk_import_and_csv_export():
     assert "class ProxmoxEndpointExportView" in contents
 
 
-def test_proxmox_endpoint_export_requires_token_for_sensitive_payloads():
+def test_proxmox_endpoint_export_requires_explicit_sensitive_access():
     contents = PROXMOX_ENDPOINT_VIEWS_PATH.read_text()
     assert "include_sensitive" in contents
-    assert "TokenAuthentication" in contents
-    assert "A valid NetBox token is required to export secrets." in contents
+    assert "require_sensitive_data_access(request.user)" in contents
+    assert "SensitiveExportMixin" in contents
+    assert "The provided NetBox token" not in contents
     assert 'allowed_formats = {"csv", "json", "yaml"}' in contents
 
 

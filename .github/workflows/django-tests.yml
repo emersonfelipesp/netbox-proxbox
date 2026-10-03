@@ -45,54 +45,54 @@ jobs:
             netbox_version: "4.5.8"
             netbox_designation: ""
             netbox_requirements_sha256: 646c5bb635d5b9b126c6af4d56664dfde461608bdcaa8a65c1735ac5d8ddde9b
-            netbox_input_sha256: eaa1232512302fd9eaf7c3ca1cee1ea959ba9c7001eb276025b4f4612c9593c3
+            netbox_input_sha256: 904ecc650c02df62fa83f59ed714e9b16737fc558cff5a909ca9b31004e593b9
             netbox_lock: ci/netbox-requirements/v4.5.8-py312-linux-x86_64.txt
-            netbox_lock_sha256: 7b515f5fd7d4b3fb03afc5b2ec3ed3b20808853de5f635fe2dc5640a1acac9fd
+            netbox_lock_sha256: 23f8362f4299c34f2f77772a87954351489f4f0b87c740de1b94f3dad21f032d
           - netbox: "v4.5.10"
             pdm: false
             netbox_ref: b78bd713294564e0421c36c936a909e64da04b8d
             netbox_version: "4.5.10"
             netbox_designation: ""
             netbox_requirements_sha256: d68f08fb6167317174be89cda3045ee0e2fa34dd6e18ce19db2a31cf31a26e6f
-            netbox_input_sha256: bdfd166f32c07d4223fe2f105a4b57873923c55b13c76946cb7b56c667fb12b5
+            netbox_input_sha256: fba47c0891dc3aac0917550698436f326f650469c052ab2ecad69a5bbe29683b
             netbox_lock: ci/netbox-requirements/v4.5.10-py312-linux-x86_64.txt
-            netbox_lock_sha256: da7e4167ffd9a6d01fd8dbeede148170c5ecc759a798a289308b9d6952c711ba
+            netbox_lock_sha256: 3ed1782b53f7a40a1a0ab8aaea11ae2bc3445d712483061aba80c80684b2819e
           - netbox: "v4.6.0"
             pdm: false
             netbox_ref: 00791344e68213bde942218283dce03cc3941c30
             netbox_version: "4.6.0"
             netbox_designation: ""
             netbox_requirements_sha256: 0d88cea37b413f22953ead2c2c341c82fe7a5e5d8a01f42632288676db8d66b6
-            netbox_input_sha256: d948640804f4d6f45fa42bd7b5192bd583c08cf3ac5156c2969dc87a6063857d
+            netbox_input_sha256: d290172ade3a4b57221c1b008d2a91132041aafd2f2d38ec0612b316bad74dcc
             netbox_lock: ci/netbox-requirements/v4.6.0-py312-linux-x86_64.txt
-            netbox_lock_sha256: 7132a376f2cd458840bb55c93268b4d09efd1aad169ff4a5aa203da62fef355b
+            netbox_lock_sha256: dddb68317d8eb9875beeb70cb9a61219e51ac661245738822296100375e858df
           - netbox: "v4.6.6"
             pdm: false
             netbox_ref: fb8c455ba61b57119a70670612dfdd05e8438b10
             netbox_version: "4.6.6"
             netbox_designation: ""
             netbox_requirements_sha256: 25eb62e54362568599c7701a528a7ac24dbe0400d5311fc496eab866bd6174b9
-            netbox_input_sha256: 2413106d8fd6e3e9023c73071059f7784add9c12309d70c6b349c83819cd37b1
+            netbox_input_sha256: 58bf25c4c923034bc02ab2535a6221f1485171617985b0969136776a21f86a96
             netbox_lock: ci/netbox-requirements/v4.6.6-py312-linux-x86_64.txt
-            netbox_lock_sha256: 91453ae85fa951ce8469f508d2304f9eefd5f6f469b1e633b0ba40734c96852f
+            netbox_lock_sha256: 034ca954a0f641db1c0fe6b8450fe4788097ff55c7c3494091304a923cdbf473
           - netbox: "v4.7.0"
             pdm: false
             netbox_ref: 5f06007e4c9bacc93ce17c1e645fc1143d60df3d
             netbox_version: "4.7.0"
             netbox_designation: ""
             netbox_requirements_sha256: 61589a94b25149765d230d3f33597326c3987faae7cbc20aae4c49e825c2b582
-            netbox_input_sha256: 61589a94b25149765d230d3f33597326c3987faae7cbc20aae4c49e825c2b582
+            netbox_input_sha256: 2cbc54404b9e1e0a700c416077069c79f2220005b977111da9da8d13b5a6e688
             netbox_lock: ci/netbox-requirements/v4.7.0-py312-linux-x86_64.txt
-            netbox_lock_sha256: 3345dd1b02e944b52ffb67edb05e8a7549b913924297f9ce23f7d2a92c6192c9
+            netbox_lock_sha256: 6f9ac88a3df8bb0fa6eb10dabaf0a663deedb85e20dd3c250bb8184889f8960a
           - netbox: "v4.6.6"
             pdm: true
             netbox_ref: fb8c455ba61b57119a70670612dfdd05e8438b10
             netbox_version: "4.6.6"
             netbox_designation: ""
             netbox_requirements_sha256: 25eb62e54362568599c7701a528a7ac24dbe0400d5311fc496eab866bd6174b9
-            netbox_input_sha256: 2413106d8fd6e3e9023c73071059f7784add9c12309d70c6b349c83819cd37b1
+            netbox_input_sha256: 58bf25c4c923034bc02ab2535a6221f1485171617985b0969136776a21f86a96
             netbox_lock: ci/netbox-requirements/v4.6.6-pdm-3408441672bf-py312-linux-x86_64.txt
-            netbox_lock_sha256: f1200401205d3e8f3c0f866626d71b8e8381916e0430e5aa23b1245eaa305955
+            netbox_lock_sha256: 156a840d02b2f77c3852412857d2bea8691594d5eafdd995549aa631179a0998
           - netbox: "v4.7.0"
             pdm: false
             all_companions: true
@@ -100,9 +100,9 @@ jobs:
             netbox_version: "4.7.0"
             netbox_designation: ""
             netbox_requirements_sha256: 61589a94b25149765d230d3f33597326c3987faae7cbc20aae4c49e825c2b582
-            netbox_input_sha256: 61589a94b25149765d230d3f33597326c3987faae7cbc20aae4c49e825c2b582
+            netbox_input_sha256: 2cbc54404b9e1e0a700c416077069c79f2220005b977111da9da8d13b5a6e688
             netbox_lock: ci/netbox-requirements/v4.7.0-all-companions-py312-linux-x86_64.txt
-            netbox_lock_sha256: e8bda99e3a415e2370973fb5e1082b2e7e0a4fabd092c244fa038851404c5508
+            netbox_lock_sha256: 0f74bb0a623cf22e4ebdaa8ff4ee103188be6f462144e25fffcd8eed0411864a
             pdm_ref: c96b425b69677107635749860e240576e91041ee
             ceph_ref: 227f386148219522476423a85156a72ab215ece5
             pbs_ref: e00bdcab5fa519f6a2cd22d51fc329e0623af746
@@ -114,9 +114,9 @@ jobs:
             netbox_version: "4.7.0"
             netbox_designation: ""
             netbox_requirements_sha256: 61589a94b25149765d230d3f33597326c3987faae7cbc20aae4c49e825c2b582
-            netbox_input_sha256: 61589a94b25149765d230d3f33597326c3987faae7cbc20aae4c49e825c2b582
+            netbox_input_sha256: 2cbc54404b9e1e0a700c416077069c79f2220005b977111da9da8d13b5a6e688
             netbox_lock: ci/netbox-requirements/v4.7.0-openbao-58677ef-py312-linux-x86_64.txt
-            netbox_lock_sha256: f6d37cbf70aece0618adb9845a559fd9af867c4664ef66cf33d5c4fc33e422da
+            netbox_lock_sha256: 5e3fe5c5fcf744e5cb91821e54d5ccebcf3a8f2c5fcdea0d63656d08ec96b2a4
             openbao_ref: 58677efdd595c34cf0d597ca3efa1951b05ea25e
             rpc_ref: eae471d601423195c28ffa8482422b4c1cb4344d
 
@@ -228,7 +228,7 @@ jobs:
           EXPECTED_INPUT_SHA256: ${{ matrix.netbox_input_sha256 }}
           EXPECTED_NETBOX_LOCK: ${{ matrix.netbox_lock }}
           EXPECTED_LOCK_SHA256: ${{ matrix.netbox_lock_sha256 }}
-          EXPECTED_PROJECT_INPUT_SHA256: 54ee51ae82ab1ec26e1de7a5f07634eff981013a8b41e62cced50e8a99d3fd18
+          EXPECTED_PROJECT_INPUT_SHA256: afd7a585213672dca2ced84b25641cf2585f01bc50efeeb0adada06440b14ae4
           EXPECTED_PDM_INPUT_SHA256: 424c8807691eaa50c53762e6b1dbddbbe4489fe0b2a9bd15d142acb17699d50e
           EXPECTED_PDM_PYPROJECT_SHA256: 496d7924629f7aa98452d302a33ce9b47c1533079f4a4320b92ee8b18133cfce
           EXPECTED_ALL_COMPANIONS_INPUT_SHA256: 7b277c8c7baf88778fac40258dca059212097e36dede04d1250f920a3ec7994b
@@ -436,6 +436,9 @@ jobs:
             tests/test_sync_state_models.py
             tests/test_sync_state_contracts.py
             tests/test_proxmox_endpoint_allowed_tenants.py
+            tests/test_proxmox_export_view.py
+            tests/test_changelog_secret_redaction_django.py
+            tests/test_connection_authority_django.py
             tests/test_openbao_optionality_django.py
             tests/test_backend_key_adoption_django.py
             tests/test_encryption_key_recovery_django.py
@@ -459,6 +462,12 @@ jobs:
             tests/test_vm_intent_django.py
             tests/test_soft_deleted_vm_purge_django.py
             tests/test_bulk_vm_delete_django.py
+            tests/test_ha_actions_django.py
+            tests/test_firewall_preview_errors_django.py
+            tests/test_vm_config_identifier_refusal_django.py
+            tests/test_websocket_sync_route_django.py
+            tests/test_secure_transport_defaults_django.py
+            tests/test_settings_read_scope_django.py
           )
           openbao_tests=(
             tests/test_openbao_assignments_django.py

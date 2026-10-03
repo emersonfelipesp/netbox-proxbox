@@ -191,6 +191,16 @@ class ProxmoxEndpoint(EndpointBase):
         editable=False,
         verbose_name=_("OpenBao SSH key pair credential UUID"),
     )
+    approved_connection_target_fingerprint = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        editable=False,
+        help_text=_(
+            "Internal approval of the exact connection target. Target edits require explicit reapproval before credentials may be sent."
+        ),
+    )
+
     pushed_credential_fingerprint = models.CharField(
         max_length=64,
         blank=True,
@@ -204,9 +214,14 @@ class ProxmoxEndpoint(EndpointBase):
         ),
     )
     verify_ssl = models.BooleanField(
-        default=False,
+        default=True,
         verbose_name=_("Verify SSL"),
-        help_text=_("Verify the TLS certificate presented by the Proxmox endpoint."),
+        help_text=_(
+            "Verify the TLS certificate presented by the Proxmox endpoint "
+            "(default). Turning this off makes the backend accept any "
+            "certificate, so an attacker on the network path can intercept the "
+            "Proxmox credentials. Prefer installing the Proxmox CA instead."
+        ),
     )
     allow_writes = models.BooleanField(
         default=False,

@@ -64,11 +64,13 @@ def _base_fastapi_row(endpoint: FastAPIEndpoint) -> dict[str, str]:
 
 
 def _sensitive_token(endpoint: FastAPIEndpoint, user: Any) -> str:
+    from netbox_proxbox.sensitive_data import require_sensitive_data_access
     from netbox_proxbox.integrations.openbao_single import (
         owner_uses_openbao_storage,
         resolve_single_secret,
     )
 
+    require_sensitive_data_access(user)
     if owner_uses_openbao_storage(endpoint):
         return resolve_single_secret(endpoint, user=user)
     return _text(endpoint.token)

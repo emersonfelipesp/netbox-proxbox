@@ -12,6 +12,12 @@ from pydantic import ValidationError
 from utilities.views import ViewTab, register_model_view
 from virtualization.models import VirtualMachine
 
+from netbox_proxbox.services.backend_path import (
+    UnsafeBackendPathSegment,
+    safe_path_segment,
+    safe_vm_type,
+    safe_vmid,
+)
 from netbox_proxbox.models import FastAPIEndpoint, ProxmoxEndpoint, VMSnapshot
 from netbox_proxbox.schemas.proxmox_vm import ProxmoxVMConfig
 from netbox_proxbox.utils import get_backend_auth_headers, get_fastapi_url
@@ -123,6 +129,16 @@ class ProxmoxVMConfigTabView(generic.ObjectView):
                 "Run a Proxbox sync to populate its sync-state record."
             )
             return context
+        try:
+            node_segment = safe_path_segment(node)
+            vm_type_segment = safe_vm_type(vm_type)
+            vmid_segment = safe_vmid(vmid)
+        except UnsafeBackendPathSegment:
+            context["detail"] = (
+                "The Proxmox node name, guest type, or VM ID recorded for this VM "
+                "is not a valid identifier, so no backend request was made."
+            )
+            return context
 
         fastapi_obj = (
             FastAPIEndpoint.objects.restrict(request.user, "view")
@@ -161,7 +177,7 @@ class ProxmoxVMConfigTabView(generic.ObjectView):
         if backend_name:
             query_params["name"] = backend_name
 
-        config_url = f"{fastapi_url}/proxmox/{node}/{vm_type}/{vmid}/config"
+        config_url = f"{fastapi_url}/proxmox/{node_segment}/{vm_type_segment}/{vmid_segment}/config"
         try:
             config_response = requests.get(
                 config_url,
@@ -202,9 +218,7 @@ class ProxmoxVMConfigTabView(generic.ObjectView):
             context["normalized"] = normalized
 
             if vm_type == "qemu":
-                firewall_url = (
-                    f"{fastapi_url}/proxmox/nodes/{node}/qemu/{vmid}/firewall"
-                )
+                firewall_url = f"{fastapi_url}/proxmox/nodes/{node_segment}/qemu/{vmid_segment}/firewall"
                 try:
                     fw_response = requests.get(
                         firewall_url,

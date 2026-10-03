@@ -12,6 +12,7 @@ from django.views.decorators.debug import sensitive_variables
 
 from netbox.models import NetBoxModel
 
+
 from netbox_proxbox.choices import (
     CredentialStorageBackendChoices,
     SyncModeChoices,
@@ -1020,6 +1021,14 @@ class ProxboxPluginSettings(NetBoxModel):
             ),
         )
 
+    def serialize_object(self, exclude=None) -> dict[str, object]:
+        """Redact sensitive fields in every NetBox change-log snapshot."""
+        from netbox_proxbox.models.changelog_redaction import redact_snapshot_data
+
+        return redact_snapshot_data(
+            self._meta.model_name, super().serialize_object(exclude=exclude)
+        )
+
     def __str__(self) -> str:
         return "Proxbox plugin settings"
 
@@ -1046,6 +1055,8 @@ class ProxboxPluginSettings(NetBoxModel):
             update_fields is None or "encryption_key" in update_fields
         )
         if not self.pk or not checks_encryption_key:
+            if not self.pk and checks_encryption_key:
+                _require_canonical_new_key(None, self.encryption_key)
             super().save(*args, **kwargs)
             return
 
@@ -1071,13 +1082,16 @@ class ProxboxPluginSettings(NetBoxModel):
                     .values_list("encryption_key", flat=True)
                     .first()
                 )
-                if previous_key is not None and str(previous_key or "") != str(
-                    self.encryption_key or ""
-                ):
+                if previous_key is None:
+                    # No stored row yet (an explicit primary key, or a stale
+                    # instance being re-inserted): this save creates the key.
+                    _require_canonical_new_key(None, self.encryption_key)
+                elif str(previous_key or "") != str(self.encryption_key or ""):
                     lock_encrypted_field_tables(using=using)
                     assert_ordinary_key_mutation_allowed(
                         str(previous_key or ""), str(self.encryption_key or "")
                     )
+                    _require_canonical_new_key(previous_key, self.encryption_key)
                 super().save(*args, **kwargs)
         except EncryptionRecoveryError as exc:
             raise ValidationError({"encryption_key": str(exc)}) from None
@@ -1099,3 +1113,20 @@ class ProxboxPluginSettings(NetBoxModel):
     def get_blocked_ip_ranges(self) -> list[str]:
         """Return list of explicitly blocked CIDR ranges."""
         return parse_cidr_list(self.explicitly_blocked_ip_ranges)
+
+
+@sensitive_variables()
+def _require_canonical_new_key(previous_key: object, new_key: object) -> None:
+    """Reject a changed, non-empty key that is not a canonical Fernet key."""
+    from netbox_proxbox.utils.encryption import (
+        EncryptionKeyInvalid,
+        require_canonical_fernet_key,
+    )
+
+    candidate = str(new_key or "").strip()
+    if not candidate or candidate == str(previous_key or "").strip():
+        return
+    try:
+        require_canonical_fernet_key(candidate)
+    except EncryptionKeyInvalid as exc:
+        raise ValidationError({"encryption_key": str(exc)}) from None

@@ -3,16 +3,20 @@
 from typing import Any
 
 from django.contrib import messages
-from django.http import HttpRequest, HttpResponse, JsonResponse
+from django.http import HttpRequest, HttpResponse
 from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.views import View
 from django.views.decorators.debug import sensitive_variables
-from netbox.api.authentication import TokenAuthentication
 from netbox.views import generic
 from utilities.permissions import get_permission_for_model
-from utilities.query import reapply_model_ordering
 from utilities.views import ViewTab, register_model_view
+
+from netbox_proxbox.sensitive_data import require_sensitive_data_access
+from netbox_proxbox.views.endpoints.sensitive_export import (
+    CredentialSafeListMixin,
+    SensitiveExportMixin,
+)
 
 from netbox_proxbox.filtersets import FastAPIEndpointFilterSet
 from netbox_proxbox.forms import (
@@ -37,7 +41,6 @@ __all__ = (
     "FastAPIEndpointEditView",
     "FastAPIEndpointDeleteView",
     "FastAPIEndpointExportView",
-    "FastAPIExportQuickAddTokenView",
 )
 
 
@@ -77,7 +80,7 @@ class FastAPIOpenAPIView(generic.ObjectView):
 
 
 @register_model_view(FastAPIEndpoint, "list", path="", detail=False)
-class FastAPIEndpointListView(generic.ObjectListView):
+class FastAPIEndpointListView(CredentialSafeListMixin, generic.ObjectListView):
     """Filterable list of FastAPI backend endpoint records."""
 
     queryset = FastAPIEndpoint.objects.all()
@@ -154,8 +157,8 @@ class FastAPIEndpointBulkImportView(generic.BulkImportView):
 
 
 @register_model_view(FastAPIEndpoint, "export", path="export", detail=False)
-class FastAPIEndpointExportView(generic.ObjectListView):
-    """Download filtered FastAPI endpoints as CSV, JSON, or YAML; secrets require token proof."""
+class FastAPIEndpointExportView(SensitiveExportMixin, generic.ObjectListView):
+    """Download filtered FastAPI endpoints as CSV, JSON, or YAML; secrets require explicit authorization."""
 
     queryset = FastAPIEndpoint.objects.all()
     filterset = FastAPIEndpointFilterSet
@@ -165,117 +168,19 @@ class FastAPIEndpointExportView(generic.ObjectListView):
         """Require model ``view`` on FastAPI endpoints (same as the list)."""
         return get_permission_for_model(self.queryset.model, "view")
 
-    def _v1_export_header(self, request: HttpRequest) -> str | None:
-        from users.models import Token
-
-        manual_token = (request.POST.get("v1_manual_token") or "").strip()
-        if manual_token:
-            return (
-                manual_token
-                if manual_token.startswith("Token ")
-                else f"Token {manual_token}"
-            )
-        token_id = (request.POST.get("token_id") or "").strip()
-        if not token_id:
-            messages.error(
-                request,
-                "Select a v1 token or enter one manually to export secrets.",
-            )
-            return None
-        try:
-            token_obj = Token.objects.get(
-                pk=int(token_id), version=1, user=request.user
-            )
-        except (Token.DoesNotExist, ValueError):
-            messages.error(request, "The selected v1 token could not be found.")
-            return None
-        plaintext = (token_obj.plaintext or "").strip()
-        if plaintext:
-            return f"Token {plaintext}"
-        messages.error(
-            request,
-            "The selected v1 token does not have a usable plaintext value.",
-        )
-        return None
-
-    def _v2_export_header(self, request: HttpRequest) -> str | None:
-        token_key = (request.POST.get("token_key") or "").strip()
-        token_secret = (request.POST.get("token_secret") or "").strip()
-        if token_key and token_secret:
-            return f"Bearer {token_key}.{token_secret}"
-        messages.error(
-            request,
-            "Both token key and token secret are required for v2 authentication.",
-        )
-        return None
-
-    def _legacy_export_header(self, request: HttpRequest) -> str | None:
-        raw_token = (request.POST.get("netbox_token") or "").strip()
-        if not raw_token:
-            messages.error(
-                request, "A valid NetBox token is required to export secrets."
-            )
-            return None
-        if raw_token.startswith(("Token ", "Bearer ")):
-            return raw_token
-        return (
-            f"Bearer {raw_token}"
-            if raw_token.startswith("nbt_")
-            else f"Token {raw_token}"
-        )
-
-    def _sensitive_export_header(self, request: HttpRequest) -> str | None:
-        token_version = (request.POST.get("token_version") or "").strip()
-        if token_version == "v1":
-            return self._v1_export_header(request)
-        if token_version == "v2":
-            return self._v2_export_header(request)
-        return self._legacy_export_header(request)
-
-    def _authenticate_export_user(
-        self, request: HttpRequest, header_value: str
-    ) -> Any | None:
-        request.META["HTTP_AUTHORIZATION"] = header_value
-        authenticator = TokenAuthentication()
-        try:
-            auth_result = authenticator.authenticate(request)
-        except Exception:
-            auth_result = None
-
-        if not auth_result:
-            messages.error(request, "The provided NetBox token is invalid.")
-            return None
-
-        user, _token = auth_result
-        if not user.is_authenticated:
-            messages.error(
-                request, "The provided NetBox token could not be authenticated."
-            )
-            return None
-
-        if not user.has_perm("netbox_proxbox.view_fastapiendpoint"):
-            messages.error(
-                request,
-                "The provided token user does not have permission to view FastAPI endpoints.",
-            )
-            return None
-
-        return user
-
-    def _validate_sensitive_export_token(self, request: HttpRequest) -> Any | None:
-        """Return the authenticated token user authorized for secret export."""
-        header_value = self._sensitive_export_header(request)
-        if header_value is None:
-            return None
-        return self._authenticate_export_user(request, header_value)
+    def _validate_sensitive_export_token(self, request: HttpRequest) -> Any:
+        """Authorize the current actor; supplied tokens do not confer access."""
+        require_sensitive_data_access(request.user)
+        return request.user
 
     def _resolve_export_format(self, request: HttpRequest) -> str:
         """Normalize ``format`` from GET/POST to one of ``allowed_formats`` (default csv)."""
         format_value = (
-            request.GET.get("format") or request.POST.get("format") or "csv"
+            request.POST.get("format") or request.GET.get("format") or "csv"
         ).lower()
         return format_value if format_value in self.allowed_formats else "csv"
 
+    @sensitive_variables()
     def _export_response(
         self,
         request: HttpRequest,
@@ -291,9 +196,9 @@ class FastAPIEndpointExportView(generic.ObjectListView):
 
         import yaml
 
-        queryset = reapply_model_ordering(super().get_queryset(request))
-        if self.filterset:
-            queryset = self.filterset(request.GET, queryset, request=request).qs
+        queryset = self.authorized_export_queryset(
+            request, include_sensitive=include_sensitive
+        )
 
         fieldnames = _fastapi_export_fieldnames(include_sensitive)
         rows = [
@@ -322,6 +227,8 @@ class FastAPIEndpointExportView(generic.ObjectListView):
         response["Content-Disposition"] = (
             f'attachment; filename="netbox_proxbox_fastapi_endpoints_{suffix}.{data_format}"'
         )
+        if include_sensitive:
+            response["Cache-Control"] = "no-store"
         return response
 
     def get(self, request: HttpRequest) -> HttpResponse:
@@ -334,15 +241,11 @@ class FastAPIEndpointExportView(generic.ObjectListView):
         )
 
     def post(self, request: HttpRequest) -> HttpResponse:
-        """Export with optional secrets after ``_validate_sensitive_export_token`` succeeds."""
+        """Export with optional secrets under the current actor's explicit grant."""
         include_sensitive = request.POST.get("include_sensitive") == "true"
         data_format = self._resolve_export_format(request)
-        material_user = None
-        if include_sensitive:
-            material_user = self._validate_sensitive_export_token(request)
-            if material_user is None:
-                return redirect("plugins:netbox_proxbox:fastapiendpoint_list")
-        return self._export_response(
+        material_user = request.user if include_sensitive else None
+        return self.protected_export_response(
             request,
             include_sensitive=include_sensitive,
             data_format=data_format,
@@ -402,44 +305,3 @@ class FastAPIEndpointDeleteView(generic.ObjectDeleteView):
             request=request,
         ):
             return super().post(request, *args, **kwargs)
-
-
-@register_model_view(
-    FastAPIEndpoint,
-    "quick_add_token",
-    path="export/quick-add-token",
-    detail=False,
-)
-class FastAPIExportQuickAddTokenView(View):
-    """Create a temporary v1 NetBox API token for use with the sensitive export modal.
-
-    The token is created under the current user's account and its plaintext is returned
-    once in the JSON response.  The UI warns the user to delete or securely store the
-    token after the export is complete.
-    """
-
-    def post(self, request: HttpRequest) -> JsonResponse:
-        from users.models import Token
-
-        if not request.user.is_authenticated:
-            return JsonResponse({"error": "Authentication required."}, status=401)
-
-        if not request.user.has_perm("users.add_token"):
-            return JsonResponse(
-                {"error": "You do not have permission to create tokens."}, status=403
-            )
-
-        try:
-            token = Token(version=1, user=request.user)
-            token.full_clean()
-            token.save()
-        except Exception as exc:
-            return JsonResponse({"error": f"Failed to create token: {exc}"}, status=500)
-
-        return JsonResponse(
-            {
-                "id": token.pk,
-                "display": str(token),
-                "plaintext": token.plaintext,
-            }
-        )

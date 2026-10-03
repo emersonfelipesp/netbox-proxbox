@@ -4,6 +4,10 @@ from django.urls import include, path
 from netbox.api.routers import NetBoxRouter
 
 from . import views
+from .sensitive_data_access import (
+    SensitiveDataAccessViewSet,
+    SensitiveDataReadinessView,
+)
 from .ha import HAClusterSummaryAPIView, HAVMResourceAPIView
 from .jobs import ProxboxJobCancelAPIView
 from .sync_jobs import ProxboxSyncJobViewSet
@@ -54,6 +58,11 @@ endpoints_router.register("pbs", views.PBSEndpointViewSet, basename="pbsendpoint
 endpoints_router.register("pdm", views.PDMEndpointViewSet, basename="pdmendpoint")
 
 router = NetBoxRouter()
+router.register(
+    "sensitive-data-access",
+    SensitiveDataAccessViewSet,
+    basename="proxboxsensitivedataaccess",
+)
 router.APIRootView = views.ProxBoxRootView
 router.register(
     "proxmox-clusters", views.ProxmoxClusterViewSet, basename="proxmoxcluster"
@@ -303,6 +312,11 @@ router.register(
 )
 
 urlpatterns = [
+    path(
+        "sensitive-data-readiness/",
+        SensitiveDataReadinessView.as_view(),
+        name="sensitive-data-readiness",
+    ),
     path(
         "endpoints/proxmox/<int:endpoint_id>/services/refresh/",
         ProxmoxServiceMonitoringRefreshAPIView.as_view(),

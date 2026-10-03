@@ -12,6 +12,7 @@ from django.utils import timezone
 from django.utils.translation import gettext_lazy as _
 from netbox.models import NetBoxModel
 
+
 from netbox_proxbox.choices import (
     CloudImageOSFamilyChoices,
     FirecrackerHostStatusChoices,
@@ -169,6 +170,14 @@ class FirecrackerHost(NetBoxModel):
         unique_together = ("pool", "name")
         verbose_name = _("Firecracker host")
         verbose_name_plural = _("Firecracker hosts")
+
+    def serialize_object(self, exclude=None) -> dict[str, object]:
+        """Redact sensitive fields in every NetBox change-log snapshot."""
+        from netbox_proxbox.models.changelog_redaction import redact_snapshot_data
+
+        return redact_snapshot_data(
+            self._meta.model_name, super().serialize_object(exclude=exclude)
+        )
 
     def __str__(self) -> str:
         return f"{self.name} ({self.pool})"

@@ -3,6 +3,7 @@
 # Django Imports
 from django import forms
 from django.utils.translation import gettext_lazy as _
+from django.views.decorators.debug import sensitive_variables
 
 # NetBox Imports
 from utilities.forms.fields import (
@@ -66,10 +67,13 @@ class NetBoxEndpointForm(NetBoxModelForm):
 
     token_secret = forms.CharField(
         required=False,
-        help_text="Enter the NetBox v2 token secret when not selecting an existing API token.",
+        help_text=(
+            "Enter the NetBox v2 token secret. Leave blank to preserve an existing "
+            "secret only when the token key and connection identity are unchanged."
+        ),
         label="Token Secret",
         widget=forms.PasswordInput(
-            render_value=True, attrs={"autocomplete": "new-password"}
+            render_value=False, attrs={"autocomplete": "new-password"}
         ),
     )
 
@@ -112,6 +116,31 @@ class NetBoxEndpointForm(NetBoxModelForm):
             else NetBoxTokenVersionChoices.V1
         )
 
+    @sensitive_variables()
+    def _preserved_v2_secret(
+        self, cleaned_data: dict[str, object], *, token_key: str
+    ) -> str:
+        """Preserve a hidden secret only for the same persisted authentication target."""
+        if (
+            self.instance.pk is None
+            or self.instance.token_version != NetBoxTokenVersionChoices.V2
+        ):
+            return ""
+        if self.instance.token_key != token_key:
+            return ""
+        if self.instance.ip_address_id != getattr(
+            cleaned_data.get("ip_address"), "pk", None
+        ):
+            return ""
+        identity_fields = ("domain", "port", "verify_ssl")
+        if any(
+            getattr(self.instance, field) != cleaned_data.get(field)
+            for field in identity_fields
+        ):
+            return ""
+        return self.instance.token_secret or ""
+
+    @sensitive_variables()
     def clean(self) -> dict[str, object]:
         """Validate host target and mutually consistent token / key-secret auth."""
         super().clean()
@@ -149,6 +178,10 @@ class NetBoxEndpointForm(NetBoxModelForm):
             cleaned_data["token_key"] = ""
             cleaned_data["token_secret"] = ""
         elif token_version == NetBoxTokenVersionChoices.V2:
+            if not token_secret:
+                token_secret = self._preserved_v2_secret(
+                    cleaned_data, token_key=token_key
+                )
             if not token_key:
                 self.add_error(
                     "token_key", "Token key is required when using a v2 token."

@@ -22,6 +22,7 @@ from ..models import FastAPIEndpoint
 from ..utils import resolve_ip_address_initial
 
 from .import_utils import NullableCSVIntegerField, validate_endpoint_import_headers
+from .transport_defaults import SecureTransportImportDefaultsMixin
 
 
 class BackendKeyAdoptionFormMixin:
@@ -152,8 +153,14 @@ class FastAPIEndpointForm(BackendKeyAdoptionFormMixin, NetBoxModelForm):
         return cleaned_data
 
 
-class FastAPIEndpointImportForm(BackendKeyAdoptionFormMixin, NetBoxModelImportForm):
+class FastAPIEndpointImportForm(
+    SecureTransportImportDefaultsMixin,
+    BackendKeyAdoptionFormMixin,
+    NetBoxModelImportForm,
+):
     """CSV import mapping for bulk FastAPI endpoint creation."""
+
+    secure_default_fields = ("use_https", "verify_ssl")
 
     token = forms.CharField(required=False)
     ip_address = forms.CharField(

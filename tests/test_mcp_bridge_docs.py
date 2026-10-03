@@ -241,10 +241,10 @@ def test_sdk_supported_schema_subset_rejects_bridge_argument_mutations() -> None
 def test_llm_and_project_docs_link_the_authoritative_guide() -> None:
     expected_links = {
         "README.md": "api/semantic-mcp-bridge/",
-        "AGENTS.md": "docs/api/semantic-mcp-bridge.md",
         "CLAUDE.md": "docs/api/semantic-mcp-bridge.md",
-        "netbox_proxbox/CLAUDE.md": "docs/api/semantic-mcp-bridge.md",
-        "netbox_proxbox/api/CLAUDE.md": "docs/api/semantic-mcp-bridge.md",
+        "AGENTS.md": "docs/api/semantic-mcp-bridge.md",
+        "netbox_proxbox/AGENTS.md": "docs/api/semantic-mcp-bridge.md",
+        "netbox_proxbox/api/AGENTS.md": "docs/api/semantic-mcp-bridge.md",
         "docs/api/index.md": "semantic-mcp-bridge.md",
         "docs/features/api-integration.md": "semantic-mcp-bridge.md",
         "docs/features/scheduled-sync.md": "semantic-mcp-bridge.md",

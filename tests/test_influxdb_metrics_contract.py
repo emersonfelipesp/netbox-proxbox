@@ -94,6 +94,9 @@ def _load_model(monkeypatch: pytest.MonkeyPatch):
     }.items():
         monkeypatch.setitem(sys.modules, name, module)
 
+    from tests.test_changelog_secret_redaction import load_redaction
+
+    load_redaction(monkeypatch)
     module_name = "_test_proxmox_metrics_model"
     spec = importlib.util.spec_from_file_location(
         module_name, ROOT / "netbox_proxbox/models/proxmox_metrics.py"

@@ -1332,6 +1332,8 @@ def rotate_encryption_key(
         raise OldEncryptionKeyRejected(
             "The replacement encryption key must differ from the current key."
         )
+    if not enc_helpers.is_canonical_fernet_key(new_value):
+        raise OldEncryptionKeyRejected(enc_helpers.NON_CANONICAL_KEY_MESSAGE)
 
     try:
         with transaction.atomic():

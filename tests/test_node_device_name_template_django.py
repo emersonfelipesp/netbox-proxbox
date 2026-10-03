@@ -135,10 +135,12 @@ class NodeDeviceNameTemplateMigrationTest(ForwardOnlyMigrationTestCase):
                     )._meta.get_fields()
                 },
             )
-            self.assertEqual(
-                MigrationExecutor(connection).loader.graph.leaf_nodes("netbox_proxbox"),
-                [self.migrate_to],
-            )
+            graph = MigrationExecutor(connection).loader.graph
+            leaves = graph.leaf_nodes("netbox_proxbox")
+            # Later migrations may follow 0103; the graph must still have one
+            # plugin leaf that descends from the migration under test.
+            self.assertEqual(len(leaves), 1)
+            self.assertIn(self.migrate_to, graph.forwards_plan(leaves[0]))
         finally:
             self._restore_current_leaf()
 

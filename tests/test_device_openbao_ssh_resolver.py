@@ -125,9 +125,18 @@ def test_openbao_not_installed_returns_none(monkeypatch) -> None:
     assert module.resolve_node_ssh_from_device_openbao(node) is None
 
 
-def test_ssh_disabled_on_owning_endpoint_denies_before_any_lookup(monkeypatch) -> None:
+@pytest.mark.parametrize(
+    "flags",
+    [
+        {"ssh_access_enabled": False},
+        {"ssh_access_enabled": True, "enabled": False},
+    ],
+)
+def test_ssh_disabled_on_owning_endpoint_denies_before_any_lookup(
+    monkeypatch, flags
+) -> None:
     module, PermissionDenied = _load_module(monkeypatch, installed={"netbox_openbao"})
-    node = _node(endpoint=types.SimpleNamespace(ssh_access_enabled=False))
+    node = _node(endpoint=types.SimpleNamespace(**flags))
 
     def _boom(*_args, **_kwargs):
         raise AssertionError("no lookup may run once SSH is gated off")

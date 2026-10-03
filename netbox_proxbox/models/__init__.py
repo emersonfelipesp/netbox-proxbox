@@ -52,6 +52,7 @@ from netbox_proxbox.models.service_monitoring import (
     ProxmoxServiceStatus,
 )
 from netbox_proxbox.models.ssh_credential import NodeSSHCredential
+from netbox_proxbox.models.sensitive_data_access import ProxboxSensitiveDataAccess
 from netbox_proxbox.models.storage import ProxmoxStorage, ProxmoxStorageVirtualDisk
 from netbox_proxbox.models.sync_state import (
     ProxboxClusterGroupSyncState,
@@ -111,6 +112,7 @@ __all__ = (
     "PDMRemote",
     "PDMRemoteTypeChoices",
     "ProxboxPluginSettings",
+    "ProxboxSensitiveDataAccess",
     "ProxmoxApplyJob",
     "ProxmoxCluster",
     "ProxmoxEndpoint",

@@ -6,6 +6,22 @@ from netbox_proxbox.models import ProxmoxEndpoint
 from netbox_proxbox.views.backend_sync import resolve_backend_endpoint_ids
 
 
+def viewable_enabled_endpoint_ids(user: object) -> list[int]:
+    """Return the enabled Proxmox endpoint pks ``user`` may view.
+
+    NetBox's restricted queryset applies object-permission constraints and, for
+    anonymous callers when ``LOGIN_REQUIRED`` is off, returns rows only when the
+    view permission is exempt. Pass the result as ``endpoint_ids`` so proxied
+    live reads never cover endpoints the caller cannot see; an empty list
+    resolves to no scope, never to every endpoint.
+    """
+    return list(
+        ProxmoxEndpoint.objects.restrict(user, "view")
+        .filter(enabled=True)
+        .values_list("pk", flat=True)
+    )
+
+
 def enabled_backend_endpoint_scope(
     *,
     base_url: str,

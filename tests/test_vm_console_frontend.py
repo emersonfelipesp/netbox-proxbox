@@ -434,13 +434,16 @@ def test_package_builds_run_the_distribution_verifier() -> None:
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="Node.js is not installed")
-def test_console_browser_state_machine_at_runtime() -> None:
+def test_console_browser_state_machine_at_runtime(tmp_path: Path) -> None:
+    # The .mjs extension works across Node releases, including those that have
+    # removed --experimental-default-type=module. Test the exact shipped source.
+    module_path = tmp_path / "vm_console.mjs"
+    module_path.write_bytes(JS_PATH.read_bytes())
     subprocess.run(
         [
             "node",
-            "--experimental-default-type=module",
             str(RUNTIME_TEST_PATH),
-            str(JS_PATH),
+            str(module_path),
         ],
         cwd=REPO_ROOT,
         check=True,

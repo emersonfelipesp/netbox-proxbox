@@ -561,6 +561,9 @@ def ensure_netbox_plugin_endpoints(
             "name": "local-proxbox-api",
             "ip_address": proxbox_api_ip_obj["id"],
             "port": 8000,
+            # The E2E proxbox-api container serves plain HTTP; new endpoints
+            # default to HTTPS, so the harness opts out explicitly.
+            "use_https": False,
             "verify_ssl": False,
             "token": proxbox_api_key,
             "use_websocket": False,

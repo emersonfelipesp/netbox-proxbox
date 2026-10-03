@@ -31,6 +31,7 @@ from ..choices import (
 from .settings import _parse_tenant_regex_rules, _sync_mode_choice_options
 
 from .import_utils import validate_endpoint_import_headers
+from .transport_defaults import SecureTransportImportDefaultsMixin
 from ..models import ProxboxPluginSettings
 from ..utils import encryption as enc_helpers
 from ..models.ssh_credential import (
@@ -974,8 +975,12 @@ class ProxmoxEndpointFilterForm(NetBoxModelFilterSetForm):
     )
 
 
-class ProxmoxEndpointImportForm(NetBoxModelImportForm):
+class ProxmoxEndpointImportForm(
+    SecureTransportImportDefaultsMixin, NetBoxModelImportForm
+):
     """CSV import mapping for bulk Proxmox endpoint creation."""
+
+    secure_default_fields = ("verify_ssl",)
 
     password = forms.CharField(required=False)
     token_value = forms.CharField(required=False)

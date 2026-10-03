@@ -174,6 +174,21 @@ def sync_vm_template_module(monkeypatch):
 
     services_pkg = types.ModuleType("netbox_proxbox.services")
     monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_pkg)
+    # The service imports these dependency-free modules directly; path-load
+    # the real ones so the fixture runs in isolation, not only after another
+    # test has imported the real ``netbox_proxbox.services`` package.
+    for dependency in ("backend_path", "sync_deadline"):
+        dependency_name = f"netbox_proxbox.services.{dependency}"
+        dependency_spec = importlib.util.spec_from_file_location(
+            dependency_name,
+            REPO_ROOT / "netbox_proxbox" / "services" / f"{dependency}.py",
+        )
+        assert dependency_spec is not None and dependency_spec.loader is not None
+        dependency_module = importlib.util.module_from_spec(dependency_spec)
+        # Register before executing: dataclasses resolve string annotations
+        # through ``sys.modules[cls.__module__]``.
+        monkeypatch.setitem(sys.modules, dependency_name, dependency_module)
+        dependency_spec.loader.exec_module(dependency_module)
     backend_proxy = types.ModuleType("netbox_proxbox.services.backend_proxy")
     backend_proxy.get_fastapi_request_context = lambda: None
     monkeypatch.setitem(
@@ -301,3 +316,128 @@ def test_sync_vm_templates_fetches_config_before_atomic_and_deletes_stale(
         (100, False),
         (102, True),
     }
+
+
+def test_unsafe_node_name_preserves_stored_template_configuration(
+    sync_vm_template_module,
+    monkeypatch,
+):
+    """A rejected identifier must not overwrite or delete the stored template."""
+    stored = sync_vm_template_module._template_manager.items[0]
+    stored.net_config = {"net0": "virtio,bridge=vmbr0"}
+    stored.os_type = "l26"
+    resources_payload = [
+        {
+            "pve-cluster": [
+                {
+                    "type": "qemu",
+                    "vmid": 101,
+                    "template": 1,
+                    "node": "../extras",
+                    "name": "hostile-node-template",
+                }
+            ]
+        }
+    ]
+    urls: list[str] = []
+
+    def fake_get(url, **_kwargs):
+        urls.append(url)
+        if url.endswith("/proxmox/cluster/resources"):
+            return _Response(resources_payload)
+        raise AssertionError(f"unexpected backend request: {url}")
+
+    monkeypatch.setattr(sync_vm_template_module.requests, "get", fake_get)
+
+    result = sync_vm_template_module.sync_vm_templates(
+        endpoint_id=1,
+        fastapi_url="http://backend:8000",
+        auth_headers={"Authorization": "Bearer token"},
+    )
+
+    assert all("extras" not in url for url in urls)
+    assert result.templates_skipped == 1
+    assert result.templates_updated == 0
+    assert stored in sync_vm_template_module._template_manager.items
+    assert stored.net_config == {"net0": "virtio,bridge=vmbr0"}
+    assert stored.os_type == "l26"
+    assert not hasattr(stored, "saved_update_fields")
+
+
+def test_backend_config_failure_preserves_stored_template(
+    sync_vm_template_module,
+    monkeypatch,
+):
+    stored = sync_vm_template_module._template_manager.items[0]
+    stored.os_type = "l26"
+    resources_payload = [
+        {"pve-cluster": [{"type": "qemu", "vmid": 101, "template": 1, "node": "pve01"}]}
+    ]
+
+    def fake_get(url, **_kwargs):
+        if url.endswith("/proxmox/cluster/resources"):
+            return _Response(resources_payload)
+        raise sync_vm_template_module.requests.RequestException("backend down")
+
+    monkeypatch.setattr(sync_vm_template_module.requests, "get", fake_get)
+
+    result = sync_vm_template_module.sync_vm_templates(
+        endpoint_id=1,
+        fastapi_url="http://backend:8000",
+        auth_headers={"Authorization": "Bearer token"},
+    )
+
+    assert result.templates_skipped == 1
+    assert stored in sync_vm_template_module._template_manager.items
+    assert stored.os_type == "l26"
+
+
+@pytest.mark.parametrize("node", [None, "", "   "])
+def test_missing_node_preserves_stored_template_and_still_syncs_others(
+    sync_vm_template_module,
+    monkeypatch,
+    node,
+):
+    """A row without a node keeps its template; good rows update; stale rows go."""
+    manager = sync_vm_template_module._template_manager
+    preserved = manager.items[0]  # vmid 101
+    preserved.os_type = "l26"
+    manager.items.append(
+        sync_vm_template_module_template(manager, pk=50, vmid=150)  # stale row
+    )
+    resources_payload = [
+        {
+            "pve-cluster": [
+                {"type": "qemu", "vmid": 101, "template": 1, "node": node},
+                {"type": "qemu", "vmid": 120, "template": 1, "node": "pve01"},
+            ]
+        }
+    ]
+
+    def fake_get(url, **_kwargs):
+        if url.endswith("/proxmox/cluster/resources"):
+            return _Response(resources_payload)
+        if url.endswith("/proxmox/pve01/qemu/120/config"):
+            return _Response({"cores": 1, "ostype": "l26"})
+        raise AssertionError(f"unexpected backend request: {url}")
+
+    monkeypatch.setattr(sync_vm_template_module.requests, "get", fake_get)
+
+    result = sync_vm_template_module.sync_vm_templates(
+        endpoint_id=1,
+        fastapi_url="http://backend:8000",
+        auth_headers={"Authorization": "Bearer token"},
+    )
+
+    vmids = {template.vmid for template in manager.items}
+    assert result.templates_skipped == 1
+    assert result.templates_created == 1
+    assert preserved in manager.items
+    assert preserved.os_type == "l26"
+    assert 120 in vmids
+    assert 150 not in vmids
+
+
+def sync_vm_template_module_template(manager, *, pk: int, vmid: int):
+    """Build an extra stored template bound to the fixture endpoint."""
+    return _Template(pk=pk, proxmox_endpoint=manager.endpoint, vmid=vmid)

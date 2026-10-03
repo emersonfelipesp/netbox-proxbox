@@ -55,6 +55,10 @@ facts that an agent must have even when `@CLAUDE.md` expansion is unavailable:
 
 ## LLM Agent Safety Guardrails
 
+Automated agents must follow `AGENTS.md` § LLM Agent Safety Guardrails before any
+destruction-adjacent workflow; inspection and explanation are allowed, confirmation
+and approval are not.
+
 Proxbox protects destruction behind a five-lock chain:
 
 1. The `allow_delete` plugin setting must be enabled.
@@ -76,21 +80,24 @@ The complete semantic bridge contract is
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.0` GA. The current
-plugin version is `0.0.27.post1`.
+plugin version is `0.0.29rc1`.
 
-Current source pairing: netbox-proxbox 0.0.27.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source pairing: netbox-proxbox 0.0.29rc1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The last documented released runtime pairing for this release line remains
 netbox-proxbox 0.0.27 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15
 <-> netbox-sdk 0.0.13. Do not rewrite historical release notes when the source
 pairing advances.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.27.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.29rc1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 ## Current implementation surfaces
 
-The current schema tip is migration
-`0103_custom_fields_request_delay_help_text`.
+The current schema tip is migration `0104_security_hardening`.
+Sensitive endpoint exports and runtime-key disclosure require an active,
+authenticated superuser or the default-off per-user sensitive-data flag.
+Only active superusers may administer grants. Keep object and provider checks
+independent, resolve material with the request actor, and never cache grants.
 Proxmox node Device names use the effective endpoint/global
 `node_device_name_template`; keep the original short node name in Proxmox API
 paths and typed sync-state identity.
@@ -178,6 +185,20 @@ UUID disclosure.
 Interactive storage validation uses only provider, default-engine, and exact-
 policy readiness. RPC and the automation service user remain composed-command
 and panel checks. A failed final command check must roll back all setup writes.
+
+SSH secret APIs require the same fresh sensitive-data grant in addition to
+API-token authentication, HTTPS, object visibility, and provider permissions.
+New ObjectChange snapshots redact settings keys, credential material,
+ciphertext, and provider references through a shared registry. Historical
+snapshots are unchanged. Proxmox and NetBox endpoint target edits invalidate
+`approved_connection_target_fingerprint`; credential payloads require exact
+approval before resolution and again before transmission. Review the target
+with GET and approve its fingerprint with PUT on the endpoint's
+`connection-authority` API action. Approval requires sensitive-data access and
+independent view/change access. Migration `0104_security_hardening`
+leaves existing approvals blank. FastAPI target changes additionally require
+sensitive authority before its existing authentication/adoption flow; disabled
+backend target edits remain drafts.
 
 ## GitHub matrix observation
 

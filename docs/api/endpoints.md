@@ -113,7 +113,7 @@ curl -H "Authorization: Token <token>" \
 | `password` | string (write-only) | Proxmox user password for auth |
 | `token_name` | string | Proxmox API token name |
 | `token_value` | string (write-only) | Proxmox API token secret |
-| `verify_ssl` | boolean | Whether to verify the Proxmox TLS certificate (default `false`) |
+| `verify_ssl` | boolean | Whether to verify the Proxmox TLS certificate (default `true` for new endpoints; existing rows keep their stored value) |
 | `enabled` | boolean | Local inventory toggle. Disabled endpoints remain visible but are excluded from operational reads, registration, keepalive, status, and sync paths. |
 | `node_device_name_template` | string | Optional per-endpoint NetBox Device naming template. Blank inherits the global setting. Supported placeholders: `{node}`, `{cluster}`, `{cluster_slug}`, and `{endpoint}`. |
 | `allowed_tenants` | nested Tenant list | Tenant allow-list for endpoint visibility. Empty means default/global visibility. |
@@ -163,7 +163,19 @@ including a switch back to `{node}`. Operator-assigned names are preserved.
     separate endpoint ID. A failed backend revocation leaves the read-only
     confirmed flag true and causes single or bulk REST deletion to return 409.
 
+### Connection target authority
+
+The Proxmox and NetBox detail APIs expose a `connection-authority/` action.
+GET returns secret-free target metadata, its fingerprint, and approval state.
+PUT accepts only the reviewed `target_fingerprint` and requires sensitive-data
+access plus independent object view/change permission and a write-enabled API
+token. Missing or stale approval blocks backend credential payloads before
+resolution. Migration 0105 does not trust existing targets automatically.
+See [Connection target approval](../features/endpoint-import-export.md#connection-target-approval).
+
 !!! tip "Endpoint SSH terminal credentials"
+    SSH secret reads also require the sensitive-data grant, API-token authentication,
+    HTTPS outside development, object visibility, and provider reveal rights.
     The endpoint SSH secrets endpoint keeps the same response shape for both
     credential sources. Dedicated mode decrypts stored `ssh_*_enc` fields and
     requires the plugin encryption key. Reuse mode returns
@@ -386,7 +398,7 @@ curl -H "Authorization: Token <token>" \
 | `ip_address` | nested IPAddress (nullable) | NetBox IPAddress object linked to this endpoint |
 | `domain` | string (nullable) | FQDN, hostname, or `localhost` |
 | `port` | integer | HTTP API port (default `8800`) |
-| `use_https` | boolean | URL scheme selector. `true` → `https://`, `false` → `http://`. Independent of `verify_ssl` since v0.0.15 (migration `0038`, [#352](https://github.com/emersonfelipesp/netbox-proxbox/issues/352)). See [Backend Setup → TLS combinations](../installation/backend-setup.md) and [v0.0.15 release notes](../release-notes/version-0.0.15.md). |
+| `use_https` | boolean | URL scheme selector (default `true` for new endpoints). `true` → `https://`, `false` → `http://`. Independent of `verify_ssl` since v0.0.15 (migration `0038`, [#352](https://github.com/emersonfelipesp/netbox-proxbox/issues/352)). See [Backend Setup → TLS combinations](../installation/backend-setup.md) and [v0.0.15 release notes](../release-notes/version-0.0.15.md). |
 | `verify_ssl` | boolean | Whether to verify the backend TLS certificate. Only meaningful when `use_https=true`. |
 | `enabled` | boolean | Operational gate. Disabled rows perform no backend connection and cannot stage or rotate a key. |
 | `token` | string (write-only) | Explicit backend API-key candidate. Blank preserves an existing key only when no activation or target change requires resubmission. |

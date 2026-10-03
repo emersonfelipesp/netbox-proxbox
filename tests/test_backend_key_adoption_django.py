@@ -64,6 +64,7 @@ except Exception as exc:  # pragma: no cover - external test harness availabilit
         allow_module_level=True,
     )
 
+from django.contrib.auth.models import AnonymousUser  # noqa: E402
 from django.core.exceptions import ValidationError  # noqa: E402
 from django.core.management import call_command  # noqa: E402
 from django.db import IntegrityError, connection, transaction  # noqa: E402
@@ -299,6 +300,11 @@ class BackendKeyPersistenceTests(TransactionTestCase):
     _discovery_client_patch: ClassVar[object]
 
     def setUp(self) -> None:
+        from netbox.context import current_request
+
+        actor = make_user("backend-target-reviewer", is_superuser=True)
+        context_token = current_request.set(SimpleNamespace(user=actor))
+        self.addCleanup(current_request.reset, context_token)
         self.backend = _StatefulBackend()
         self._client_patch = patch(
             "netbox_proxbox.services.backend_key_adoption.get_default_http_client",
@@ -1370,7 +1376,9 @@ class BackendKeyPersistenceTests(TransactionTestCase):
                 side_effect=AssertionError("disabled endpoint must not connect"),
             ) as start_websocket,
         ):
-            response = WebSocketView().get(SimpleNamespace(GET={}), "full-update")
+            response = WebSocketView().get(
+                SimpleNamespace(GET={}, user=AnonymousUser()), "full-update"
+            )
 
         self.assertEqual(response.status_code, 404)
         get_url.assert_not_called()

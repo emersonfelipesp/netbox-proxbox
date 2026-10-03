@@ -28,6 +28,7 @@ from django.views.decorators.debug import sensitive_variables
 
 from netbox.models import NetBoxModel
 
+
 AUTH_METHOD_KEY = "key"
 AUTH_METHOD_PASSWORD = "password"
 
@@ -163,6 +164,14 @@ class NodeSSHCredential(NetBoxModel):
         ordering = ("node",)
         verbose_name = _("Node SSH credential")
         verbose_name_plural = _("Node SSH credentials")
+
+    def serialize_object(self, exclude=None) -> dict[str, object]:
+        """Redact sensitive fields in every NetBox change-log snapshot."""
+        from netbox_proxbox.models.changelog_redaction import redact_snapshot_data
+
+        return redact_snapshot_data(
+            self._meta.model_name, super().serialize_object(exclude=exclude)
+        )
 
     def __str__(self) -> str:
         return f"{self.username}@{self.node}"

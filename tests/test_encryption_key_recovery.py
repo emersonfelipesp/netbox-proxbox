@@ -269,13 +269,20 @@ def test_recovery_surfaces_never_render_keys_and_runtime_stays_permissioned() ->
         ROOT / "netbox_proxbox" / "templates" / "netbox_proxbox" / "settings.html"
     ).read_text()
 
-    assert "encryption_key if _user_can_read_runtime_secret(request.user)" in api
-    assert "_user_can_read_runtime_secret(request.user)" in api
-    assert 'get_permission_for_model(models.ProxboxPluginSettings, "change")' in api
+    assert (
+        "_user_can_read_runtime_secret(request.user, settings_pk=settings_obj.pk)"
+        in api
+    )
+    assert 'models.ProxboxPluginSettings.objects.restrict(user, "view")' in api
+    assert "not can_access_sensitive_data(user)" in api
+    assert 'get_permission_for_model(models.ProxboxPluginSettings, "change")' not in api
     assert "old_key.value" not in template
     assert "new_key.value" not in template
     assert "settings_obj.encryption_key" not in template
     assert "innerHTML" not in template
+
+
+def test_recovery_request_and_helper_debug_redaction() -> None:
     assert (
         'sensitive_post_parameters("old_key", "new_key", "confirm_new_key")'
         in (ROOT / "netbox_proxbox" / "views" / "settings.py").read_text()
@@ -291,6 +298,9 @@ def test_recovery_surfaces_never_render_keys_and_runtime_stays_permissioned() ->
         "@sensitive_variables()\ndef encrypted_family_statuses" in RECOVERY.read_text()
     )
     assert "@sensitive_variables()\ndef ciphertext_state" in RECOVERY.read_text()
+
+
+def test_recovery_model_serializer_and_terminal_debug_redaction() -> None:
     settings_model = (MODELS / "plugin_settings.py").read_text()
     settings_serializer = (
         ROOT / "netbox_proxbox" / "api" / "serializers" / "settings.py"
@@ -308,7 +318,11 @@ def test_recovery_surfaces_never_render_keys_and_runtime_stays_permissioned() ->
     encryption_helpers = (
         ROOT / "netbox_proxbox" / "utils" / "encryption.py"
     ).read_text()
-    assert encryption_helpers.count("@sensitive_variables()") == 5
+    assert encryption_helpers.count("@sensitive_variables()") == 7
+    assert "@sensitive_variables()\ndef is_canonical_fernet_key" in encryption_helpers
+    assert (
+        "@sensitive_variables()\ndef require_canonical_fernet_key" in encryption_helpers
+    )
     settings_form = (ROOT / "netbox_proxbox" / "forms" / "settings.py").read_text()
     assert "current_encryption_key" not in settings_form
     assert 'kwargs.pop("encryption_key_configured", False)' in settings_form

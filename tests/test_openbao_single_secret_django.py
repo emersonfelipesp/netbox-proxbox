@@ -752,6 +752,7 @@ def test_fastapi_sensitive_export_uses_authenticated_token_user_authority(
     from netbox_proxbox.views.endpoints.fastapi_export import (
         _serialize_fastapi_endpoint,
     )
+    from netbox_proxbox.models import ProxboxSensitiveDataAccess
     from tests.django_support import grant_user_permissions
 
     actor, _policy, _backend = openbao_single_estate
@@ -763,6 +764,9 @@ def test_fastapi_sensitive_export_uses_authenticated_token_user_authority(
     permitted_group = group_model.objects.create(name="export-provider-permitted")
     _policy.groups.add(permitted_group)
     denied = get_user_model().objects.create_user(username="export-provider-denied")
+    ProxboxSensitiveDataAccess.objects.create(
+        user=denied, can_access_sensitive_data=True
+    )
     grant_user_permissions(
         denied,
         [
@@ -804,7 +808,7 @@ def test_fastapi_sensitive_export_uses_authenticated_token_user_authority(
     monkeypatch.setattr(view, "_export_response", capture_export)
     response = view.post(request)
     assert response.status_code == 200
-    assert captured["material_user"] == denied
+    assert captured["material_user"] == actor
 
 
 def test_authenticated_fastapi_ui_create_starts_provider_before_netbox_atomic(

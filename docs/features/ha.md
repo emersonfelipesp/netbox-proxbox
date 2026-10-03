@@ -58,14 +58,30 @@ When the cluster has no HA configured, each section renders an empty-state row i
 
 ## HA Arm / Disarm
 
-Two AJAX POST endpoints allow operators to arm (enable HA management) or disarm (remove from HA management) a Proxmox resource directly from the NetBox UI:
+Two POST endpoints arm or disarm the Proxmox HA stack (PVE 9.2+
+`cluster/ha/status/arm-ha` / `disarm-ha`) from NetBox:
 
 ```
 POST /plugins/proxbox/ha/arm/
 POST /plugins/proxbox/ha/disarm/
 ```
 
-These routes map to `HAResourceArmView` and `HAResourceDisarmView` respectively (see `netbox_proxbox/urls.py`). Both views forward the request to the `proxbox-api` backend which issues the corresponding Proxmox HA manager API call. The endpoints are AJAX-friendly and return JSON status responses.
+These routes map to `HaArmView` and `HaDisarmView` in
+`netbox_proxbox/views/ha_actions.py`. They accept CSRF-protected session
+requests only and return JSON with one result per endpoint:
+
+- The caller needs the `run_proxmox_action` action on Proxmox endpoints. Grant
+  it as an additional action on a NetBox object permission whose object type is
+  *Proxbox › Proxmox Endpoint*; constraints limit which endpoints the user may
+  arm or disarm.
+- Only enabled endpoints the caller holds that action on are in scope. An
+  optional `endpoint_id` form field targets one of them (404 outside the
+  caller's scope).
+- Endpoints with **Allow Proxmox-side writes** disabled are reported as
+  `endpoint_writes_disabled` and never sent to the backend.
+- A result is `ok: true` only when proxbox-api returns a non-empty result list
+  whose every row has `status: ok`. proxbox-api answers HTTP 200 even when a
+  cluster rejects the command, so a per-cluster error is reported as failure.
 
 !!! info "Backend requirement"
     HA arm/disarm requires `proxbox-api >= 0.0.14`. Earlier backends do not expose the corresponding action routes.
@@ -84,7 +100,9 @@ The plugin's REST shim that exposes both backend calls as JSON for non-HTML cons
 ## Permissions
 
 - The VM HA tab uses NetBox's standard `virtualization.view_virtualmachine` permission and `restrict()` so users only see HA state for VMs they may view.
+- HA arm/disarm requires the `run_proxmox_action` action on Proxmox endpoints (see above). Model-level `change_proxmoxendpoint` alone no longer grants it.
 - The cluster page reuses the plugin's dashboard mixin chain (`ConditionalLoginRequiredMixin` + `RequireProxboxDashboardAccessMixin`), so it follows the same access rules as the rest of the Proxbox UI.
+- The HA status page, the VM HA tab, and the HA REST API only ask proxbox-api about enabled Proxmox endpoints the caller may view (`ProxmoxEndpoint.objects.restrict(user, "view")`). An anonymous caller with `LOGIN_REQUIRED = False` sees HA data only when the Proxmox endpoint view permission is exempt.
 
 ## Related Pages
 

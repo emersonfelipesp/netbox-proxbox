@@ -174,7 +174,7 @@ class ProxboxConfig(PluginConfig):
     name = "netbox_proxbox"
     verbose_name = "Proxbox"
     description = "Integrates Proxmox and Netbox"
-    version = "0.0.27.post1"
+    version = "0.0.29rc1"
     author = "Emerson Felipe (@emersonfelipesp)"
     author_email = "emersonfelipe.2003@gmail.com"
     # Sourced from .compat so the backward-compatible and GA contract is
@@ -201,6 +201,9 @@ class ProxboxConfig(PluginConfig):
                 "Skipping ProxBox job and view registration because Pydantic is not installed."
             )
             return
+        from .security_checks import register_security_checks
+
+        register_security_checks()
         from .integrations.openbao import register_openbao_assignable_models
 
         register_openbao_assignable_models()

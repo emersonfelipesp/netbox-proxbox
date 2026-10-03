@@ -6,6 +6,15 @@ from decimal import Decimal
 from pathlib import PurePosixPath
 from django import forms
 
+try:
+    from django.views.decorators.debug import sensitive_variables
+except ImportError:  # pragma: no cover - stubbed Django in focused tests
+
+    def sensitive_variables(*_variables: str):  # type: ignore[no-redef]
+        """Fallback no-op decorator when Django's debug helpers are absent."""
+        return lambda function: function
+
+
 from dcim.models import DeviceRole
 from utilities.forms.fields import DynamicModelChoiceField
 
@@ -518,6 +527,22 @@ class ProxboxPluginSettingsForm(forms.Form):
         ),
     )
 
+    @sensitive_variables()
+    def clean_encryption_key(self) -> str:
+        """Accept only canonical Fernet keys when a new key is entered."""
+        from netbox_proxbox.utils.encryption import (
+            EncryptionKeyInvalid,
+            require_canonical_fernet_key,
+        )
+
+        value = (self.cleaned_data.get("encryption_key") or "").strip()
+        if value:
+            try:
+                require_canonical_fernet_key(value)
+            except EncryptionKeyInvalid as exc:
+                raise forms.ValidationError(str(exc)) from None
+        return value
+
     def clean_vm_interface_sync_strategy(self) -> str:
         """Default omitted legacy settings posts to the additive strategy."""
         return (
@@ -948,9 +973,15 @@ class EncryptionKeyRotationForm(forms.Form):
     def clean(self) -> dict[str, object]:
         """Require matching replacement-key inputs without echoing their values."""
 
+        from netbox_proxbox.utils.encryption import is_canonical_fernet_key
+        from netbox_proxbox.utils.encryption import NON_CANONICAL_KEY_MESSAGE
+
         super().clean()
         if self.cleaned_data.get("new_key") != self.cleaned_data.get("confirm_new_key"):
             self.add_error("confirm_new_key", "The replacement keys do not match.")
+        new_key = self.cleaned_data.get("new_key")
+        if new_key and not is_canonical_fernet_key(str(new_key)):
+            self.add_error("new_key", NON_CANONICAL_KEY_MESSAGE)
         return self.cleaned_data
 
 

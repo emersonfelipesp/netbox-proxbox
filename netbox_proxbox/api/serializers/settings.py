@@ -52,6 +52,21 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
                 raise serializers.ValidationError(
                     {"encryption_key": str(exc)}
                 ) from None
+        if "encryption_key" in attrs:
+            from netbox_proxbox.utils.encryption import (
+                EncryptionKeyInvalid,
+                require_canonical_fernet_key,
+            )
+
+            new_key = str(attrs.get("encryption_key") or "").strip()
+            current_key = str(getattr(self.instance, "encryption_key", "") or "")
+            if new_key and new_key != current_key.strip():
+                try:
+                    require_canonical_fernet_key(new_key)
+                except EncryptionKeyInvalid as exc:
+                    raise serializers.ValidationError(
+                        {"encryption_key": str(exc)}
+                    ) from None
         validated = super().validate(attrs)
         template = validated.get(
             "node_device_name_template",

@@ -2,10 +2,16 @@
 
 from __future__ import annotations
 
+import ipaddress
 from dataclasses import asdict, dataclass, field
 from typing import Any
 from urllib.parse import quote
 
+from netbox_proxbox.services.backend_path import (
+    UnsafeBackendPathSegment,
+    safe_path_segment,
+    safe_vmid,
+)
 from netbox_proxbox.choices import (
     FirewallScopeChoices,
     FirewallSyncStatusChoices,
@@ -477,7 +483,7 @@ def push_ipset_entry(
     return _call_firewall_backend(
         entry,
         method=method,
-        path=path if method == "post" else f"{path}/{quote(str(entry.cidr), safe='')}",
+        path=path if method == "post" else f"{path}/{_ipset_entry_segment(entry.cidr)}",
         payload=payload,
         actor=actor,
         client=client,
@@ -495,7 +501,7 @@ def push_alias(
     path = (
         collection
         if method == "post"
-        else _path_add_segments(collection, quote(str(alias.name), safe=""))
+        else _path_add_segments(collection, _path_segment(str(alias.name)))
     )
     payload = _drop_empty(
         {
@@ -661,7 +667,7 @@ def _rule_preview_target(
         return "/proxmox/firewall/datacenter/groups", None
     if rule.zone == FirewallZoneChoices.NODE:
         return (
-            f"/proxmox/firewall/nodes/{quote(_node_name(rule.proxmox_node), safe='')}/rules",
+            f"/proxmox/firewall/nodes/{_path_segment(_node_name(rule.proxmox_node))}/rules",
             None,
         )
     if rule.zone in {FirewallZoneChoices.VM_QEMU, FirewallZoneChoices.VM_LXC}:
@@ -697,7 +703,7 @@ def _options_preview_target(
         return "/proxmox/firewall/datacenter/options", None
     if options.zone == FirewallZoneChoices.NODE:
         return (
-            f"/proxmox/firewall/nodes/{quote(_node_name(options.proxmox_node), safe='')}/options",
+            f"/proxmox/firewall/nodes/{_path_segment(_node_name(options.proxmox_node))}/options",
             None,
         )
     if options.zone in {FirewallZoneChoices.VM_QEMU, FirewallZoneChoices.VM_LXC}:
@@ -810,7 +816,7 @@ def _rule_push_target(rule: ProxmoxFirewallRule) -> tuple[str, str]:
         node_name = _node_name(rule.proxmox_node)
         return (
             method,
-            f"/proxmox/firewall/nodes/{quote(node_name, safe='')}/rules{suffix}",
+            f"/proxmox/firewall/nodes/{_path_segment(node_name)}/rules{suffix}",
         )
 
     if rule.zone == FirewallZoneChoices.SECURITY_GROUP:
@@ -824,7 +830,7 @@ def _rule_push_target(rule: ProxmoxFirewallRule) -> tuple[str, str]:
         return (
             method,
             "/proxmox/firewall/datacenter/groups/"
-            f"{quote(str(group_name), safe='')}/rules{suffix}",
+            f"{_path_segment(str(group_name))}/rules{suffix}",
         )
 
     if rule.zone in {FirewallZoneChoices.VM_QEMU, FirewallZoneChoices.VM_LXC}:
@@ -843,7 +849,7 @@ def _rule_push_target(rule: ProxmoxFirewallRule) -> tuple[str, str]:
                 "VNet firewall rules require the interface field to hold the VNet name.",
                 status_code=400,
             )
-        return method, f"/proxmox/firewall/vnets/{quote(vnet, safe='')}/rules{suffix}"
+        return method, f"/proxmox/firewall/vnets/{_path_segment(vnet)}/rules{suffix}"
 
     raise FirewallPushError(
         "unsupported_firewall_zone",
@@ -876,7 +882,7 @@ def _ipset_entry_path(entry: ProxmoxFirewallIPSetEntry) -> tuple[str, dict[str, 
     ipset = entry.ipset
     collection, params = _scoped_collection_path(ipset, "ipsets")
     return _path_add_segments(
-        collection, quote(str(ipset.name), safe=""), "entries"
+        collection, _path_segment(str(ipset.name)), "entries"
     ), params
 
 
@@ -885,7 +891,7 @@ def _options_path(options: ProxmoxFirewallOptions) -> str:
         return "/proxmox/firewall/datacenter/options"
     if options.zone == FirewallZoneChoices.NODE:
         node_name = _node_name(options.proxmox_node)
-        return f"/proxmox/firewall/nodes/{quote(node_name, safe='')}/options"
+        return f"/proxmox/firewall/nodes/{_path_segment(node_name)}/options"
     if options.zone in {FirewallZoneChoices.VM_QEMU, FirewallZoneChoices.VM_LXC}:
         vmid, node, vm_type = _vm_context(options.virtual_machine, zone=options.zone)
         return (
@@ -964,6 +970,35 @@ def _vm_node_name(vm: object | None) -> str:
     return resolve_vm_node(vm).strip()
 
 
+def _ipset_entry_segment(cidr: object) -> str:
+    """Encode an IP-set entry key: an IP address/network or an alias name."""
+    text = str(cidr if cidr is not None else "").strip()
+    try:
+        ipaddress.ip_network(text, strict=False)
+    except ValueError:
+        # Proxmox also accepts alias names as IP-set entries.
+        return _path_segment(text)
+    return quote(text, safe="")
+
+
+def _path_segment(value: object) -> str:
+    """Return ``value`` as a validated, encoded backend path segment.
+
+    ``quote()`` alone keeps ``..``, so an editable name such as a security
+    group called ``..`` would collapse the authenticated backend URL onto a
+    different firewall route.
+    """
+    try:
+        return safe_path_segment(value)
+    except UnsafeBackendPathSegment:
+        raise FirewallPushError(
+            "invalid_identifier",
+            "A firewall object name, node name, or VNet name is not a valid "
+            "Proxmox identifier, so no backend request was made.",
+            status_code=400,
+        ) from None
+
+
 def _vm_context(
     vm: object | None,
     *,
@@ -986,7 +1021,15 @@ def _vm_context(
             "VM-scoped firewall pushes require a Proxmox node name on the VM.",
             status_code=400,
         )
-    return vmid, node, vm_type
+    try:
+        safe_vmid_value = int(safe_vmid(vmid))
+    except UnsafeBackendPathSegment:
+        raise FirewallPushError(
+            "vmid_invalid",
+            "The Proxmox VM ID recorded for this VM is not a valid identifier.",
+            status_code=400,
+        ) from None
+    return safe_vmid_value, node, vm_type
 
 
 def _node_name(node: ProxmoxNode | None) -> str:

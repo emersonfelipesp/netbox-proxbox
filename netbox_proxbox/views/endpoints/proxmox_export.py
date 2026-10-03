@@ -1,6 +1,7 @@
 """CSV / JSON / YAML export helpers for ProxmoxEndpoint records."""
 
 from netbox_proxbox.models import ProxmoxEndpoint
+from typing import Any
 
 __all__ = (
     "_proxmox_export_fieldnames",
@@ -38,8 +39,37 @@ def _proxmox_export_fieldnames(include_sensitive: bool) -> tuple[str, ...]:
     )
 
 
+def _sensitive_proxmox_material(endpoint: ProxmoxEndpoint, user: Any) -> dict[str, str]:
+    """Resolve only authorized material without bypassing the selected provider."""
+    from netbox_proxbox.integrations.openbao import (
+        endpoint_uses_openbao_storage,
+        resolve_endpoint_password,
+        resolve_endpoint_token_value,
+    )
+    from netbox_proxbox.sensitive_data import require_sensitive_data_access
+
+    require_sensitive_data_access(user)
+    if not endpoint_uses_openbao_storage(endpoint):
+        return {
+            "password": endpoint.password or "",
+            "token_value": endpoint.token_value or "",
+        }
+    return {
+        "password": (
+            resolve_endpoint_password(endpoint, user=user)
+            if not endpoint.token_name or endpoint.openbao_password_credential_uuid
+            else ""
+        ),
+        "token_value": (
+            resolve_endpoint_token_value(endpoint, user=user)
+            if endpoint.token_name or endpoint.openbao_token_credential_uuid
+            else ""
+        ),
+    }
+
+
 def _serialize_proxmox_endpoint(
-    endpoint: ProxmoxEndpoint, include_sensitive: bool
+    endpoint: ProxmoxEndpoint, include_sensitive: bool, *, user: Any = None
 ) -> dict[str, str]:
     """One export row as string values, optionally including password and API token."""
     tags_value = ",".join(sorted(tag.slug for tag in endpoint.tags.all()))
@@ -60,9 +90,5 @@ def _serialize_proxmox_endpoint(
         "token_name": endpoint.token_name or "",
     }
     if include_sensitive:
-        from netbox_proxbox.integrations.openbao import (
-            resolve_endpoint_api_credentials,
-        )
-
-        row.update(resolve_endpoint_api_credentials(endpoint))
+        row.update(_sensitive_proxmox_material(endpoint, user))
     return row

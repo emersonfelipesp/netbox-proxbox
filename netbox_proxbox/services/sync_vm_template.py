@@ -23,6 +23,12 @@ except ImportError:  # pragma: no cover - compatibility for focused import stubs
         DISABLED = "disabled"
 
 
+from netbox_proxbox.services.backend_path import (
+    UnsafeBackendPathSegment,
+    safe_path_segment,
+    safe_vm_type,
+    safe_vmid,
+)
 from netbox_proxbox.models import (
     ProxmoxCluster,
     ProxmoxEndpoint,
@@ -175,12 +181,30 @@ def _fetch_template_config(
     proxmox_type: str,
     vmid: int,
     timeout: float = SYNC_TIMEOUT,
-) -> dict[str, Any]:
+) -> dict[str, Any] | None:
+    """Return the template config, or ``None`` when it is unavailable.
+
+    ``None`` means the configuration could not be read: no node, an invalid
+    identifier, or a backend failure. Callers must then preserve the stored
+    template instead of overwriting it with empty defaults.
+    """
     if not node_name:
-        return {}
+        return None
+    try:
+        path = (
+            f"/proxmox/{safe_path_segment(node_name)}/"
+            f"{safe_vm_type(proxmox_type)}/{safe_vmid(vmid)}/config"
+        )
+    except UnsafeBackendPathSegment:
+        logger.warning(
+            "Skipping template config fetch for VMID %s: node name or guest type "
+            "is not a valid Proxmox identifier",
+            vmid,
+        )
+        return None
     try:
         response = requests.get(
-            f"{fastapi_url}/proxmox/{node_name}/{proxmox_type}/{vmid}/config",
+            f"{fastapi_url}{path}",
             params={
                 "source": "database",
                 "proxmox_endpoint_ids": str(backend_endpoint_id),
@@ -199,8 +223,8 @@ def _fetch_template_config(
             vmid,
             exc,
         )
-        return {}
-    return payload if isinstance(payload, dict) else {}
+        return None
+    return payload if isinstance(payload, dict) else None
 
 
 def _collect_template_rows(
@@ -211,11 +235,11 @@ def _collect_template_rows(
     verify_ssl: bool,
     backend_endpoint_id: int,
     deadline: float | None,
-) -> list[tuple[str | None, dict[str, Any], dict[str, Any]]]:
+) -> list[tuple[str | None, dict[str, Any], dict[str, Any] | None]]:
     """Fetch configuration for each valid template resource before DB writes."""
     from netbox_proxbox.services.sync_deadline import remaining_timeout
 
-    rows: list[tuple[str | None, dict[str, Any], dict[str, Any]]] = []
+    rows: list[tuple[str | None, dict[str, Any], dict[str, Any] | None]] = []
     for cluster_name, resource in _iter_cluster_resource_rows(resources_payload):
         if not _coerce_bool(resource.get("template")):
             continue
@@ -237,13 +261,27 @@ def _collect_template_rows(
     return rows
 
 
+def _resource_template_key(resource: dict[str, Any]) -> tuple[int, str] | None:
+    """Return the ``(vmid, proxmox_type)`` key of a cluster resource row."""
+    vmid = _coerce_int(resource.get("vmid"))
+    proxmox_type = _template_type(resource)
+    if vmid is None or proxmox_type not in {"qemu", "lxc"}:
+        return None
+    return vmid, proxmox_type
+
+
 def _persist_template_rows(
     endpoint: ProxmoxEndpoint,
     mode: str,
-    template_rows: list[tuple[str | None, dict[str, Any], dict[str, Any]]],
+    template_rows: list[tuple[str | None, dict[str, Any], dict[str, Any] | None]],
     result: VMTemplateSyncResult,
 ) -> int:
-    """Upsert live templates, delete stale rows, and return the processed count."""
+    """Upsert live templates, delete stale rows, and return the processed count.
+
+    A row whose configuration could not be read (``config is None``) keeps its
+    stored template untouched: it is neither overwritten with empty defaults
+    nor treated as stale.
+    """
     processed = 0
     with transaction.atomic():
         existing_keys = set(
@@ -253,6 +291,12 @@ def _persist_template_rows(
         )
         synced_keys: set[tuple[int, str]] = set()
         for cluster_name, resource, config in template_rows:
+            if config is None:
+                preserved_key = _resource_template_key(resource)
+                if preserved_key is not None:
+                    synced_keys.add(preserved_key)
+                result.templates_skipped += 1
+                continue
             defaults = _template_defaults(
                 endpoint=endpoint,
                 cluster_name=cluster_name,

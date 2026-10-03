@@ -49,10 +49,16 @@ SERVICE_MONITORING_ELIGIBILITY_FIELDS = (
 class NestedTokenSerializer(WritableNestedSerializer):
     """Minimal token shape for nested NetBox endpoint writes."""
 
+    display = serializers.SerializerMethodField()
+
+    def get_display(self, instance: Token) -> str:
+        """Use an identifier, never a core token's secret-dependent representation."""
+        return f"Token {instance.pk}"
+
     class Meta:
         model = Token
-        fields = ["id", "url", "display", "key"]
-        brief_fields = ("id", "url", "display", "key")
+        fields = ["id", "url", "display"]
+        brief_fields = ("id", "url", "display")
 
 
 class ProxmoxEndpointSerializer(NetBoxModelSerializer):

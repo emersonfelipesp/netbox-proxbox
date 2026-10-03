@@ -95,13 +95,25 @@ curl -X PATCH \
 }
 ```
 
-The ordinary list/detail serializer omits `encryption_key` because it is
-write-only. `GET /api/plugins/proxbox/settings/runtime/` additionally returns
-`"encryption_key_configured": true|false`. For compatibility with current
-proxbox-api releases, that backend-only runtime route returns the key only to a
-superuser or caller with plugin-settings change permission; every other caller
-receives `"encryption_key": ""`. Provision proxbox-api's own local encryption
-key before this deprecated compatibility fallback is removed.
+Reading the settings (list, detail, and the runtime route) requires the
+`netbox_proxbox.view_proxboxpluginsettings` permission; being authenticated is
+not enough, because the settings carry SSRF allow/block ranges, log paths, and
+storage policy. The ordinary list/detail serializer omits `encryption_key`
+because it is write-only. `GET /api/plugins/proxbox/settings/runtime/`
+additionally returns `"encryption_key_configured": true|false`. For
+compatibility with current proxbox-api releases, that backend-only runtime
+route returns the key only to an active superuser or a user with the explicit
+sensitive-data grant who can also view the settings row; every other caller
+receives `"encryption_key": ""`. Grant the user behind the NetBox token that
+proxbox-api uses `view_proxboxpluginsettings` (and the sensitive-data grant if
+it still reads the key): released proxbox-api clients fall back to their
+defaults when this read is denied, which can be more permissive than the
+configured SSRF policy. Migration `0104_security_hardening` grants
+that view-only permission to the users behind tokens already configured on
+enabled NetBox endpoints at upgrade time. System check `netbox_proxbox.W105`
+(`manage.py check --database default`) reports a configured backend token that
+cannot read the settings. Provision proxbox-api's own local encryption key before
+this deprecated compatibility fallback is removed.
 
 ---
 

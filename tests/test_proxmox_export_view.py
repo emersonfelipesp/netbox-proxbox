@@ -1,480 +1,723 @@
-"""Tests for test_proxmox_export_view."""
+"""Real-NetBox authorization for endpoint exports and sensitive-access grants."""
 
 from __future__ import annotations
 
-import importlib
-import os
-import sys
-from pathlib import Path
 from types import SimpleNamespace
+from unittest.mock import Mock
 
+from cryptography.fernet import Fernet
 import pytest
 
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-NETBOX_ROOT = REPO_ROOT.parent / "netbox" / "netbox"
-
-for candidate in (REPO_ROOT, NETBOX_ROOT):
-    candidate_str = str(candidate)
-    if candidate.exists() and candidate_str not in sys.path:
-        sys.path.insert(0, candidate_str)
+from tests.test_proxmox_endpoint_allowed_tenants import _require_harness
 
 
-try:
-    import django
-except ModuleNotFoundError:
-    pytest.skip(
-        "Django/NetBox test dependencies are not installed in this environment.",
-        allow_module_level=True,
+@pytest.mark.parametrize("superuser", [False, True])
+@pytest.mark.parametrize("active", [False, True])
+def test_grant_api_permission_with_real_user_without_database(
+    pytestconfig, superuser, active
+):
+    """Exercise DRF's real permission dispatch before any grant queryset evaluation."""
+    _require_harness(pytestconfig)
+    from django.contrib.auth import get_user_model
+    from rest_framework.test import APIRequestFactory, force_authenticate
+    from netbox_proxbox.api.sensitive_data_access import SensitiveDataAccessViewSet
+
+    principal = get_user_model()(
+        username="unsaved-policy-probe", is_superuser=superuser, is_active=active
     )
-
-
-os.environ.setdefault("NETBOX_CONFIGURATION", "tests.netbox_test_configuration")
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "netbox.settings")
-
-try:
-    django.setup()
-except Exception as exc:
-    pytest.skip(
-        f"NetBox test environment is not available: {exc}", allow_module_level=True
+    request = APIRequestFactory().post(
+        "/api/plugins/proxbox/sensitive-data-access/", {}, format="json"
     )
+    force_authenticate(request, user=principal)
+    view = SensitiveDataAccessViewSet()
+    view.action_map = {"post": "create"}
+    view.request = view.initialize_request(request)
+    permission = view.get_permissions()[0]
+    assert permission.has_permission(view.request, view) is (superuser and active)
 
 
-from django.contrib.auth.models import AnonymousUser
+def test_readiness_superuser_uses_no_database(pytestconfig):
+    _require_harness(pytestconfig)
+    from django.contrib.auth import get_user_model
+    from rest_framework.test import APIRequestFactory, force_authenticate
+    from netbox_proxbox.api.sensitive_data_access import SensitiveDataReadinessView
+
+    principal = get_user_model()(
+        username="unsaved-superuser-probe", is_superuser=True, is_active=True
+    )
+    request = APIRequestFactory().get("/api/plugins/proxbox/sensitive-data-readiness/")
+    force_authenticate(request, user=principal)
+    response = SensitiveDataReadinessView.as_view()(request)
+    assert response.status_code == 200
+    assert response.data == {"schema_version": 1, "can_access_sensitive_data": True}
+    assert response["Cache-Control"] == "no-store"
 
 
-proxmox_views = importlib.import_module("netbox_proxbox.views.endpoints.proxmox")
+@pytest.mark.parametrize(
+    "method", ["GET", "HEAD", "OPTIONS", "POST", "PUT", "PATCH", "DELETE"]
+)
+@pytest.mark.parametrize("write_enabled", [False, True])
+@pytest.mark.parametrize("token_version", [1, 2])
+def test_grant_api_preserves_token_write_boundary_without_database(
+    pytestconfig, method, write_enabled, token_version
+):
+    """Run the actual permission chain with only queryset evaluation omitted."""
+    _require_harness(pytestconfig)
+    from django.contrib.auth import get_user_model
+    from rest_framework.exceptions import PermissionDenied
+    from rest_framework.test import APIRequestFactory, force_authenticate
+    from users.models import Token
+    from netbox_proxbox.api.sensitive_data_access import SensitiveDataAccessViewSet
 
-
-class _Tag:
-    def __init__(self, slug: str):
-        self.slug = slug
-
-
-class _TagManager:
-    def __init__(self, slugs: list[str]):
-        self._slugs = slugs
-
-    def all(self):
-        return [_Tag(slug) for slug in self._slugs]
-
-
-def _endpoint(**overrides):
-    data = {
-        "pk": 7,
-        "name": "pve01",
-        "domain": "pve01.example.test",
-        "ip_address": SimpleNamespace(address="192.0.2.10/24"),
-        "port": 8006,
-        "mode": "cluster",
-        "version": "8.3.0",
-        "repoid": "bookworm",
-        "username": "root@pam",
-        "verify_ssl": False,
-        "token_name": "api-id",
-        "password": "p@ss",
-        "token_value": "s3cret",
-        "tags": _TagManager(["lab", "prod"]),
-        "site": None,
-        "tenant": None,
+    token_kwargs = {}
+    if "version" in {field.name for field in Token._meta.fields}:
+        token_kwargs["version"] = token_version
+    elif token_version == 2:
+        pytest.skip("This NetBox version has no v2 token contract.")
+    principal = get_user_model()(username="unsaved-token-owner", is_superuser=True)
+    token = Token(user=principal, write_enabled=write_enabled, **token_kwargs)
+    request = APIRequestFactory().generic(method, "/synthetic-grants/")
+    force_authenticate(request, user=principal, token=token)
+    view = SensitiveDataAccessViewSet()
+    view.action_map = {
+        method.lower(): "list" if method in {"GET", "HEAD"} else "create"
     }
-    data.update(overrides)
-    return SimpleNamespace(**data)
+    view.request = view.initialize_request(request)
+    # DjangoObjectPermissions needs model metadata, not any rows, for this check.
+    view.get_queryset = Mock(return_value=view.queryset)
+    allowed = write_enabled or method in {"GET", "HEAD", "OPTIONS"}
+    if allowed:
+        view.check_permissions(view.request)
+    else:
+        with pytest.raises(PermissionDenied):
+            view.check_permissions(view.request)
 
 
-def test_safe_export_never_contains_password_or_token_value(monkeypatch):
-    endpoint = _endpoint()
+def test_netbox_secret_widget_never_echoes_values_without_database(pytestconfig):
+    _require_harness(pytestconfig)
+    from netbox_proxbox.forms.netbox import NetBoxEndpointForm
 
-    class _QS:
-        def __iter__(self):
-            return iter([endpoint])
+    widget = NetBoxEndpointForm.base_fields["token_secret"].widget
+    assert widget.render_value is False
+    for secret in ("stored-secret-sentinel", "submitted-secret-sentinel"):
+        html = widget.render("token_secret", secret)
+        assert secret not in html
+        assert 'value="' not in html
 
-    view = proxmox_views.ProxmoxEndpointExportView()
-    view.filterset = None
-    monkeypatch.setattr(view, "get_queryset", lambda request: _QS())
 
-    request = SimpleNamespace(GET={}, POST={}, META={}, user=AnonymousUser())
-    response = view._export_response(
-        request, include_sensitive=False, data_format="csv"
+@pytest.mark.parametrize(
+    "change",
+    [None, "new", "version", "token_key", "domain", "ip_address", "port", "verify_ssl"],
+)
+def test_netbox_blank_secret_preservation_binds_identity_without_database(
+    pytestconfig, change
+):
+    _require_harness(pytestconfig)
+    from netbox_proxbox.choices import NetBoxTokenVersionChoices
+    from netbox_proxbox.forms.netbox import NetBoxEndpointForm
+    from netbox_proxbox.models import NetBoxEndpoint
+
+    instance = NetBoxEndpoint(
+        pk=7,
+        token_version=NetBoxTokenVersionChoices.V2,
+        token_key="nbt_existing",
+        token_secret="stored-secret-sentinel",
+        domain="netbox.example.test",
+        port=443,
+        verify_ssl=True,
     )
-    csv_text = response.content.decode()
-
-    assert "password" not in csv_text.splitlines()[0]
-    assert "token_value" not in csv_text.splitlines()[0]
-    assert "api-id" in csv_text
-    assert "p@ss" not in csv_text
-    assert "s3cret" not in csv_text
-
-
-def test_sensitive_export_includes_password_and_token_value(monkeypatch):
-    endpoint = _endpoint()
-
-    class _QS:
-        def __iter__(self):
-            return iter([endpoint])
-
-    view = proxmox_views.ProxmoxEndpointExportView()
-    view.filterset = None
-    monkeypatch.setattr(view, "get_queryset", lambda request: _QS())
-
-    request = SimpleNamespace(GET={}, POST={}, META={}, user=AnonymousUser())
-    response = view._export_response(request, include_sensitive=True, data_format="csv")
-    csv_text = response.content.decode()
-
-    header = csv_text.splitlines()[0]
-    assert "password" in header
-    assert "token_value" in header
-    assert "p@ss" in csv_text
-    assert "s3cret" in csv_text
-
-
-def test_safe_export_json_and_yaml_formats(monkeypatch):
-    endpoint = _endpoint()
-
-    class _QS:
-        def __iter__(self):
-            return iter([endpoint])
-
-    view = proxmox_views.ProxmoxEndpointExportView()
-    view.filterset = None
-    monkeypatch.setattr(view, "get_queryset", lambda request: _QS())
-
-    request = SimpleNamespace(GET={}, POST={}, META={}, user=AnonymousUser())
-
-    json_response = view._export_response(
-        request, include_sensitive=False, data_format="json"
+    data = dict(
+        domain="netbox.example.test", port=443, verify_ssl=True, ip_address=None
     )
-    json_text = json_response.content.decode()
-    assert '"name": "pve01"' in json_text
-    assert '"password"' not in json_text
-    assert json_response["Content-Disposition"].endswith('safe.json"')
+    token_key = "nbt_existing"
+    if change == "new":
+        instance.pk = None
+    elif change == "version":
+        instance.token_version = NetBoxTokenVersionChoices.V1
+    elif change == "token_key":
+        token_key = "nbt_other"
+    elif change == "domain":
+        data["domain"] = "other.example.test"
+    elif change == "ip_address":
+        data["ip_address"] = SimpleNamespace(pk=9)
+    elif change == "port":
+        data["port"] = 8443
+    elif change == "verify_ssl":
+        data["verify_ssl"] = False
+    # The full ModelForm constructor reads custom fields; this test targets the identity helper.
+    form = object.__new__(NetBoxEndpointForm)
+    form.instance = instance
+    expected = "stored-secret-sentinel" if change is None else ""
+    assert form._preserved_v2_secret(data, token_key=token_key) == expected
 
-    yaml_response = view._export_response(
-        request, include_sensitive=False, data_format="yaml"
+
+@pytest.mark.parametrize("flag", [False, True])
+@pytest.mark.parametrize("visible", [False, True])
+def test_runtime_key_requires_independent_settings_visibility_without_database(
+    pytestconfig: pytest.Config,
+    monkeypatch: pytest.MonkeyPatch,
+    flag: bool,
+    visible: bool,
+) -> None:
+    """Run the actual disclosure policy with only grant/object storage replaced."""
+    _require_harness(pytestconfig)
+    from django.contrib.auth import get_user_model
+    from netbox_proxbox.api.views import _user_can_read_runtime_secret
+    from netbox_proxbox.models import ProxboxPluginSettings, ProxboxSensitiveDataAccess
+
+    principal = get_user_model()(pk=17, username="unsaved-runtime-caller")
+    grant_query = Mock()
+    grant_query.exists.return_value = flag
+    grant_lookup = Mock(return_value=grant_query)
+    monkeypatch.setattr(ProxboxSensitiveDataAccess.objects, "filter", grant_lookup)
+    visible_query = Mock()
+    visible_query.filter.return_value.exists.return_value = visible
+    restrict = Mock(return_value=visible_query)
+    monkeypatch.setattr(ProxboxPluginSettings.objects, "restrict", restrict)
+
+    assert _user_can_read_runtime_secret(principal, settings_pk=1) is (flag and visible)
+    grant_lookup.assert_called_once_with(user_id=17, can_access_sensitive_data=True)
+    if flag:
+        restrict.assert_called_once_with(principal, "view")
+        visible_query.filter.assert_called_once_with(pk=1)
+    else:
+        restrict.assert_not_called()
+
+
+@pytest.mark.parametrize("failure", ["missing-row", "database", "deleted-row"])
+def test_runtime_key_visibility_lookup_fails_closed_without_database(
+    pytestconfig: pytest.Config, monkeypatch: pytest.MonkeyPatch, failure: str
+) -> None:
+    _require_harness(pytestconfig)
+    from django.contrib.auth import get_user_model
+    from django.core.exceptions import ObjectDoesNotExist
+    from django.db import DatabaseError
+    from netbox_proxbox.api.views import _user_can_read_runtime_secret
+    from netbox_proxbox.models import ProxboxPluginSettings, ProxboxSensitiveDataAccess
+
+    principal = get_user_model()(pk=17, username="unsaved-runtime-failure")
+    grant_query = Mock()
+    grant_query.exists.return_value = True
+    monkeypatch.setattr(
+        ProxboxSensitiveDataAccess.objects, "filter", Mock(return_value=grant_query)
     )
-    yaml_text = yaml_response.content.decode()
-    assert "name: pve01" in yaml_text
-    assert "password:" not in yaml_text
-    assert yaml_response["Content-Disposition"].endswith('safe.yaml"')
+    restrict = Mock()
+    restrict.side_effect = (
+        DatabaseError("synthetic-storage-failure")
+        if failure == "database"
+        else ObjectDoesNotExist("synthetic-deleted-row")
+    )
+    monkeypatch.setattr(ProxboxPluginSettings.objects, "restrict", restrict)
+    settings_pk = None if failure == "missing-row" else 1
+    assert _user_can_read_runtime_secret(principal, settings_pk=settings_pk) is False
+    if failure == "missing-row":
+        restrict.assert_not_called()
+    else:
+        restrict.assert_called_once_with(principal, "view")
 
 
-def test_export_fieldnames_do_not_include_comments():
-    """Regression guard: ProxmoxEndpoint has no comments field — must not appear in export."""
-    from netbox_proxbox.views.endpoints.proxmox_export import _proxmox_export_fieldnames
+@pytest.mark.parametrize("kind", ["proxmox", "netbox", "fastapi"])
+@pytest.mark.parametrize("failure_kind", ["denied", "unavailable", "success"])
+def test_native_export_failure_boundary_without_database(
+    pytestconfig, kind, failure_kind, caplog
+):
+    """Exercise actual endpoint POST routing with real Django responses and errors."""
+    _require_harness(pytestconfig)
+    import logging
+    from uuid import UUID
 
-    safe_fields = _proxmox_export_fieldnames(include_sensitive=False)
-    sensitive_fields = _proxmox_export_fieldnames(include_sensitive=True)
-    assert "comments" not in safe_fields
-    assert "comments" not in sensitive_fields
+    from django.contrib.auth import get_user_model
+    from django.core.exceptions import PermissionDenied
+    from django.http import HttpResponse
+    from django.test import RequestFactory
+    from netbox_proxbox.views.endpoints import (
+        FastAPIEndpointExportView,
+        NetBoxEndpointExportView,
+        ProxmoxEndpointExportView,
+    )
+
+    view = {
+        "proxmox": ProxmoxEndpointExportView,
+        "netbox": NetBoxEndpointExportView,
+        "fastapi": FastAPIEndpointExportView,
+    }[kind]()
+    request = RequestFactory().post(
+        "/synthetic-export/",
+        {"include_sensitive": "true", "format": "json", "token": "input-sentinel"},
+    )
+    request.user = get_user_model()(username="unsaved-export", is_superuser=True)
+    failure = {
+        "denied": PermissionDenied("provider-secret-sentinel"),
+        "unavailable": RuntimeError("decryption-secret-sentinel"),
+        "success": None,
+    }[failure_kind]
+    view._export_response = Mock(
+        side_effect=failure, return_value=HttpResponse("export-secret-sentinel")
+    )
+    with caplog.at_level(logging.INFO, logger="netbox_proxbox.sensitive_export"):
+        response = view.post(request)
+    assert (
+        response.status_code
+        == {"denied": 403, "unavailable": 503, "success": 200}[failure_kind]
+    )
+    assert response["Cache-Control"] == "no-store"
+    UUID(response["X-Export-Correlation-ID"])
+    assert "sentinel" not in caplog.text
+    assert all(record.exc_info is None for record in caplog.records)
+    if failure_kind != "success":
+        assert "sentinel" not in response.content.decode()
+    if kind == "fastapi":
+        assert view._export_response.call_args.kwargs["material_user"] is request.user
 
 
-def test_export_serialization_does_not_access_comments(monkeypatch):
-    """Regression guard: serializing an endpoint without a comments attr must not raise."""
-    endpoint = _endpoint()
-    # Explicitly remove comments if somehow set (SimpleNamespace allows it).
-    if hasattr(endpoint, "comments"):
-        delattr(endpoint, "comments")
+@pytest.mark.parametrize("kind", ["proxmox", "netbox", "fastapi"])
+def test_native_list_refuses_raw_object_exports_without_database(pytestconfig, kind):
+    _require_harness(pytestconfig)
+    from django.core.exceptions import PermissionDenied
+    from django.test import RequestFactory
+    from netbox_proxbox.views.endpoints import (
+        FastAPIEndpointListView,
+        NetBoxEndpointListView,
+        ProxmoxEndpointListView,
+    )
 
-    from netbox_proxbox.views.endpoints.proxmox_export import _serialize_proxmox_endpoint
+    view = {
+        "proxmox": ProxmoxEndpointListView,
+        "netbox": NetBoxEndpointListView,
+        "fastapi": FastAPIEndpointListView,
+    }[kind]()
+    template = Mock()
+    template.render_to_response.side_effect = AssertionError("secret-template-sentinel")
+    response = view.export_template(template, RequestFactory().get("/synthetic-list/"))
+    assert response.status_code == 403
+    assert response["Cache-Control"] == "no-store"
+    assert "sentinel" not in response.content.decode()
+    template.render_to_response.assert_not_called()
+    with pytest.raises(PermissionDenied, match="safe YAML"):
+        view.export_yaml()
 
-    row = _serialize_proxmox_endpoint(endpoint, include_sensitive=False)
-    assert "comments" not in row
-    assert row["name"] == "pve01"
+
+def test_nested_token_and_table_are_secret_free_without_database(pytestconfig):
+    _require_harness(pytestconfig)
+    from django.test import RequestFactory
+    from users.models import Token
+    from netbox_proxbox.api.serializers.endpoints import NestedTokenSerializer
+    from netbox_proxbox.tables import NetBoxEndpointTable
+
+    class PoisonToken:
+        pk = 17
+        id = 17
+        _meta = Token._meta
+
+        @property
+        def key(self):
+            raise AssertionError("token-key-sentinel was read")
+
+        def __str__(self):
+            raise AssertionError("token-display-sentinel was read")
+
+    request = RequestFactory().get("/synthetic-endpoint/")
+    serializer = NestedTokenSerializer(context={"request": request})
+    payload = serializer.to_representation(PoisonToken())
+    assert set(payload) == {"id", "url", "display"}
+    assert payload["display"] == "Token 17"
+    assert "sentinel" not in repr(payload)
+    assert str(NetBoxEndpointTable.base_columns["token"].accessor) == "token_id"
+    # Exercise the renderer without NetBox's unrelated custom-field database lookup.
+    table = object.__new__(NetBoxEndpointTable)
+    assert table.render_token(17) == "Token 17"
+    assert table.value_token(17) == "Token 17"
 
 
-def test_bulk_import_view_strips_id_column(monkeypatch):
-    """Regression guard: an 'id' column exported from another NetBox instance must be ignored.
+@pytest.fixture
+def sensitive_estate(pytestconfig, request):
+    """Create synthetic disabled endpoints in the explicitly selected native lane."""
+    _require_harness(pytestconfig)
+    request.getfixturevalue("db")
+    settings = request.getfixturevalue("settings")
+    from django.contrib.contenttypes.models import ContentType
+    from django.urls import reverse
+    from users.models import ObjectPermission, Token
 
-    NetBox's create_and_update_objects() prefetches by id and then
-    _process_import_records() looks up each id — both fail if the id doesn't
-    exist locally.  Our override strips 'id' from cleaned_data['data'] before
-    delegating to super(), so rows are always created fresh.
-    """
+    from netbox_proxbox.models import (
+        FastAPIEndpoint,
+        NetBoxEndpoint,
+        ProxmoxEndpoint,
+        ProxboxPluginSettings,
+        ProxboxSensitiveDataAccess,
+    )
+    from tests.django_support import make_user
+
+    settings.PLUGINS = ["netbox_proxbox"]
+    configuration = ProxboxPluginSettings.get_solo()
+    configuration.credential_storage_backend = "legacy_encrypted"
+    configuration.encryption_key = Fernet.generate_key().decode("ascii")
+    configuration.save(update_fields=("credential_storage_backend", "encryption_key"))
+    users = {
+        "viewer": make_user("sensitive-viewer", is_staff=True),
+        "flagged": make_user("sensitive-flagged"),
+        "superuser": make_user("sensitive-superuser", is_superuser=True),
+    }
+    ProxboxSensitiveDataAccess.objects.create(
+        user=users["flagged"], can_access_sensitive_data=True
+    )
+    token_fields = {field.name for field in Token._meta.fields}
+    token_kwargs = {"user": users["superuser"]}
+    if "version" in token_fields:
+        token_kwargs["version"] = 1
+    core_token = Token.objects.create(**token_kwargs)
+    core_value = getattr(core_token, "plaintext", None) or core_token.key
+    model_by_kind = {
+        "proxmox": ProxmoxEndpoint,
+        "netbox": NetBoxEndpoint,
+        "fastapi": FastAPIEndpoint,
+    }
+    visible = {}
+    hidden = {}
+    for kind, model in model_by_kind.items():
+        common = dict(
+            domain=f"{kind}.example.test",
+            enabled=False,
+            port=8006,
+            verify_ssl=True,
+            credential_storage_backend="legacy_encrypted",
+        )
+        if kind == "proxmox":
+            common.update(
+                username="root@pam",
+                password="pve-password-sentinel",
+                token_name="export",
+                token_value="pve-token-sentinel",
+            )
+        elif kind == "fastapi":
+            common.update(token="backend-token-sentinel", use_https=True)
+        else:
+            common.pop("credential_storage_backend")
+            common.update(
+                token=core_token,
+                token_version="v1",
+                token_key="nbt_v2_identifier",
+                token_secret="v2-secret-sentinel",
+            )
+        visible[kind] = model.objects.create(name=f"visible-{kind}", **common)
+        hidden[kind] = model.objects.create(name=f"hidden-{kind}", **common)
+        permission = ObjectPermission.objects.create(
+            name=f"View only visible {kind}",
+            actions=["view"],
+            constraints={"pk": visible[kind].pk},
+        )
+        permission.object_types.add(ContentType.objects.get_for_model(model))
+        permission.users.add(users["viewer"], users["flagged"])
+    grant_permission = ObjectPermission.objects.create(
+        name="Ordinary grant CRUD must not confer flag administration",
+        actions=["view", "add", "change", "delete"],
+    )
+    grant_permission.object_types.add(
+        ContentType.objects.get_for_model(ProxboxSensitiveDataAccess)
+    )
+    grant_permission.users.add(users["viewer"], users["flagged"])
+    export_urls = {
+        kind: reverse(f"plugins:netbox_proxbox:{kind}endpoint_export")
+        for kind in model_by_kind
+    }
+    return SimpleNamespace(
+        users=users,
+        visible=visible,
+        hidden=hidden,
+        urls=export_urls,
+        grant_model=ProxboxSensitiveDataAccess,
+        configuration=configuration,
+        secrets=(
+            "pve-password-sentinel",
+            "pve-token-sentinel",
+            "backend-token-sentinel",
+            core_value,
+            "v2-secret-sentinel",
+        ),
+    )
+
+
+@pytest.mark.parametrize("kind", ["proxmox", "netbox", "fastapi"])
+@pytest.mark.parametrize("data_format", ["csv", "json", "yaml"])
+def test_safe_export_obeys_real_object_permissions(sensitive_estate, kind, data_format):
+    from django.test import Client
+
+    client = Client()
+    client.force_login(sensitive_estate.users["viewer"])
+    response = client.get(sensitive_estate.urls[kind], {"format": data_format})
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert f"visible-{kind}" in content
+    assert f"hidden-{kind}" not in content
+    for secret in sensitive_estate.secrets:
+        assert secret not in content
+
+
+@pytest.mark.parametrize("kind", ["proxmox", "netbox", "fastapi"])
+@pytest.mark.parametrize("data_format", ["csv", "json", "yaml"])
+@pytest.mark.parametrize("role", ["flagged", "superuser"])
+def test_sensitive_export_has_explicit_authority(
+    sensitive_estate, kind, data_format, role
+):
+    from django.test import Client
+
+    client = Client()
+    client.force_login(sensitive_estate.users[role])
+    response = client.post(
+        sensitive_estate.urls[kind],
+        {
+            "include_sensitive": "true",
+            "format": data_format,
+        },
+    )
+    assert response.status_code == 200
+    assert response["Cache-Control"] == "no-store"
+    content = response.content.decode()
+    expected = {
+        "proxmox": "pve-password-sentinel",
+        "fastapi": "backend-token-sentinel",
+        "netbox": "v2-secret-sentinel",
+    }[kind]
+    assert expected in content
+    assert f"visible-{kind}" in content
+    assert (f"hidden-{kind}" in content) is (role == "superuser")
+
+
+@pytest.mark.parametrize("kind", ["proxmox", "netbox", "fastapi"])
+@pytest.mark.parametrize(
+    "proof",
+    [
+        {"token_version": "v1", "v1_manual_token": "self-issued-v1-sentinel"},
+        {"token_version": "v2", "token_key": "nbt_self", "token_secret": "self-secret"},
+        {"netbox_token": "other-actor-token-sentinel"},
+        {},
+    ],
+)
+def test_ordinary_viewer_cannot_forge_sensitive_export(sensitive_estate, kind, proof):
+    from django.test import Client
+
+    client = Client()
+    client.force_login(sensitive_estate.users["viewer"])
+    response = client.post(
+        sensitive_estate.urls[kind], {"include_sensitive": "true", **proof}
+    )
+    assert response.status_code == 403
+    for secret in sensitive_estate.secrets:
+        assert secret.encode() not in response.content
+
+
+@pytest.mark.parametrize("kind", ["proxmox", "netbox", "fastapi"])
+def test_mixed_selection_fails_before_serializer(sensitive_estate, kind, monkeypatch):
+    from django.test import Client
+    from netbox_proxbox.views.endpoints import fastapi, netbox, proxmox
+
+    modules = {"proxmox": proxmox, "netbox": netbox, "fastapi": fastapi}
+    serializer = Mock(
+        side_effect=AssertionError("An unauthorized selection reached serialization.")
+    )
+    monkeypatch.setattr(modules[kind], f"_serialize_{kind}_endpoint", serializer)
+    client = Client()
+    client.force_login(sensitive_estate.users["flagged"])
+    response = client.post(
+        sensitive_estate.urls[kind],
+        {
+            "include_sensitive": "true",
+            "pk": [sensitive_estate.visible[kind].pk, sensitive_estate.hidden[kind].pk],
+        },
+    )
+    assert response.status_code == 403
+    serializer.assert_not_called()
+
+
+@pytest.mark.parametrize("kind", ["proxmox", "netbox", "fastapi"])
+def test_revocation_blocks_next_export(sensitive_estate, kind):
+    from django.test import Client
+
+    user = sensitive_estate.users["flagged"]
+    client = Client()
+    client.force_login(user)
+    data = {"include_sensitive": "true"}
+    assert client.post(sensitive_estate.urls[kind], data).status_code == 200
+    sensitive_estate.grant_model.objects.filter(user=user).update(
+        can_access_sensitive_data=False
+    )
+    assert client.post(sensitive_estate.urls[kind], data).status_code == 403
+
+
+@pytest.mark.parametrize("kind", ["proxmox", "netbox", "fastapi"])
+def test_sensitive_post_requires_csrf(sensitive_estate, kind):
+    from django.test import Client
+
+    client = Client(enforce_csrf_checks=True)
+    client.force_login(sensitive_estate.users["superuser"])
+    response = client.post(sensitive_estate.urls[kind], {"include_sensitive": "true"})
+    assert response.status_code == 403
+
+
+@pytest.mark.parametrize("role", ["viewer", "flagged"])
+@pytest.mark.parametrize("method", ["get", "post", "patch", "delete"])
+def test_only_superusers_can_administer_grants(sensitive_estate, role, method):
+    from django.urls import reverse
+    from rest_framework.test import APIClient
+
+    client = APIClient()
+    client.force_authenticate(sensitive_estate.users[role])
+    grant = sensitive_estate.grant_model.objects.get(
+        user=sensitive_estate.users["flagged"]
+    )
+    route = (
+        "proxboxsensitivedataaccess-list"
+        if method in ("get", "post")
+        else "proxboxsensitivedataaccess-detail"
+    )
+    kwargs = {} if method in ("get", "post") else {"pk": grant.pk}
+    url = reverse(f"plugins-api:netbox_proxbox-api:{route}", kwargs=kwargs)
+    response = getattr(client, method)(
+        url,
+        {
+            "user": sensitive_estate.users[role].pk,
+            "can_access_sensitive_data": True,
+        },
+        format="json",
+    )
+    assert response.status_code == 403
+    grant.refresh_from_db()
+    assert grant.can_access_sensitive_data is True
+    assert not sensitive_estate.grant_model.objects.filter(
+        user=sensitive_estate.users["viewer"]
+    ).exists()
+
+
+def test_default_off_grant_and_fresh_readiness(sensitive_estate):
+    from django.urls import reverse
+    from rest_framework.test import APIClient
+
+    user = sensitive_estate.users["viewer"]
+    grant = sensitive_estate.grant_model.objects.create(user=user)
+    assert grant.can_access_sensitive_data is False
+    client = APIClient()
+    client.force_authenticate(user)
+    url = reverse("plugins-api:netbox_proxbox-api:sensitive-data-readiness")
+    response = client.get(url)
+    assert response.status_code == 200
+    assert response.data == {"schema_version": 1, "can_access_sensitive_data": False}
+    assert response["Cache-Control"] == "no-store"
+    grant.can_access_sensitive_data = True
+    grant.save(update_fields=("can_access_sensitive_data",))
+    assert client.get(url).data["can_access_sensitive_data"] is True
+    grant.can_access_sensitive_data = False
+    grant.save(update_fields=("can_access_sensitive_data",))
+    assert client.get(url).data["can_access_sensitive_data"] is False
+
+
+@pytest.mark.parametrize("role", ["viewer", "flagged", "superuser"])
+@pytest.mark.parametrize("settings_scope", ["absent", "mismatched", "matching"])
+def test_runtime_settings_disclose_key_only_with_sensitive_authority(
+    sensitive_estate, role, settings_scope
+):
+    from django.contrib.contenttypes.models import ContentType
+    from django.urls import reverse
+    from rest_framework.test import APIClient
+    from users.models import ObjectPermission
+
+    if settings_scope != "absent":
+        configuration = sensitive_estate.configuration
+        permission = ObjectPermission.objects.create(
+            name=f"Runtime settings visibility {settings_scope}",
+            actions=["view"],
+            constraints={
+                "pk": configuration.pk
+                if settings_scope == "matching"
+                else configuration.pk + 1
+            },
+        )
+        permission.object_types.add(
+            ContentType.objects.get_for_model(type(configuration))
+        )
+        permission.users.add(sensitive_estate.users[role])
+
+    client = APIClient()
+    client.force_authenticate(sensitive_estate.users[role])
+    url = reverse("plugins-api:netbox_proxbox-api:proxboxpluginsettings-runtime")
+    response = client.get(url)
+    assert response.status_code == 200
+    assert response["Cache-Control"] == "no-store"
+    assert response.data["encryption_key_configured"] is True
+    permitted = role == "superuser" or (
+        role == "flagged" and settings_scope == "matching"
+    )
+    expected = sensitive_estate.configuration.encryption_key if permitted else ""
+    assert response.data["encryption_key"] == expected
+    if role == "flagged":
+        sensitive_estate.grant_model.objects.filter(
+            user=sensitive_estate.users[role]
+        ).update(can_access_sensitive_data=False)
+        assert client.get(url).data["encryption_key"] == ""
+
+
+def test_superuser_grant_and_revoke_with_real_netbox_token(sensitive_estate):
+    from django.urls import reverse
+    from rest_framework.test import APIClient
+    from tests.django_support import make_api_token
+
+    _, headers = make_api_token(sensitive_estate.users["superuser"])
+    client = APIClient()
+    client.credentials(**headers)
+    list_url = reverse("plugins-api:netbox_proxbox-api:proxboxsensitivedataaccess-list")
+    response = client.post(
+        list_url,
+        {
+            "user": sensitive_estate.users["viewer"].pk,
+            "can_access_sensitive_data": True,
+        },
+        format="json",
+    )
+    assert response.status_code == 201
+    detail_url = reverse(
+        "plugins-api:netbox_proxbox-api:proxboxsensitivedataaccess-detail",
+        kwargs={"pk": response.data["id"]},
+    )
+    response = client.patch(
+        detail_url, {"can_access_sensitive_data": False}, format="json"
+    )
+    assert response.status_code == 200
+    assert response.data["can_access_sensitive_data"] is False
+
+
+@pytest.mark.parametrize("role", ["viewer", "flagged", "superuser"])
+@pytest.mark.parametrize("kind", ["proxmox", "netbox", "fastapi"])
+def test_html_sensitive_controls_follow_authority(sensitive_estate, role, kind):
+    from django.test import Client
+    from django.urls import reverse
+
+    client = Client()
+    client.force_login(sensitive_estate.users[role])
+    url = reverse(f"plugins:netbox_proxbox:{kind}endpoint_list")
+    response = client.get(url)
+    assert response.status_code == 200
+    content = response.content.decode()
+    assert ("Export with secrets" in content) is (role != "viewer")
+    assert 'name="netbox_token"' not in content
+    assert 'name="token_secret"' not in content
+    for secret in sensitive_estate.secrets:
+        assert secret not in content
+
+
+def test_bulk_import_still_strips_export_ids(pytestconfig, monkeypatch):
+    _require_harness(pytestconfig)
+    from netbox.views.generic import BulkImportView
     from netbox_proxbox.views.endpoints.proxmox import ProxmoxEndpointBulkImportView
 
-    view = ProxmoxEndpointBulkImportView()
+    captured = []
 
-    seen_records = []
-
-    def fake_super(form, request):
-        seen_records.extend([dict(r) for r in form.cleaned_data.get("data", [])])
+    def capture(parent, form, request):
+        captured.extend(form.cleaned_data["data"])
         return []
 
-    # Patch the parent so we can inspect what records reach it.
-    monkeypatch.setattr(
-        "netbox.views.generic.BulkImportView.create_and_update_objects",
-        fake_super,
+    monkeypatch.setattr(BulkImportView, "create_and_update_objects", capture)
+    records = [{"id": "1", "name": "imported-one"}, {"name": "imported-two"}]
+    ProxmoxEndpointBulkImportView().create_and_update_objects(
+        SimpleNamespace(cleaned_data={"data": records}),
+        request=None,
     )
-
-    records = [
-        {"id": "1", "name": "pve01", "port": "8006"},
-        {"id": "2", "name": "pve02", "port": "8006"},
-        {"name": "pve03", "port": "8006"},  # no id — unchanged
-    ]
-
-    class _FakeForm:
-        cleaned_data = {"data": records}
-
-    view.create_and_update_objects(_FakeForm(), request=None)
-
-    for row in seen_records:
-        assert "id" not in row, f"'id' was not stripped from {row}"
-
-    assert seen_records[0]["name"] == "pve01"
-    assert seen_records[2]["name"] == "pve03"
-
-
-# ── _validate_sensitive_export_token: v1 / v2 / fallback modes ───────────────
-
-
-def _make_view():
-    view = proxmox_views.ProxmoxEndpointExportView()
-    view.filterset = None
-    return view
-
-
-class _FakeToken:
-    DoesNotExist = KeyError
-
-    def __init__(self, pk, plaintext, version=1):
-        self.pk = pk
-        self.plaintext = plaintext
-        self.version = version
-
-
-class _FakeTokenManager:
-    def __init__(self, token):
-        self._token = token
-
-    def get(self, **kwargs):
-        pk = kwargs.get("pk")
-        version = kwargs.get("version", 1)
-        if self._token and self._token.pk == pk and self._token.version == version:
-            return self._token
-        raise KeyError("not found")
-
-
-class _FakeUser:
-    is_authenticated = True
-
-    def has_perm(self, perm):
-        return True
-
-
-def test_validate_token_v1_mode_uses_plaintext(monkeypatch):
-    """v1 mode: constructs 'Token <plaintext>' header from the looked-up token."""
-    view = _make_view()
-    fake_token = _FakeToken(pk=42, plaintext="abc123" * 7)  # 42-char plaintext
-    manager = _FakeTokenManager(fake_token)
-
-    captured_headers = {}
-
-    def fake_authenticate(req):
-        captured_headers.update({"auth": req.META.get("HTTP_AUTHORIZATION", "")})
-        return (_FakeUser(), fake_token)
-
-    monkeypatch.setattr(
-        proxmox_views.TokenAuthentication, "authenticate", fake_authenticate
-    )
-
-    import sys
-    fake_users_module = type(sys)("users.models")
-    fake_users_module.Token = type("Token", (), {
-        "objects": manager,
-        "DoesNotExist": KeyError,
-    })
-    monkeypatch.setitem(sys.modules, "users.models", fake_users_module)
-
-    class _Msgs:
-        def __init__(self):
-            self.errors = []
-
-        def error(self, req, msg):
-            self.errors.append(msg)
-
-    msgs = _Msgs()
-    monkeypatch.setattr(proxmox_views.messages, "error", msgs.error)
-
-    request = SimpleNamespace(
-        POST={"token_version": "v1", "token_id": "42"},
-        META={},
-        user=_FakeUser(),
-    )
-    result = view._validate_sensitive_export_token(request)
-
-    assert result is True
-    assert captured_headers["auth"] == f"Token {fake_token.plaintext}"
-    assert msgs.errors == []
-
-
-def test_validate_token_v1_mode_missing_token_id(monkeypatch):
-    """v1 mode with no token_id returns False and adds an error message."""
-    view = _make_view()
-
-    errors = []
-    monkeypatch.setattr(proxmox_views.messages, "error", lambda req, msg: errors.append(msg))
-
-    import sys
-    fake_users_module = type(sys)("users.models")
-    fake_users_module.Token = type("Token", (), {"DoesNotExist": KeyError})
-    monkeypatch.setitem(sys.modules, "users.models", fake_users_module)
-
-    request = SimpleNamespace(POST={"token_version": "v1", "token_id": ""}, META={}, user=None)
-    result = view._validate_sensitive_export_token(request)
-    assert result is False
-    assert errors
-
-
-def test_validate_token_v2_mode_constructs_bearer_header(monkeypatch):
-    """v2 mode: constructs 'Bearer key.secret' header from POST fields."""
-    view = _make_view()
-
-    captured = {}
-
-    def fake_authenticate(req):
-        captured["auth"] = req.META.get("HTTP_AUTHORIZATION", "")
-        return (_FakeUser(), None)
-
-    monkeypatch.setattr(proxmox_views.TokenAuthentication, "authenticate", fake_authenticate)
-
-    import sys
-    fake_users_module = type(sys)("users.models")
-    fake_users_module.Token = type("Token", (), {"DoesNotExist": KeyError})
-    monkeypatch.setitem(sys.modules, "users.models", fake_users_module)
-
-    errors = []
-    monkeypatch.setattr(proxmox_views.messages, "error", lambda req, msg: errors.append(msg))
-
-    request = SimpleNamespace(
-        POST={"token_version": "v2", "token_key": "nbt_abc123", "token_secret": "mysecret"},
-        META={},
-        user=_FakeUser(),
-    )
-    result = view._validate_sensitive_export_token(request)
-
-    assert result is True
-    assert captured["auth"] == "Bearer nbt_abc123.mysecret"
-    assert errors == []
-
-
-def test_validate_token_v2_mode_missing_secret_returns_false(monkeypatch):
-    """v2 mode without token_secret returns False."""
-    view = _make_view()
-    errors = []
-    monkeypatch.setattr(proxmox_views.messages, "error", lambda req, msg: errors.append(msg))
-
-    import sys
-    fake_users_module = type(sys)("users.models")
-    fake_users_module.Token = type("Token", (), {"DoesNotExist": KeyError})
-    monkeypatch.setitem(sys.modules, "users.models", fake_users_module)
-
-    request = SimpleNamespace(
-        POST={"token_version": "v2", "token_key": "nbt_abc", "token_secret": ""},
-        META={},
-        user=None,
-    )
-    result = view._validate_sensitive_export_token(request)
-    assert result is False
-    assert errors
-
-
-def test_validate_token_v1_manual_overrides_dropdown(monkeypatch):
-    """v1 mode: v1_manual_token field takes priority over token_id selection."""
-    view = _make_view()
-    captured = {}
-
-    def fake_authenticate(req):
-        captured["auth"] = req.META.get("HTTP_AUTHORIZATION", "")
-        return (_FakeUser(), None)
-
-    monkeypatch.setattr(proxmox_views.TokenAuthentication, "authenticate", fake_authenticate)
-
-    import sys
-    fake_users_module = type(sys)("users.models")
-    fake_users_module.Token = type("Token", (), {"DoesNotExist": KeyError})
-    monkeypatch.setitem(sys.modules, "users.models", fake_users_module)
-
-    errors = []
-    monkeypatch.setattr(proxmox_views.messages, "error", lambda req, msg: errors.append(msg))
-
-    request = SimpleNamespace(
-        POST={
-            "token_version": "v1",
-            "token_id": "42",           # dropdown selection (should be ignored)
-            "v1_manual_token": "manualplaintext1234",  # manual wins
-        },
-        META={},
-        user=_FakeUser(),
-    )
-    result = view._validate_sensitive_export_token(request)
-
-    assert result is True
-    assert captured["auth"] == "Token manualplaintext1234"
-    assert errors == []
-
-
-def test_validate_token_fallback_uses_legacy_netbox_token_field(monkeypatch):
-    """Fallback (no token_version) uses the legacy netbox_token POST field."""
-    view = _make_view()
-
-    captured = {}
-
-    def fake_authenticate(req):
-        captured["auth"] = req.META.get("HTTP_AUTHORIZATION", "")
-        return (_FakeUser(), None)
-
-    monkeypatch.setattr(proxmox_views.TokenAuthentication, "authenticate", fake_authenticate)
-
-    import sys
-    fake_users_module = type(sys)("users.models")
-    fake_users_module.Token = type("Token", (), {"DoesNotExist": KeyError})
-    monkeypatch.setitem(sys.modules, "users.models", fake_users_module)
-
-    errors = []
-    monkeypatch.setattr(proxmox_views.messages, "error", lambda req, msg: errors.append(msg))
-
-    request = SimpleNamespace(
-        POST={"netbox_token": "abcdef1234567890" * 3},
-        META={},
-        user=_FakeUser(),
-    )
-    result = view._validate_sensitive_export_token(request)
-    assert result is True
-    assert captured["auth"].startswith("Token ")
-    assert errors == []
-
-
-def test_quick_add_token_view_exists():
-    """ProxmoxExportQuickAddTokenView is importable and is registered in __all__."""
-    assert hasattr(proxmox_views, "ProxmoxExportQuickAddTokenView")
-    assert "ProxmoxExportQuickAddTokenView" in proxmox_views.__all__
-
-
-def test_quick_add_token_view_requires_authentication(monkeypatch):
-    """Unauthenticated request to quick_add_token returns 401."""
-    import importlib
-
-    view_cls = proxmox_views.ProxmoxExportQuickAddTokenView
-    view = view_cls()
-
-    class _AnonUser:
-        is_authenticated = False
-
-    request = SimpleNamespace(user=_AnonUser(), POST={}, META={}, method="POST")
-    response = view.post(request)
-    assert response.status_code == 401
-
-
-def test_quick_add_token_view_requires_add_permission(monkeypatch):
-    """Authenticated user without users.add_token perm gets 403."""
-    view = proxmox_views.ProxmoxExportQuickAddTokenView()
-
-    class _UserNoPerms:
-        is_authenticated = True
-
-        def has_perm(self, perm):
-            return False
-
-    request = SimpleNamespace(user=_UserNoPerms(), POST={}, META={}, method="POST")
-    response = view.post(request)
-    assert response.status_code == 403
+    assert captured == [{"name": "imported-one"}, {"name": "imported-two"}]

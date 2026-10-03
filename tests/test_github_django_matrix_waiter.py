@@ -1226,7 +1226,7 @@ def test_documentation_keeps_bootstrap_non_consuming_and_non_security_critical()
         waiter.REPO_ROOT / "docs/developer/ci-e2e-workflows.md"
     ).read_text()
     agent_doc = (waiter.REPO_ROOT / "AGENTS.md").read_text()
-    claude_doc = (waiter.REPO_ROOT / "CLAUDE.md").read_text()
+    claude_doc = (waiter.REPO_ROOT / "AGENTS.md").read_text()
 
     for document in (developer_doc, agent_doc, claude_doc):
         assert "GH_MATRIX_READ_TOKEN" in document

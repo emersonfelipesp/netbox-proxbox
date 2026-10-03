@@ -11,8 +11,8 @@ a way to retrieve them:
   ``_ProxboxDashboardPermission``.
 * ``GET /api/plugins/proxbox/ssh-credentials/by-node/<node_id>/credentials/``
   — full payload including the decrypted password / private key. Requires
-  a NetBox API token with ``view_nodesshcredential`` permission and refuses
-  non-HTTPS in non-DEBUG mode.
+  a NetBox API token whose owner has sensitive-data access and
+  ``view_nodesshcredential`` permission, and refuses non-HTTPS in non-DEBUG mode.
 
 The encryption key is read from ``ProxboxPluginSettings.encryption_key``;
 when missing the secrets endpoint returns ``503 Service Unavailable``
@@ -45,6 +45,10 @@ from netbox_proxbox.models.ssh_credential import (
     SSH_CRED_SOURCE_REUSE,
 )
 from netbox_proxbox.utils import encryption as enc_helpers
+from netbox_proxbox.sensitive_data import (
+    can_access_sensitive_data,
+    require_sensitive_data_access,
+)
 
 _HOST_KEY_SCAN_TIMEOUT = 25
 
@@ -90,6 +94,11 @@ def _optional_get(queryset, model, **kwargs):
         return queryset.get(**kwargs)
     except model.DoesNotExist:
         return None
+
+
+def _ssh_secret_response(payload: dict[str, object]) -> Response:
+    """Prevent storage of successfully disclosed SSH material."""
+    return Response(payload, headers={"Cache-Control": "no-store"})
 
 
 def _metadata_payload(cred: NodeSSHCredential) -> dict:
@@ -246,7 +255,7 @@ def _node_ssh_access_disabled(cred: NodeSSHCredential) -> bool:
     endpoint = getattr(getattr(cred, "node", None), "endpoint", None)
     if endpoint is None:
         return False
-    return not endpoint.ssh_access_enabled
+    return not getattr(endpoint, "enabled", True) or not endpoint.ssh_access_enabled
 
 
 @sensitive_variables()
@@ -303,6 +312,7 @@ class _NetBoxTokenPermission(BasePermission):
         has_perm = getattr(user, "has_perm", None)
         return bool(
             callable(has_perm)
+            and can_access_sensitive_data(user)
             and all(has_perm(permission) for permission in self.required_permissions)
         )
 
@@ -356,6 +366,10 @@ class NodeSSHCredentialSecretsAPIView(APIView):
     @sensitive_variables()
     def get(self, request: Request, node_id: int) -> Response:
         """Return decrypted secrets for proxbox-api API-token callers only."""
+        try:
+            require_sensitive_data_access(request.user)
+        except PermissionDenied as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
         if not django_settings.DEBUG and not request.is_secure():
             return Response(
                 {"detail": "HTTPS required to retrieve SSH credentials."},
@@ -375,6 +389,11 @@ class NodeSSHCredentialSecretsAPIView(APIView):
         except NodeSSHCredential.DoesNotExist:
             return self._resolve_from_device_openbao(request, node_id)
 
+        # Resolve collisions before scoping, then require visibility of the exact
+        # credential. A hidden local credential must never select the fallback.
+        cred = get_object_or_404(
+            NodeSSHCredential.objects.restrict(request.user, "view"), pk=cred.pk
+        )
         # Gate node-target SSH on the owning endpoint's access method.
         if _node_ssh_access_disabled(cred):
             return Response(
@@ -401,7 +420,7 @@ class NodeSSHCredentialSecretsAPIView(APIView):
 
         payload = _metadata_payload(cred)
         payload.update(secrets)
-        return Response(payload)
+        return _ssh_secret_response(payload)
 
     @sensitive_variables()
     def _resolve_from_device_openbao(self, request: Request, node_id: int) -> Response:
@@ -459,7 +478,7 @@ class NodeSSHCredentialSecretsAPIView(APIView):
                 },
                 status=status.HTTP_404_NOT_FOUND,
             )
-        return Response(payload)
+        return _ssh_secret_response(payload)
 
 
 class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
@@ -469,6 +488,10 @@ class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
 
     def get(self, request: Request, endpoint_id: int) -> Response:
         """Return endpoint fallback SSH secrets for API-token callers only."""
+        try:
+            require_sensitive_data_access(request.user)
+        except PermissionDenied as exc:
+            return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
         if not django_settings.DEBUG and not request.is_secure():
             return Response(
                 {"detail": "HTTPS required to retrieve SSH credentials."},
@@ -481,21 +504,28 @@ class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
             ),
             pk=endpoint_id,
         )
+        endpoint._openbao_actor_user = request.user
         # Load-bearing SSH access-method gate: refuse to release SSH secrets
         # (and thus block the browser terminal) unless the endpoint opted into
         # the SSH transport (access_methods='api_ssh'). Orthogonal to writes.
-        if not endpoint.ssh_access_enabled:
+        if not getattr(endpoint, "enabled", True) or not endpoint.ssh_access_enabled:
             return Response(
                 {"detail": _SSH_ACCESS_DISABLED},
                 status=status.HTTP_403_FORBIDDEN,
             )
         if endpoint.ssh_credential_source == SSH_CRED_SOURCE_REUSE:
-            return self._reused_credentials_response(endpoint)
+            return self._reused_credentials_response(endpoint, user=request.user)
         if not endpoint.has_ssh_terminal_credentials:
             return Response(
                 {"detail": "No endpoint SSH fallback credential configured."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        return self._dedicated_credentials_response(endpoint)
+
+    @staticmethod
+    @sensitive_variables()
+    def _dedicated_credentials_response(endpoint: ProxmoxEndpoint) -> Response:
+        """Resolve dedicated endpoint material after all request gates pass."""
         from netbox_proxbox.integrations.openbao import endpoint_uses_openbao_storage
 
         if endpoint_uses_openbao_storage(endpoint):
@@ -513,15 +543,16 @@ class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
             except Exception as exc:
                 if not isinstance(exc, ValidationError):
                     raise
-                detail = exc.messages[0] if getattr(exc, "messages", None) else str(exc)
                 return Response(
-                    {"detail": detail},
+                    {
+                        "detail": "Stored endpoint SSH credential cannot be resolved. Check credential storage and access permissions."
+                    },
                     status=status.HTTP_503_SERVICE_UNAVAILABLE,
                 )
             payload = _endpoint_metadata_payload(endpoint)
             payload["password"] = password
             payload["private_key"] = private_key
-            return Response(payload)
+            return _ssh_secret_response(payload)
 
         settings_obj = ProxboxPluginSettings.get_solo()
         key = settings_obj.encryption_key or ""
@@ -554,15 +585,17 @@ class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
         payload = _endpoint_metadata_payload(endpoint)
         payload["password"] = password
         payload["private_key"] = private_key
-        return Response(payload)
+        return _ssh_secret_response(payload)
 
     @staticmethod
-    def _reused_credentials_response(endpoint: ProxmoxEndpoint) -> Response:
+    def _reused_credentials_response(
+        endpoint: ProxmoxEndpoint, *, user: object | None = None
+    ) -> Response:
         """Keep missing and unavailable reused-password responses secret-safe."""
         from netbox_proxbox.integrations.openbao import resolve_endpoint_api_secret
 
         try:
-            password = resolve_endpoint_api_secret(endpoint, "password")
+            password = resolve_endpoint_api_secret(endpoint, "password", user=user)
         except enc_helpers.EncryptionError:
             return Response(
                 {
@@ -592,7 +625,7 @@ class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
         payload = _endpoint_metadata_payload(endpoint)
         payload["password"] = password
         payload["private_key"] = ""
-        return Response(payload)
+        return _ssh_secret_response(payload)
 
 
 class _ProxmoxEndpointChangePermission(BasePermission):

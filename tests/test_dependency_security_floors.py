@@ -58,6 +58,7 @@ NETBOX_REQUIREMENTS_DIR = ROOT / "ci" / "netbox-requirements"
 RUNTIME_DEPENDENCIES = "pyproject.toml [project].dependencies"
 CLI_EXTRA = "pyproject.toml [project.optional-dependencies].cli"
 DEV_GROUP = "pyproject.toml [dependency-groups].dev"
+DEV_EXTRA = "pyproject.toml [project.optional-dependencies].dev"
 DOCS_REQUIREMENTS = "requirements-docs.txt"
 
 
@@ -133,6 +134,31 @@ SECURITY_FLOORS: dict[str, SecurityFloor] = {
         advisories=("GHSA-xvg9-69gf-fjrf",),
         declared_in=(DEV_GROUP, DOCS_REQUIREMENTS),
     ),
+    "virtualenv": SecurityFloor(
+        name="virtualenv",
+        floor="21.7.13",
+        # The activation-script issue covers <= 21.7.12; the seed-wheel and
+        # prompt-injection advisories cover earlier subsets of the same range.
+        affected=("20.36.1", "21.7.10", "21.7.11", "21.7.12"),
+        advisories=(
+            "GHSA-94p9-xgh2-xp45",
+            "GHSA-9h9j-4vrj-gf7g",
+            "GHSA-p58f-9548-mpm2",
+            "GHSA-x78j-v8h9-3j2q",
+        ),
+        declared_in=(DEV_GROUP, DEV_EXTRA),
+    ),
+    "urllib3": SecurityFloor(
+        name="urllib3",
+        floor="2.8.0",
+        affected=("1.26.20", "2.6.2", "2.7.0"),
+        advisories=(
+            "GHSA-8988-9cw3-xx77",
+            "GHSA-gh4c-6fx4-qh6g",
+            "GHSA-vxq7-64xx-v4gw",
+        ),
+        declared_in=(RUNTIME_DEPENDENCIES,),
+    ),
 }
 
 
@@ -143,10 +169,12 @@ SECURITY_FLOORS: dict[str, SecurityFloor] = {
 _COMMON_NETBOX_MATRIX_FLOORS = {
     "djangorestframework": "3.17.2",
     "mkdocs-material": "9.7.7",
+    "oauthlib": "4.0.0",
     "pillow": "12.3.0",
-    "pyjwt": "2.13.0",
+    "pyjwt": "2.15.0",
     "strawberry-graphql": "0.315.7",
     "tablib": "3.10.0",
+    "urllib3": "2.8.0",
 }
 NETBOX_MATRIX_SECURITY_FLOORS = {
     "v4.5.8-py312-linux-x86_64.in": {
@@ -165,31 +193,63 @@ NETBOX_MATRIX_SECURITY_FLOORS = {
         "django": "6.0.8",
         **_COMMON_NETBOX_MATRIX_FLOORS,
     },
+    "v4.7.0-beta2-py312-linux-x86_64.in": {
+        "django": "6.1.1",
+        **_COMMON_NETBOX_MATRIX_FLOORS,
+    },
+    "v4.7.0-py312-linux-x86_64.in": {
+        "django": "6.1.1",
+        **_COMMON_NETBOX_MATRIX_FLOORS,
+    },
 }
 NETBOX_MATRIX_AUTH_CHAINS = {
     "v4.5.8-py312-linux-x86_64.in": {
-        "pyjwt": "2.13.0",
-        "requests": "2.33.1",
-        "social-auth-app-django": "5.7.0",
-        "social-auth-core": "4.8.5",
+        "oauthlib": "4.0.0",
+        "pyjwt": "2.15.0",
+        "requests": "2.34.2",
+        "social-auth-app-django": "6.0.1",
+        "social-auth-core": "5.1.0",
+        "urllib3": "2.8.0",
     },
     "v4.5.10-py312-linux-x86_64.in": {
-        "pyjwt": "2.13.0",
+        "oauthlib": "4.0.0",
+        "pyjwt": "2.15.0",
         "requests": "2.34.2",
         "social-auth-app-django": "6.0.1",
         "social-auth-core": "5.1.0",
+        "urllib3": "2.8.0",
     },
     "v4.6.0-py312-linux-x86_64.in": {
-        "pyjwt": "2.13.0",
+        "oauthlib": "4.0.0",
+        "pyjwt": "2.15.0",
         "requests": "2.34.2",
         "social-auth-app-django": "6.0.1",
         "social-auth-core": "5.1.0",
+        "urllib3": "2.8.0",
     },
     "v4.6.6-py312-linux-x86_64.in": {
-        "pyjwt": "2.13.0",
+        "oauthlib": "4.0.0",
+        "pyjwt": "2.15.0",
         "requests": "2.34.2",
         "social-auth-app-django": "6.0.1",
         "social-auth-core": "5.1.0",
+        "urllib3": "2.8.0",
+    },
+    "v4.7.0-beta2-py312-linux-x86_64.in": {
+        "oauthlib": "4.0.0",
+        "pyjwt": "2.15.0",
+        "requests": "2.34.2",
+        "social-auth-app-django": "6.0.1",
+        "social-auth-core": "5.1.0",
+        "urllib3": "2.8.0",
+    },
+    "v4.7.0-py312-linux-x86_64.in": {
+        "oauthlib": "4.0.0",
+        "pyjwt": "2.15.0",
+        "requests": "2.34.2",
+        "social-auth-app-django": "6.0.1",
+        "social-auth-core": "5.1.0",
+        "urllib3": "2.8.0",
     },
 }
 NETBOX_MATRIX_SECURITY_ADVISORIES = {
@@ -209,6 +269,7 @@ NETBOX_MATRIX_SECURITY_ADVISORIES = {
     ),
     "djangorestframework": ("GHSA-2m8g-3cmr-wg3w", "GHSA-g47c-3xmw-q6m2"),
     "mkdocs-material": ("GHSA-xvg9-69gf-fjrf",),
+    "oauthlib": ("GHSA-hj66-6f7g-4r5v", "GHSA-xpv3-w29h-x7cv"),
     "pillow": (
         "GHSA-45hq-cxwh-f6vc",
         "GHSA-4x4j-2g7c-83w6",
@@ -225,11 +286,19 @@ NETBOX_MATRIX_SECURITY_ADVISORIES = {
         "GHSA-xj96-63gp-2gmr",
     ),
     "pyjwt": (
-        "GHSA-993g-76c3-p5m4",
-        "GHSA-fhv5-28vv-h8m8",
-        "GHSA-jq35-7prp-9v3f",
-        "GHSA-w7vc-732c-9m39",
-        "GHSA-xgmm-8j9v-c9wx",
+        "GHSA-2gx3-rcp4-g85q",
+        "GHSA-42vr-xj54-vc7v",
+        "GHSA-8wjv-2p76-3863",
+        "GHSA-9j54-fg26-wv3r",
+        "GHSA-9v7f-9g4p-ffgj",
+        "GHSA-ffc3-869f-jxw9",
+        "GHSA-gvp8-978c-rx2q",
+        "GHSA-hxm8-2xgr-2p9m",
+        "GHSA-jwrc-g2q2-pq5p",
+        "GHSA-p4g4-x82p-q773",
+        "GHSA-r6x4-923q-g947",
+        "GHSA-w2cx-738m-mc7w",
+        "GHSA-w6j9-cwv2-h6wq",
     ),
     "strawberry-graphql": (
         "GHSA-fr49-mhgj-crfc",
@@ -237,6 +306,11 @@ NETBOX_MATRIX_SECURITY_ADVISORIES = {
         "GHSA-x97m-qp5c-w9xj",
     ),
     "tablib": ("GHSA-gqgw-jghv-mxwx",),
+    "urllib3": (
+        "GHSA-8988-9cw3-xx77",
+        "GHSA-gh4c-6fx4-qh6g",
+        "GHSA-vxq7-64xx-v4gw",
+    ),
 }
 
 
@@ -278,6 +352,10 @@ def _runtime_dependency_specs() -> list[str]:
 
 def _cli_extra_specs() -> list[str]:
     return _pyproject_list(("project", "optional-dependencies", "cli"), CLI_EXTRA)
+
+
+def _dev_extra_specs() -> list[str]:
+    return _pyproject_list(("project", "optional-dependencies", "dev"), DEV_EXTRA)
 
 
 def _dev_group_specs() -> list[str]:
@@ -327,6 +405,7 @@ _SPEC_SOURCES = {
     RUNTIME_DEPENDENCIES: _runtime_dependency_specs,
     CLI_EXTRA: _cli_extra_specs,
     DEV_GROUP: _dev_group_specs,
+    DEV_EXTRA: _dev_extra_specs,
     DOCS_REQUIREMENTS: _docs_specs,
 }
 
@@ -703,6 +782,92 @@ def test_netbox_matrix_inputs_and_locks_enforce_security_floors(
         assert lock_versions[_canonical(package)] == expected, (
             f"{input_path.with_suffix('.txt')}: expected the reviewed "
             f"authentication-chain pin {package}=={expected}"
+        )
+
+
+# Composed CI locks that install a companion plugin on top of one NetBox
+# matrix input. Each must clear the same floors and authentication chain as
+# the base input it extends, or a coherent-looking regeneration could
+# reintroduce a vulnerable dependency that only the companion cell installs.
+NETBOX_COMPANION_LOCKS = {
+    "v4.6.6-pdm-3408441672bf-py312-linux-x86_64.txt": "v4.6.6-py312-linux-x86_64.in",
+    "v4.7.0-all-companions-py312-linux-x86_64.txt": "v4.7.0-py312-linux-x86_64.in",
+    "v4.7.0-openbao-58677ef-py312-linux-x86_64.txt": "v4.7.0-py312-linux-x86_64.in",
+}
+
+
+def _assert_companion_lock_clears_floors(
+    lock_name: str, lock_versions: dict[str, Version]
+) -> None:
+    """Require a composed lock to satisfy its base input's floors and chain."""
+    base = NETBOX_COMPANION_LOCKS[lock_name]
+    base_path = NETBOX_REQUIREMENTS_DIR / base
+    # Security floors are not monotonic across Django series, so a scalar
+    # lower bound is not enough: every reviewed base pin (including the exact
+    # Django series) must govern the composed lock as well.
+    _assert_matrix_input_matches_lock(
+        base_path, _matrix_input_specs(base_path), lock_versions
+    )
+    for package, floor_raw in NETBOX_MATRIX_SECURITY_FLOORS[base].items():
+        locked = lock_versions.get(_canonical(package))
+        assert locked is not None, f"{lock_name}: missing {package}"
+        assert locked >= Version(floor_raw), (
+            f"{lock_name} pins {package} {locked}, below the {floor_raw} "
+            f"security floor required by "
+            f"{', '.join(NETBOX_MATRIX_SECURITY_ADVISORIES[package])}"
+        )
+    for package, expected_raw in NETBOX_MATRIX_AUTH_CHAINS[base].items():
+        assert lock_versions.get(_canonical(package)) == Version(expected_raw), (
+            f"{lock_name}: expected the reviewed authentication-chain pin "
+            f"{package}=={expected_raw}"
+        )
+
+
+@pytest.mark.parametrize("lock_name", sorted(NETBOX_COMPANION_LOCKS))
+def test_netbox_companion_locks_enforce_security_floors(lock_name: str) -> None:
+    """Every composed companion lock clears its base input's advisories."""
+    lock_versions = _matrix_lock_versions(NETBOX_REQUIREMENTS_DIR / lock_name)
+    _assert_companion_lock_clears_floors(lock_name, lock_versions)
+
+
+@pytest.mark.parametrize(
+    ("package", "vulnerable"),
+    [
+        ("oauthlib", "3.3.1"),
+        ("pyjwt", "2.14.0"),
+        ("urllib3", "2.7.0"),
+        ("django", "6.0.7"),
+        ("django", "6.1.0"),
+    ],
+)
+@pytest.mark.parametrize("lock_name", sorted(NETBOX_COMPANION_LOCKS))
+def test_netbox_companion_lock_downgrade_is_rejected(
+    lock_name: str, package: str, vulnerable: str
+) -> None:
+    """A companion lock downgraded to a vulnerable pin fails the guard."""
+    lock_versions = dict(_matrix_lock_versions(NETBOX_REQUIREMENTS_DIR / lock_name))
+    lock_versions[_canonical(package)] = Version(vulnerable)
+    with pytest.raises(AssertionError, match=f"(?i){package}"):
+        _assert_companion_lock_clears_floors(lock_name, lock_versions)
+
+
+@pytest.mark.parametrize(
+    ("filename", "vulnerable"),
+    [
+        ("v4.5.8-py312-linux-x86_64.in", "6.0.7"),
+        ("v4.6.6-py312-linux-x86_64.in", "6.1.0"),
+    ],
+)
+def test_netbox_matrix_lock_off_series_django_is_rejected(
+    filename: str, vulnerable: str
+) -> None:
+    """A lock moved to another or vulnerable Django release fails the guard."""
+    input_path = NETBOX_REQUIREMENTS_DIR / filename
+    lock_versions = dict(_matrix_lock_versions(input_path.with_suffix(".txt")))
+    lock_versions["django"] = Version(vulnerable)
+    with pytest.raises(AssertionError, match="(?i)django"):
+        _assert_matrix_input_matches_lock(
+            input_path, _matrix_input_specs(input_path), lock_versions
         )
 
 

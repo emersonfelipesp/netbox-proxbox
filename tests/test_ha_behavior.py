@@ -105,6 +105,7 @@ def _install_services_stubs(
     )
     services_backend_context.get_fastapi_request_context = lambda: request_context
     services_endpoint_scope = types.ModuleType("netbox_proxbox.services.endpoint_scope")
+    services_endpoint_scope.viewable_enabled_endpoint_ids = lambda _user: [1]
     services_endpoint_scope.enabled_backend_endpoint_scope = lambda **_kw: (
         {"source": "database", "proxmox_endpoint_ids": "1"},
         {1: 1},
@@ -246,7 +247,7 @@ def test_summary_view_returns_503_when_backend_unconfigured(
         REPO_ROOT / "netbox_proxbox" / "api" / "ha.py",
     )
     view = module.HAClusterSummaryAPIView()
-    resp = view.get(SimpleNamespace())
+    resp = view.get(SimpleNamespace(user=None))
     assert resp.status_code == 503
     assert resp.data["detail"] == "No FastAPI backend endpoint is configured."
 
@@ -261,7 +262,7 @@ def test_vm_view_returns_503_when_backend_unconfigured(
         REPO_ROOT / "netbox_proxbox" / "api" / "ha.py",
     )
     view = module.HAVMResourceAPIView()
-    resp = view.get(SimpleNamespace(), 100)
+    resp = view.get(SimpleNamespace(user=None), 100)
     assert resp.status_code == 503
 
 
@@ -276,7 +277,7 @@ def test_summary_view_proxies_with_backend_url(monkeypatch: pytest.MonkeyPatch) 
     view = module.HAClusterSummaryAPIView()
     payload = {"resources": [{"sid": "vm:101", "state": "started"}]}
     with patch("requests.get", return_value=_make_response(200, payload)) as mock_get:
-        resp = view.get(SimpleNamespace())
+        resp = view.get(SimpleNamespace(user=None))
     assert resp.status_code == 200
     assert resp.data == payload
     args, kwargs = mock_get.call_args
@@ -299,7 +300,7 @@ def test_vm_view_normalises_null_payload_to_empty_dict(
     )
     view = module.HAVMResourceAPIView()
     with patch("requests.get", return_value=_make_response(200, None)):
-        resp = view.get(SimpleNamespace(), 4242)
+        resp = view.get(SimpleNamespace(user=None), 4242)
     assert resp.status_code == 200
     assert resp.data == {}
 
@@ -314,7 +315,7 @@ def test_vm_view_uses_ten_second_timeout(monkeypatch: pytest.MonkeyPatch) -> Non
     )
     view = module.HAVMResourceAPIView()
     with patch("requests.get", return_value=_make_response(200, {})) as mock_get:
-        view.get(SimpleNamespace(), 4242)
+        view.get(SimpleNamespace(user=None), 4242)
     assert mock_get.call_args.kwargs["timeout"] == 10
 
 

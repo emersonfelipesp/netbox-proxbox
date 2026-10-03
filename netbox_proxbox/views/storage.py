@@ -14,6 +14,9 @@ from utilities.views import ViewTab, register_model_view
 from virtualization.models import VirtualDisk
 from virtualization.tables import VirtualDiskTable
 
+from netbox_proxbox.services.backend_path import (
+    safe_path_segment,
+)
 from netbox_proxbox.filtersets import (
     ProxmoxStorageFilterSet,
     VMBackupFilterSet,
@@ -162,7 +165,10 @@ class ProxmoxStorageView(generic.ObjectView):
                 base_url=base_url,
                 auth_headers=auth_headers,
                 verify_ssl=verify_ssl,
-                route=f"/proxmox/nodes/{node}/storage/{storage_name}/content",
+                route=(
+                    f"/proxmox/nodes/{safe_path_segment(node)}/storage/"
+                    f"{safe_path_segment(storage_name)}/content"
+                ),
                 query_params=query_params,
                 request_timeout=max(
                     0.001,

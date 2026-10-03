@@ -70,6 +70,42 @@ def _coerce_fernet_key(raw: str) -> bytes:
     return encoded
 
 
+NON_CANONICAL_KEY_MESSAGE = (
+    "The encryption key must be a Fernet key: 44 url-safe base64 characters "
+    "that decode to 32 random bytes (for example the output of "
+    "cryptography.fernet.Fernet.generate_key()). Raw 32-character secrets are "
+    "no longer accepted for new keys because they are used without key "
+    "derivation; a low-entropy value would become the encryption key."
+)
+
+
+@sensitive_variables()
+def is_canonical_fernet_key(raw: str) -> bool:
+    """Return whether ``raw`` is a canonical 44-character Fernet key."""
+    encoded = (raw or "").strip().encode("utf-8")
+    if len(encoded) != 44:
+        return False
+    try:
+        decoded = base64.urlsafe_b64decode(encoded)
+    except (ValueError, TypeError, binascii.Error):
+        return False
+    # Strict form only: standard-base64 '+'/'/' characters and non-zero
+    # padding bits decode to the same key under a different spelling, which
+    # would let a rotation "replace" a key with itself.
+    return len(decoded) == 32 and base64.urlsafe_b64encode(decoded) == encoded
+
+
+@sensitive_variables()
+def require_canonical_fernet_key(raw: str) -> None:
+    """Reject a newly written key unless it is a canonical Fernet key.
+
+    Already stored legacy raw 32-byte keys keep decrypting through
+    ``_coerce_fernet_key``; this check only applies when a key is written.
+    """
+    if not is_canonical_fernet_key(raw):
+        raise EncryptionKeyInvalid(NON_CANONICAL_KEY_MESSAGE)
+
+
 @sensitive_variables()
 def _fernet(key: str) -> Fernet:
     return Fernet(_coerce_fernet_key(key))
@@ -77,9 +113,17 @@ def _fernet(key: str) -> Fernet:
 
 @sensitive_variables()
 def keys_match(left: str, right: str) -> bool:
-    """Return whether two accepted key spellings resolve to the same Fernet key."""
+    """Return whether two accepted key spellings resolve to the same Fernet key.
 
-    return hmac.compare_digest(_coerce_fernet_key(left), _coerce_fernet_key(right))
+    Compares the decoded 32-byte key material, not the spelling: standard-base64
+    and non-zero-padding aliases of one key decode to the same bytes, so a
+    rotation between them would not change the effective key.
+    """
+
+    return hmac.compare_digest(
+        base64.urlsafe_b64decode(_coerce_fernet_key(left)),
+        base64.urlsafe_b64decode(_coerce_fernet_key(right)),
+    )
 
 
 @sensitive_variables()

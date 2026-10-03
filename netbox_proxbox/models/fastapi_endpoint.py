@@ -101,13 +101,14 @@ class FastAPIEndpoint(EndpointBase):
         verbose_name=_("HTTP port"),
     )
     use_https = models.BooleanField(
-        default=False,
+        default=True,
         verbose_name=_("Use HTTPS"),
         help_text=_(
-            "Use the HTTPS scheme to reach the ProxBox backend. "
-            "Enable this when the backend is served over TLS, e.g. the "
-            "proxbox-api '*-nginx' image. Certificate verification is "
-            "controlled separately by 'Verify SSL'."
+            "Use the HTTPS scheme to reach the ProxBox backend (default). "
+            "The backend API key, pushed Proxmox credentials, and the NetBox "
+            "token cross this connection, so turning HTTPS off sends them in "
+            "plaintext; disable it only on an isolated, trusted network. "
+            "Certificate verification is controlled separately by 'Verify SSL'."
         ),
     )
     verify_ssl = models.BooleanField(
@@ -322,6 +323,11 @@ class FastAPIEndpoint(EndpointBase):
             self._save_nonsecurity_only(*args, **kwargs)
             return
 
+        from netbox_proxbox.services.connection_authority import (
+            require_backend_target_edit_authority,
+        )
+
+        require_backend_target_edit_authority(self)
         saved = False
         try:
             with transaction.atomic(using=using):

@@ -524,3 +524,66 @@ def test_firewall_payload_does_not_import_firewall_common_at_module_load():
     header = source.split("FIREWALL_MODEL_NAMES", 1)[0]
 
     assert "netbox_proxbox.intent.firewall_common" not in header
+
+
+@pytest.mark.parametrize("hostile", ["..", "../rules", "a/b", "grp?x=1", "%2e%2e"])
+def test_security_group_rule_rejects_traversal_names(fw_common, hostile):
+    """A group named ``..`` must not collapse onto the datacenter rule route."""
+    rule = _rule(fw_common, _endpoint(fw_common))
+    rule.zone = fw_common.FirewallZoneChoices.SECURITY_GROUP
+    rule.security_group = SimpleNamespace(name=hostile)
+
+    with pytest.raises(fw_common.FirewallPushError) as excinfo:
+        fw_common._rule_push_target(rule)
+
+    assert excinfo.value.reason == "invalid_identifier"
+
+
+def test_security_group_rule_keeps_valid_names(fw_common):
+    rule = _rule(fw_common, _endpoint(fw_common))
+    rule.zone = fw_common.FirewallZoneChoices.SECURITY_GROUP
+    rule.security_group = SimpleNamespace(name="web-servers")
+
+    method, path = fw_common._rule_push_target(rule)
+
+    assert path == "/proxmox/firewall/datacenter/groups/web-servers/rules/7"
+    assert method == "put"
+
+
+@pytest.mark.parametrize(
+    ("zone", "field", "value"),
+    [
+        ("NODE", "proxmox_node", SimpleNamespace(name="../datacenter")),
+        ("VNET", "iface", ".."),
+    ],
+)
+def test_node_and_vnet_rules_reject_traversal_names(fw_common, zone, field, value):
+    rule = _rule(fw_common, _endpoint(fw_common))
+    rule.zone = getattr(fw_common.FirewallZoneChoices, zone)
+    setattr(rule, field, value)
+
+    with pytest.raises(fw_common.FirewallPushError) as excinfo:
+        fw_common._rule_push_target(rule)
+
+    assert excinfo.value.reason == "invalid_identifier"
+
+
+@pytest.mark.parametrize(
+    ("cidr", "expected"),
+    [
+        ("127.0.0.1/32", "127.0.0.1%2F32"),
+        ("127.0.0.1", "127.0.0.1"),
+        ("2001:db8::/32", "2001%3Adb8%3A%3A%2F32"),
+        ("trusted-alias", "trusted-alias"),
+    ],
+)
+def test_ipset_entry_segment_keeps_valid_keys(fw_common, cidr, expected):
+    assert fw_common._ipset_entry_segment(cidr) == expected
+
+
+@pytest.mark.parametrize("hostile", ["..", "../rules", "2001:db8::/32/..", ""])
+def test_ipset_entry_segment_rejects_traversal(fw_common, hostile):
+    with pytest.raises(fw_common.FirewallPushError) as excinfo:
+        fw_common._ipset_entry_segment(hostile)
+
+    assert excinfo.value.reason == "invalid_identifier"

@@ -169,7 +169,16 @@ class NetBoxEndpointTable(NetBoxTable):
     ip_address = tables.Column(linkify=True)
     verify_ssl = BooleanColumn()
     enabled = BooleanColumn()
-    token = tables.Column(linkify=True)
+    token = tables.Column(accessor="token_id", verbose_name=_("Token"))
+
+    def render_token(self, value: object) -> str:
+        """Render only a token identity, never the core object's secret material."""
+        return f"Token {value}" if value is not None else ""
+
+    def value_token(self, value: object) -> str:
+        """Keep generic table exports independent of token string representations."""
+        return self.render_token(value)
+
     status = tables.TemplateColumn(
         template_code=STATUS_BADGE_TEMPLATE.replace("{{ service }}", "netbox"),
         verbose_name=_("Status"),

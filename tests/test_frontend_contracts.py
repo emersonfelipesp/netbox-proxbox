@@ -584,8 +584,8 @@ def test_proxmox_endpoint_list_template_loads_static_for_status_script():
     # export-secrets-modal JS must be inlined (not an external file reference) so it
     # is served without requiring collectstatic.
     assert "export-secrets-modal.js" not in contents
-    assert "TOKEN_API_URL" in contents
-    assert "loadV1Tokens" in contents
+    assert "TOKEN_API_URL" not in contents
+    assert "loadV1Tokens" not in contents
 
 
 def test_fastapi_openapi_tab_view_and_template_contract():
@@ -676,7 +676,7 @@ def test_community_surface_excludes_discord_and_telegram_links():
         "netbox_proxbox/views/__init__.py",
         "netbox_proxbox/views/external_pages.py",
         "netbox_proxbox/templates/netbox_proxbox/community.html",
-        "netbox_proxbox/static/netbox_proxbox/CLAUDE.md",
+        "netbox_proxbox/static/netbox_proxbox/AGENTS.md",
     ]
     forbidden = (
         "discord",
@@ -733,18 +733,18 @@ def test_proxmox_list_template_exposes_import_export_controls_and_warning_modal(
         "This export includes Proxmox passwords and token values in plain text"
         in contents
     )
-    # Token version selector fields.
-    assert 'name="token_version"' in contents
-    assert 'name="token_id"' in contents
-    assert 'name="token_key"' in contents
-    assert 'name="token_secret"' in contents
-    # v1 sub-mode: select vs manual.
-    assert 'name="v1_mode"' in contents
-    assert 'name="v1_manual_token"' in contents
-    # Quick add button.
-    assert "Quick add token" in contents
-    # Security warning for quick-add.
-    assert "Delete it or store it securely after this export" in contents
+    assert "{% if request.user|proxbox_can_access_sensitive_data %}" in contents
+    assert "{% csrf_token %}" in contents
+    for obsolete in (
+        "token_version",
+        "token_id",
+        "token_key",
+        "token_secret",
+        "v1_mode",
+        "v1_manual_token",
+    ):
+        assert f'name="{obsolete}"' not in contents
+    assert "Quick add token" not in contents
 
 
 def _assert_singleton_list_template_export_controls(
@@ -759,22 +759,32 @@ def _assert_singleton_list_template_export_controls(
     assert "Export with secrets" in contents
     assert 'name="format"' in contents
     assert warning_text in contents
-    # Token version selector fields.
-    assert 'name="token_version"' in contents
-    assert 'name="token_id"' in contents
-    assert 'name="token_key"' in contents
-    assert 'name="token_secret"' in contents
-    # v1 sub-mode: select vs manual.
-    assert 'name="v1_mode"' in contents
-    assert 'name="v1_manual_token"' in contents
-    # Quick add button.
-    assert "Quick add token" in contents
-    assert f"{url_prefix}_quick_add_token" in contents
-    # Security warning for quick-add.
-    assert "Delete it or store it securely after this export" in contents
-    # JS must be inlined (not external).
-    assert "TOKEN_API_URL" in contents
-    assert "loadV1Tokens" in contents
+    _assert_sensitive_export_template_controls(contents, url_prefix)
+
+
+def _assert_sensitive_export_template_controls(contents: str, url_prefix: str) -> None:
+    """Sensitive export controls keep the actor gate, CSRF, and status script."""
+    assert "{% if request.user|proxbox_can_access_sensitive_data %}" in contents
+    assert "{% csrf_token %}" in contents
+    _assert_no_export_token_proof_controls(contents, url_prefix)
+    assert "endpoint-status.js" in contents
+
+
+def _assert_no_export_token_proof_controls(contents: str, url_prefix: str) -> None:
+    """Retired token-proof controls cannot replace the request actor's authority."""
+    for obsolete in (
+        "token_version",
+        "token_id",
+        "token_key",
+        "token_secret",
+        "v1_mode",
+        "v1_manual_token",
+    ):
+        assert f'name="{obsolete}"' not in contents
+    assert "Quick add token" not in contents
+    assert f"{url_prefix}_quick_add_token" not in contents
+    assert "TOKEN_API_URL" not in contents
+    assert "loadV1Tokens" not in contents
 
 
 def test_netbox_endpoint_list_template_exposes_import_export_controls():

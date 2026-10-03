@@ -244,9 +244,35 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
+## What's New in v0.0.29rc1
+
+Current backend-runtime pairing: netbox-proxbox 0.0.29rc1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+
+This is the first candidate for 0.0.29, a security-hardening release:
+
+- **Sensitive data:** credential export, SSH secret reads, and the settings
+  runtime key require an active superuser or an explicit per-user
+  sensitive-data grant.
+- **Connection-target approval:** credentials are sent only to an endpoint
+  target that was explicitly approved; editing the target clears approval.
+- **Scoped reads:** plugin settings reads require view permission, and HA data
+  covers only the Proxmox endpoints the caller may view.
+- **Safer actions:** HA arm/disarm requires the grantable `run_proxmox_action`
+  action, and the WebSocket sync route starts work only on an authorized,
+  CSRF-protected POST.
+- **Input validation:** Proxmox node, storage, guest type, VM ID, and firewall
+  identifiers are validated before they reach backend request paths.
+- **Secure defaults:** new endpoints default to HTTPS and TLS verification, and
+  new encryption keys must be canonical Fernet keys.
+- **Dependencies:** raised security floors for Django, oauthlib, PyJWT,
+  social-auth-core, urllib3, and virtualenv.
+
+Upgrade notes and the single migration `0104_security_hardening` are described
+in [Release Notes - v0.0.29](docs/release-notes/version-0.0.29.md).
+
 ## What's New in v0.0.27.post1
 
-Current backend-runtime pairing: netbox-proxbox 0.0.27.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Backend-runtime pairing: netbox-proxbox 0.0.27.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The current released runtime pairing for this release line is
 `proxbox-api 0.0.23.post3`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`.
@@ -439,7 +465,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
-| 4.5.8-4.7.0 GA | v0.0.27.post1 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
+| 4.5.8-4.7.0 GA | v0.0.29rc1 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc18 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc17 | v0.0.23.post2 | v0.0.13 | v0.0.15 |

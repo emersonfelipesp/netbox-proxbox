@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import importlib
+import os
 import subprocess
 import sys
 import types
@@ -54,7 +55,14 @@ def test_get_backend_auth_headers_uses_api_key_header(monkeypatch):
     }
 
 
-def test_get_fastapi_url_configures_mkcert_bundle_for_local_https(monkeypatch):
+def test_get_fastapi_url_never_mutates_the_process_trust_store(monkeypatch):
+    """Building a backend URL must not swap the process-wide CA bundle.
+
+    The previous implementation ran ``mkcert -CAROOT`` and set
+    ``REQUESTS_CA_BUNDLE`` whenever the URL merely contained a local hostname,
+    which changed TLS trust for every later ``requests`` call in the NetBox
+    process.
+    """
     netbox_module = types.ModuleType("netbox")
     netbox_plugins = types.ModuleType("netbox.plugins")
     netbox_plugins.PluginConfig = type("PluginConfig", (), {})
@@ -63,11 +71,15 @@ def test_get_fastapi_url_configures_mkcert_bundle_for_local_https(monkeypatch):
     sys.modules.pop("netbox_proxbox.utils", None)
 
     utils = importlib.import_module("netbox_proxbox.utils")
+    calls: list[object] = []
     monkeypatch.setattr(
         subprocess,
         "run",
-        lambda *args, **kwargs: SimpleNamespace(stdout="/tmp/mkcert-root\n"),
+        lambda *args, **kwargs: (
+            calls.append(args) or SimpleNamespace(stdout="/tmp/mkcert-root\n")
+        ),
     )
+    monkeypatch.delenv("REQUESTS_CA_BUNDLE", raising=False)
 
     endpoint = SimpleNamespace(
         domain="proxbox.backend.local",
@@ -82,6 +94,8 @@ def test_get_fastapi_url_configures_mkcert_bundle_for_local_https(monkeypatch):
     result = utils.get_fastapi_url(endpoint)
 
     assert result["http_url"] == "https://proxbox.backend.local:8800"
+    assert "REQUESTS_CA_BUNDLE" not in os.environ
+    assert calls == []
 
 
 def test_get_fastapi_url_scheme_uses_use_https_not_verify_ssl(monkeypatch):

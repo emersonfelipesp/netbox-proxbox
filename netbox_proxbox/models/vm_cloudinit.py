@@ -184,6 +184,14 @@ class ProxmoxVMCloudInit(NetBoxModel):
         verbose_name_plural = _("Proxmox VM cloud-init records")
         ordering = ("virtual_machine",)
 
+    def serialize_object(self, exclude=None) -> dict[str, object]:
+        """Redact sensitive fields in every NetBox change-log snapshot."""
+        from netbox_proxbox.models.changelog_redaction import redact_snapshot_data
+
+        return redact_snapshot_data(
+            self._meta.model_name, super().serialize_object(exclude=exclude)
+        )
+
     def __str__(self) -> str:
         """Return the parent VM name for list displays."""
         return f"{self.virtual_machine} cloud-init"

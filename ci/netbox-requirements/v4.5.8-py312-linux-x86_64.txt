@@ -11,6 +11,7 @@ asgiref==3.12.1 \
     #   django
     #   django-cors-headers
     #   django-htmx
+    #   social-auth-app-django
     #   strawberry-graphql-django
 attrs==26.1.0 \
     --hash=sha256:c647aa4a12dfbad9333ca4e71fe62ddc36f4e63b2d260a37a8b83d2f043ac309 \
@@ -503,6 +504,7 @@ cryptography==50.0.1 \
     # via
     #   -r ci/netbox-requirements/netbox-proxbox-test-py312.in
     #   pyjwt
+    #   social-auth-core
 defusedxml==0.7.1 \
     --hash=sha256:1bb3032db185915b62d7c6209c5a8792be6a32ab2fedacc84e01b52c51aa3e69 \
     --hash=sha256:a352e7e428770286cc899e2542b6cdaedb2b4953ff269a210103ec58f6198a61
@@ -877,10 +879,11 @@ nh3==0.3.4 \
     --hash=sha256:f5f214618ad5eff4f2a6b13a8d4da4d9e7f37c569d90a13fb9f0caaf7d04fe21 \
     --hash=sha256:f987cb56458323405e8e5ea827e1befcf141ffa0c0ac797d6d02e6b646056d9a
     # via -r ci/netbox-requirements/v4.5.8-py312-linux-x86_64.in
-oauthlib==3.3.1 \
-    --hash=sha256:0f0f8aa759826a193cf66c12ea1af1637f87b9b4622d46e866952bb022e538c9 \
-    --hash=sha256:88119c938d2b8fb88561af5f6ee0eec8cc8d552b7bb1f712743136eb7523b7a1
+oauthlib==4.0.0 \
+    --hash=sha256:624c28c13a0a59cabf9747dfa52af63be3e512a7f2714df16e91b5b3a145e6cd \
+    --hash=sha256:efb274799819440f95b4ab3b818869f1ce9ae26c5beacba0201d1a1b76b54f86
     # via
+    #   -r ci/netbox-requirements/v4.5.8-py312-linux-x86_64.in
     #   requests-oauthlib
     #   social-auth-core
 packaging==26.3 \
@@ -1158,9 +1161,9 @@ pygments==2.21.0 \
     #   mkdocs-material
     #   pytest
     #   rich
-pyjwt==2.13.0 \
-    --hash=sha256:41571c89ca91598c79e8ef18a2d07367d4810fbbd6f637794879baf1b7703423 \
-    --hash=sha256:66adcc2aff09b3f1bbd95fc1e1577df8ac8723c978552fd43304c8a290ac5728
+pyjwt==2.15.0 \
+    --hash=sha256:7a3742debf6b879e912dbb9819ceec1594be812452b78c5f2e2dfc56564954f8 \
+    --hash=sha256:b11c5f9791d7bf51c2b39a81ed669f6b2dbbd669df2942f6c60167e9e3d1abe4
     # via
     #   -r ci/netbox-requirements/v4.5.8-py312-linux-x86_64.in
     #   social-auth-core
@@ -1296,9 +1299,9 @@ referencing==0.37.0 \
     # via
     #   jsonschema
     #   jsonschema-specifications
-requests==2.33.1 \
-    --hash=sha256:18817f8c57c6263968bc123d237e3b8b08ac046f5456bd1e307ee8f4250d3517 \
-    --hash=sha256:4e6d1ef462f3626a1f0a0a9c42dd93c63bad33f9f1c1937509b8c5c8718ab56a
+requests==2.34.2 \
+    --hash=sha256:2a0d60c172f83ac6ab31e4554906c0f3b3588d37b5cb939b1c061f4907e278e0 \
+    --hash=sha256:f288924cae4e29463698d6d60bc6a4da69c89185ad1e0bcc4104f584e960b9ed
     # via
     #   -r ci/netbox-requirements/netbox-proxbox-test-py312.in
     #   -r ci/netbox-requirements/v4.5.8-py312-linux-x86_64.in
@@ -1449,13 +1452,13 @@ six==1.17.0 \
     #   django-pglocks
     #   promise
     #   python-dateutil
-social-auth-app-django==5.7.0 \
-    --hash=sha256:492b6f64e1e9fa5ed62b24bc19bde31c235fd4eb7fbd5c310e999e752b8f699a \
-    --hash=sha256:c0cc118d1bb935dbf02acb8a57fabd7b07694452fce755a5956282c69f019c79
+social-auth-app-django==6.0.1 \
+    --hash=sha256:43002de0530e2ad13ef067f54aba7185a05fc8527310006c5328dc0b5e7a4cfd \
+    --hash=sha256:652ec21105ef58a34ffd223a02c338bc03e5f56d357ee69c33283afd08442065
     # via -r ci/netbox-requirements/v4.5.8-py312-linux-x86_64.in
-social-auth-core==4.8.5 \
-    --hash=sha256:2591c2ce71127ad410e7ca9581bd88658031fdf7b209e05be5920d0bcc1c005a \
-    --hash=sha256:fd10d44bff681a128d127f665f203c496658d5bbfc993ad1b5bbaed589eab573
+social-auth-core==5.1.0 \
+    --hash=sha256:1e8b678473fef38a972d3e4c5f6fa898558abe7ba46bd56b8429cc484483bf7b \
+    --hash=sha256:7a622ceeab857c8310e358b4ad7727e410b735052ab90cc408835c16304b18e8
     # via
     #   -r ci/netbox-requirements/v4.5.8-py312-linux-x86_64.in
     #   social-auth-app-django
@@ -1520,10 +1523,13 @@ uritemplate==4.2.0 \
     --hash=sha256:480c2ed180878955863323eea31b0ede668795de182617fef9c6ca09e6ec9d0e \
     --hash=sha256:962201ba1c4edcab02e60f9a0d3821e82dfc5d2d6662a21abd533879bdb8a686
     # via drf-spectacular
-urllib3==2.7.0 \
-    --hash=sha256:231e0ec3b63ceb14667c67be60f2f2c40a518cb38b03af60abc813da26505f4c \
-    --hash=sha256:9fb4c81ebbb1ce9531cce37674bbc6f1360472bc18ca9a553ede278ef7276897
-    # via requests
+urllib3==2.8.0 \
+    --hash=sha256:0cf3cae568d36aa9576b28dfb35f11328f1cb974ca7647d9475ebb86c75ac6e3 \
+    --hash=sha256:63bf2ead4c879426ebf22ef2a781eeb4aa3b4ae798a0435506f8687fd5bb9b63
+    # via
+    #   -r ci/netbox-requirements/netbox-proxbox-test-py312.in
+    #   -r ci/netbox-requirements/v4.5.8-py312-linux-x86_64.in
+    #   requests
 watchdog==6.0.0 \
     --hash=sha256:07df1fdd701c5d4c8e55ef6cf55b8f0120fe1aef7ef39a1c6fc6bc2e606d517a \
     --hash=sha256:20ffe5b202af80ab4266dcd3e91aae72bf2da48c0d33bdb15c66658e685e94e2 \

@@ -42,6 +42,11 @@ from utilities.views import (
 )
 from virtualization.models import VirtualMachine
 
+from netbox_proxbox.services.backend_path import (
+    UnsafeBackendPathSegment,
+    safe_vm_type,
+    safe_vmid,
+)
 from netbox_proxbox.models import ProxmoxNode
 from netbox_proxbox.services._endpoint_errors import translate_request_exception
 from netbox_proxbox.services.backend_context import get_fastapi_request_context
@@ -243,7 +248,17 @@ def _forward_verb(
         messages.error(request, _("No FastAPI backend endpoint is configured."))
         return HttpResponseRedirect(redirect_to)
 
-    url = f"{ctx.http_url}/proxmox/{vm_type}/{vmid}/{verb}"
+    try:
+        url = f"{ctx.http_url}/proxmox/{safe_vm_type(vm_type)}/{safe_vmid(vmid)}/{verb}"
+    except UnsafeBackendPathSegment:
+        messages.error(
+            request,
+            _(
+                "The guest type or VM ID recorded for this VM is not a valid "
+                "Proxmox identifier, so no backend request was made."
+            ),
+        )
+        return HttpResponseRedirect(redirect_to)
     headers = dict(ctx.headers or {})
     headers["Idempotency-Key"] = str(uuid.uuid4())
     headers.setdefault("Content-Type", "application/json")

@@ -32,12 +32,14 @@ __all__ = (
     "permission_open_console",
     "permission_open_ssh_terminal",
     "permission_reset_encrypted_secrets",
+    "permission_run_endpoint_action",
     "permission_run_proxmox_action",
     "permission_view_fastapi_endpoint",
     "user_may_access_proxbox_dashboard",
 )
 
 PROXMOX_ACTION_PERMISSION = "core.run_proxmox_action"
+ENDPOINT_OPERATIONAL_ACTION = "run_proxmox_action"
 SSH_TERMINAL_ACTION = "open_ssh_terminal"
 CONSOLE_ACTION = "open_console"
 
@@ -88,6 +90,20 @@ def permission_run_proxmox_action() -> str:
     ``docs/design/operational-verbs.md`` for the full contract.
     """
     return PROXMOX_ACTION_PERMISSION
+
+
+def permission_run_endpoint_action() -> str:
+    """Grantable, object-scoped operational permission on ``ProxmoxEndpoint``.
+
+    NetBox renders object permissions as ``<app>.<action>_<model>``, so the
+    literal ``core.run_proxmox_action`` cannot be granted to non-superusers
+    through an ObjectPermission. This custom action on ``ProxmoxEndpoint``
+    can be: add ``run_proxmox_action`` as an additional action on an object
+    permission for Proxmox endpoints, optionally constrained to some of them.
+    Endpoint-wide operations (HA arm/disarm) use it with
+    ``ProxmoxEndpoint.objects.restrict(user, ENDPOINT_OPERATIONAL_ACTION)``.
+    """
+    return get_permission_for_model(ProxmoxEndpoint, ENDPOINT_OPERATIONAL_ACTION)
 
 
 def permission_open_ssh_terminal() -> str:

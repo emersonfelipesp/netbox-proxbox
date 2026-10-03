@@ -8,6 +8,28 @@ netbox-proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data 
 
 ### What It Does
 
+SSH secret APIs require the same fresh sensitive-data grant in addition to
+API-token authentication, HTTPS, object visibility, and provider permissions.
+New ObjectChange snapshots redact settings keys, credential material,
+ciphertext, and provider references through a shared registry. Historical
+snapshots are unchanged. Proxmox and NetBox endpoint target edits invalidate
+`approved_connection_target_fingerprint`; credential payloads require exact
+approval before resolution and again before transmission. Review the target
+with GET and approve its fingerprint with PUT on the endpoint's
+`connection-authority` API action. Approval requires sensitive-data access and
+independent view/change access. Migration `0104_security_hardening`
+leaves existing approvals blank. FastAPI target changes additionally require
+sensitive authority before its existing authentication/adoption flow; disabled
+backend target edits remain drafts.
+
+
+- **Explicit sensitive-data authorization** - endpoint secret exports and runtime
+  encryption-key disclosure require an active authenticated superuser or the
+  default-off `ProxboxSensitiveDataAccess.can_access_sensitive_data` flag.
+  Only active superusers manage grants. Existing object and credential-provider
+  permissions remain independent. Grants are checked on every request, safe
+  exports omit all usable tokens, and export-specific token creation is removed.
+  See `docs/features/endpoint-import-export.md` for the role and API contracts.
 - **Clusters and Nodes** — Proxmox cluster and node information
 - **Configurable node Device names** — a global template and optional
   per-endpoint override render NetBox Device names from `{node}`, `{cluster}`,
@@ -66,9 +88,9 @@ topology.
 
 ### Version
 
-- Plugin version: `0.0.27.post1`
+- Plugin version: `0.0.29rc1`
 - NetBox compatibility: `4.5.8` through `4.7.0`
-- Current source pairing: `netbox-proxbox 0.0.27.post1`, `proxbox-api 0.0.23.post3`,
+- Current source pairing: `netbox-proxbox 0.0.29rc1`, `proxbox-api 0.0.23.post3`,
   `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`
 - Last documented released runtime pairing: `netbox-proxbox 0.0.27rc4`,
   `proxbox-api 0.0.22.post1`, `proxmox-sdk 0.0.13`, and `netbox-sdk 0.0.13`

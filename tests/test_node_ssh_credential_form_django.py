@@ -79,7 +79,7 @@ from netbox_proxbox.models.ssh_credential import (  # noqa: E402
 
 
 FINGERPRINT = "SHA256:" + "A" * 43
-ENCRYPTION_KEY = "0123456789abcdef0123456789abcdef"
+ENCRYPTION_KEY = "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="
 PASSWORD = "form-regression-password"
 PRIVATE_KEY = (
     "-----BEGIN OPENSSH PRIVATE KEY-----\n"

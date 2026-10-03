@@ -13,6 +13,15 @@ from django.utils.safestring import mark_safe
 
 register = template.Library()
 
+
+@register.filter
+def proxbox_can_access_sensitive_data(user: object) -> bool:
+    """Hide protected controls using the same uncached policy as the server."""
+    from netbox_proxbox.sensitive_data import can_access_sensitive_data
+
+    return can_access_sensitive_data(user)
+
+
 # Logos and JS modules referenced by the home dashboard are inlined into the
 # HTML response (issue #355). This guarantees the page renders correctly even
 # when ``manage.py collectstatic`` was skipped after a plugin install/upgrade,

@@ -292,9 +292,9 @@ def test_netbox_fastapi_export_views_exist():
     fastapi_contents = _read("netbox_proxbox/views/endpoints/fastapi.py")
 
     assert "class NetBoxEndpointExportView" in netbox_contents
-    assert "class NetBoxExportQuickAddTokenView" in netbox_contents
+    assert "class NetBoxExportQuickAddTokenView" not in netbox_contents
     assert "class FastAPIEndpointExportView" in fastapi_contents
-    assert "class FastAPIExportQuickAddTokenView" in fastapi_contents
+    assert "class FastAPIExportQuickAddTokenView" not in fastapi_contents
 
 
 def test_netbox_fastapi_export_helpers_exist():

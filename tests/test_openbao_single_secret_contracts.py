@@ -147,7 +147,8 @@ def test_rest_and_fastapi_ui_begin_outer_material_boundaries() -> None:
 def test_fastapi_export_carries_authenticated_material_user() -> None:
     view = _source("netbox_proxbox/views/endpoints/fastapi.py")
     serializer = _source("netbox_proxbox/views/endpoints/fastapi_export.py")
-    assert "return user" in view
+    assert "return request.user" in view
+    assert "require_sensitive_data_access(request.user)" in view
     assert "material_user=material_user" in view
     assert "user=material_user" in view
     assert "resolve_single_secret(endpoint, user=user)" in serializer

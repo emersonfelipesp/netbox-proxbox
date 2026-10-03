@@ -802,3 +802,49 @@ def test_vm_firewall_never_attaches_rules_to_another_endpoints_vm(
     # The resolved VM must be this endpoint's, not the colliding foreign row
     # that sorts ahead of it.
     assert sync_fw_module._rule_mgr._stale_marked == 1
+
+
+@pytest.mark.parametrize("hostile", ["../datacenter", "..", "pve1/../x", "a b"])
+def test_node_firewall_refuses_unsafe_node_names_without_a_request(
+    sync_fw_module, monkeypatch, hostile
+):
+    """A hostile node name is refused before any backend request is sent."""
+    models = sys.modules["netbox_proxbox.models"]
+    monkeypatch.setattr(
+        models.ProxmoxNode.objects, "first", lambda: SimpleNamespace(pk=5, name=hostile)
+    )
+    endpoint = SimpleNamespace(pk=1, enabled=True)
+
+    with patch("requests.get") as get:
+        result = sync_fw_module.sync_node_firewall(
+            endpoint=endpoint,
+            node_name=hostile,
+            fastapi_url="http://backend:8000",
+            auth_headers={},
+        )
+
+    assert result is None
+    get.assert_not_called()
+
+
+def test_node_firewall_requests_the_encoded_node_route(sync_fw_module, monkeypatch):
+    models = sys.modules["netbox_proxbox.models"]
+    monkeypatch.setattr(
+        models.ProxmoxNode.objects, "first", lambda: SimpleNamespace(pk=5, name="pve01")
+    )
+    response = MagicMock()
+    response.raise_for_status.return_value = None
+    response.json.return_value = []
+
+    with patch("requests.get", return_value=response) as get:
+        sync_fw_module.sync_node_firewall(
+            endpoint=SimpleNamespace(pk=1, enabled=True),
+            node_name="pve01",
+            fastapi_url="http://backend:8000",
+            auth_headers={},
+        )
+
+    assert (
+        get.call_args.args[0]
+        == "http://backend:8000/proxmox/firewall/nodes/pve01/rules"
+    )

@@ -44,7 +44,7 @@ RUNNER_ACCEPTANCE_PATH = REPO_ROOT / ".gitea" / "release-runner-acceptance.json"
 PYPROJECT_PATH = REPO_ROOT / "pyproject.toml"
 RELEASE_CONTROL_DOC_PATHS = (
     REPO_ROOT / "AGENTS.md",
-    REPO_ROOT / "CLAUDE.md",
+    REPO_ROOT / "AGENTS.md",
     REPO_ROOT / "docs" / "developer" / "release-publishing.md",
     REPO_ROOT / "README.md",
     REPO_ROOT / "docs" / "release-notes" / "version-0.0.24.md",

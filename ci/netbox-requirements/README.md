@@ -32,17 +32,19 @@ in every affected matrix input and lock:
 
 | Package | Minimum safe version |
 | --- | --- |
-| Django | `5.2.17` on NetBox 4.5; `6.0.8` on NetBox 4.6 |
+| Django | `5.2.17` on NetBox 4.5; `6.0.8` on NetBox 4.6; `6.1.1` on NetBox 4.7 |
 | djangorestframework | `3.17.2` |
 | mkdocs-material | `9.7.7` |
+| oauthlib | `4.0.0` |
 | Pillow | `12.3.0` |
-| PyJWT | `2.13.0` |
+| PyJWT | `2.15.0` |
 | strawberry-graphql | `0.315.7` |
 | tablib | `3.10.0` |
+| urllib3 | `2.8.0` |
 
 The PyJWT floor also requires a coherent authentication dependency chain in
-the affected inputs: `social-auth-core==5.1.0`,
-`social-auth-app-django==6.0.1`, and `requests==2.34.2` where required.
+the affected inputs: `oauthlib==4.0.0`, `social-auth-core==5.1.0`,
+`social-auth-app-django==6.0.1`, `requests==2.34.2`, and `urllib3==2.8.0`.
 Regression tests require every direct `.in` declaration—not only the packages
 with a published security floor—to exist in the adjacent lock and accept its
 stable exact version. Direct URLs and environment markers are forbidden in

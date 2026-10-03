@@ -106,7 +106,9 @@ def proxmox_endpoint_fixture(pytestconfig: pytest.Config):  # type: ignore[no-un
     settings_obj.credential_storage_backend = (
         CredentialStorageBackendChoices.LEGACY_ENCRYPTED
     )
-    settings_obj.encryption_key = "0123456789abcdef0123456789abcdef"
+    settings_obj.encryption_key = (
+        "MDEyMzQ1Njc4OWFiY2RlZjAxMjM0NTY3ODlhYmNkZWY="  # canonical Fernet key
+    )
     settings_obj.save(update_fields=("credential_storage_backend", "encryption_key"))
 
     tenant_a = Tenant.objects.create(name="Tenant A", slug="tenant-a")

@@ -1,6 +1,6 @@
 # netbox-proxbox Repository Guide
 
-Current backend-runtime pairing: netbox-proxbox 0.0.27.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.29rc1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 > **LLM Agent Safety:** Before any destruction-adjacent operation, read
 > `AGENTS.md` § "LLM Agent Safety Guardrails". Automated agents may inspect and
@@ -58,16 +58,16 @@ interfaces documented in this repository.
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.0` GA. The current
-plugin version is `0.0.27.post1`.
+plugin version is `0.0.29rc1`.
 
-Current source pairing: netbox-proxbox 0.0.27.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source pairing: netbox-proxbox 0.0.29rc1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The last documented released runtime pairing for this release line remains
 netbox-proxbox 0.0.27 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15
 <-> netbox-sdk 0.0.13. Preserve release-note and compatibility rows as
 historical records unless a release workflow changes them.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.27.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.29rc1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 CI pairing: the E2E Docker, page-coverage, documentation-screenshot, and
 release-validation workflow defaults consume proxbox-api `0.0.23.post3`. E2E uses the
@@ -87,7 +87,7 @@ field creation route.
   inventory, Firecracker inventory, service-monitoring collections, metrics,
   intent/apply records, deletion requests, cloud-init records, and companion
   PBS/PDM endpoint records. Migration
-  `0103_custom_fields_request_delay_help_text`
+  `0104_security_hardening`
   is the current schema tip.
 
   Proxmox node Device names use the effective endpoint/global
@@ -238,10 +238,28 @@ retaining isolated coverage of the published behavior. Version-specific
 query-count baselines are allowed only for a demonstrated NetBox core query-plan
 difference and must be verified in the affected and adjacent matrix lanes.
 
+SSH secret APIs require the same fresh sensitive-data grant in addition to
+API-token authentication, HTTPS, object visibility, and provider permissions.
+New ObjectChange snapshots redact settings keys, credential material,
+ciphertext, and provider references through a shared registry. Historical
+snapshots are unchanged. Proxmox and NetBox endpoint target edits invalidate
+`approved_connection_target_fingerprint`; credential payloads require exact
+approval before resolution and again before transmission. Review the target
+with GET and approve its fingerprint with PUT on the endpoint's
+`connection-authority` API action. Approval requires sensitive-data access and
+independent view/change access. Migration `0104_security_hardening`
+leaves existing approvals blank. FastAPI target changes additionally require
+sensitive authority before its existing authentication/adoption flow; disabled
+backend target edits remain drafts.
+
 ## Safety invariants
 
-- Never log, serialize, export, or render plaintext passwords, private keys,
-  API keys, tokens, or encryption keys.
+- Never log credentials or include them in ordinary serialization, templates,
+  history, errors, or exports. Explicit protected endpoint exports and runtime
+  key disclosure require an active authenticated superuser or the default-off
+  per-user sensitive-data flag, plus existing object and provider permissions.
+  Only active superusers may administer grants; cached user relations and
+  ordinary view/change/token permissions must never confer sensitive access.
 - Credentialed HTTP requests must reject redirects, validate their destination,
   use bounded timeouts, and verify TLS by default.
 - Destructive Proxmox operations require explicit permission and the repository's

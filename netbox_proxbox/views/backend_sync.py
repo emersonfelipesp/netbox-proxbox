@@ -247,7 +247,11 @@ def backend_holds_proxmox_endpoint(
     ``None`` (the listing call itself failed) is treated as *not held*: unknown
     must never be the reason an endpoint is skipped into a fatal error.
     """
-    if not existing_endpoints:
+    from netbox_proxbox.services.connection_authority import (
+        approved_connection_allows_secrets,
+    )
+
+    if not approved_connection_allows_secrets(endpoint) or not existing_endpoints:
         return False
     row = _backend_row_for_endpoint(existing_endpoints, endpoint)
     return row is not None and _proxmox_row_is_current(endpoint, row)
@@ -310,9 +314,12 @@ def _proxmox_backend_payload(endpoint: ProxmoxEndpoint) -> dict[str, object]:
     """JSON body for POST/PUT ``/proxmox/endpoints`` from a ``ProxmoxEndpoint`` row."""
     from netbox_proxbox.integrations.openbao import resolve_endpoint_api_credentials
 
+    from netbox_proxbox.services.connection_authority import require_approved_connection
+
+    require_approved_connection(endpoint)
     credentials = resolve_endpoint_api_credentials(endpoint)
     tuning = endpoint.effective_connection_tuning()
-    return {
+    payload = {
         "name": proxmox_backend_name(endpoint),
         "node_device_name_template": (
             getattr(endpoint, "node_device_name_template", "") or ""
@@ -346,6 +353,54 @@ def _proxmox_backend_payload(endpoint: ProxmoxEndpoint) -> dict[str, object]:
         **_related_object_metadata("site", getattr(endpoint, "site", None)),
         **_related_object_metadata("tenant", getattr(endpoint, "tenant", None)),
     }
+    require_approved_connection(endpoint)
+    return payload
+
+
+def _revoke_duplicate_proxmox_rows(
+    endpoint: ProxmoxEndpoint,
+    matching_rows: list[dict[str, object]],
+    *,
+    list_url: str,
+    headers: dict[str, str],
+    backend_verify_ssl: bool,
+    timeout: float,
+    deadline: float | None,
+) -> tuple[bool, str | None, int | None]:
+    """Attempt every duplicate revocation before refusing ambiguous identity."""
+    revocation_failures: list[str] = []
+    for row in matching_rows:
+        row_id = row.get("id")
+        if row_id is None:
+            continue
+        try:
+            response = requests.put(  # nosec B113
+                f"{list_url}/{row_id}",
+                json={
+                    "enabled": False,
+                    "allow_packer_template_builds": False,
+                },
+                headers=headers,
+                verify=backend_verify_ssl,
+                timeout=_remaining_request_timeout(timeout, deadline),
+                allow_redirects=False,
+            )
+            response.raise_for_status()
+        except requests.exceptions.RequestException as exc:
+            detail, _ = extract_backend_error_detail(exc)
+            revocation_failures.append(f"backend row {row_id}: {detail}")
+    failure_detail = (
+        " Revocation failed for " + "; ".join(revocation_failures) + "."
+        if revocation_failures
+        else " All identifiable rows were disabled."
+    )
+    return (
+        False,
+        f"Multiple ProxBox backend rows claim immutable identity nb:{endpoint.pk}; "
+        f"every identifiable row was attempted and operator cleanup is required."
+        f"{failure_detail}",
+        None,
+    )
 
 
 def sync_proxmox_endpoint_to_backend(
@@ -372,9 +427,14 @@ def sync_proxmox_endpoint_to_backend(
 
     list_url = f"{base_url}/proxmox/endpoints"
     headers = auth_headers or {}
-    payload, fingerprint, cached_id = _prepare_proxmox_push(
-        endpoint, base_url, existing_endpoints, disabled_detail
-    )
+    from netbox_proxbox.services.connection_authority import ConnectionAuthorityError
+
+    try:
+        payload, fingerprint, cached_id = _prepare_proxmox_push(
+            endpoint, base_url, existing_endpoints, disabled_detail
+        )
+    except ConnectionAuthorityError:
+        return False, "Connection target approval is missing or stale.", None
     if cached_id is not None:
         cached_row, cache_error = _confirmed_cached_proxmox_row(
             endpoint,
@@ -423,38 +483,14 @@ def sync_proxmox_endpoint_to_backend(
             # rename races can leave duplicates for one NetBox pk. Never choose
             # one arbitrarily: best-effort revoke every identifiable copy before
             # refusing, even when an earlier row rejects its update.
-            revocation_failures: list[str] = []
-            for row in matching_rows:
-                row_id = row.get("id")
-                if row_id is None:
-                    continue
-                try:
-                    response = requests.put(  # nosec B113
-                        f"{list_url}/{row_id}",
-                        json={
-                            "enabled": False,
-                            "allow_packer_template_builds": False,
-                        },
-                        headers=headers,
-                        verify=backend_verify_ssl,
-                        timeout=_remaining_request_timeout(timeout, deadline),
-                        allow_redirects=False,
-                    )
-                    response.raise_for_status()
-                except requests.exceptions.RequestException as exc:
-                    detail, _ = extract_backend_error_detail(exc)
-                    revocation_failures.append(f"backend row {row_id}: {detail}")
-            failure_detail = (
-                " Revocation failed for " + "; ".join(revocation_failures) + "."
-                if revocation_failures
-                else " All identifiable rows were disabled."
-            )
-            return (
-                False,
-                f"Multiple ProxBox backend rows claim immutable identity nb:{endpoint.pk}; "
-                f"every identifiable row was attempted and operator cleanup is required."
-                f"{failure_detail}",
-                None,
+            return _revoke_duplicate_proxmox_rows(
+                endpoint,
+                matching_rows,
+                list_url=list_url,
+                headers=headers,
+                backend_verify_ssl=backend_verify_ssl,
+                timeout=timeout,
+                deadline=deadline,
             )
         existing = matching_rows[0] if matching_rows else None
 
@@ -480,6 +516,11 @@ def sync_proxmox_endpoint_to_backend(
             return True, None, None
 
         assert payload is not None and fingerprint is not None
+        from netbox_proxbox.services.connection_authority import (
+            require_approved_connection,
+        )
+
+        require_approved_connection(endpoint)
 
         if existing and existing.get("id") is not None:
             response = requests.put(  # nosec B113
@@ -510,6 +551,8 @@ def sync_proxmox_endpoint_to_backend(
         )
         return True, None, None
 
+    except ConnectionAuthorityError:
+        return False, "Connection target approval is missing or stale.", None
     except requests.exceptions.RequestException as exc:
         detail, http_status = extract_backend_error_detail(exc)
         return (
@@ -914,6 +957,9 @@ def resolve_backend_endpoint_ids(
 
 def _netbox_endpoint_backend_payload(endpoint: NetBoxEndpoint) -> dict[str, object]:
     """JSON body for POST/PUT ``/netbox/endpoint`` from a ``NetBoxEndpoint`` row."""
+    from netbox_proxbox.services.connection_authority import require_approved_connection
+
+    require_approved_connection(endpoint)
     # Resolve IP address string — fall back to loopback when only a domain is set.
     ip_obj = getattr(endpoint, "ip_address", None)
     if ip_obj is not None:
@@ -960,6 +1006,7 @@ def _netbox_endpoint_backend_payload(endpoint: NetBoxEndpoint) -> dict[str, obje
     }
     if token_key:
         payload["token_key"] = token_key
+    require_approved_connection(endpoint)
     return payload
 
 
@@ -1134,7 +1181,11 @@ def backend_holds_netbox_endpoint(
     unparseable port — returns ``False``. Callers use this to decide whether to
     keep going after a failed push, so "unknown" must never read as "safe".
     """
-    if not existing_endpoints:
+    from netbox_proxbox.services.connection_authority import (
+        approved_connection_allows_secrets,
+    )
+
+    if not approved_connection_allows_secrets(endpoint) or not existing_endpoints:
         return False
     if len(existing_endpoints) > 1:
         return False
@@ -1446,7 +1497,12 @@ def sync_netbox_endpoint_to_backend(
 
     list_url = f"{base_url}/netbox/endpoint"
     headers = auth_headers or {}
-    payload = _netbox_endpoint_backend_payload(endpoint)
+    from netbox_proxbox.services.connection_authority import ConnectionAuthorityError
+
+    try:
+        payload = _netbox_endpoint_backend_payload(endpoint)
+    except ConnectionAuthorityError:
+        return False, "Connection target approval is missing or stale.", None
 
     try:
         list_resp = requests.get(
@@ -1479,6 +1535,11 @@ def sync_netbox_endpoint_to_backend(
                 None,
             )
 
+        from netbox_proxbox.services.connection_authority import (
+            require_approved_connection,
+        )
+
+        require_approved_connection(endpoint)
         if existing:
             # Singleton — always update the first (and only) entry.
             endpoint_id = (
@@ -1529,6 +1590,8 @@ def sync_netbox_endpoint_to_backend(
             response.status_code,
         )
 
+    except ConnectionAuthorityError:
+        return False, "Connection target approval is missing or stale.", None
     except requests.exceptions.RequestException as exc:
         detail, http_status = extract_backend_error_detail(exc)
         return (

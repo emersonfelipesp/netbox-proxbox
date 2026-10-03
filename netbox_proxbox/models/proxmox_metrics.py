@@ -12,6 +12,7 @@ from django.urls import NoReverseMatch, reverse
 from django.utils.translation import gettext_lazy as _
 from netbox.models import NetBoxModel
 
+
 CREDENTIAL_FREE_HTTP_URL_RE = r"^[Hh][Tt][Tt][Pp][Ss]://[^/?#@\s]+(?:/[^?#\s]*)?$"
 METRICS_SOURCE_MODES = (
     ("influx", _("InfluxDB")),
@@ -212,13 +213,15 @@ class ProxmoxMetricsInfluxDB(NetBoxModel):
 
         return enc_helpers.decrypt(self.query_token_enc, key=key)
 
-    def serialize_object(self, exclude=None):
+    def serialize_object(self, exclude=None) -> dict[str, object]:
         """Mask URL and ciphertext in NetBox change-log snapshots."""
-        data = super().serialize_object(exclude=exclude)
+        from netbox_proxbox.models.changelog_redaction import redact_snapshot_data
+
+        data = redact_snapshot_data(
+            "proxmoxmetricsinfluxdb", super().serialize_object(exclude=exclude)
+        )
         if "influx_url" in data:
             data["influx_url"] = masked_influx_url(data["influx_url"])
-        if "query_token_enc" in data:
-            data["query_token_enc"] = MASKED_SECRET if data["query_token_enc"] else ""
         return data
 
     @property
