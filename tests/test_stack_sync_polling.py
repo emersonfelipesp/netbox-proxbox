@@ -261,6 +261,19 @@ def _trigger_response(*, job_id: str = "42", location: str = "/plugins/proxbox/h
     )
 
 
+@pytest.mark.parametrize("location", ["/plugins/proxbox/home/", "/core/jobs/42/"])
+def test_sync_redirect_accepts_home_or_matching_job_page(location):
+    stack_sync = _load_stack_sync()
+
+    job_id = stack_sync._validate_sync_redirect(
+        _trigger_response(location=location),
+        netbox_base_url="http://netbox.example",
+        route="/plugins/proxbox/sync/devices/",
+    )
+
+    assert job_id == 42
+
+
 def test_trigger_and_wait_sync_polls_authoritative_job_id(monkeypatch):
     stack_sync = _load_stack_sync()
     clock = _Clock()
@@ -337,6 +350,11 @@ def test_trigger_and_wait_sync_polls_authoritative_job_id(monkeypatch):
         ),
         (_trigger_response(location="/plugins/proxbox/%68ome/"), "outside"),
         (_trigger_response(location="http://[::1"), "invalid redirect"),
+        (_trigger_response(location="/core/jobs/43/"), "outside"),
+        (_trigger_response(location="/core/jobs/42"), "outside"),
+        (_trigger_response(location="/core/jobs/42/?tab=log"), "outside"),
+        (_trigger_response(location="/core/jobs/"), "outside"),
+        (_trigger_response(job_id="", location="/core/jobs/42/"), "outside"),
         (_trigger_response(job_id=""), "authoritative job ID"),
         (_trigger_response(job_id="0"), "authoritative job ID"),
         (_trigger_response(job_id="٠"), "authoritative job ID"),

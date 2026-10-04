@@ -70,13 +70,20 @@ def _validate_sync_redirect(
         raise AssertionError(
             f"Sync trigger {route} returned an invalid redirect destination"
         )
-    if parsed_redirect.path != "/plugins/proxbox/home/" or any(
+    job_id = _parse_positive_ascii_id(trigger.headers.get("X-Proxbox-Job-ID", ""))
+    # A queued sync redirects to its own NetBox job page; the Proxbox home page
+    # remains an accepted destination. Any other path, or a job page for a
+    # different job than the authoritative header names, is rejected.
+    allowed_paths = {"/plugins/proxbox/home/"}
+    if job_id is not None:
+        allowed_paths.add(f"/core/jobs/{job_id}/")
+    if parsed_redirect.path not in allowed_paths or any(
         delimiter in location for delimiter in ("?", "#")
     ):
         raise AssertionError(
-            f"Sync trigger {route} redirected outside the Proxbox home page: {location}"
+            f"Sync trigger {route} redirected outside the Proxbox home page "
+            f"or its job page: {location}"
         )
-    job_id = _parse_positive_ascii_id(trigger.headers.get("X-Proxbox-Job-ID", ""))
     if job_id is None:
         raise AssertionError(
             f"Sync trigger {route} did not return an authoritative job ID"

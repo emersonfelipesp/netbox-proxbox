@@ -14,13 +14,13 @@ appliance.
 
 ## Release status
 
-The current candidate is `0.0.29rc2`.
+The current candidate is `0.0.29rc3`.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29rc2 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.29rc3 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |---|---|---|---|---|
-| 4.5.8-4.7.0 GA | v0.0.29rc2 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
+| 4.5.8-4.7.0 GA | v0.0.29rc3 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
 
 Version 0.0.28 is not used for this release line: its only published candidate
 predates this release's schema change, and each release ships exactly one
@@ -150,6 +150,21 @@ migration.
   defensively, limits deletion to the active cluster, preserves unrelated
   selections, and reports missing or mismatched records instead of raising an
   internal server error.
+
+- The Proxbox home page and the NetBox endpoint list no longer fail with an
+  internal server error on NetBox 4.7 when listing NetBox endpoints; the token
+  column shows only the token's identity.
+- The device sync-state API supports exact `proxmox_node_name` and
+  `proxmox_cluster_name` filters, so proxbox-api resolves a node's NetBox
+  device without reporting that several devices claim the same node.
+
+## Known limitations
+
+- Node device identity is not yet scoped by Proxmox endpoint. When two Proxmox
+  endpoints use the same cluster name and the same node name, the first
+  synchronization of the second endpoint can match the first endpoint's node
+  device. Give each endpoint's cluster or nodes distinct names until a later
+  release adds endpoint scoping to device sync state.
 
 ## Dependencies
 

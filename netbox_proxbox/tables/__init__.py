@@ -169,7 +169,9 @@ class NetBoxEndpointTable(NetBoxTable):
     ip_address = tables.Column(linkify=True)
     verify_ssl = BooleanColumn()
     enabled = BooleanColumn()
-    token = tables.Column(accessor="token_id", verbose_name=_("Token"))
+    # ``token__pk`` lets NetBox prefetch the ``token`` relation; ``token_id``
+    # would be prefetched literally and raise ValueError on list pages.
+    token = tables.Column(accessor="token__pk", verbose_name=_("Token"))
 
     def render_token(self, value: object) -> str:
         """Render only a token identity, never the core object's secret material."""

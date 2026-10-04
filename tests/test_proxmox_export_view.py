@@ -322,7 +322,7 @@ def test_nested_token_and_table_are_secret_free_without_database(pytestconfig):
     assert set(payload) == {"id", "url", "display"}
     assert payload["display"] == "Token 17"
     assert "sentinel" not in repr(payload)
-    assert str(NetBoxEndpointTable.base_columns["token"].accessor) == "token_id"
+    assert str(NetBoxEndpointTable.base_columns["token"].accessor) == "token__pk"
     # Exercise the renderer without NetBox's unrelated custom-field database lookup.
     table = object.__new__(NetBoxEndpointTable)
     assert table.render_token(17) == "Token 17"

@@ -468,6 +468,8 @@ jobs:
             tests/test_websocket_sync_route_django.py
             tests/test_secure_transport_defaults_django.py
             tests/test_settings_read_scope_django.py
+            tests/test_device_sync_state_filters_django.py
+            tests/test_netbox_endpoint_table_django.py
           )
           openbao_tests=(
             tests/test_openbao_assignments_django.py

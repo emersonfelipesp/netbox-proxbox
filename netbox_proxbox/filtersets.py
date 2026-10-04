@@ -959,6 +959,12 @@ class ProxboxDeviceSyncStateFilterSet(ProxboxSyncStateFilterSet):
             "proxmox_node_id",
             "proxmox_cluster",
             "proxmox_cluster_id",
+            # proxbox-api resolves node device identity by exact node and
+            # cluster name; without these filters every row was returned.
+            # Endpoint scope (proxmox_endpoint_raw_id) is not stored yet, so
+            # identical cluster and node names across endpoints stay ambiguous.
+            "proxmox_node_name",
+            "proxmox_cluster_name",
             "proxmox_vmid",
             "hardware_chassis_serial",
             "proxmox_last_updated",
