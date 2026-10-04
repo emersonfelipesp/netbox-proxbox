@@ -70,7 +70,22 @@ def test_netbox_e2e_endpoint_uses_deterministic_fixture_settings(monkeypatch):
 
     def fake_get(url: str, **kwargs):
         calls.append(("GET", url, kwargs))
+        if url.endswith("/connection-authority/"):
+            return _Response(
+                status_code=200,
+                payload={"target_fingerprint": f"fp:{url}", "approved": False},
+            )
         return _Response(status_code=200, payload={"id": 23})
+
+    def fake_put(url: str, **kwargs):
+        calls.append(("PUT", url, kwargs))
+        return _Response(
+            status_code=200,
+            payload={
+                "target_fingerprint": kwargs["json"]["target_fingerprint"],
+                "approved": True,
+            },
+        )
 
     def fake_patch(url: str, **kwargs):
         calls.append(("PATCH", url, kwargs))
@@ -88,6 +103,7 @@ def test_netbox_e2e_endpoint_uses_deterministic_fixture_settings(monkeypatch):
 
     monkeypatch.setattr(stack_setup.requests, "get", fake_get)
     monkeypatch.setattr(stack_setup.requests, "patch", fake_patch)
+    monkeypatch.setattr(stack_setup.requests, "put", fake_put)
     monkeypatch.setattr(stack_setup, "post_json", fake_post_json)
 
     stack_setup.ensure_netbox_plugin_endpoints(
@@ -232,3 +248,73 @@ def test_sensitive_assertion_omits_response_body(monkeypatch):
 
     assert "HTTP 401" in str(captured.value)
     assert secret not in str(captured.value)
+
+
+def test_e2e_harness_approves_reviewed_connection_targets(monkeypatch):
+    stack_setup = _load_stack_setup()
+    calls: list[tuple[str, str, dict]] = []
+
+    def fake_get(url: str, **kwargs):
+        calls.append(("GET", url, kwargs))
+        return _Response(
+            status_code=200, payload={"target_fingerprint": "abc", "approved": False}
+        )
+
+    def fake_put(url: str, **kwargs):
+        calls.append(("PUT", url, kwargs))
+        return _Response(status_code=200, payload={"approved": True})
+
+    monkeypatch.setattr(stack_setup.requests, "get", fake_get)
+    monkeypatch.setattr(stack_setup.requests, "put", fake_put)
+
+    stack_setup.approve_connection_targets(
+        "http://netbox.test",
+        {"Authorization": "Token t"},
+        {"proxmox_pk": 1, "netbox_pk": 2, "fastapi_pk": 3},
+    )
+
+    assert [(method, url) for method, url, _ in calls] == [
+        (
+            "GET",
+            "http://netbox.test/api/plugins/proxbox/endpoints/proxmox/1/connection-authority/",
+        ),
+        (
+            "PUT",
+            "http://netbox.test/api/plugins/proxbox/endpoints/proxmox/1/connection-authority/",
+        ),
+        (
+            "GET",
+            "http://netbox.test/api/plugins/proxbox/endpoints/netbox/2/connection-authority/",
+        ),
+        (
+            "PUT",
+            "http://netbox.test/api/plugins/proxbox/endpoints/netbox/2/connection-authority/",
+        ),
+    ]
+    assert all(
+        kwargs["json"] == {"target_fingerprint": "abc"}
+        for method, _, kwargs in calls
+        if method == "PUT"
+    )
+
+
+def test_e2e_harness_fails_when_approval_is_not_confirmed(monkeypatch):
+    stack_setup = _load_stack_setup()
+
+    monkeypatch.setattr(
+        stack_setup.requests,
+        "get",
+        lambda url, **kwargs: _Response(
+            status_code=200, payload={"target_fingerprint": "abc"}
+        ),
+    )
+    monkeypatch.setattr(
+        stack_setup.requests,
+        "put",
+        lambda url, **kwargs: _Response(status_code=200, payload={"approved": False}),
+    )
+
+    with pytest.raises(AssertionError, match="not approved"):
+        stack_setup.approve_connection_targets(
+            "http://netbox.test", {}, {"proxmox_pk": 1, "netbox_pk": 2}
+        )

@@ -575,11 +575,49 @@ def ensure_netbox_plugin_endpoints(
         context="create plugin FastAPI endpoint",
     )
 
-    return {
+    endpoint_ids = {
         "proxmox_pk": int(proxmox["id"]),
         "netbox_pk": int(netbox_ep["id"]),
         "fastapi_pk": int(fastapi["id"]),
     }
+    approve_connection_targets(netbox_base_url, headers, endpoint_ids)
+    return endpoint_ids
+
+
+def approve_connection_targets(
+    netbox_base_url: str, headers: dict[str, str], endpoint_ids: dict[str, int]
+) -> None:
+    """Approve the exact fixture targets, as an operator does after review.
+
+    Credentials are never sent to a Proxmox or NetBox endpoint whose exact
+    connection target lacks an approval, so the harness reads each target's
+    fingerprint and approves that fingerprint before any keepalive or sync.
+    """
+    for kind, key in (("proxmox", "proxmox_pk"), ("netbox", "netbox_pk")):
+        url = (
+            f"{netbox_base_url}/api/plugins/proxbox/endpoints/{kind}/"
+            f"{endpoint_ids[key]}/connection-authority/"
+        )
+        current = assert_ok(
+            requests.get(url, headers=headers, timeout=30),
+            context=f"read {kind} connection target",
+        )
+        fingerprint = current.get("target_fingerprint")
+        if not isinstance(fingerprint, str) or not fingerprint:
+            raise AssertionError(
+                f"{kind} connection target has no fingerprint: {current}"
+            )
+        approved = assert_ok(
+            requests.put(
+                url,
+                json={"target_fingerprint": fingerprint},
+                headers=headers,
+                timeout=30,
+            ),
+            context=f"approve {kind} connection target",
+        )
+        if approved.get("approved") is not True:
+            raise AssertionError(f"{kind} connection target not approved: {approved}")
 
 
 def assert_plugin_routes(

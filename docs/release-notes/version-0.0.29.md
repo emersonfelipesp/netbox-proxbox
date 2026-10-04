@@ -14,13 +14,13 @@ appliance.
 
 ## Release status
 
-The current candidate is `0.0.29rc1`.
+The current candidate is `0.0.29rc2`.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29rc1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.29rc2 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |---|---|---|---|---|
-| 4.5.8-4.7.0 GA | v0.0.29rc1 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
+| 4.5.8-4.7.0 GA | v0.0.29rc2 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
 
 Version 0.0.28 is not used for this release line: its only published candidate
 predates this release's schema change, and each release ships exactly one

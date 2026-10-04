@@ -88,9 +88,9 @@ topology.
 
 ### Version
 
-- Plugin version: `0.0.29rc1`
+- Plugin version: `0.0.29rc2`
 - NetBox compatibility: `4.5.8` through `4.7.0`
-- Current source pairing: `netbox-proxbox 0.0.29rc1`, `proxbox-api 0.0.23.post3`,
+- Current source pairing: `netbox-proxbox 0.0.29rc2`, `proxbox-api 0.0.23.post3`,
   `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`
 - Last documented released runtime pairing: `netbox-proxbox 0.0.27rc4`,
   `proxbox-api 0.0.22.post1`, `proxmox-sdk 0.0.13`, and `netbox-sdk 0.0.13`
