@@ -4,7 +4,7 @@ This section tracks the release line represented by this repository and keeps ol
 
 ## Current Release Line
 
-The plugin source in this repository is currently `0.0.29` on the
+The plugin source in this repository is currently `0.0.29.post1` on the
 development line. The sibling plugins (`netbox-pbs`,
 `netbox-ceph`, and `netbox-pdm`) live in standalone repositories under
 [@emersonfelipesp](https://github.com/emersonfelipesp) and declare
@@ -14,6 +14,35 @@ part of the same plugin family.
 
 ## Unreleased Maintenance Fixes
 
+- netbox-openbao is optional again. Migration
+  `0105_reset_implicit_openbao_storage_default` resets a plugin-wide
+  credential storage backend of `openbao` that the historical migration
+  default left in the settings row to Automatic, but only when no OpenBao
+  credential reference exists on any credential owner. Endpoint overrides and
+  installations with referenced OpenBao material are not changed. Without the
+  companion, Automatic uses local Fernet storage, so Proxmox endpoints can be
+  created again. The settings form, the endpoint form, and the REST API now
+  refuse a new explicit OpenBao selection while netbox-openbao is not
+  enabled, storage errors appear on the credential storage field instead of
+  the write-permission field, and system check `netbox_proxbox.W106` reports
+  an explicit OpenBao selection that the companion cannot serve. To opt out
+  manually, set **Settings > Credential storage backend** to **Automatic** or
+  **Legacy Fernet-encrypted local storage**. This migration starts a new
+  release boundary after the published `0.0.29` candidates.
+- The Settings page now renders a **Credential storage** card with the
+  credential storage backend, OpenBao policy slug, and OpenBao service username.
+  Before this fix the page omitted the required policy slug, so saving Settings
+  failed with an error on a field that was not displayed. A pip-installed but
+  disabled netbox-openbao package no longer breaks settings or endpoint saves.
+- Proxmox endpoints without OpenBao references can be deleted when
+  netbox-openbao is absent. An endpoint that still holds OpenBao references is
+  refused with an actionable error instead of a server error, and bulk or
+  queryset deletion of such an endpoint is refused as well.
+- Switching the plugin-wide credential storage away from OpenBao is refused,
+  with a field error on the Settings page and in the REST API, while any
+  inheriting Proxmox endpoint, node credential, single-secret owner, or VM
+  cloud-init record still holds OpenBao references or assignments. Clear those
+  credentials through the supported cleanup path first.
 - Docker E2E and page coverage now use proxbox-api `0.0.23.post2`, and the E2E
   bootstrap no longer calls the removed custom-field creation route. Typed
   sync-state sidecars require no custom-field bootstrap before synchronization.
@@ -36,6 +65,7 @@ part of the same plugin family.
 
 | Version | Summary |
 |---------|---------|
+| `0.0.29.post1` | Maintenance release: explicit endpoint connection approval recovery, optional OpenBao operation, credential-storage settings, and migration `0105_reset_implicit_openbao_storage_default`. See [Version 0.0.29.post1](version-0.0.29.post1.md). |
 | `0.0.29` | Security-hardening release: sensitive-data grants, connection-target approval, scoped HA and settings reads, Proxmox identifier validation, side-effect-free WebSocket GET, secure transport defaults, dependency security floors, endpoint-list and node-identity fixes. Ships the validated `0.0.29rc3` content. Single migration `0104_security_hardening`. Pairs with `proxbox-api 0.0.23.post3`. See [Version 0.0.29](version-0.0.29.md). |
 | `0.0.29rc3` | Third candidate for 0.0.29. Fixes an HTTP 500 on the Proxbox home page and the NetBox endpoint list caused by the new token-identity column, adds exact `proxmox_node_name` and `proxmox_cluster_name` filters to the device sync-state API so proxbox-api 0.0.23.post3 resolves a node's device without reporting duplicate claims, and lets the E2E harness accept the queued job's page as the sync redirect. RC2 failed its Page Coverage gate on that redirect before publication. See [Version 0.0.29](version-0.0.29.md). |
 | `0.0.29rc2` | Second candidate for 0.0.29: the E2E and page-coverage harness now approves the exact fixture connection targets before keepalive and synchronization, as the new connection-target approval requires. RC1 failed the Page Coverage gate before publication to TestPyPI because the harness never approved its targets. No plugin code change. See [Version 0.0.29](version-0.0.29.md). |
@@ -102,6 +132,6 @@ part of the same plugin family.
 - Older pages are intentionally brief because the repository does not preserve fuller release-note prose for those versions.
 
 
-> **Current source:** netbox-proxbox `0.0.29` supports NetBox `4.5.8`-`4.7.0`, including official v4.7.0 GA. Current source pairing: netbox-proxbox 0.0.29 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+> **Current source:** netbox-proxbox `0.0.29.post1` supports NetBox `4.5.8`-`4.7.0`, including official v4.7.0 GA. Current source pairing: netbox-proxbox 0.0.29.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.29.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.

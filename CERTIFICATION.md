@@ -27,3 +27,9 @@ This checklist tracks readiness for the NetBox Plugin Certification Program.
 - Verified GA target: `v4.7.0` at `5f06007e4c9bacc93ce17c1e645fc1143d60df3d`
 - Source evidence: checkout commit plus release metadata verification, upstream requirements checksums, and reviewed Python 3.12/Linux artifact-hash locks
 - Family tracking issue: <https://github.com/emersonfelipesp/netbox-proxbox/issues/499>
+
+## Maintenance source
+
+The current maintenance source is `0.0.29.post1`.
+The artifact and certification evidence described above remain the preceding
+`0.0.29` baseline; this source identity does not establish new certification.

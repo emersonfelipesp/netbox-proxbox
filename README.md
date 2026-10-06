@@ -244,11 +244,18 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
+## What's New in v0.0.29.post1
+
+The source maintenance release adds explicit endpoint connection-target approval
+recovery and restores optional netbox-openbao operation.
+See [Release Notes - v0.0.29.post1](docs/release-notes/version-0.0.29.post1.md)
+for the recovery procedure and migration guidance.
+
 ## What's New in v0.0.29
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.29.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
-This is the first candidate for 0.0.29, a security-hardening release:
+Version 0.0.29 is the preceding security-hardening release:
 
 - **Sensitive data:** credential export, SSH secret reads, and the settings
   runtime key require an active superuser or an explicit per-user
@@ -465,6 +472,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| 4.5.8-4.7.0 GA | v0.0.29.post1 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.29 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc18 | v0.0.23.post2 | v0.0.13 | v0.0.15 |

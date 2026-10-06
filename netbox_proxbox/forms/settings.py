@@ -126,6 +126,16 @@ def _parse_tenant_regex_rules(
     return cleaned
 
 
+def _resolve_current_storage_backend(
+    explicit: object | None,
+    initial: dict[str, object],
+) -> str:
+    """Return the stored storage selection the settings form was opened with."""
+    if explicit is None:
+        explicit = initial.get("credential_storage_backend")
+    return str(explicit or "")
+
+
 class ProxboxPluginSettingsForm(forms.Form):
     """Toggle behavior flags that affect proxbox-api sync requests."""
 
@@ -498,7 +508,10 @@ class ProxboxPluginSettingsForm(forms.Form):
     credential_storage_backend = forms.ChoiceField(
         required=False,
         choices=[("", "Automatic (enabled plugins)")]
-        + list(CredentialStorageBackendChoices.CHOICES),
+        + [
+            (value, label)
+            for value, label, *_ in CredentialStorageBackendChoices.CHOICES
+        ],
         label="Credential storage backend",
         help_text=(
             "Default storage for Proxmox API tokens, passwords, and SSH secrets. "
@@ -541,6 +554,24 @@ class ProxboxPluginSettingsForm(forms.Form):
                 require_canonical_fernet_key(value)
             except EncryptionKeyInvalid as exc:
                 raise forms.ValidationError(str(exc)) from None
+        return value
+
+    def clean_credential_storage_backend(self) -> str:
+        """Reject an unavailable backend or a switch that strands OpenBao state."""
+        value = str(self.cleaned_data.get("credential_storage_backend") or "")
+        from netbox_proxbox.integrations.openbao import (
+            validate_settings_storage_transition,
+            validate_storage_backend_selection,
+        )
+
+        try:
+            validate_storage_backend_selection(
+                value,
+                current=self._current_storage_backend,
+            )
+            validate_settings_storage_transition(value)
+        except forms.ValidationError as exc:
+            raise forms.ValidationError(exc.messages[0]) from exc
         return value
 
     def clean_vm_interface_sync_strategy(self) -> str:
@@ -824,7 +855,20 @@ class ProxboxPluginSettingsForm(forms.Form):
     def __init__(self, *args: object, **kwargs: object) -> None:
         encryption_key_configured = bool(kwargs.pop("encryption_key_configured", False))
         encryption_key_locked = bool(kwargs.pop("encryption_key_locked", False))
+        current_storage_backend = kwargs.pop("current_storage_backend", None)
         super().__init__(*args, **kwargs)
+        self._current_storage_backend = _resolve_current_storage_backend(
+            current_storage_backend,
+            self.initial,
+        )
+        from netbox_proxbox.integrations.openbao import (
+            hide_unavailable_openbao_choice,
+        )
+
+        hide_unavailable_openbao_choice(
+            self.fields["credential_storage_backend"],
+            current=self._current_storage_backend,
+        )
         self._encryption_key_locked = encryption_key_locked
         if encryption_key_locked:
             self.fields["encryption_enabled"].disabled = True

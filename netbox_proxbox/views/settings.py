@@ -257,6 +257,9 @@ class SettingsView(
             )
         form = ProxboxPluginSettingsForm(
             initial=initial,
+            current_storage_backend=getattr(
+                settings_obj, "credential_storage_backend", ""
+            ),
             encryption_key_configured=bool(settings_obj.encryption_key),
             encryption_key_locked=any(
                 bool(getattr(status, "rows_with_ciphertext", 0))
@@ -278,6 +281,9 @@ class SettingsView(
         encryption_statuses = _encrypted_family_statuses(settings_obj)
         form = ProxboxPluginSettingsForm(
             request.POST,
+            current_storage_backend=getattr(
+                settings_obj, "credential_storage_backend", ""
+            ),
             encryption_key_configured=bool(settings_obj.encryption_key),
             encryption_key_locked=any(
                 bool(getattr(status, "rows_with_ciphertext", 0))
@@ -493,84 +499,11 @@ class SettingsView(
             settings_obj.openbao_service_username = (
                 form.cleaned_data.get("openbao_service_username", "") or ""
             ).strip()
-            settings_obj.save(
-                update_fields=[
-                    "use_guest_agent_interface_name",
-                    "vm_interface_sync_strategy",
-                    "node_device_name_template",
-                    "proxbox_fetch_max_concurrency",
-                    "ignore_ipv6_link_local_addresses",
-                    "ensure_netbox_objects",
-                    "delete_orphans",
-                    "primary_ip_preference",
-                    "netbox_max_concurrent",
-                    "netbox_timeout",
-                    "netbox_write_concurrency",
-                    "proxmox_fetch_concurrency",
-                    "netbox_max_retries",
-                    "netbox_retry_delay",
-                    "netbox_get_cache_ttl",
-                    "netbox_get_cache_max_entries",
-                    "netbox_get_cache_max_bytes",
-                    "bulk_batch_size",
-                    "bulk_batch_delay_ms",
-                    "backup_batch_size",
-                    "backup_batch_delay_ms",
-                    "interface_batch_size",
-                    "interface_batch_delay_ms",
-                    "vm_sync_max_concurrency",
-                    "sync_job_timeout",
-                    "reconciliation_engine",
-                    "reconciliation_compare_strict",
-                    "custom_fields_request_delay",
-                    "backend_log_file_path",
-                    "debug_cache",
-                    "expose_internal_errors",
-                    "netbox_openapi_persist",
-                    "parse_description_metadata",
-                    "embed_description_metadata",
-                    "ssrf_protection_enabled",
-                    "allow_private_ips",
-                    "additional_allowed_ip_ranges",
-                    "explicitly_blocked_ip_ranges",
-                    "encryption_key",
-                    "credential_storage_backend",
-                    "openbao_policy_slug",
-                    "openbao_service_username",
-                    "proxmox_timeout",
-                    "proxmox_max_retries",
-                    "proxmox_retry_backoff",
-                    "ceph_task_timeout",
-                    "ceph_task_poll_interval",
-                    "ceph_run_lease_seconds",
-                    "default_role_qemu",
-                    "default_role_lxc",
-                    "enable_tenant_name_regex",
-                    "tenant_name_regex_rules",
-                    "enable_tenant_tag_assignment",
-                    "enable_tenant_from_cluster",
-                    "cloud_network_lock_enabled",
-                    "cloud_customer_prefix_id",
-                    "cloud_customer_bridge",
-                    "cloud_customer_vlan_tag",
-                    "cloud_customer_gateway",
-                    "branching_enabled",
-                    "branch_name_prefix",
-                    "branch_on_conflict",
-                    "netbox_to_proxmox_enabled",
-                    "netbox_to_proxmox_typed_confirmation",
-                    "intent_warn_plaintext_password",
-                    "apply_destroy_confirmed",
-                    "intent_apply_authorization_self_approve_allowed",
-                    "intent_deletion_request_ttl_days",
-                    "hardware_discovery_enabled",
-                    "hardware_discovery_sync_nic_macs",
-                    *SYNC_MODE_FIELDS,
-                    *OVERWRITE_FIELDS,
-                ]
-            )
-            messages.success(request, "Proxbox plugin settings updated.")
-            return redirect("plugins:netbox_proxbox:settings")
+            refusal = _persist_settings(settings_obj)
+            if refusal is None:
+                messages.success(request, "Proxbox plugin settings updated.")
+                return redirect("plugins:netbox_proxbox:settings")
+            form.add_error("credential_storage_backend", refusal)
         return render(
             request,
             self.template_name,
@@ -578,6 +511,111 @@ class SettingsView(
                 request, form, encryption_statuses=encryption_statuses
             ),
         )
+
+
+def _persist_settings(settings_obj: ProxboxPluginSettings) -> str | None:
+    """Save settings and return a storage guard refusal instead of raising it."""
+    try:
+        _save_settings(settings_obj)
+    except Exception as exc:  # noqa: BLE001 - non-validation errors re-raise
+        refusal = _storage_refusal_message(exc)
+        if refusal is None:
+            raise
+        return refusal
+    return None
+
+
+def _storage_refusal_message(exc: Exception) -> str | None:
+    """Return a storage guard's validation message, or None for other errors.
+
+    The import is lazy because mocked view tests load this module against
+    Django stubs and never reach a failed save.
+    """
+    from django.core.exceptions import ValidationError
+
+    if isinstance(exc, ValidationError):
+        return exc.messages[0]
+    return None
+
+
+def _save_settings(settings_obj: ProxboxPluginSettings) -> None:
+    """Persist every field owned by the settings form."""
+    settings_obj.save(
+        update_fields=[
+            "use_guest_agent_interface_name",
+            "vm_interface_sync_strategy",
+            "node_device_name_template",
+            "proxbox_fetch_max_concurrency",
+            "ignore_ipv6_link_local_addresses",
+            "ensure_netbox_objects",
+            "delete_orphans",
+            "primary_ip_preference",
+            "netbox_max_concurrent",
+            "netbox_timeout",
+            "netbox_write_concurrency",
+            "proxmox_fetch_concurrency",
+            "netbox_max_retries",
+            "netbox_retry_delay",
+            "netbox_get_cache_ttl",
+            "netbox_get_cache_max_entries",
+            "netbox_get_cache_max_bytes",
+            "bulk_batch_size",
+            "bulk_batch_delay_ms",
+            "backup_batch_size",
+            "backup_batch_delay_ms",
+            "interface_batch_size",
+            "interface_batch_delay_ms",
+            "vm_sync_max_concurrency",
+            "sync_job_timeout",
+            "reconciliation_engine",
+            "reconciliation_compare_strict",
+            "custom_fields_request_delay",
+            "backend_log_file_path",
+            "debug_cache",
+            "expose_internal_errors",
+            "netbox_openapi_persist",
+            "parse_description_metadata",
+            "embed_description_metadata",
+            "ssrf_protection_enabled",
+            "allow_private_ips",
+            "additional_allowed_ip_ranges",
+            "explicitly_blocked_ip_ranges",
+            "encryption_key",
+            "credential_storage_backend",
+            "openbao_policy_slug",
+            "openbao_service_username",
+            "proxmox_timeout",
+            "proxmox_max_retries",
+            "proxmox_retry_backoff",
+            "ceph_task_timeout",
+            "ceph_task_poll_interval",
+            "ceph_run_lease_seconds",
+            "default_role_qemu",
+            "default_role_lxc",
+            "enable_tenant_name_regex",
+            "tenant_name_regex_rules",
+            "enable_tenant_tag_assignment",
+            "enable_tenant_from_cluster",
+            "cloud_network_lock_enabled",
+            "cloud_customer_prefix_id",
+            "cloud_customer_bridge",
+            "cloud_customer_vlan_tag",
+            "cloud_customer_gateway",
+            "branching_enabled",
+            "branch_name_prefix",
+            "branch_on_conflict",
+            "netbox_to_proxmox_enabled",
+            "netbox_to_proxmox_typed_confirmation",
+            "intent_warn_plaintext_password",
+            "apply_destroy_confirmed",
+            "intent_apply_authorization_self_approve_allowed",
+            "intent_deletion_request_ttl_days",
+            "hardware_discovery_enabled",
+            "hardware_discovery_sync_nic_macs",
+            *SYNC_MODE_FIELDS,
+            *OVERWRITE_FIELDS,
+        ]
+    )
 
 
 @method_decorator(

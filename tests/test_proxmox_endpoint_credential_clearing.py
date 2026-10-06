@@ -256,7 +256,9 @@ def test_form_storage_validation_preserves_fail_closed_errors(
         error = forms.ValidationError("missing OpenBao prerequisites")
         error.messages = ["missing OpenBao prerequisites"]
         if kind == "field_error":
-            error.error_dict = {"allow_writes": ["missing OpenBao prerequisites"]}
+            error.error_dict = {
+                "credential_storage_backend": ["missing OpenBao prerequisites"]
+            }
     with (
         patch.object(
             openbao, "validate_write_mode_openbao_requirements", side_effect=error
@@ -269,7 +271,9 @@ def test_form_storage_validation_preserves_fail_closed_errors(
     )
     assert storage.call_count == (1 if kind in {"password", "token"} else 0)
     assert errors == (
-        [("allow_writes", "missing OpenBao prerequisites")] if error else []
+        [("credential_storage_backend", "missing OpenBao prerequisites")]
+        if error
+        else []
     )
 
 

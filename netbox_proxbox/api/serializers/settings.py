@@ -27,6 +27,21 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
         write_only=True,
     )
 
+    def validate_credential_storage_backend(self, value: str) -> str:
+        """Reject an unavailable backend or a switch that strands OpenBao state."""
+        from netbox_proxbox.integrations.openbao import (
+            validate_settings_storage_transition,
+            validate_storage_backend_selection,
+        )
+
+        current = str(getattr(self.instance, "credential_storage_backend", "") or "")
+        try:
+            validate_storage_backend_selection(value, current=current)
+            validate_settings_storage_transition(value)
+        except ValidationError as exc:
+            raise serializers.ValidationError(exc.messages[0]) from exc
+        return value
+
     @sensitive_variables()
     def run_validation(self, data: object = serializers.empty) -> object:
         """Validate settings without exposing write-only input in parent frames."""

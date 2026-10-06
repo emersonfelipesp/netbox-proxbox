@@ -257,6 +257,27 @@ sequenceDiagram
   use stable proxbox-api from PyPI because the paired backend is not published
   on TestPyPI.
 
+## Channel sync rule
+
+The Gitea Package Registry is the production artifact of record, but it must
+never go ahead of PyPI or Docker Hub.
+
+- A final or `.postN` version is published to the Gitea registry only in the
+  same release run that promotes its tag with `promote-final-tag.yml` and
+  publishes it to PyPI (and Docker Hub, when applicable) through the GitHub
+  Release. If any of those steps is blocked, stop before the Gitea final.
+- Every release candidate is published to the Gitea registry and TestPyPI
+  together. Private, Gitea-only candidates are not allowed: a version number
+  consumed only on Gitea forces the public line to skip it.
+- The next version follows the latest PyPI final. Do not start a release while
+  the latest Gitea final differs from the latest PyPI final; reconcile first.
+- A release is complete only when the Gitea registry, the GitHub tag and
+  Release, PyPI, and Docker Hub (when applicable) show the same final version.
+
+`promote-final-tag.yml` verifies package provenance against the private
+registry, so its validation step receives `GITEA_PACKAGE_TOKEN` from the same
+`PKG_TOKEN` secret that the publisher uses.
+
 ## Operator Checklist
 
 1. Before merging the target cutover, require the private control repository's

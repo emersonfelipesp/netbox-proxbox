@@ -1,11 +1,17 @@
 # netbox-proxbox Repository Guide
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.29.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 > **LLM Agent Safety:** Before any destruction-adjacent operation, read
 > `AGENTS.md` § "LLM Agent Safety Guardrails". Automated agents may inspect and
 > explain protected workflows, but they may not supply human confirmation or
 > approval on an operator's behalf.
+
+> **Release channels:** the Gitea Package Registry must never go ahead of PyPI
+> or Docker Hub. Publish a final or `.postN` to Gitea only in the same run that
+> publishes it to PyPI; never consume a version number only on Gitea; choose
+> the next version from the latest PyPI final. See `AGENTS.md` § "Release
+> Channel Sync Guardrail".
 
 This repository contains the public `netbox_proxbox` NetBox plugin and its
 standalone `proxbox` command-line client. Keep the project independently
@@ -58,16 +64,16 @@ interfaces documented in this repository.
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.0` GA. The current
-plugin version is `0.0.29`.
+plugin version is `0.0.29.post1`.
 
-Current source pairing: netbox-proxbox 0.0.29 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source pairing: netbox-proxbox 0.0.29.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The last documented released runtime pairing for this release line remains
 netbox-proxbox 0.0.27 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15
 <-> netbox-sdk 0.0.13. Preserve release-note and compatibility rows as
 historical records unless a release workflow changes them.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.29.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 CI pairing: the E2E Docker, page-coverage, documentation-screenshot, and
 release-validation workflow defaults consume proxbox-api `0.0.23.post3`. E2E uses the
@@ -87,7 +93,7 @@ field creation route.
   inventory, Firecracker inventory, service-monitoring collections, metrics,
   intent/apply records, deletion requests, cloud-init records, and companion
   PBS/PDM endpoint records. Migration
-  `0104_security_hardening`
+  `0105_reset_implicit_openbao_storage_default`
   is the current schema tip.
 
   Proxmox node Device names use the effective endpoint/global
@@ -265,6 +271,9 @@ backend target edits remain drafts.
 - Destructive Proxmox operations require explicit permission and the repository's
   approval or intent workflow. Do not weaken four-eyes or confirmation gates.
 - Keep optional companion-plugin imports lazy and fail safely when unavailable.
+- netbox-openbao is optional. Automatic credential storage selects OpenBao only
+  when the companion is enabled and otherwise selects local Fernet storage;
+  explicit selections never fall back.
 - Historical migrations are immutable compatibility records. Add a new migration
   for schema changes instead of rewriting an already released migration, except
   when sanitizing non-functional prose without changing migration behavior.
@@ -318,3 +327,14 @@ Read the nearest scoped `CLAUDE.md` before changing files under
 `netbox_proxbox/api/`, `netbox_proxbox/models/`,
 `netbox_proxbox/templates/netbox_proxbox/`, or
 `netbox_proxbox/views/endpoints/`.
+
+## Connection approval recovery
+
+The Proxmox and remote NetBox endpoint detail pages provide a secret-free
+connection target review panel. An authorized human must review the current
+destination before explicitly approving it through the protected
+`connection-authority` API action. The panel never approves on GET, page load,
+ordinary save, or upgrade. Failed or stale approval responses require another
+review. Backend health does not substitute for endpoint approval. Keep the
+existing sensitive-data, object permission, disabled-state, and exact-target
+checks authoritative on the server.

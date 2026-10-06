@@ -61,3 +61,9 @@ evidence on disposable data — not a production certification.
   image reference.
 - Support and family coordination are handled through the canonical Gitea issue
   workflow.
+
+## Maintenance source
+
+The current maintenance source is `0.0.29.post1`.
+The artifact and certification evidence described above remain the preceding
+`0.0.29` baseline; this source identity does not establish new certification.

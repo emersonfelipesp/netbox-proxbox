@@ -617,7 +617,14 @@ class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
                 },
                 status=status.HTTP_422_UNPROCESSABLE_ENTITY,
             )
-        if not endpoint.has_ssh_terminal_credentials:
+        # The password was resolved for the requesting actor above. Inspect
+        # only metadata here; the model readiness property reads the password
+        # again without that explicit actor.
+        if not (
+            endpoint.ssh_host
+            and endpoint.ssh_known_host_fingerprint
+            and endpoint.effective_ssh_username
+        ):
             return Response(
                 {"detail": "No endpoint SSH fallback credential configured."},
                 status=status.HTTP_404_NOT_FOUND,

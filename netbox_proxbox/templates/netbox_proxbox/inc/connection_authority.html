@@ -1,0 +1,105 @@
+{% load i18n static %}
+
+<div
+    class="card mb-3"
+    data-proxbox-connection-authority-panel
+    data-authority-url="{{ authority_url }}"
+    data-endpoint-enabled="{{ object.enabled|yesno:'true,false' }}"
+    data-can-change="{{ can_change|yesno:'true,false' }}"
+>
+    {% csrf_token %}
+    <div class="card-header d-flex flex-wrap justify-content-between align-items-center gap-2">
+        <h5 class="mb-0">
+            <i class="mdi mdi-shield-check" aria-hidden="true"></i>
+            {% trans "Connection target approval" %}
+        </h5>
+        <span
+            class="badge text-bg-secondary"
+            data-proxbox-connection-authority-approved-badge
+        >
+            {% if object.enabled %}
+                {% trans "Not reviewed" %}
+            {% else %}
+                {% trans "Endpoint disabled" %}
+            {% endif %}
+        </span>
+    </div>
+    <div class="card-body">
+        <div class="alert alert-warning mb-3" role="note">
+            <strong>{% trans "Security notice" %}</strong>
+            <p class="mb-0">
+                {% blocktrans trimmed %}
+                    Stored credentials are transmitted only after you review the exact
+                    connection target shown below and approve its fingerprint. Proxbox
+                    sends secrets only to that reviewed host, port, TLS policy, and
+                    authentication identity. Any change to the domain, IP address, port,
+                    TLS verification, username, or displayed authentication identity invalidates approval
+                    and requires a fresh review before credentials may be sent again.
+                {% endblocktrans %}
+            </p>
+        </div>
+
+        <p
+            class="mb-2"
+            data-proxbox-connection-authority-status
+            aria-live="polite"
+            aria-atomic="true"
+        >
+            {% if not object.enabled %}
+                {% trans "This endpoint is disabled. Enable it before approving a connection target." %}
+            {% elif not can_change %}
+                {% trans "You may review the current target. Approval requires change permission on this endpoint." %}
+            {% else %}
+                {% trans "Review the current target, then approve it before synchronization may send credentials." %}
+            {% endif %}
+        </p>
+
+        <dl class="row mb-3">
+            <dt class="col-sm-4">{% trans "Kind" %}</dt>
+            <dd class="col-sm-8" data-proxbox-connection-authority-field="kind">—</dd>
+
+            <dt class="col-sm-4">{% trans "Domain" %}</dt>
+            <dd class="col-sm-8" data-proxbox-connection-authority-field="domain">—</dd>
+
+            <dt class="col-sm-4">{% trans "IP address" %}</dt>
+            <dd class="col-sm-8" data-proxbox-connection-authority-field="ip_address">—</dd>
+
+            <dt class="col-sm-4">{% trans "Port" %}</dt>
+            <dd class="col-sm-8" data-proxbox-connection-authority-field="port">—</dd>
+
+            <dt class="col-sm-4">{% trans "Verify SSL" %}</dt>
+            <dd class="col-sm-8" data-proxbox-connection-authority-field="verify_ssl">—</dd>
+
+            <dt class="col-sm-4">{% trans "Username" %}</dt>
+            <dd class="col-sm-8" data-proxbox-connection-authority-field="username">—</dd>
+
+            <dt class="col-sm-4">{% trans "Token name" %}</dt>
+            <dd class="col-sm-8" data-proxbox-connection-authority-field="token_name">—</dd>
+
+            <dt class="col-sm-4">{% trans "Token version" %}</dt>
+            <dd class="col-sm-8" data-proxbox-connection-authority-field="token_version">—</dd>
+        </dl>
+
+        <div class="d-flex flex-wrap gap-2">
+            <button
+                type="button"
+                class="btn btn-outline-primary"
+                data-proxbox-connection-authority-review
+            >
+                <i class="mdi mdi-refresh" aria-hidden="true"></i>
+                {% trans "Review again" %}
+            </button>
+            <button
+                type="button"
+                class="btn btn-primary"
+                data-proxbox-connection-authority-approve
+                disabled
+            >
+                <i class="mdi mdi-check-decagram" aria-hidden="true"></i>
+                {% trans "Approve reviewed target" %}
+            </button>
+        </div>
+    </div>
+</div>
+
+<script type="module" src="{% static 'netbox_proxbox/js/connection-authority.js' %}"></script>

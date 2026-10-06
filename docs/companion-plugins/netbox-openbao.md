@@ -20,6 +20,7 @@ repairs, replaces, or explicitly clears that credential. The requesting actor is
 retained for authorized OpenBao reads and writes.
 
 `netbox-openbao` is a **separate** NetBox plugin from the Proxbox suite. It is
+fully optional: netbox-proxbox installs and stores credentials without it.
 not a companion plugin in the same sense as netbox-pbs or netbox-ceph — you do
 not install it through proxbox-api sync jobs — but it is the supported way to
 store SSH login material for Proxmox guests that netbox-proxbox already models
@@ -101,6 +102,25 @@ blank default) selects that backend only when `netbox_openbao` is enabled in
 authoritative and never downgrade when OpenBao becomes unavailable. That
 path secures *how NetBox talks to Proxmox*, not *how operators SSH into a synced
 guest*.
+
+Migration `0105_reset_implicit_openbao_storage_default` resets a global stored
+`openbao` value created by the historical default to Automatic only when none
+of the supported credential owners contains an OpenBao UUID reference. It does
+not inspect or change endpoint backend overrides, and it preserves the global
+selection when any reference exists. To opt out, open **Settings**, set
+**Credential storage backend** to **Automatic** or **Legacy Fernet-encrypted
+local storage**, and save. Automatic continues to follow the enabled companion
+set; Legacy always uses the plugin's configured Fernet key.
+
+Proxbox refuses that switch while any credential that follows the plugin-wide
+setting still holds an OpenBao reference or assignment: Proxmox endpoints that
+inherit the setting, node SSH credentials, FastAPI/PBS/PDM/Firecracker tokens,
+and VM cloud-init secrets. Clear those credentials first so no OpenBao material
+is silently replaced by Fernet storage. Endpoints without OpenBao references can
+be created, edited, and deleted when netbox-openbao is absent, or installed but
+not listed in `PLUGINS`; an endpoint that still holds references cannot be
+deleted, individually or through bulk deletion, until netbox-openbao is restored
+and the references are cleared.
 
 Per-node SSH credentials used by hardware discovery and the node terminal use
 the same effective backend selection as their `ProxmoxEndpoint`. With OpenBao

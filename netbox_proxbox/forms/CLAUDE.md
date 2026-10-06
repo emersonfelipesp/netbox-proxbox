@@ -66,6 +66,13 @@ selector, so password-only and token-only OpenBao endpoints remain editable.
 Explicit clear/replacement requests bypass preservation of the affected field;
 remaining required or referenced secrets still fail validation when unresolved.
 
+`settings.html` must render every required settings field, including
+`openbao_policy_slug`, in its **Credential storage** card; an unrendered
+required field makes the whole page unsavable. The storage choices are plain
+`(value, label)` pairs because `ChoiceSet.CHOICES` carries colors. Without
+netbox-openbao enabled, the settings and endpoint forms hide the OpenBao choice
+unless it is the stored value, and they reject a new OpenBao selection.
+
 - Inbound: view classes in `views/` import these forms for object edit and list pages.
 - Outbound: `netbox_proxbox.models`, `netbox_proxbox.choices`, NetBox form base classes, and NetBox core models such as `IPAddress`, `Token`, and `VirtualMachine`.
 

@@ -32,7 +32,11 @@ This directory contains Django templates bundled with the plugin.
   and secret-free states. Rotation password inputs never render submitted or
   stored values. The destructive reset form is omitted unless the user holds
   the separate reset permission; keep all recovery rendering free of dynamic
-  `innerHTML` and ciphertext/key material.
+  `innerHTML` and ciphertext/key material. Its **Credential storage** card must
+  render `credential_storage_backend`, `openbao_policy_slug`, and
+  `openbao_service_username`; the settings form requires the policy slug, so
+  omitting any required field makes every settings save fail on an invisible
+  error. A real-Django test asserts that every required settings field renders.
 - `netbox_proxbox/inc/vm_proxmox_card.html` is the typed reflection card on a
   core VM detail page. It may show only the count of reflected cloud-init SSH
   keys, never their contents, and must rely on Django autoescaping for every

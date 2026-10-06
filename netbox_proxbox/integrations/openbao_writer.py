@@ -113,6 +113,13 @@ def _validate_partial_assignment_state(
         )
 
 
+_DELETE_WITHOUT_PROVIDER = (
+    "OpenBao credential references remain on this endpoint, but netbox-openbao "
+    "is not installed and enabled. Restore netbox-openbao and clear the "
+    "endpoint credentials before deleting the endpoint."
+)
+
+
 @sensitive_variables()
 def delete_endpoint(
     endpoint: Any,
@@ -121,11 +128,15 @@ def delete_endpoint(
     kwargs: dict[str, Any],
 ) -> tuple[int, dict[str, int]]:
     """Unlink owned assignments and delete the endpoint in one transaction."""
-    from .openbao import endpoint_uses_openbao_storage
-
-    from netbox_openbao.models import CredentialAssignment
+    from .openbao import endpoint_uses_openbao_storage, is_netbox_openbao_installed
 
     references = {name: getattr(endpoint, name) for name in SLOTS}
+    if not is_netbox_openbao_installed():
+        if any(references.values()):
+            raise ValidationError(_DELETE_WITHOUT_PROVIDER)
+        return original(*args, **kwargs)
+    from netbox_openbao.models import CredentialAssignment
+
     has_assignments = CredentialAssignment.objects.filter(
         assigned_object_type__app_label=endpoint._meta.app_label,
         assigned_object_type__model=endpoint._meta.model_name,

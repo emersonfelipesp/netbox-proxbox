@@ -174,6 +174,35 @@ def _legacy_key_warnings() -> list[DjangoWarning]:
     ]
 
 
+def _unavailable_openbao_storage_warnings() -> list[DjangoWarning]:
+    from netbox_proxbox.integrations.openbao import is_netbox_openbao_installed
+    from netbox_proxbox.models import ProxboxPluginSettings, ProxmoxEndpoint
+
+    if is_netbox_openbao_installed():
+        return []
+    settings_selected = ProxboxPluginSettings.objects.filter(
+        credential_storage_backend="openbao"
+    ).exists()
+    endpoints = ProxmoxEndpoint.objects.filter(credential_storage_backend="openbao")
+    if not settings_selected and not endpoints.exists():
+        return []
+    selected_parts = ["plugin settings"] if settings_selected else []
+    if endpoints.exists():
+        selected_parts.append(f"endpoints: {_names(endpoints)}")
+    selected = "; ".join(selected_parts)
+    return [
+        DjangoWarning(
+            "OpenBao credential storage is selected while netbox-openbao is not "
+            f"installed and enabled: {selected}.",
+            hint=(
+                "Select Automatic or Legacy Fernet-encrypted local storage, or "
+                "install and enable netbox-openbao."
+            ),
+            id="netbox_proxbox.W106",
+        )
+    ]
+
+
 def _is_missing_plugin_table(exc: DatabaseError) -> bool:
     """Return whether ``exc`` only means a plugin table is not migrated yet.
 
@@ -267,6 +296,7 @@ def insecure_transport_check(app_configs: Any = None, **kwargs: Any) -> list[Any
         _unverified_proxmox_warnings,
         _legacy_key_warnings,
         _backend_settings_access_warnings,
+        _unavailable_openbao_storage_warnings,
     )
     results: list[Any] = []
     for check in inspections:

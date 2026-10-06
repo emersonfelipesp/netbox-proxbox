@@ -421,7 +421,7 @@ fake historical models for both generations.
   devices keep their names until the next sync applies a non-default template,
   and existing installations retain the historical two-hour job limit.
 
-- Migration `0104_security_hardening` is the single 0.0.29 release migration
+- Migration `0104_security_hardening` is the consolidated 0.0.29rc1 migration
   (it consolidates the unpublished development migrations that followed the
   0.0.27.post1 boundary). It:
   - adds default-off per-user disclosure grants without automatically granting
@@ -433,6 +433,13 @@ fake historical models for both generations.
     defaults to `True` (state-only; existing rows keep their values);
   - grants a view-only settings object permission to the users behind tokens
     already configured on enabled NetBox endpoints (reverse is a no-op).
+
+- Migration `0105_reset_implicit_openbao_storage_default` resets the historical
+  global `openbao` default to Automatic only when no supported owner has an
+  OpenBao credential UUID reference. It never changes endpoint overrides, and
+  its reverse is a no-op.
+  The published 0.0.29 candidates froze 0104, so 0105 starts the next
+  release boundary.
 
 ## Links
 

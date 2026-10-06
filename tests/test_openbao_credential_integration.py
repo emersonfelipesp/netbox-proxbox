@@ -305,8 +305,9 @@ def test_validate_write_mode_skips_legacy_backend(monkeypatch) -> None:
 
 def test_validate_write_mode_requires_openbao_when_enabled(monkeypatch) -> None:
     openbao = _load_openbao_module(monkeypatch)
-    with patch.object(
-        openbao, "openbao_prerequisites_errors", return_value=["missing"]
+    with (
+        patch.object(openbao, "is_netbox_openbao_installed", return_value=True),
+        patch.object(openbao, "openbao_prerequisites_errors", return_value=["missing"]),
     ):
         with pytest.raises(Exception) as excinfo:
             openbao.validate_write_mode_openbao_requirements(
@@ -373,6 +374,28 @@ def test_validate_openbao_storage_requires_plugin(monkeypatch) -> None:
         with pytest.raises(Exception) as excinfo:
             openbao.validate_openbao_storage_available(None, storage_backend=OPENBAO)
     assert "netbox-openbao" in str(excinfo.value).lower()
+
+
+@pytest.mark.parametrize(
+    "value,current,installed,raises",
+    [
+        (OPENBAO, "", False, True),
+        (OPENBAO, OPENBAO, False, False),
+        (OPENBAO, "", True, False),
+        (LEGACY, "", False, False),
+        ("", OPENBAO, False, False),
+    ],
+)
+def test_validate_storage_backend_selection(
+    monkeypatch, value, current, installed, raises
+) -> None:
+    openbao = _load_openbao_module(monkeypatch)
+    monkeypatch.setattr(openbao, "is_netbox_openbao_installed", lambda: installed)
+    if raises:
+        with pytest.raises(Exception, match="Choose Automatic or Legacy"):
+            openbao.validate_storage_backend_selection(value, current=current)
+    else:
+        openbao.validate_storage_backend_selection(value, current=current)
 
 
 def test_ssh_getters_import_endpoint_uses_openbao_storage() -> None:
@@ -442,6 +465,33 @@ def test_api_selector_rejects_unknown_material_field(monkeypatch) -> None:
     openbao = _load_openbao_module(monkeypatch)
     with pytest.raises(ValueError, match="Unsupported endpoint API credential field"):
         openbao.resolve_endpoint_api_secret(types.SimpleNamespace(), "ssh_private_key")
+
+
+@pytest.mark.parametrize("field", ["password", "token_value"])
+def test_api_selector_forwards_the_request_actor_to_material_reveal(
+    monkeypatch, field
+) -> None:
+    openbao = _load_openbao_module(monkeypatch)
+    endpoint = types.SimpleNamespace(
+        name="actor-bound",
+        credential_storage_backend=OPENBAO,
+        token_name="api-token",
+        openbao_password_credential_uuid="password-ref",
+        openbao_token_credential_uuid="token-ref",
+    )
+    actor = object()
+    credential = object()
+    revealed = []
+    monkeypatch.setattr(openbao, "_credential_for_uuid", lambda reference: credential)
+
+    def reveal_material(value, *, user=None):
+        revealed.append((value, user))
+        return {"password": "password-material", "token": "token-material"}
+
+    monkeypatch.setattr(openbao, "reveal_credential_material", reveal_material)
+    expected = "password-material" if field == "password" else "token-material"
+    assert openbao.resolve_endpoint_api_secret(endpoint, field, user=actor) == expected
+    assert revealed == [(credential, actor)]
 
 
 @pytest.mark.parametrize("selected", [False, True])

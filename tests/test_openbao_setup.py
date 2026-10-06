@@ -101,6 +101,7 @@ def test_validator_keeps_one_actionable_error(monkeypatch) -> None:
     monkeypatch.setattr(
         openbao, "openbao_prerequisites_errors", lambda: ["first", "second"]
     )
+    monkeypatch.setattr(openbao, "is_netbox_openbao_installed", lambda: True)
     with pytest.raises(openbao.ValidationError) as excinfo:
         openbao.validate_openbao_storage_available(storage_backend="openbao")
     assert excinfo.value.messages == ["first"]

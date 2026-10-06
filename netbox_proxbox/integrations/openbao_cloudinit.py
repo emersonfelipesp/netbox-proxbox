@@ -241,6 +241,10 @@ def _expected_primary_name(owner: Any, references: dict[str, Any]) -> str | None
 
 
 def _assignment_rows(owner: Any, references: dict[str, Any]) -> Any | None:
+    from .openbao import is_netbox_openbao_installed
+
+    if not is_netbox_openbao_installed():
+        return None
     try:
         from netbox_openbao.models import CredentialAssignment
     except ImportError:

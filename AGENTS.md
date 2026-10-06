@@ -27,6 +27,9 @@ facts that an agent must have even when `@CLAUDE.md` expansion is unavailable:
   server-side and out of browser-readable output.
 - Keep companion-plugin imports optional and lazy; enabled-but-broken
   companions fail at startup rather than degrading silently.
+- netbox-openbao is optional. Automatic credential storage selects OpenBao only
+  when the companion is enabled and otherwise selects local Fernet storage;
+  explicit selections never fall back.
 - Keep historical migrations immutable and add a migration for schema changes.
 - Keep `ProxboxPluginSettings.sync_job_timeout` UI-backed and bounded to
   3600–604800 seconds. Resolve it when enqueueing a sync job, preserve explicit
@@ -52,6 +55,25 @@ facts that an agent must have even when `@CLAUDE.md` expansion is unavailable:
   a per-function complexity audit when executable source changes.
 
 @CLAUDE.md
+
+## Release Channel Sync Guardrail
+
+The Gitea Package Registry must never go ahead of PyPI or Docker Hub. Agents
+and operators must:
+
+- publish a final or `.postN` version to the Gitea registry only in the same
+  run that also publishes it to PyPI and, when applicable, Docker Hub. If the
+  final-tag promotion, the GitHub Release, or any public publish step is
+  blocked, stop before the Gitea final;
+- never consume a version number only on Gitea: every release candidate goes
+  to the Gitea registry and TestPyPI together, and private Gitea-only
+  candidates are not allowed;
+- choose the next version from the latest PyPI final, and refuse to start a
+  release while the latest Gitea final differs from the latest PyPI final.
+
+A Gitea-only `0.0.27.post1` and a private `0.0.28rc1` forced the public line to
+jump from 0.0.27 to 0.0.29. See
+[`docs/developer/release-publishing.md`](docs/developer/release-publishing.md#channel-sync-rule).
 
 ## LLM Agent Safety Guardrails
 
@@ -80,20 +102,20 @@ The complete semantic bridge contract is
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.0` GA. The current
-plugin version is `0.0.29`.
+plugin version is `0.0.29.post1`.
 
-Current source pairing: netbox-proxbox 0.0.29 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source pairing: netbox-proxbox 0.0.29.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The last documented released runtime pairing for this release line remains
 netbox-proxbox 0.0.27 <-> proxbox-api 0.0.23.post2 <-> proxmox-sdk 0.0.15
 <-> netbox-sdk 0.0.13. Do not rewrite historical release notes when the source
 pairing advances.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.29.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 ## Current implementation surfaces
 
-The current schema tip is migration `0104_security_hardening`.
+The current schema tip is migration `0105_reset_implicit_openbao_storage_default`.
 Sensitive endpoint exports and runtime-key disclosure require an active,
 authenticated superuser or the default-off per-user sensitive-data flag.
 Only active superusers may administer grants. Keep object and provider checks
@@ -228,3 +250,12 @@ a newer app-registry class identity; narrow the compatibility fixture while
 retaining isolated coverage of the published behavior. Version-specific
 query-count baselines are allowed only for a demonstrated NetBox core query-plan
 difference and must be verified in the affected and adjacent matrix lanes.
+
+## Connection approval recovery
+
+Proxmox and remote NetBox endpoint detail pages expose explicit target review
+and approval through the existing protected API. Do not automatically approve
+existing targets on upgrade or save. Failed requests and stale reviews must
+leave approval disabled until another review. Successful backend health does
+not establish approval for a Proxmox destination. Preserve sensitive-data and
+object permissions, CSRF protection, and server-side exact-target validation.

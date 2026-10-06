@@ -147,10 +147,15 @@ def credential_assignment_readiness(owner: Any) -> tuple[bool, str]:
     reference = getattr(owner, spec.reference_field, None)
     if reference is None:
         return False, "The selected provider credential is not configured."
+    from .openbao import is_netbox_openbao_installed
+
+    unavailable = "The credential provider is unavailable; restore it before use."
+    if not is_netbox_openbao_installed():
+        return False, unavailable
     try:
         from netbox_openbao.models import CredentialAssignment
     except ImportError:
-        return False, "The credential provider is unavailable; restore it before use."
+        return False, unavailable
     app_label, model = lookup["assigned_object_type"].split(".", 1)
     matches = CredentialAssignment.objects.filter(
         credential__uuid=reference,

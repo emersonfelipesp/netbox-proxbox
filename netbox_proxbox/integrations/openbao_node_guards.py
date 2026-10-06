@@ -327,10 +327,24 @@ def _guard_parent_delete(sender: type, instance: Any, **_kwargs: Any) -> None:
         sender.objects.filter(pk=instance.pk)
     ):
         raise ValidationError(_CLEANUP_MESSAGE)
-    if sender is ProxmoxEndpoint and _endpoints_have_state(
-        sender.objects.filter(pk=instance.pk)
-    ):
+    if sender is ProxmoxEndpoint and _endpoint_delete_has_state(sender, instance):
         raise ValidationError(_CLEANUP_MESSAGE)
+
+
+def _endpoint_delete_has_state(sender: type, instance: Any) -> bool:
+    """Return whether deleting an endpoint row would strand OpenBao state.
+
+    The supported ``ProxmoxEndpoint.delete()`` path clears the row's own
+    references before Django sends ``pre_delete``. Queryset and bulk deletion
+    load rows from the database, so references that remain refuse deletion.
+    """
+    from netbox_proxbox.integrations.openbao import (
+        endpoint_holds_openbao_references,
+    )
+
+    return endpoint_holds_openbao_references(instance) or _endpoints_have_state(
+        sender.objects.filter(pk=instance.pk)
+    )
 
 
 def install_node_material_guards() -> None:

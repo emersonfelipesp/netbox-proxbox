@@ -32,6 +32,8 @@ __all__ = (
     "credential_assignment_lookup",
     "credential_assignment_readiness",
     "effective_credential_storage_backend",
+    "endpoint_holds_openbao_references",
+    "hide_unavailable_openbao_choice",
     "endpoint_uses_openbao_storage",
     "is_netbox_openbao_installed",
     "node_uses_openbao_storage",
@@ -57,7 +59,21 @@ __all__ = (
     "store_node_ssh_keypair",
     "store_node_ssh_password",
     "validate_openbao_storage_available",
+    "validate_settings_storage_transition",
+    "validate_storage_backend_selection",
     "validate_write_mode_openbao_requirements",
+)
+
+_OPENBAO_SELECTION_ERROR = _(
+    "OpenBao credential storage requires the netbox-openbao plugin, which is not "
+    "installed and enabled. Choose Automatic or Legacy Fernet-encrypted local "
+    "storage, or install and enable netbox-openbao."
+)
+
+_OPENBAO_AVAILABILITY_ERROR = _(
+    "netbox-openbao is not installed and enabled. Choose Automatic or Legacy "
+    "for this endpoint or in Proxbox plugin settings, or install and enable "
+    "netbox-openbao."
 )
 
 
@@ -89,6 +105,52 @@ def is_netbox_openbao_installed() -> bool:
     except Exception:  # noqa: BLE001 - Django not ready
         return False
     return "netbox_openbao" in (getattr(settings, "PLUGINS", []) or [])
+
+
+def hide_unavailable_openbao_choice(field: Any, *, current: str | None) -> None:
+    """Hide the OpenBao choice unless the companion is enabled or already stored."""
+    if (
+        is_netbox_openbao_installed()
+        or current == CredentialStorageBackendChoices.OPENBAO
+    ):
+        return
+    field.widget.choices = [
+        choice
+        for choice in field.choices
+        if choice[0] != CredentialStorageBackendChoices.OPENBAO
+    ]
+
+
+def validate_storage_backend_selection(
+    value: str | None,
+    *,
+    current: str | None,
+) -> None:
+    """Reject a new explicit OpenBao selection when its companion is absent."""
+    if (
+        value == CredentialStorageBackendChoices.OPENBAO
+        and value != current
+        and not is_netbox_openbao_installed()
+    ):
+        raise ValidationError(_OPENBAO_SELECTION_ERROR)
+
+
+def endpoint_holds_openbao_references(endpoint: Any) -> bool:
+    """Return whether a Proxmox endpoint row still holds OpenBao UUID references."""
+    return any(
+        getattr(endpoint, field.name, None) is not None
+        for field in type(endpoint)._meta.concrete_fields
+        if field.name.startswith("openbao_") and field.name.endswith("_credential_uuid")
+    )
+
+
+def validate_settings_storage_transition(value: str | None) -> None:
+    """Raise the settings persistence guards' refusal before a settings save."""
+    from .openbao_node_guards import _guard_settings_update
+    from .openbao_single_guards import _guard_settings_downgrade
+
+    _guard_settings_downgrade(value or "")
+    _guard_settings_update({"credential_storage_backend": value or ""})
 
 
 def register_openbao_assignable_models() -> None:
@@ -187,10 +249,13 @@ def node_openbao_assignment_readiness(
     reference = getattr(credential, _selected_reference(credential), None)
     if reference is None:
         return False, "The selected OpenBao node credential is not configured."
+    unavailable = "netbox-openbao is unavailable; restore it before use."
+    if not is_netbox_openbao_installed():
+        return False, unavailable
     try:
         from netbox_openbao.models import CredentialAssignment
     except ImportError:
-        return False, "netbox-openbao is unavailable; restore it before use."
+        return False, unavailable
     matches = CredentialAssignment.objects.filter(
         credential__uuid=reference,
         assigned_object_type__app_label="dcim",
@@ -226,8 +291,11 @@ def validate_openbao_storage_available(
     if backend != CredentialStorageBackendChoices.OPENBAO:
         return
     errors = openbao_prerequisites_errors()
-    if errors:
-        raise ValidationError(errors[0])
+    if not errors:
+        return
+    if not is_netbox_openbao_installed():
+        raise ValidationError(_OPENBAO_AVAILABILITY_ERROR)
+    raise ValidationError(errors[0])
 
 
 def validate_write_mode_openbao_requirements(
@@ -244,7 +312,7 @@ def validate_write_mode_openbao_requirements(
         validate_openbao_storage_available(endpoint, storage_backend=backend)
     except ValidationError as exc:
         message = exc.messages[0] if getattr(exc, "messages", None) else str(exc)
-        raise ValidationError({"allow_writes": message}) from exc
+        raise ValidationError({"credential_storage_backend": message}) from exc
 
 
 def _openbao_actor(user: Any | None = None) -> Any:
@@ -544,6 +612,7 @@ def resolve_endpoint_api_secret(
     field: Literal["password", "token_value"],
     *,
     token_selected: bool | None = None,
+    user: Any | None = None,
 ) -> str:
     """Read stored material using the current or explicitly submitted auth mode.
 
@@ -556,7 +625,9 @@ def resolve_endpoint_api_secret(
         return getattr(endpoint, field) or ""
     if token_selected is None:
         token_selected = bool((endpoint.token_name or "").strip())
-    return _resolve_openbao_api_secret(endpoint, field, token_selected=token_selected)
+    return _resolve_openbao_api_secret(
+        endpoint, field, token_selected=token_selected, user=user
+    )
 
 
 def _resolve_openbao_api_secret(
@@ -564,17 +635,18 @@ def _resolve_openbao_api_secret(
     field: Literal["password", "token_value"],
     *,
     token_selected: bool,
+    user: Any | None = None,
 ) -> str:
     if field == "password":
         if not token_selected or _has_openbao_reference(
             endpoint, "openbao_password_credential_uuid"
         ):
-            return resolve_endpoint_password(endpoint)
+            return resolve_endpoint_password(endpoint, user=user)
         return ""
     if token_selected or _has_openbao_reference(
         endpoint, "openbao_token_credential_uuid"
     ):
-        return resolve_endpoint_token_value(endpoint)
+        return resolve_endpoint_token_value(endpoint, user=user)
     return ""
 
 

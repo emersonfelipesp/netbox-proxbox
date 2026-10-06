@@ -108,15 +108,16 @@ explicit PyPI first-index policy.
 
 Current source pairing: netbox-proxbox 0.0.29 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This is the current sibling-source development stack. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.29.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.29.post1 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The next row records current source compatibility. The following row preserves
 the last released runtime pairing for the same prerelease plugin identity.
 
 | netbox-proxbox | NetBox | Python | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |---|---|---|---|---|---|
+| v0.0.29.post1 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
 | v0.0.29 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
 | v0.0.29rc3 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
 | v0.0.29rc2 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.23.post3 | v0.0.13 | v0.0.15 |

@@ -30,6 +30,10 @@ def _queryset_has_state(queryset: Any) -> bool:
     spec = spec_for(queryset.model)
     if queryset.filter(**{f"{spec.reference_field}__isnull": False}).exists():
         return True
+    from .openbao import is_netbox_openbao_installed
+
+    if not is_netbox_openbao_installed():
+        return False
     try:
         from netbox_openbao.models import CredentialAssignment
     except ImportError:
@@ -89,8 +93,35 @@ def _guard_settings_downgrade(value: Any) -> None:
 
     if any(_queryset_has_state(model.objects.all()) for model in _owner_models()):
         raise ValidationError(_CLEANUP)
-    if any_cloudinit_openbao_state():
+    if any_cloudinit_openbao_state() or _inherited_endpoints_have_state():
         raise ValidationError(_CLEANUP)
+
+
+def _inherited_endpoints_have_state() -> bool:
+    """Return whether endpoints that inherit the plugin backend hold OpenBao state."""
+    from django.db.models import Q
+    from netbox_proxbox.models import ProxmoxEndpoint
+
+    from .openbao import is_netbox_openbao_installed
+
+    inherited = ProxmoxEndpoint.objects.filter(credential_storage_backend="")
+    referenced = Q()
+    for field in ProxmoxEndpoint._meta.concrete_fields:
+        if field.name.startswith("openbao_") and field.name.endswith(
+            "_credential_uuid"
+        ):
+            referenced |= Q(**{f"{field.name}__isnull": False})
+    if inherited.filter(referenced).exists():
+        return True
+    if not is_netbox_openbao_installed():
+        return False
+    from netbox_openbao.models import CredentialAssignment
+
+    return CredentialAssignment.objects.filter(
+        assigned_object_type__app_label=ProxmoxEndpoint._meta.app_label,
+        assigned_object_type__model=ProxmoxEndpoint._meta.model_name,
+        assigned_object_id__in=inherited.values("pk"),
+    ).exists()
 
 
 def _guard_update(queryset: Any, updates: dict[str, Any]) -> None:

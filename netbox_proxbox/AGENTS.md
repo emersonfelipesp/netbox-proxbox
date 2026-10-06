@@ -18,10 +18,11 @@ The public semantic bridge API and agent-safety contract are documented in
 [`docs/api/semantic-mcp-bridge.md`](../docs/api/semantic-mcp-bridge.md).
 
 `security_checks.py` registers database-tagged Django system checks
-(`netbox_proxbox.W101`–`W105`, plus `W100` when an inspection fails for any
+(`netbox_proxbox.W101`–`W106`, plus `W100` when an inspection fails for any
 reason other than unmigrated tables; `W105` reports a NetBox token configured
 for proxbox-api that cannot read the plugin settings) for enabled backend endpoints on plain HTTP or
 unverified TLS, enabled Proxmox endpoints without TLS verification, and a
-legacy raw plugin encryption key. They run for `migrate` and
+legacy raw plugin encryption key. `W106` reports explicit OpenBao storage while
+netbox-openbao is not enabled. They run for `migrate` and
 `check --database default` only, return nothing before the plugin tables exist,
 and never rewrite rows; new endpoints default to HTTPS and TLS verification.

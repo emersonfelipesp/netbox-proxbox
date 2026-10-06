@@ -110,3 +110,62 @@ def test_native_migration_state_adds_unapproved_internal_fields() -> None:
         assert field.default == ""
         assert field.editable is False
         assert field.max_length == 64
+
+
+@pytest.mark.parametrize("kind", ["proxmox", "netbox"])
+@pytest.mark.parametrize(
+    "enabled,can_change", [(True, True), (False, True), (True, False)]
+)
+def test_native_review_panel_routes_and_initial_approval_state(
+    kind, enabled, can_change
+):
+    """Render native template routes without giving a browser implicit approval."""
+    from django.template.loader import render_to_string
+    from django.urls import reverse
+
+    url = reverse(
+        f"plugins-api:netbox_proxbox-api:endpoints:{kind}endpoint-connection-authority",
+        kwargs={"pk": 101},
+    )
+    assert url == f"/api/plugins/proxbox/endpoints/{kind}/101/connection-authority/"
+    html = render_to_string(
+        "netbox_proxbox/inc/connection_authority.html",
+        {
+            "authority_url": url,
+            "object": SimpleNamespace(enabled=enabled),
+            "can_change": can_change,
+            "csrf_token": "native-panel-test",
+        },
+    )
+    assert f'data-authority-url="{url}"' in html
+    assert f'data-endpoint-enabled="{str(enabled).lower()}"' in html
+    assert f'data-can-change="{str(can_change).lower()}"' in html
+    assert 'name="csrfmiddlewaretoken"' in html
+    assert "connection-authority.js" in html
+    assert "data-proxbox-connection-authority-approve\n                disabled" in html
+
+
+@pytest.mark.parametrize("valid_csrf", [True, False])
+def test_native_session_approval_requires_csrf(valid_csrf):
+    """The session authentication used by the approval panel enforces real CSRF."""
+    from django.conf import settings
+    from django.middleware.csrf import get_token
+    from django.test import RequestFactory
+    from rest_framework.authentication import SessionAuthentication
+    from rest_framework.exceptions import PermissionDenied as RESTPermissionDenied
+
+    factory = RequestFactory()
+    seed = factory.get("/plugins/proxbox/")
+    token = get_token(seed)
+    request = factory.put(
+        "/api/plugins/proxbox/endpoints/proxmox/101/connection-authority/",
+        data={"target_fingerprint": "a" * 64},
+        content_type="application/json",
+        HTTP_X_CSRFTOKEN=token if valid_csrf else "invalid",
+    )
+    request.COOKIES[settings.CSRF_COOKIE_NAME] = seed.META["CSRF_COOKIE"]
+    if valid_csrf:
+        SessionAuthentication().enforce_csrf(request)
+    else:
+        with pytest.raises(RESTPermissionDenied, match="CSRF"):
+            SessionAuthentication().enforce_csrf(request)

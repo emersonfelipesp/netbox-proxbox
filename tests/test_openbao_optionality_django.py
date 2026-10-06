@@ -135,6 +135,192 @@ def test_automatic_settings_form_and_serializer_accept_blank(optionality_models)
     assert serializer.fields["credential_storage_backend"].run_validation("") == ""
 
 
+@pytest.mark.parametrize("with_reference", [False, True])
+@pytest.mark.django_db(transaction=True)
+def test_0105_resets_only_unreferenced_implicit_openbao_default(
+    pytestconfig, with_reference
+):
+    _require_harness(pytestconfig)
+    from django.db import connection
+    from django.db.migrations.executor import MigrationExecutor
+    from netbox_proxbox.models import ProxmoxEndpoint, ProxboxPluginSettings
+
+    before = ("netbox_proxbox", "0104_security_hardening")
+    after = ("netbox_proxbox", "0105_reset_implicit_openbao_storage_default")
+    executor = MigrationExecutor(connection)
+    latest = executor.loader.graph.leaf_nodes()
+    try:
+        settings_row, _created = ProxboxPluginSettings.objects.update_or_create(
+            singleton_key="default",
+            defaults={"credential_storage_backend": "openbao"},
+        )
+        endpoint = None
+        if with_reference:
+            endpoint = ProxmoxEndpoint.objects.create(
+                name="0105-reference",
+                domain="pve.example.test",
+                enabled=False,
+                openbao_password_credential_uuid=(
+                    "11111111-1111-4111-8111-111111111111"
+                ),
+            )
+        executor.migrate([before])
+        old_apps = executor.loader.project_state([before]).apps
+        old_settings = old_apps.get_model("netbox_proxbox", "ProxboxPluginSettings")
+        old_settings.objects.filter(pk=settings_row.pk).update(
+            credential_storage_backend="openbao"
+        )
+        executor = MigrationExecutor(connection)
+        executor.migrate([after])
+        new_apps = executor.loader.project_state([after]).apps
+        migrated_settings = new_apps.get_model(
+            "netbox_proxbox", "ProxboxPluginSettings"
+        )
+        assert migrated_settings.objects.get(
+            pk=settings_row.pk
+        ).credential_storage_backend == ("openbao" if endpoint is not None else "")
+    finally:
+        MigrationExecutor(connection).migrate(latest)
+
+
+@pytest.mark.parametrize("allow_writes", [False, True])
+def test_automatic_endpoint_form_encrypts_password_without_openbao(
+    optionality_models, settings, allow_writes
+):
+    from netbox_proxbox.forms.proxmox import ProxmoxEndpointForm
+
+    Settings, _Endpoint = optionality_models
+    settings.PLUGINS = ["netbox_proxbox"]
+    configuration = Settings.get_solo()
+    configuration.credential_storage_backend = ""
+    configuration.encryption_key = Fernet.generate_key().decode("ascii")
+    configuration.save(update_fields=("credential_storage_backend", "encryption_key"))
+    form = ProxmoxEndpointForm(
+        data={
+            "name": f"automatic-{allow_writes}",
+            "domain": "pve.example.test",
+            "port": 8006,
+            "username": "root@pam",
+            "password": "form-password",
+            "credential_storage_backend": "",
+            "mode": "undefined",
+            "allow_writes": allow_writes,
+            "ssh_credential_source": "dedicated",
+            "ssh_port": 22,
+            "ssh_auth_method": "password",
+            "access_methods": "api",
+            "service_monitoring_interval_minutes": 5,
+        }
+    )
+    assert form.is_valid(), form.errors.as_data()
+    endpoint = form.save()
+    assert endpoint.password_enc
+    assert endpoint.password_enc != "form-password"
+    assert endpoint.password == "form-password"
+
+
+def test_absent_openbao_selection_forms_reject_new_and_accept_stored(
+    optionality_models, settings
+):
+    from netbox_proxbox.forms.proxmox import ProxmoxEndpointForm
+    from netbox_proxbox.forms.settings import ProxboxPluginSettingsForm
+
+    _Settings, Endpoint = optionality_models
+    settings.PLUGINS = ["netbox_proxbox"]
+    settings_form = ProxboxPluginSettingsForm(
+        data={"credential_storage_backend": "openbao"},
+        current_storage_backend="",
+    )
+    assert "openbao" not in [
+        choice[0]
+        for choice in settings_form.fields["credential_storage_backend"].widget.choices
+    ]
+    assert 'value="openbao"' not in str(settings_form["credential_storage_backend"])
+    assert not settings_form.is_valid()
+    stored_settings_form = ProxboxPluginSettingsForm(
+        data={"credential_storage_backend": "openbao"},
+        current_storage_backend="openbao",
+    )
+    stored_settings_form.full_clean()
+    assert "credential_storage_backend" not in stored_settings_form.errors
+
+    endpoint = _saved_openbao_endpoint(Endpoint)
+    endpoint_form = ProxmoxEndpointForm(
+        instance=endpoint,
+        data=_edit_data(endpoint, password="replacement-password"),
+    )
+    endpoint_form.full_clean()
+    assert "credential_storage_backend" in endpoint_form.fields
+    assert "credential_storage_backend" in endpoint_form.errors
+    assert "allow_writes" not in endpoint_form.errors
+
+
+class _UnregisteredOpenBaoModels(types.ModuleType):
+    """Mimic a pip-installed netbox-openbao whose app is not in PLUGINS."""
+
+    def __getattr__(self, name: str) -> object:
+        raise RuntimeError(
+            f"Model class netbox_openbao.models.{name} doesn't declare an "
+            "explicit app_label and isn't in an application in INSTALLED_APPS."
+        )
+
+
+@pytest.mark.parametrize("allow_writes", [False, True])
+def test_installed_but_disabled_openbao_package_is_never_imported(
+    optionality_models, settings, monkeypatch, allow_writes
+):
+    from netbox_proxbox.forms.proxmox import ProxmoxEndpointForm
+
+    Settings, _Endpoint = optionality_models
+    settings.PLUGINS = ["netbox_proxbox"]
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_openbao.models",
+        _UnregisteredOpenBaoModels("netbox_openbao.models"),
+    )
+    configuration = Settings.get_solo()
+    configuration.credential_storage_backend = ""
+    configuration.encryption_key = Fernet.generate_key().decode("ascii")
+    configuration.save()
+    form = ProxmoxEndpointForm(
+        data={
+            "name": f"disabled-package-{allow_writes}",
+            "domain": "pve.example.test",
+            "port": 8006,
+            "username": "root@pam",
+            "password": "form-password",
+            "credential_storage_backend": "",
+            "mode": "undefined",
+            "allow_writes": allow_writes,
+            "ssh_credential_source": "dedicated",
+            "ssh_port": 22,
+            "ssh_auth_method": "password",
+            "access_methods": "api",
+            "service_monitoring_interval_minutes": 5,
+        }
+    )
+    assert form.is_valid(), form.errors.as_data()
+    endpoint = form.save()
+    assert endpoint.password == "form-password"
+
+
+def test_w106_reports_unavailable_explicit_openbao(optionality_models, settings):
+    from netbox_proxbox.security_checks import insecure_transport_check
+
+    Settings, Endpoint = optionality_models
+    settings.PLUGINS = ["netbox_proxbox"]
+    configuration = Settings.get_solo()
+    configuration.credential_storage_backend = ""
+    configuration.save(update_fields=("credential_storage_backend",))
+    Endpoint.objects.filter(credential_storage_backend="openbao").delete()
+    ids = {warning.id for warning in insecure_transport_check(databases=["default"])}
+    assert "netbox_proxbox.W106" not in ids
+    configuration.credential_storage_backend = "openbao"
+    configuration.save(update_fields=("credential_storage_backend",))
+    ids = {warning.id for warning in insecure_transport_check(databases=["default"])}
+    assert "netbox_proxbox.W106" in ids
+
+
 @pytest.mark.parametrize("saved", ["openbao", "legacy_encrypted"])
 @pytest.mark.django_db(transaction=True)
 def test_forward_migration_preserves_explicit_storage_choices(pytestconfig, saved):
@@ -673,6 +859,7 @@ def test_ssh_reuse_response_contains_expected_openbao_failure(
     _, Endpoint = optionality_models
     endpoint = _saved_openbao_endpoint(
         Endpoint,
+        enabled=True,
         ssh_credential_source="reuse_endpoint",
         access_methods="api_ssh",
         token_name="api-token" if mode == "token" else "",
@@ -706,7 +893,44 @@ def test_ssh_reuse_response_contains_expected_openbao_failure(
     else:
         assert "password" not in response.data
     assert bool(reveal.call_count) is (mode in {"denied", "healthy", "unpinned"})
+    if reveal.called:
+        reveal.assert_called_once()
+        assert reveal.call_args.kwargs["user"] is user
     assert "secret-canary" not in str(response.data)
+
+
+def test_ssh_reuse_response_disabled_endpoint_refuses_without_credential_reveal(
+    optionality_models,
+):
+    from netbox_proxbox.api import ssh_credentials
+    from netbox_proxbox.integrations import openbao
+    from tests.django_support import make_user
+
+    _, Endpoint = optionality_models
+    endpoint = _saved_openbao_endpoint(
+        Endpoint,
+        ssh_credential_source="reuse_endpoint",
+        access_methods="api_ssh",
+        openbao_password_credential_uuid="11111111-1111-4111-8111-111111111111",
+        ssh_known_host_fingerprint="SHA256:" + "A" * 43,
+    )
+    user = make_user("ssh-disabled-endpoint", is_staff=True, is_superuser=True)
+    request = SimpleNamespace(user=user, is_secure=lambda: True)
+    with (
+        patch.object(openbao, "_credential_for_uuid", return_value=object()),
+        patch.object(
+            openbao,
+            "reveal_credential_material",
+            return_value={"password": "must-not-leak"},
+        ) as reveal,
+    ):
+        response = ssh_credentials.ProxmoxEndpointSSHCredentialSecretsAPIView().get(
+            request, endpoint.pk
+        )
+    assert response.status_code == 403
+    assert "password" not in response.data
+    reveal.assert_not_called()
+    assert "must-not-leak" not in str(response.data)
 
 
 def test_reuse_form_contains_failed_preservation_in_all_readiness_checks(
@@ -749,3 +973,229 @@ def test_reuse_form_contains_failed_preservation_in_all_readiness_checks(
         with pytest.raises(ValidationError) as raised:
             endpoint.clean()
     assert "ssh_credential_source" in raised.value.message_dict
+
+
+def test_settings_page_renders_every_required_and_storage_field(
+    optionality_models, settings
+):
+    from django.test import Client
+
+    from netbox_proxbox.forms.settings import ProxboxPluginSettingsForm
+    from tests.django_support import make_user
+
+    Settings, _Endpoint = optionality_models
+    settings.PLUGINS = ["netbox_proxbox"]
+    configuration = Settings.get_solo()
+    configuration.credential_storage_backend = ""
+    configuration.save(update_fields=("credential_storage_backend",))
+    client = Client()
+    client.force_login(make_user("storage-settings-admin", is_superuser=True))
+
+    response = client.get("/plugins/proxbox/settings/")
+
+    assert response.status_code == 200
+    html = response.content.decode()
+    form = ProxboxPluginSettingsForm(current_storage_backend="")
+    unrendered = [
+        name
+        for name, field in form.fields.items()
+        if field.required and f'name="{name}"' not in html
+    ]
+    assert unrendered == []
+    for name in (
+        "credential_storage_backend",
+        "openbao_policy_slug",
+        "openbao_service_username",
+    ):
+        assert f'name="{name}"' in html
+    assert 'value="openbao"' not in html
+
+
+def test_settings_downgrade_refuses_inherited_endpoint_openbao_reference(
+    optionality_models, settings
+):
+    from django.core.exceptions import ValidationError
+
+    from netbox_proxbox.forms.settings import ProxboxPluginSettingsForm
+
+    Settings, Endpoint = optionality_models
+    settings.PLUGINS = ["netbox_proxbox"]
+    configuration = Settings.get_solo()
+    Settings.objects.filter(pk=configuration.pk).update(
+        credential_storage_backend="openbao"
+    )
+    Endpoint.objects.create(
+        name="inherited-reference",
+        domain="pve.example.test",
+        enabled=False,
+        credential_storage_backend="",
+        openbao_password_credential_uuid="22222222-2222-4222-8222-222222222222",
+    )
+    configuration.refresh_from_db()
+
+    for selection in ("", "legacy_encrypted"):
+        form = ProxboxPluginSettingsForm(
+            data={"credential_storage_backend": selection},
+            current_storage_backend="openbao",
+        )
+        form.full_clean()
+        assert "OpenBao references or assignments remain" in str(
+            form.errors.get("credential_storage_backend")
+        )
+        configuration.credential_storage_backend = selection
+        with pytest.raises(ValidationError):
+            configuration.save()
+    configuration.refresh_from_db()
+    assert configuration.credential_storage_backend == "openbao"
+
+
+@pytest.mark.parametrize("disabled_package", [False, True])
+def test_endpoint_delete_does_not_require_the_companion(
+    optionality_models, settings, monkeypatch, disabled_package
+):
+    from django.core.exceptions import ValidationError
+
+    Settings, Endpoint = optionality_models
+    settings.PLUGINS = ["netbox_proxbox"]
+    if disabled_package:
+        monkeypatch.setitem(
+            sys.modules,
+            "netbox_openbao.models",
+            _UnregisteredOpenBaoModels("netbox_openbao.models"),
+        )
+    else:
+        monkeypatch.setitem(sys.modules, "netbox_openbao", None)
+        monkeypatch.setitem(sys.modules, "netbox_openbao.models", None)
+    configuration = Settings.get_solo()
+    configuration.credential_storage_backend = ""
+    configuration.encryption_key = Fernet.generate_key().decode("ascii")
+    configuration.save()
+    plain = Endpoint(name="plain-delete", domain="pve.example.test", enabled=False)
+    plain.password = "api-password"
+    plain.save()
+    plain_pk = plain.pk
+
+    plain.delete()
+
+    assert not Endpoint.objects.filter(pk=plain_pk).exists()
+    referenced = Endpoint.objects.create(
+        name="referenced-delete",
+        domain="pve2.example.test",
+        enabled=False,
+        credential_storage_backend="legacy_encrypted",
+        openbao_token_credential_uuid="33333333-3333-4333-8333-333333333333",
+    )
+    with pytest.raises(ValidationError, match="netbox-openbao is not installed"):
+        referenced.delete()
+    assert Endpoint.objects.filter(pk=referenced.pk).exists()
+
+
+def test_narrow_endpoint_form_reports_storage_error_without_crashing(
+    optionality_models, settings
+):
+    from netbox_proxbox.forms.proxmox import ProxmoxEndpointSSHSettingsForm
+
+    _Settings, Endpoint = optionality_models
+    settings.PLUGINS = ["netbox_proxbox"]
+    endpoint = _saved_openbao_endpoint(
+        Endpoint, name="narrow-storage", allow_writes=True
+    )
+    form = ProxmoxEndpointSSHSettingsForm(
+        instance=endpoint,
+        data={
+            "ssh_credential_source": "dedicated",
+            "ssh_port": 22,
+            "ssh_auth_method": "password",
+        },
+    )
+
+    assert not form.is_valid()
+    assert "netbox-openbao" in " ".join(form.non_field_errors())
+
+
+def _settings_post_data(form) -> dict[str, object]:
+    """Return POST data equivalent to submitting the rendered settings form."""
+    data: dict[str, object] = {}
+    for name, field in form.fields.items():
+        value = form.initial.get(name, field.initial)
+        if value is None or value is False:
+            continue
+        if value is True:
+            data[name] = "on"
+        elif hasattr(value, "pk"):
+            data[name] = value.pk
+        else:
+            data[name] = value
+    return data
+
+
+def test_settings_post_refusal_is_a_field_error_not_a_server_error(
+    optionality_models, settings
+):
+    from django.test import Client
+
+    from tests.django_support import make_user
+
+    Settings, Endpoint = optionality_models
+    settings.PLUGINS = ["netbox_proxbox"]
+    configuration = Settings.get_solo()
+    Settings.objects.filter(pk=configuration.pk).update(
+        credential_storage_backend="openbao"
+    )
+    Endpoint.objects.create(
+        name="post-inherited-reference",
+        domain="pve.example.test",
+        enabled=False,
+        credential_storage_backend="",
+        openbao_password_credential_uuid="44444444-4444-4444-8444-444444444444",
+    )
+    client = Client()
+    client.force_login(make_user("storage-post-admin", is_superuser=True))
+    page = client.get("/plugins/proxbox/settings/")
+    assert page.status_code == 200
+    data = _settings_post_data(page.context["form"])
+    data["credential_storage_backend"] = "legacy_encrypted"
+
+    response = client.post("/plugins/proxbox/settings/", data)
+
+    assert response.status_code == 200
+    assert "OpenBao references or assignments remain" in response.content.decode()
+    configuration.refresh_from_db()
+    assert configuration.credential_storage_backend == "openbao"
+
+
+@pytest.mark.parametrize("disabled_package", [False, True])
+def test_queryset_delete_refuses_endpoint_openbao_references(
+    optionality_models, settings, monkeypatch, disabled_package
+):
+    from django.core.exceptions import ValidationError
+    from django.db import transaction
+
+    _Settings, Endpoint = optionality_models
+    settings.PLUGINS = ["netbox_proxbox"]
+    if disabled_package:
+        monkeypatch.setitem(
+            sys.modules,
+            "netbox_openbao.models",
+            _UnregisteredOpenBaoModels("netbox_openbao.models"),
+        )
+    referenced = Endpoint.objects.create(
+        name="queryset-referenced",
+        domain="pve.example.test",
+        enabled=False,
+        credential_storage_backend="legacy_encrypted",
+        openbao_token_credential_uuid="55555555-5555-4555-8555-555555555555",
+    )
+    plain = Endpoint.objects.create(
+        name="queryset-plain",
+        domain="pve2.example.test",
+        enabled=False,
+        credential_storage_backend="legacy_encrypted",
+    )
+
+    with pytest.raises(ValidationError), transaction.atomic():
+        Endpoint.objects.filter(pk=referenced.pk).delete()
+    Endpoint.objects.filter(pk=plain.pk).delete()
+
+    assert Endpoint.objects.filter(pk=referenced.pk).exists()
+    assert not Endpoint.objects.filter(pk=plain.pk).exists()

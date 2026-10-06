@@ -88,9 +88,9 @@ topology.
 
 ### Version
 
-- Plugin version: `0.0.29`
+- Plugin version: `0.0.29.post1`
 - NetBox compatibility: `4.5.8` through `4.7.0`
-- Current source pairing: `netbox-proxbox 0.0.29`, `proxbox-api 0.0.23.post3`,
+- Current source pairing: `netbox-proxbox 0.0.29.post1`, `proxbox-api 0.0.23.post3`,
   `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`
 - Last documented released runtime pairing: `netbox-proxbox 0.0.27rc4`,
   `proxbox-api 0.0.22.post1`, `proxmox-sdk 0.0.13`, and `netbox-sdk 0.0.13`
@@ -181,10 +181,15 @@ This generated context summary follows the executable source. The authoritative
 inventories are `netbox_proxbox/models/`, `netbox_proxbox/urls.py`,
 `netbox_proxbox/api/urls.py`, `netbox_proxbox/jobs.py`, `proxbox_cli/`, and the
 workflow files. The current schema tip is
-`0102_vm_cloudinit_openbao_references`, which adds opaque OpenBao password and
-keypair references for VM cloud-init intent after the FastAPI, PBS, PDM, and
-Firecracker token references from `0101`. It preserves explicit legacy
-credential references and public SSH-key fields without moving material.
+`0105_reset_implicit_openbao_storage_default`, a data-only migration that
+resets the plugin-wide credential storage backend from the historical implicit
+`openbao` default to Automatic when no OpenBao credential reference exists on
+any owner model, so installations without the optional netbox-openbao
+companion use local Fernet storage. It keeps the value when any reference
+exists. Migration `0102_vm_cloudinit_openbao_references` adds opaque OpenBao
+password and keypair references for VM cloud-init intent after the FastAPI,
+PBS, PDM, and Firecracker token references from `0101`. It preserves explicit
+legacy credential references and public SSH-key fields without moving material.
 
 ---
 
@@ -1553,3 +1558,15 @@ context = get_fastapi_request_context()  # Returns URLs and headers
 ---
 
 *This file is designed for LLM context. For human-readable documentation, see README.md and DEVELOP.md.*
+
+## Connection approval recovery
+
+Proxmox and remote NetBox endpoint detail pages provide a Connection target
+approval panel. Review the displayed destination, fallback IP, port, TLS policy,
+and authentication identity, then select Approve reviewed target. Approval uses
+only the exact displayed fingerprint through the protected connection-authority
+API. It requires sensitive-data access and independent view/change permissions.
+Disabled endpoints cannot transmit credentials. Failed or stale approval
+requests require a new review. The panel never approves automatically. After
+upgrading from 0.0.27 to 0.0.29, existing endpoint approvals are blank; successful
+FastAPI health does not replace this explicit endpoint approval step.

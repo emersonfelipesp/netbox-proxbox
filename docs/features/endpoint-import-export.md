@@ -175,6 +175,21 @@ resolution. Approval is checked again after material resolution and before a
 backend write, including when it changes during the backend listing request.
 
 Migration `0104_security_hardening` leaves existing approvals blank.
+The endpoint detail page provides a **Connection target approval** panel. Review
+every displayed destination, fallback IP address, port, TLS policy, and
+authentication identity before selecting **Approve reviewed target**. Approval
+requires sensitive-data access and independent view/change access to the endpoint.
+Disabled endpoints cannot be approved for credential transmission. If the target
+changes during review, select **Review again** and inspect the new values before
+approving. A failed request never approves the endpoint.
+
+After an upgrade, a successful FastAPI health check can coexist with failed
+Proxmox connections: backend health does not establish approval of the Proxmox
+destination. Review and approve each intended Proxmox endpoint and the remote
+NetBox endpoint, then retry synchronization. Changing the backend's HTTP setting
+does not restore missing target approval.
+
+For API clients, use the protected action directly.
 After upgrading, review each intended endpoint before resuming synchronization:
 
 1. Read `GET /api/plugins/proxbox/endpoints/proxmox/{id}/connection-authority/`

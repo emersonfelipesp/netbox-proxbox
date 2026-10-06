@@ -13,7 +13,6 @@ import pytest
 
 from tests.conftest import ResponseStub, _make_model_class, load_plugin_module
 
-
 REPO_ROOT = Path(__file__).resolve().parents[1]
 
 
@@ -2045,3 +2044,32 @@ def test_fastapi_keepalive_maps_backend_429_to_throttled(monkeypatch, fastapi_en
 
     assert response.payload["status"] == "throttled"
     assert response.payload["http_status"] == 429
+
+
+def test_proxmox_status_reports_missing_approval_before_backend_reads(
+    monkeypatch, fastapi_endpoint, proxmox_endpoint
+):
+    """A healthy HTTP backend does not replace explicit destination approval."""
+    load_plugin_module(
+        "netbox_proxbox.views.keepalive_status",
+        monkeypatch=monkeypatch,
+        fastapi_endpoint=fastapi_endpoint,
+        proxmox_endpoint=proxmox_endpoint,
+    )
+    service = _service_status_module()
+    detail = "Connection target approval is missing or stale."
+    monkeypatch.setattr(
+        service,
+        "sync_proxmox_endpoint_to_backend",
+        lambda *args, **kwargs: (False, detail, None),
+    )
+
+    def refuse_network(*args, **kwargs):
+        raise AssertionError("Unapproved endpoints must not trigger backend reads")
+
+    monkeypatch.setattr(service.requests, "get", refuse_network)
+    monkeypatch.setattr(service, "resolve_backend_endpoint_id", refuse_network)
+    status = service.ServiceStatus()
+    result, _ = status.proxmox_status(1, "http://backend.example.test:8800")
+    assert result == "error"
+    assert status.last_error_detail == detail

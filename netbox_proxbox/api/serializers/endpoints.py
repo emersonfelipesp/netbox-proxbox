@@ -106,6 +106,21 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
         """Resolved netbox-rpc enablement: installed, then endpoint override/global."""
         return obj.effective_rpc_enabled()
 
+    def validate_credential_storage_backend(self, value: str) -> str:
+        """Reject a newly selected unavailable companion backend."""
+        from django.core.exceptions import ValidationError
+
+        from netbox_proxbox.integrations.openbao import (
+            validate_storage_backend_selection,
+        )
+
+        current = str(getattr(self.instance, "credential_storage_backend", "") or "")
+        try:
+            validate_storage_backend_selection(value, current=current)
+        except ValidationError as exc:
+            raise serializers.ValidationError(exc.messages[0]) from exc
+        return value
+
     class Meta:
         model = ProxmoxEndpoint
         fields = (

@@ -466,6 +466,14 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
         """Only expose the clear-credential checkboxes when there is something to clear."""
         super().__init__(*args, **kwargs)
         instance = getattr(self, "instance", None)
+        from netbox_proxbox.integrations.openbao import (
+            hide_unavailable_openbao_choice,
+        )
+
+        hide_unavailable_openbao_choice(
+            self.fields["credential_storage_backend"],
+            current=getattr(instance, "credential_storage_backend", None),
+        )
         if not (instance and getattr(instance, "pk", None)):
             self.fields.pop("clear_password", None)
             self.fields.pop("clear_token", None)
@@ -495,6 +503,20 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
                 "Recovery required: the stored token value cannot be decrypted. "
                 "Enter a replacement or explicitly clear it."
             )
+
+    def clean_credential_storage_backend(self) -> str:
+        """Reject a newly selected unavailable companion backend."""
+        value = str(self.cleaned_data.get("credential_storage_backend") or "")
+        current = str(getattr(self.instance, "credential_storage_backend", "") or "")
+        from netbox_proxbox.integrations.openbao import (
+            validate_storage_backend_selection,
+        )
+
+        try:
+            validate_storage_backend_selection(value, current=current)
+        except ValidationError as exc:
+            raise forms.ValidationError(exc.messages[0]) from exc
+        return value
 
     class Meta:
         model = ProxmoxEndpoint
@@ -662,7 +684,7 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
                     for message in messages:
                         self.add_error(field, message)
             else:
-                self.add_error("allow_writes", exc.messages[0])
+                self.add_error("credential_storage_backend", exc.messages[0])
 
     def _clean_service_monitoring(self) -> None:
         """Mirror the model eligibility gate using submitted credential values."""
@@ -754,7 +776,29 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
         return bool(host and username and fingerprint and has_secret)
 
 
-class ProxmoxEndpointSettingsForm(NetBoxModelForm):
+class ExcludedFieldErrorsMixin(forms.Form):
+    """Report model errors for fields this form omits as non-field errors.
+
+    ``ProxmoxEndpoint.clean()`` attaches errors to fields such as
+    ``credential_storage_backend``. Django raises ``ValueError`` when a model
+    error names a field that a narrow form does not declare.
+    """
+
+    def _update_errors(self, errors: ValidationError) -> None:
+        from django.core.exceptions import NON_FIELD_ERRORS
+
+        if hasattr(errors, "error_dict"):
+            remapped: dict[str, list[ValidationError]] = {}
+            for field, messages in errors.error_dict.items():
+                known = field == NON_FIELD_ERRORS or field in self.fields
+                remapped.setdefault(field if known else NON_FIELD_ERRORS, []).extend(
+                    messages
+                )
+            errors = ValidationError(remapped)
+        super()._update_errors(errors)
+
+
+class ProxmoxEndpointSettingsForm(ExcludedFieldErrorsMixin, NetBoxModelForm):
     """Per-endpoint Proxmox-specific overrides exposed on the Settings tab.
 
     Connection tunables (timeout / retries) and overwrite flags live here so the
@@ -915,6 +959,7 @@ class ProxmoxEndpointSettingsForm(NetBoxModelForm):
 
 
 class ProxmoxEndpointSSHSettingsForm(
+    ExcludedFieldErrorsMixin,
     ProxmoxEndpointSSHCredentialFormMixin,
     NetBoxModelForm,
 ):

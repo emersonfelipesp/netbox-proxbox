@@ -37,6 +37,17 @@ monitoring scheduling; token-pair repairs; original-store preservation after
 clears; actor propagation; and missing-address form errors. These caller tests
 complement helper coverage and must remain in the native Django lane.
 
+It also proves that netbox-openbao is optional: migration 0105 resets the
+historical implicit `openbao` setting only without references; Automatic
+endpoint creation encrypts with Fernet; new explicit OpenBao selections are
+refused while the companion is absent; W106 reports an unservable selection; a
+pip-installed but unregistered package (simulated by a poisoned
+`netbox_openbao.models` module) is never imported; the Settings page renders
+every required field and turns a storage-switch refusal into a field error;
+endpoint deletion, including queryset deletion, works without the companion and
+refuses remaining references; and narrow endpoint forms report storage errors as
+non-field errors.
+
 `test_openbao_node_assignments_django.py` is the real-provider complement for
 node SSH material. It covers selected password/key-pair create and rotation,
 the exact primary `login` assignment to a linked `dcim.Device`, deferred

@@ -35,14 +35,8 @@ class Command(BaseCommand):
         return readiness.ready
 
     def _create_structure(self, options: dict[str, object]) -> None:
-        try:
-            from netbox_openbao.models import CredentialPolicy, SecretEngine
-            from netbox_openbao.utils import get_default_engine
-            from netbox_proxbox.models import ProxboxPluginSettings
-        except ImportError as exc:
-            raise CommandError(
-                "netbox-openbao is unavailable; install and enable it first."
-            ) from exc
+        CredentialPolicy, SecretEngine, get_default_engine = _provider_api()
+        from netbox_proxbox.models import ProxboxPluginSettings
 
         settings_row = ProxboxPluginSettings.get_solo()
         engine = get_default_engine()
@@ -135,3 +129,22 @@ class Command(BaseCommand):
                 self._backfill(check=False)
             if not self._print_readiness():
                 raise CommandError("OpenBao prerequisites remain incomplete.")
+
+
+def _provider_api() -> tuple[type, type, object]:
+    """Return the netbox-openbao models and engine lookup, or raise CommandError.
+
+    An installed package that is not listed in ``PLUGINS`` raises RuntimeError
+    on model import, so enablement is checked before importing.
+    """
+    from netbox_proxbox.integrations.openbao import is_netbox_openbao_installed
+
+    unavailable = "netbox-openbao is unavailable; install and enable it first."
+    if not is_netbox_openbao_installed():
+        raise CommandError(unavailable)
+    try:
+        from netbox_openbao.models import CredentialPolicy, SecretEngine
+        from netbox_openbao.utils import get_default_engine
+    except ImportError as exc:
+        raise CommandError(unavailable) from exc
+    return CredentialPolicy, SecretEngine, get_default_engine

@@ -311,6 +311,24 @@
                     {% render_field form.hardware_discovery_sync_nic_macs %}
                 </div>
             </div>
+            {# Credential Storage Card #}
+            <div class="card mb-3" data-credential-storage>
+                <h5 class="card-header">
+                    <i class="mdi mdi-database-lock"></i>
+                    {% trans "Credential storage" %}
+                </h5>
+                <div class="card-body">
+                    <p class="text-muted">
+                        {% blocktrans trimmed %}
+                        netbox-openbao is optional. Automatic uses OpenBao only when
+                        netbox-openbao is enabled and local Fernet storage otherwise.
+                        {% endblocktrans %}
+                    </p>
+                    {% render_field form.credential_storage_backend %}
+                    {% render_field form.openbao_policy_slug %}
+                    {% render_field form.openbao_service_username %}
+                </div>
+            </div>
             {# Encryption Card #}
             <div class="card mb-3" data-openbao-readiness>
                 <h5 class="card-header">

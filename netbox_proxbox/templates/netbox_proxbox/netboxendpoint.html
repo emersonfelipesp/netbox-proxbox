@@ -2,6 +2,8 @@
 {% load static %}
 
 {% block content %}
+    {% url 'plugins-api:netbox_proxbox-api:endpoints:netboxendpoint-connection-authority' pk=object.pk as authority_url %}
+    {% include 'netbox_proxbox/inc/connection_authority.html' with authority_url=authority_url can_change=perms.netbox_proxbox.change_netboxendpoint %}
     <div class="row mb-3">
         <div class="col col-md-6">
             <div class="card">

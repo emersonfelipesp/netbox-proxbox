@@ -42,3 +42,9 @@ This directory contains the plugin's browser-side JavaScript.
 ## Links
 
 - Parent: [`../CLAUDE.md`](../CLAUDE.md)
+
+`connection-authority.js` owns the explicit endpoint review and approval panel.
+GET displays only target metadata. PUT sends only the displayed fingerprint
+and CSRF token after a human click. Failed requests clear review state; stale
+fingerprints require a new review. Render text with `textContent` and preserve
+the protected API's permission and exact-target authority.
