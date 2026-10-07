@@ -14,6 +14,23 @@ part of the same plugin family.
 
 ## Unreleased Maintenance Fixes
 
+- Optional companion detection now follows NetBox's enabled plugin registry.
+  The home page no longer constructs a PDM table when `netbox_pdm` is merely
+  importable, and Proxmox endpoint serialization no longer queries the
+  `netbox_rpc` settings table when that companion is disabled. This prevents
+  missing-route rendering failures and transaction-aborting unmigrated-table
+  probes in ordinary compatibility lanes.
+- FastAPI endpoint list serialization now resolves global credential-storage
+  state once per response instead of once for each assignment metadata field.
+  The measured NetBox 4.7.0 GA list contract is 13 queries: the existing 12
+  core/list queries plus one required plugin-settings lookup. The separate
+  NetBox 4.6.6 baseline remains 13 and is not inferred from the 4.7 lane.
+- Verified Fernet rotation and selective reset can again update the encrypted
+  columns of FastAPI, PBS, PDM, and Firecracker single-secret owners. Their
+  OpenBao queryset guard now recognizes only the recovery workflow's existing
+  exact-value, model-specific, database-specific permit; ordinary ciphertext
+  writes, mismatched permits, reference changes, storage switches, assignments,
+  and deletion remain fail-closed.
 - netbox-openbao is optional again. Migration
   `0105_reset_implicit_openbao_storage_default` resets a plugin-wide
   credential storage backend of `openbao` that the historical migration

@@ -22,6 +22,11 @@ jobs:
     # Keep the host OS line stable; GitHub maintains the image behind this
     # label, while every fetchable action, service, source, and Python/tool
     # input below is pinned independently.
+    # profile isolates additive companion contracts: include entries that only
+    # repeat netbox/pdm from an original combination merge into that job, so
+    # all_companions and openbao must use distinct profile values or they
+    # collapse onto the base v4.7.0 cell (hosted evidence previously showed 6).
+    name: Django ${{ matrix.netbox }} pdm=${{ matrix.pdm }} profile=${{ matrix.profile }}
     runs-on: ubuntu-24.04
     strategy:
       fail-fast: false
@@ -38,9 +43,11 @@ jobs:
         # CREATE EXTENSION.
         netbox: ["v4.5.8", "v4.5.10", "v4.6.0", "v4.6.6", "v4.7.0"]
         pdm: [false]
+        profile: [base]
         include:
           - netbox: "v4.5.8"
             pdm: false
+            profile: base
             netbox_ref: 75e1b86613792458b4d4c8d0cbbfc94df16cfaaf
             netbox_version: "4.5.8"
             netbox_designation: ""
@@ -50,6 +57,7 @@ jobs:
             netbox_lock_sha256: 23f8362f4299c34f2f77772a87954351489f4f0b87c740de1b94f3dad21f032d
           - netbox: "v4.5.10"
             pdm: false
+            profile: base
             netbox_ref: b78bd713294564e0421c36c936a909e64da04b8d
             netbox_version: "4.5.10"
             netbox_designation: ""
@@ -59,6 +67,7 @@ jobs:
             netbox_lock_sha256: 3ed1782b53f7a40a1a0ab8aaea11ae2bc3445d712483061aba80c80684b2819e
           - netbox: "v4.6.0"
             pdm: false
+            profile: base
             netbox_ref: 00791344e68213bde942218283dce03cc3941c30
             netbox_version: "4.6.0"
             netbox_designation: ""
@@ -68,6 +77,7 @@ jobs:
             netbox_lock_sha256: dddb68317d8eb9875beeb70cb9a61219e51ac661245738822296100375e858df
           - netbox: "v4.6.6"
             pdm: false
+            profile: base
             netbox_ref: fb8c455ba61b57119a70670612dfdd05e8438b10
             netbox_version: "4.6.6"
             netbox_designation: ""
@@ -77,6 +87,7 @@ jobs:
             netbox_lock_sha256: 034ca954a0f641db1c0fe6b8450fe4788097ff55c7c3494091304a923cdbf473
           - netbox: "v4.7.0"
             pdm: false
+            profile: base
             netbox_ref: 5f06007e4c9bacc93ce17c1e645fc1143d60df3d
             netbox_version: "4.7.0"
             netbox_designation: ""
@@ -86,6 +97,7 @@ jobs:
             netbox_lock_sha256: 6f9ac88a3df8bb0fa6eb10dabaf0a663deedb85e20dd3c250bb8184889f8960a
           - netbox: "v4.6.6"
             pdm: true
+            profile: base
             netbox_ref: fb8c455ba61b57119a70670612dfdd05e8438b10
             netbox_version: "4.6.6"
             netbox_designation: ""
@@ -95,6 +107,7 @@ jobs:
             netbox_lock_sha256: 156a840d02b2f77c3852412857d2bea8691594d5eafdd995549aa631179a0998
           - netbox: "v4.7.0"
             pdm: false
+            profile: all-companions
             all_companions: true
             netbox_ref: 5f06007e4c9bacc93ce17c1e645fc1143d60df3d
             netbox_version: "4.7.0"
@@ -109,6 +122,7 @@ jobs:
             packer_ref: 31f9ddf9652dbbbb9b34b83604acd888228caae7
           - netbox: "v4.7.0"
             pdm: false
+            profile: openbao
             openbao: true
             netbox_ref: 5f06007e4c9bacc93ce17c1e645fc1143d60df3d
             netbox_version: "4.7.0"
@@ -177,6 +191,17 @@ jobs:
           path: netbox-ceph
           persist-credentials: false
 
+      - name: Verify COMPANION_READ_SSH_KEY for private PBS checkout
+        if: matrix.all_companions
+        env:
+          COMPANION_READ_SSH_KEY: ${{ secrets.COMPANION_READ_SSH_KEY }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${COMPANION_READ_SSH_KEY}" ]]; then
+            echo "::error::COMPANION_READ_SSH_KEY is not configured. The all_companions matrix cell needs this repository secret to checkout the private emersonfelipesp/netbox-pbs companion at the pinned commit."
+            exit 1
+          fi
+
       - name: Checkout supported PBS companion
         if: matrix.all_companions
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -184,6 +209,7 @@ jobs:
           repository: emersonfelipesp/netbox-pbs
           ref: ${{ matrix.pbs_ref }}
           path: netbox-pbs
+          ssh-key: ${{ secrets.COMPANION_READ_SSH_KEY }}
           persist-credentials: false
 
       - name: Checkout supported Packer companion

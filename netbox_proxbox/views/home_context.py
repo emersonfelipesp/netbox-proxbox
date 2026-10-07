@@ -364,6 +364,13 @@ def _build_pdm_endpoint_context(request: HttpRequest) -> dict[str, object]:
     Returns an empty dict when ``netbox-pdm`` is not installed.
     """
     try:
+        from django.apps import apps
+    except ImportError:
+        return {}
+    if not apps.is_installed("netbox_pdm"):
+        return {}
+
+    try:
         from netbox_pdm.tables import PDMEndpointTable as _PDMEndpointTable  # type: ignore[import]
     except ImportError:
         return {}

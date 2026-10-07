@@ -154,6 +154,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
     {
         "netbox": "v4.5.8",
         "pdm": False,
+        "profile": "base",
         "netbox_ref": "75e1b86613792458b4d4c8d0cbbfc94df16cfaaf",
         "netbox_version": "4.5.8",
         "netbox_designation": "",
@@ -167,6 +168,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
     {
         "netbox": "v4.5.10",
         "pdm": False,
+        "profile": "base",
         "netbox_ref": "b78bd713294564e0421c36c936a909e64da04b8d",
         "netbox_version": "4.5.10",
         "netbox_designation": "",
@@ -180,6 +182,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
     {
         "netbox": "v4.6.0",
         "pdm": False,
+        "profile": "base",
         "netbox_ref": "00791344e68213bde942218283dce03cc3941c30",
         "netbox_version": "4.6.0",
         "netbox_designation": "",
@@ -193,6 +196,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
     {
         "netbox": "v4.6.6",
         "pdm": False,
+        "profile": "base",
         "netbox_ref": "fb8c455ba61b57119a70670612dfdd05e8438b10",
         "netbox_version": "4.6.6",
         "netbox_designation": "",
@@ -206,6 +210,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
     {
         "netbox": "v4.7.0",
         "pdm": False,
+        "profile": "base",
         "netbox_ref": "5f06007e4c9bacc93ce17c1e645fc1143d60df3d",
         "netbox_version": "4.7.0",
         "netbox_designation": "",
@@ -219,6 +224,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
     {
         "netbox": "v4.6.6",
         "pdm": True,
+        "profile": "base",
         "netbox_ref": "fb8c455ba61b57119a70670612dfdd05e8438b10",
         "netbox_version": "4.6.6",
         "netbox_designation": "",
@@ -232,6 +238,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
     {
         "netbox": "v4.7.0",
         "pdm": False,
+        "profile": "all-companions",
         "all_companions": True,
         "netbox_ref": "5f06007e4c9bacc93ce17c1e645fc1143d60df3d",
         "netbox_version": "4.7.0",
@@ -252,6 +259,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
     {
         "netbox": "v4.7.0",
         "pdm": False,
+        "profile": "openbao",
         "openbao": True,
         "netbox_ref": "5f06007e4c9bacc93ce17c1e645fc1143d60df3d",
         "netbox_version": "4.7.0",

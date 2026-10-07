@@ -215,6 +215,30 @@ _ENCRYPTED_QUERYSET_WRITE_PERMIT: ContextVar[_EncryptedQuerySetWritePermit | Non
 )
 
 
+def _encrypted_queryset_write_permit_matches(
+    queryset: object, updates: dict[str, object]
+) -> bool:
+    """Return whether the active permit covers these exact encrypted values."""
+
+    queryset_model = getattr(queryset, "model", None)
+    encrypted_fields = _ENCRYPTED_FIELDS_BY_MODEL.get(queryset_model, frozenset())
+    encrypted_updates = tuple(
+        sorted(
+            (field_name, str(value))
+            for field_name, value in updates.items()
+            if field_name in encrypted_fields
+        )
+    )
+    if not encrypted_updates:
+        return False
+    using = str(getattr(queryset, "db", "default") or "default")
+    return _ENCRYPTED_QUERYSET_WRITE_PERMIT.get() == _EncryptedQuerySetWritePermit(
+        model=queryset_model,
+        using=using,
+        encrypted_updates=encrypted_updates,
+    )
+
+
 @dataclass(frozen=True, slots=True)
 class _SettingsKeyQuerySetWritePermit:
     """One exact settings-key update authorized by verified rotation."""

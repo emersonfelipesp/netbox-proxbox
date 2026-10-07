@@ -549,9 +549,24 @@ class FastAPIEndpointSerializer(
     def _assignment_state(self, obj: FastAPIEndpoint) -> tuple[bool, str]:
         from netbox_proxbox.integrations.openbao_single import (
             credential_assignment_readiness,
+            owner_uses_openbao_storage,
         )
 
-        return credential_assignment_readiness(obj)
+        states = getattr(self, "_credential_assignment_states", None)
+        if states is None:
+            states = {}
+            self._credential_assignment_states = states
+        key = (obj._meta.label_lower, obj.pk)
+        if key not in states:
+            uses_openbao = getattr(self, "_credential_assignment_uses_openbao", None)
+            if uses_openbao is None:
+                uses_openbao = owner_uses_openbao_storage(obj)
+                self._credential_assignment_uses_openbao = uses_openbao
+            states[key] = credential_assignment_readiness(
+                obj,
+                _uses_openbao_storage=uses_openbao,
+            )
+        return states[key]
 
     def get_credential_assignment_ready(self, obj: FastAPIEndpoint) -> bool:
         return self._assignment_state(obj)[0]

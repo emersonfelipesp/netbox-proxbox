@@ -390,7 +390,8 @@ def sensitive_estate(pytestconfig, request):
                 token_value="pve-token-sentinel",
             )
         elif kind == "fastapi":
-            common.update(token="backend-token-sentinel", use_https=True)
+            common.pop("credential_storage_backend")
+            common.update(use_https=True)
         else:
             common.pop("credential_storage_backend")
             common.update(
@@ -401,6 +402,20 @@ def sensitive_estate(pytestconfig, request):
             )
         visible[kind] = model.objects.create(name=f"visible-{kind}", **common)
         hidden[kind] = model.objects.create(name=f"hidden-{kind}", **common)
+        if kind == "fastapi":
+            from netbox_proxbox.services.encryption_recovery import (
+                _locked_encrypted_queryset_update,
+            )
+            from netbox_proxbox.utils.encryption import encrypt
+
+            token_enc = encrypt(
+                "backend-token-sentinel", key=configuration.encryption_key
+            )
+            for endpoint in (visible[kind], hidden[kind]):
+                _locked_encrypted_queryset_update(
+                    model.objects.filter(pk=endpoint.pk), token_enc=token_enc
+                )
+                endpoint.refresh_from_db()
         permission = ObjectPermission.objects.create(
             name=f"View only visible {kind}",
             actions=["view"],
@@ -437,6 +452,7 @@ def sensitive_estate(pytestconfig, request):
     )
 
 
+@pytest.mark.django_db
 @pytest.mark.parametrize("kind", ["proxmox", "netbox", "fastapi"])
 @pytest.mark.parametrize("data_format", ["csv", "json", "yaml"])
 def test_safe_export_obeys_real_object_permissions(sensitive_estate, kind, data_format):
@@ -453,6 +469,7 @@ def test_safe_export_obeys_real_object_permissions(sensitive_estate, kind, data_
         assert secret not in content
 
 
+@pytest.mark.django_db
 @pytest.mark.parametrize("kind", ["proxmox", "netbox", "fastapi"])
 @pytest.mark.parametrize("data_format", ["csv", "json", "yaml"])
 @pytest.mark.parametrize("role", ["flagged", "superuser"])
@@ -483,6 +500,7 @@ def test_sensitive_export_has_explicit_authority(
     assert (f"hidden-{kind}" in content) is (role == "superuser")
 
 
+@pytest.mark.django_db
 @pytest.mark.parametrize("kind", ["proxmox", "netbox", "fastapi"])
 @pytest.mark.parametrize(
     "proof",
@@ -506,6 +524,7 @@ def test_ordinary_viewer_cannot_forge_sensitive_export(sensitive_estate, kind, p
         assert secret.encode() not in response.content
 
 
+@pytest.mark.django_db
 @pytest.mark.parametrize("kind", ["proxmox", "netbox", "fastapi"])
 def test_mixed_selection_fails_before_serializer(sensitive_estate, kind, monkeypatch):
     from django.test import Client
@@ -529,6 +548,7 @@ def test_mixed_selection_fails_before_serializer(sensitive_estate, kind, monkeyp
     serializer.assert_not_called()
 
 
+@pytest.mark.django_db
 @pytest.mark.parametrize("kind", ["proxmox", "netbox", "fastapi"])
 def test_revocation_blocks_next_export(sensitive_estate, kind):
     from django.test import Client
@@ -544,6 +564,7 @@ def test_revocation_blocks_next_export(sensitive_estate, kind):
     assert client.post(sensitive_estate.urls[kind], data).status_code == 403
 
 
+@pytest.mark.django_db
 @pytest.mark.parametrize("kind", ["proxmox", "netbox", "fastapi"])
 def test_sensitive_post_requires_csrf(sensitive_estate, kind):
     from django.test import Client
@@ -554,6 +575,7 @@ def test_sensitive_post_requires_csrf(sensitive_estate, kind):
     assert response.status_code == 403
 
 
+@pytest.mark.django_db
 @pytest.mark.parametrize("role", ["viewer", "flagged"])
 @pytest.mark.parametrize("method", ["get", "post", "patch", "delete"])
 def test_only_superusers_can_administer_grants(sensitive_estate, role, method):
@@ -588,6 +610,7 @@ def test_only_superusers_can_administer_grants(sensitive_estate, role, method):
     ).exists()
 
 
+@pytest.mark.django_db
 def test_default_off_grant_and_fresh_readiness(sensitive_estate):
     from django.urls import reverse
     from rest_framework.test import APIClient
@@ -610,6 +633,7 @@ def test_default_off_grant_and_fresh_readiness(sensitive_estate):
     assert client.get(url).data["can_access_sensitive_data"] is False
 
 
+@pytest.mark.django_db
 @pytest.mark.parametrize("role", ["viewer", "flagged", "superuser"])
 @pytest.mark.parametrize("settings_scope", ["absent", "mismatched", "matching"])
 def test_runtime_settings_disclose_key_only_with_sensitive_authority(
@@ -640,7 +664,16 @@ def test_runtime_settings_disclose_key_only_with_sensitive_authority(
     client.force_authenticate(sensitive_estate.users[role])
     url = reverse("plugins-api:netbox_proxbox-api:proxboxpluginsettings-runtime")
     response = client.get(url)
-    assert response.status_code == 200
+    expected_status = (
+        200
+        if role == "superuser" or settings_scope == "matching"
+        else 403
+        if settings_scope == "absent"
+        else 404
+    )
+    assert response.status_code == expected_status
+    if expected_status != 200:
+        return
     assert response["Cache-Control"] == "no-store"
     assert response.data["encryption_key_configured"] is True
     permitted = role == "superuser" or (
@@ -655,6 +688,7 @@ def test_runtime_settings_disclose_key_only_with_sensitive_authority(
         assert client.get(url).data["encryption_key"] == ""
 
 
+@pytest.mark.django_db
 def test_superuser_grant_and_revoke_with_real_netbox_token(sensitive_estate):
     from django.urls import reverse
     from rest_framework.test import APIClient
@@ -684,6 +718,7 @@ def test_superuser_grant_and_revoke_with_real_netbox_token(sensitive_estate):
     assert response.data["can_access_sensitive_data"] is False
 
 
+@pytest.mark.django_db
 @pytest.mark.parametrize("role", ["viewer", "flagged", "superuser"])
 @pytest.mark.parametrize("kind", ["proxmox", "netbox", "fastapi"])
 def test_html_sensitive_controls_follow_authority(sensitive_estate, role, kind):

@@ -146,6 +146,8 @@ def sync_fw_module(monkeypatch):
             return (0, {})
 
         def update_or_create(self, defaults=None, **_lookup):
+            self._upsert_calls = getattr(self, "_upsert_calls", [])
+            self._upsert_calls.append({"lookup": dict(_lookup), "defaults": defaults})
             self._pk_counter[0] += 1
             pk = self._pk_counter[0]
             obj = SimpleNamespace(pk=pk)
@@ -848,3 +850,310 @@ def test_node_firewall_requests_the_encoded_node_route(sync_fw_module, monkeypat
         get.call_args.args[0]
         == "http://backend:8000/proxmox/firewall/nodes/pve01/rules"
     )
+
+
+def test_sync_node_firewall_skips_disabled_endpoint_without_http(sync_fw_module):
+    endpoint = SimpleNamespace(pk=1, enabled=False)
+    with patch("requests.get") as get:
+        sync_fw_module.sync_node_firewall(
+            endpoint=endpoint,
+            node_name="pve01",
+            fastapi_url="http://backend:8000",
+            auth_headers={},
+        )
+    get.assert_not_called()
+
+
+def test_sync_node_firewall_skips_when_node_row_is_missing(sync_fw_module, monkeypatch):
+    models = sys.modules["netbox_proxbox.models"]
+    monkeypatch.setattr(models.ProxmoxNode.objects, "first", lambda: None)
+    with patch("requests.get") as get:
+        sync_fw_module.sync_node_firewall(
+            endpoint=SimpleNamespace(pk=1, enabled=True),
+            node_name="missing-node",
+            fastapi_url="http://backend:8000",
+            auth_headers={},
+        )
+    get.assert_not_called()
+
+
+def test_sync_node_firewall_expired_deadline_raises_before_http(
+    sync_fw_module, monkeypatch
+):
+    models = sys.modules["netbox_proxbox.models"]
+    monkeypatch.setattr(
+        models.ProxmoxNode.objects, "first", lambda: SimpleNamespace(pk=5, name="pve01")
+    )
+    with patch("requests.get") as get:
+        with pytest.raises(
+            sync_fw_module.SyncJobDeadlineReached, match="Job deadline reached"
+        ):
+            sync_fw_module.sync_node_firewall(
+                endpoint=SimpleNamespace(pk=1, enabled=True),
+                node_name="pve01",
+                fastapi_url="http://backend:8000",
+                auth_headers={},
+                deadline=0.0,
+            )
+    get.assert_not_called()
+
+
+def test_sync_node_firewall_transport_failure_does_not_persist_rules(
+    sync_fw_module, monkeypatch
+):
+    import requests as req
+
+    models = sys.modules["netbox_proxbox.models"]
+    monkeypatch.setattr(
+        models.ProxmoxNode.objects, "first", lambda: SimpleNamespace(pk=5, name="pve01")
+    )
+    before = sync_fw_module._rule_mgr._created_count
+    with patch("requests.get", side_effect=req.exceptions.ConnectionError("refused")):
+        sync_fw_module.sync_node_firewall(
+            endpoint=SimpleNamespace(pk=1, enabled=True),
+            node_name="pve01",
+            fastapi_url="http://backend:8000",
+            auth_headers={},
+        )
+    assert sync_fw_module._rule_mgr._created_count == before
+    assert not getattr(sync_fw_module._rule_mgr, "_upsert_calls", [])
+
+
+def test_sync_node_firewall_non_list_response_skips_persistence(
+    sync_fw_module, monkeypatch
+):
+    models = sys.modules["netbox_proxbox.models"]
+    monkeypatch.setattr(
+        models.ProxmoxNode.objects, "first", lambda: SimpleNamespace(pk=5, name="pve01")
+    )
+    response = MagicMock()
+    response.raise_for_status.return_value = None
+    response.json.return_value = {"not": "a list"}
+    with patch("requests.get", return_value=response):
+        sync_fw_module.sync_node_firewall(
+            endpoint=SimpleNamespace(pk=1, enabled=True),
+            node_name="pve01",
+            fastapi_url="http://backend:8000",
+            auth_headers={},
+        )
+    assert not getattr(sync_fw_module._rule_mgr, "_upsert_calls", [])
+
+
+def test_sync_node_firewall_upserts_rules_and_marks_stale(sync_fw_module, monkeypatch):
+    models = sys.modules["netbox_proxbox.models"]
+    monkeypatch.setattr(
+        models.ProxmoxNode.objects, "first", lambda: SimpleNamespace(pk=5, name="pve01")
+    )
+    payload = [
+        {"pos": 0, "type": "in", "action": "ACCEPT", "enable": 1, "comment": "ssh"},
+        {"pos": 1, "type": "out", "action": "DROP", "enable": 1},
+    ]
+    response = MagicMock()
+    response.raise_for_status.return_value = None
+    response.json.return_value = payload
+    with patch("requests.get", return_value=response) as get:
+        sync_fw_module.sync_node_firewall(
+            endpoint=SimpleNamespace(pk=1, enabled=True),
+            node_name="pve01",
+            fastapi_url="http://backend:8000",
+            auth_headers={"Authorization": "Bearer test"},
+            backend_endpoint_id=11,
+            deadline=None,
+        )
+    assert get.call_args.kwargs["params"] == {
+        "source": "database",
+        "proxmox_endpoint_ids": "11",
+    }
+    calls = sync_fw_module._rule_mgr._upsert_calls
+    assert len(calls) == 2
+    assert calls[0]["lookup"]["pos"] == 0
+    assert calls[1]["lookup"]["pos"] == 1
+    assert sync_fw_module._rule_mgr._stale_marked == 1
+
+
+def test_sync_node_firewall_rejects_malformed_rule_rows(sync_fw_module, monkeypatch):
+    models = sys.modules["netbox_proxbox.models"]
+    monkeypatch.setattr(
+        models.ProxmoxNode.objects, "first", lambda: SimpleNamespace(pk=5, name="pve01")
+    )
+    payload = [
+        {"action": "ACCEPT"},
+        {"pos": "not-int", "type": "in", "action": "ACCEPT"},
+        {"pos": 2, "type": "in", "action": "ACCEPT", "enable": "bad", "comment": "ok"},
+    ]
+    response = MagicMock()
+    response.raise_for_status.return_value = None
+    response.json.return_value = payload
+    with patch("requests.get", return_value=response):
+        sync_fw_module.sync_node_firewall(
+            endpoint=SimpleNamespace(pk=1, enabled=True),
+            node_name="pve01",
+            fastapi_url="http://backend:8000",
+            auth_headers={},
+        )
+    calls = sync_fw_module._rule_mgr._upsert_calls
+    assert len(calls) == 1
+    assert calls[0]["lookup"]["pos"] == 2
+    assert calls[0]["defaults"]["enable"] is True
+
+
+def test_sync_firewall_keeps_explicit_auth_headers_over_context(sync_fw_module):
+    ctx = SimpleNamespace(
+        http_url="http://ctx-backend:9000",
+        verify_ssl=True,
+        headers={"X-Proxbox-API-Key": "ctx-key"},
+    )
+    sync_fw_module.get_fastapi_request_context = lambda endpoint_id=None: ctx
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status.return_value = None
+    mock_resp.json.return_value = []
+    explicit = {"Authorization": "Bearer explicit"}
+    with patch("requests.get", return_value=mock_resp) as get:
+        sync_fw_module.sync_firewall(auth_headers=explicit)
+    assert get.call_args.kwargs["headers"] is explicit
+
+
+def test_sync_firewall_resolves_backend_from_context(sync_fw_module):
+    ctx = SimpleNamespace(
+        http_url="http://ctx-backend:9000",
+        verify_ssl=False,
+        headers={"X-Proxbox-API-Key": "ctx-key"},
+    )
+    sync_fw_module.get_fastapi_request_context = lambda endpoint_id=None: ctx
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status.return_value = None
+    mock_resp.json.return_value = []
+    with patch("requests.get", return_value=mock_resp) as get:
+        result = sync_fw_module.sync_firewall(fastapi_endpoint_id=3)
+    assert result.success is True
+    assert get.call_args.args[0].startswith("http://ctx-backend:9000/")
+    assert get.call_args.kwargs["verify"] is False
+    assert get.call_args.kwargs["headers"]["X-Proxbox-API-Key"] == "ctx-key"
+
+
+def test_sync_firewall_scope_error_returns_without_http(sync_fw_module):
+    sync_fw_module.enabled_backend_endpoint_scope = lambda **_kw: (
+        None,
+        {},
+        "No backend id for endpoint 5",
+    )
+    with patch("requests.get") as get:
+        result = sync_fw_module.sync_firewall(fastapi_url="http://backend:8000")
+    assert result.success is False
+    assert result.error == "No backend id for endpoint 5"
+    get.assert_not_called()
+
+
+def test_sync_firewall_expired_deadline_raises_before_summary_http(sync_fw_module):
+    with patch("requests.get") as get:
+        with pytest.raises(
+            sync_fw_module.SyncJobDeadlineReached, match="Job deadline reached"
+        ):
+            sync_fw_module.sync_firewall(
+                fastapi_url="http://backend:8000", deadline=0.0
+            )
+    get.assert_not_called()
+
+
+def test_sync_firewall_invokes_real_node_sync_for_resolved_endpoints(
+    sync_fw_module, monkeypatch
+):
+    monkeypatch.setattr(
+        sync_fw_module,
+        "_resolve_endpoint_by_cluster_name",
+        lambda _name: sync_fw_module._endpoint_obj,
+    )
+    models = sys.modules["netbox_proxbox.models"]
+    node_row = SimpleNamespace(pk=5, name="pve01")
+
+    def _node_filter(**_kw):
+        if "name" in _kw:
+            return SimpleNamespace(first=lambda: node_row)
+        return SimpleNamespace(values_list=lambda *_a, **_kw: ["pve01"])
+
+    monkeypatch.setattr(models.ProxmoxNode.objects, "filter", _node_filter)
+    summary_resp = MagicMock()
+    summary_resp.raise_for_status.return_value = None
+    empty_endpoint_summary = [
+        {
+            "cluster_name": CLUSTER_NAME,
+            "rules": [],
+            "security_groups": [],
+            "ip_sets": [],
+            "aliases": [],
+            "options": None,
+        }
+    ]
+    summary_resp.json.return_value = empty_endpoint_summary
+    node_resp = MagicMock()
+    node_resp.raise_for_status.return_value = None
+    node_resp.json.return_value = [
+        {"pos": 0, "type": "in", "action": "ACCEPT", "enable": 1}
+    ]
+    urls: list[str] = []
+
+    def _route_get(url, **kwargs):
+        urls.append(url)
+        if url.endswith("/summary"):
+            return summary_resp
+        return node_resp
+
+    with patch("requests.get", side_effect=_route_get):
+        result = sync_fw_module.sync_firewall(fastapi_url="http://backend:8000")
+
+    assert result.success is True
+    assert any("/proxmox/firewall/nodes/pve01/rules" in u for u in urls)
+    node_zone = sync_fw_module.FirewallZoneChoices.NODE
+    node_upserts = [
+        call
+        for call in sync_fw_module._rule_mgr._upsert_calls
+        if call["lookup"].get("zone") == node_zone
+    ]
+    assert len(node_upserts) == 1
+
+
+def test_sync_resolved_endpoint_nodes_without_per_endpoint_metadata(
+    sync_fw_module, monkeypatch
+):
+    endpoint = sync_fw_module._endpoint_obj
+    models = sys.modules["netbox_proxbox.models"]
+    monkeypatch.setattr(
+        models.ProxmoxNode.objects,
+        "filter",
+        lambda **_kw: SimpleNamespace(values_list=lambda *_a, **_kw: []),
+    )
+    sync_fw_module._sync_resolved_endpoint_nodes(
+        {endpoint.pk: endpoint},
+        {endpoint.pk: 11},
+        {},
+        {endpoint.pk: 0.0},
+        fastapi_url="http://backend:8000",
+        auth_headers={},
+        verify_ssl=True,
+        deadline=None,
+    )
+
+
+def test_sync_resolved_endpoint_nodes_skips_unresolved_backend_id(
+    sync_fw_module, monkeypatch
+):
+    endpoint = sync_fw_module._endpoint_obj
+    models = sys.modules["netbox_proxbox.models"]
+    monkeypatch.setattr(
+        models.ProxmoxNode.objects,
+        "filter",
+        lambda **_kw: SimpleNamespace(values_list=lambda *_a, **_kw: ["pve01"]),
+    )
+    per_endpoint = {endpoint.pk: {"endpoint_id": endpoint.pk}}
+    with patch.object(sync_fw_module, "sync_node_firewall") as node_sync:
+        sync_fw_module._sync_resolved_endpoint_nodes(
+            {endpoint.pk: endpoint},
+            {},
+            per_endpoint,
+            {endpoint.pk: 0.0},
+            fastapi_url="http://backend:8000",
+            auth_headers={},
+            verify_ssl=True,
+            deadline=None,
+        )
+    node_sync.assert_not_called()

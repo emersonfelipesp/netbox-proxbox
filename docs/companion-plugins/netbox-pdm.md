@@ -2,6 +2,10 @@
 
 `netbox-pdm` is a standalone NetBox plugin that inventories **Proxmox Datacenter Manager (PDM)** infrastructure. PDM is the centralized management plane that sits above individual Proxmox VE clusters and PBS servers. `netbox-pdm` reflects PDM endpoint metadata and the remotes they manage (PVE nodes and PBS servers) into NetBox, and links them to the `ProxmoxEndpoint` and `PBSEndpoint` objects tracked by the sibling plugins.
 
+The Proxbox home page exposes the PDM endpoint table only when `netbox_pdm` is
+enabled in NetBox. Installing the Python package without adding the plugin to
+`PLUGINS` does not mount PDM routes and therefore must not render its table.
+
 ## Architecture
 
 ```mermaid

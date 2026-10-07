@@ -9,6 +9,9 @@ not establish that every Proxbox write already passes through RPC.
 Proxmox inventory and endpoint configuration; RPC owns the policy and audit
 record for host operations. Installing the package does not enable it, and
 enabling the integration does not change the read-only inventory sync contract.
+Proxbox treats RPC as available only when `netbox_rpc` is enabled in NetBox.
+An importable but disabled package has no migrated settings contract, so
+endpoint serialization and monitoring eligibility do not query it.
 
 ## Boundary
 

@@ -89,7 +89,8 @@ def _install_installed_plugin_stubs(monkeypatch, app_configs):
     django_apps_module = types.ModuleType("django.apps")
     configs_by_label = {config.label: config for config in app_configs}
     django_apps_module.apps = SimpleNamespace(
-        get_app_config=lambda label: configs_by_label[label]
+        get_app_config=lambda label: configs_by_label[label],
+        is_installed=lambda name: name in configs_by_label,
     )
 
     registry_module = types.ModuleType("netbox.registry")
@@ -288,3 +289,25 @@ def test_companion_endpoint_groups_ignore_unrelated_plugins(monkeypatch):
     )
 
     assert groups == []
+
+
+def test_pdm_context_ignores_importable_but_disabled_companion(monkeypatch):
+    module = load_plugin_module(
+        "netbox_proxbox.views.home_context", monkeypatch=monkeypatch
+    )
+    django_apps_module = types.ModuleType("django.apps")
+    django_apps_module.apps = SimpleNamespace(is_installed=lambda name: False)
+    pdm_package = types.ModuleType("netbox_pdm")
+    pdm_package.__path__ = []
+    pdm_tables = types.ModuleType("netbox_pdm.tables")
+
+    class PoisonPDMEndpointTable:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError("disabled netbox-pdm table was constructed")
+
+    pdm_tables.PDMEndpointTable = PoisonPDMEndpointTable
+    monkeypatch.setitem(sys.modules, "django.apps", django_apps_module)
+    monkeypatch.setitem(sys.modules, "netbox_pdm", pdm_package)
+    monkeypatch.setitem(sys.modules, "netbox_pdm.tables", pdm_tables)
+
+    assert module._build_pdm_endpoint_context(SimpleNamespace(user=object())) == {}

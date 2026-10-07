@@ -63,6 +63,7 @@ from django.http import HttpRequest  # noqa: E402
 from netbox_proxbox.views import job_stream as job_stream_module  # noqa: E402
 
 
+@pytest.mark.django_db
 def test_streaming_response_close_releases_job_observer_producer() -> None:
     """Django response.close() must close the generator Gunicorn iterates."""
     created_threads = []

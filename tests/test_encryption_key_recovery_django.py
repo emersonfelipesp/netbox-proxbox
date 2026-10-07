@@ -110,6 +110,8 @@ from netbox_proxbox.services.encryption_recovery import (  # noqa: E402
     CiphertextVerificationFailed,
     EncryptionRecoveryConfigurationError,
     OldEncryptionKeyRejected,
+    _ENCRYPTED_QUERYSET_WRITE_PERMIT,
+    _EncryptedQuerySetWritePermit,
     _locked_encrypted_queryset_update,
     _locked_recovery_conflict_bulk_create,
     available_encrypted_field_families,
@@ -464,6 +466,72 @@ class EncryptionKeyRecoveryTest(TestCase):
 
         self.proxmox.refresh_from_db()
         self.assertEqual(self.proxmox.password_enc, original)
+
+    def test_single_secret_guard_accepts_exact_recovery_permit(self) -> None:
+        replacement = enc_helpers.encrypt("replacement-backend-token", key=self.old_key)
+
+        updated = _locked_encrypted_queryset_update(
+            FastAPIEndpoint.objects.filter(pk=self.fastapi.pk),
+            token_enc=replacement,
+        )
+
+        self.assertEqual(updated, 1)
+        self.fastapi.refresh_from_db()
+        self.assertEqual(self.fastapi.token_enc, replacement)
+
+    def test_single_secret_guard_rejects_ordinary_and_mismatched_permits(self) -> None:
+        original = self.fastapi.token_enc
+        replacement = enc_helpers.encrypt("replacement-backend-token", key=self.old_key)
+        queryset = FastAPIEndpoint.objects.filter(pk=self.fastapi.pk)
+
+        with self.assertRaises(ValidationError):
+            queryset.update(token_enc=replacement)
+
+        mismatched_permits = (
+            _EncryptedQuerySetWritePermit(
+                model=PDMEndpoint,
+                using="default",
+                encrypted_updates=(("token_enc", replacement),),
+            ),
+            _EncryptedQuerySetWritePermit(
+                model=FastAPIEndpoint,
+                using="other",
+                encrypted_updates=(("token_enc", replacement),),
+            ),
+            _EncryptedQuerySetWritePermit(
+                model=FastAPIEndpoint,
+                using="default",
+                encrypted_updates=(("token_enc", original),),
+            ),
+        )
+        for permit in mismatched_permits:
+            with self.subTest(permit=permit):
+                permit_token = _ENCRYPTED_QUERYSET_WRITE_PERMIT.set(permit)
+                try:
+                    with self.assertRaises(ValidationError):
+                        queryset.update(token_enc=replacement)
+                finally:
+                    _ENCRYPTED_QUERYSET_WRITE_PERMIT.reset(permit_token)
+
+        self.fastapi.refresh_from_db()
+        self.assertEqual(self.fastapi.token_enc, original)
+
+    def test_ciphertext_permit_never_authorizes_reference_mutation(self) -> None:
+        original = self.fastapi.token_enc
+        permit = _EncryptedQuerySetWritePermit(
+            model=FastAPIEndpoint,
+            using="default",
+            encrypted_updates=(("token_enc", original),),
+        )
+        permit_token = _ENCRYPTED_QUERYSET_WRITE_PERMIT.set(permit)
+        try:
+            with self.assertRaises(ValidationError):
+                FastAPIEndpoint.objects.filter(pk=self.fastapi.pk).update(
+                    token_enc=original,
+                    openbao_token_credential_uuid=None,
+                )
+        finally:
+            _ENCRYPTED_QUERYSET_WRITE_PERMIT.reset(permit_token)
 
     def test_internal_conflict_upsert_permit_updates_protected_field(self) -> None:
         conflict = FirecrackerHost(
@@ -1106,6 +1174,7 @@ class EncryptionKeyRecoveryTest(TestCase):
             "interface_batch_size": 5,
             "interface_batch_delay_ms": 100,
             "vm_sync_max_concurrency": 4,
+            "sync_job_timeout": 7200,
             "reconciliation_engine": "python",
             "proxmox_timeout": 5,
             "proxmox_max_retries": 0,

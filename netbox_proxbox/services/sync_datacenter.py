@@ -177,12 +177,13 @@ def sync_datacenter(
     allowed_endpoint_pks = set(backend_id_by_pk)
 
     try:
+        request_timeout = remaining_timeout(deadline, float(SYNC_TIMEOUT))
         resp = requests.get(
             f"{fastapi_url}/proxmox/datacenter/cpu-models",
             params=scope_params,
             headers=auth_headers,
             verify=verify_ssl,
-            timeout=remaining_timeout(deadline, float(SYNC_TIMEOUT)),
+            timeout=request_timeout,
             allow_redirects=False,
         )
         resp.raise_for_status()

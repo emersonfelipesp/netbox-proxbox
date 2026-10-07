@@ -113,6 +113,7 @@ class ProxmoxEndpointAPITest(_ProxboxEndpointAPIViewTestCase):
         "iana_timezone",
         "id",
         "name",
+        "node_device_name_template",
         "port",
         "url",
     ]

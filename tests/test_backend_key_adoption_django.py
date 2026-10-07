@@ -10,6 +10,7 @@ import sys
 from types import SimpleNamespace
 from typing import ClassVar
 from unittest.mock import patch
+import uuid
 
 import pytest
 
@@ -303,7 +304,9 @@ class BackendKeyPersistenceTests(TransactionTestCase):
         from netbox.context import current_request
 
         actor = make_user("backend-target-reviewer", is_superuser=True)
-        context_token = current_request.set(SimpleNamespace(user=actor))
+        context_token = current_request.set(
+            SimpleNamespace(user=actor, id=uuid.uuid4())
+        )
         self.addCleanup(current_request.reset, context_token)
         self.backend = _StatefulBackend()
         self._client_patch = patch(

@@ -57,22 +57,24 @@ def _fetch_cluster_and_node_data(
     deadline: float | None,
 ) -> tuple[ProxmoxClusterStatusResponse, list[ProxmoxNodeDetail]]:
     """Fetch the endpoint-scoped cluster status and optional node details."""
+    request_timeout = remaining_timeout(deadline, 30.0)
     cluster_resp = requests.get(
         f"{fastapi_url}/proxmox/cluster/status",
         headers=auth_headers,
         params=scope_params,
         verify=verify_ssl,
-        timeout=remaining_timeout(deadline, 30.0),
+        timeout=request_timeout,
         allow_redirects=False,
     )
     cluster_resp.raise_for_status()
     cluster_data = ProxmoxClusterStatusResponse.model_validate(cluster_resp.json())
+    request_timeout = remaining_timeout(deadline, 30.0)
     node_detail_resp = requests.get(
         f"{fastapi_url}/proxmox/nodes/",
         headers=auth_headers,
         params=scope_params,
         verify=verify_ssl,
-        timeout=remaining_timeout(deadline, 30.0),
+        timeout=request_timeout,
         allow_redirects=False,
     )
     if not node_detail_resp.ok:

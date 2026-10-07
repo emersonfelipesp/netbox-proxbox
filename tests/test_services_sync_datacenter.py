@@ -37,12 +37,37 @@ def sync_dc_module(monkeypatch):
     attach_credential_storage_backend_choices(choices)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.choices", choices)
 
-    cpu_mgr = SimpleNamespace(upserts=[], stale_calls=[])
+    cpu_mgr = SimpleNamespace(
+        upserts=[], stale_calls=[], saves=[], _rows={}, persisted={}
+    )
+
+    class _CpuRow:
+        def __init__(self, pk, **fields):
+            self.pk = pk
+            for key, value in fields.items():
+                setattr(self, key, value)
+
+        def save(self):
+            cpu_mgr.saves.append(self.pk)
+            cpu_mgr.persisted[self.pk] = vars(self).copy()
 
     class _CpuManager:
         def get_or_create(self, defaults=None, **lookup):
             cpu_mgr.upserts.append(lookup)
-            return SimpleNamespace(pk=len(cpu_mgr.upserts)), True
+            key = (
+                id(lookup.get("endpoint")),
+                lookup.get("cluster_name"),
+                lookup.get("cputype"),
+            )
+            if key in cpu_mgr._rows:
+                return cpu_mgr._rows[key], False
+            obj = _CpuRow(len(cpu_mgr._rows) + 1, **lookup)
+            if defaults:
+                for field, value in defaults.items():
+                    setattr(obj, field, value)
+            cpu_mgr._rows[key] = obj
+            cpu_mgr.persisted[obj.pk] = vars(obj).copy()
+            return obj, True
 
         def filter(self, **kwargs):
             cpu_mgr.stale_calls.append(kwargs)
@@ -52,7 +77,8 @@ def sync_dc_module(monkeypatch):
             return self
 
         def update(self, **_kw):
-            return 0
+            cpu_mgr.stale_marked = getattr(cpu_mgr, "stale_marked", 0) + 1
+            return cpu_mgr.stale_marked
 
     class _ProxmoxDatacenterCpuModel:
         objects = _CpuManager()
@@ -183,3 +209,166 @@ def test_a_cluster_name_claimed_by_two_endpoints_is_refused(
     monkeypatch.setattr(models, "ProxmoxCluster", _AmbiguousCluster, raising=False)
 
     assert sync_dc_module._resolve_endpoint_by_cluster_name("pve") is None
+
+
+def test_no_fastapi_url_and_no_context_returns_error(sync_dc_module):
+    sync_dc_module.get_fastapi_request_context = lambda endpoint_id=None: None
+    with patch.object(sync_dc_module.requests, "get") as get:
+        result = sync_dc_module.sync_datacenter()
+    assert result.success is False
+    assert "FastAPI" in (result.error or "")
+    get.assert_not_called()
+
+
+def test_sync_datacenter_resolves_backend_from_context(sync_dc_module):
+    ctx = SimpleNamespace(
+        http_url="http://ctx-backend:9000",
+        verify_ssl=False,
+        headers={"X-Proxbox-API-Key": "ctx-key"},
+    )
+    sync_dc_module.get_fastapi_request_context = lambda endpoint_id=None: ctx
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status.return_value = None
+    mock_resp.json.return_value = []
+    with patch.object(sync_dc_module.requests, "get", return_value=mock_resp) as get:
+        result = sync_dc_module.sync_datacenter(fastapi_endpoint_id=4)
+    assert result.success is True
+    assert get.call_args.args[0].endswith("/proxmox/datacenter/cpu-models")
+    assert get.call_args.kwargs["verify"] is False
+    assert get.call_args.kwargs["headers"]["X-Proxbox-API-Key"] == "ctx-key"
+
+
+def test_sync_datacenter_no_enabled_endpoints_skips_http(sync_dc_module):
+    sync_dc_module.enabled_backend_endpoint_scope = lambda **_kw: (None, {}, None)
+    with patch.object(sync_dc_module.requests, "get") as get:
+        result = sync_dc_module.sync_datacenter(fastapi_url="http://backend:8000")
+    assert result.success is True
+    assert result.endpoints_processed == 0
+    get.assert_not_called()
+
+
+def test_sync_datacenter_keeps_explicit_auth_headers_over_context(sync_dc_module):
+    ctx = SimpleNamespace(
+        http_url="http://ctx-backend:9000",
+        verify_ssl=True,
+        headers={"X-Proxbox-API-Key": "ctx-key"},
+    )
+    sync_dc_module.get_fastapi_request_context = lambda endpoint_id=None: ctx
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status.return_value = None
+    mock_resp.json.return_value = []
+    explicit = {"Authorization": "Bearer explicit"}
+    with patch.object(sync_dc_module.requests, "get", return_value=mock_resp) as get:
+        sync_dc_module.sync_datacenter(auth_headers=explicit)
+    assert get.call_args.kwargs["headers"] is explicit
+
+
+def test_sync_datacenter_scope_error_returns_without_http(sync_dc_module):
+    sync_dc_module.enabled_backend_endpoint_scope = lambda **_kw: (
+        None,
+        {},
+        "Endpoint scope resolution failed",
+    )
+    with patch.object(sync_dc_module.requests, "get") as get:
+        result = sync_dc_module.sync_datacenter(fastapi_url="http://backend:8000")
+    assert result.success is False
+    assert result.error == "Endpoint scope resolution failed"
+    get.assert_not_called()
+
+
+def test_sync_datacenter_expired_deadline_raises_before_http(sync_dc_module):
+    with patch.object(sync_dc_module.requests, "get") as get:
+        with pytest.raises(RuntimeError, match="Job deadline reached"):
+            sync_dc_module.sync_datacenter(
+                fastapi_url="http://backend:8000", deadline=0.0
+            )
+    get.assert_not_called()
+
+
+def test_sync_datacenter_http_error_returns_without_persistence(sync_dc_module):
+    import requests as req
+
+    before = len(sync_dc_module._cpu_mgr.upserts)
+    with patch.object(
+        sync_dc_module.requests,
+        "get",
+        side_effect=req.exceptions.Timeout("timed out"),
+    ):
+        result = sync_dc_module.sync_datacenter(fastapi_url="http://backend:8000")
+    assert result.success is False
+    assert "HTTP error fetching datacenter CPU models" in (result.error or "")
+    assert len(sync_dc_module._cpu_mgr.upserts) == before
+
+
+def test_sync_datacenter_non_list_response_returns_error(sync_dc_module):
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status.return_value = None
+    mock_resp.json.return_value = {"unexpected": "dict"}
+    with patch.object(sync_dc_module.requests, "get", return_value=mock_resp):
+        result = sync_dc_module.sync_datacenter(fastapi_url="http://backend:8000")
+    assert result.success is False
+    assert "Unexpected response type" in (result.error or "")
+    assert sync_dc_module._cpu_mgr.upserts == []
+
+
+def test_sync_datacenter_skips_rows_without_cputype(sync_dc_module, monkeypatch):
+    endpoint = SimpleNamespace(pk=1, __str__=lambda _s: "ep-1")
+    monkeypatch.setattr(
+        sync_dc_module, "_resolve_endpoint_by_cluster_name", lambda _name: endpoint
+    )
+    payload = [{"cluster_name": "cluster-in", "description": "missing type"}]
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status.return_value = None
+    mock_resp.json.return_value = payload
+    with patch.object(sync_dc_module.requests, "get", return_value=mock_resp):
+        result = sync_dc_module.sync_datacenter(fastapi_url="http://backend:8000")
+    assert result.success is True
+    assert result.cpu_models_created == 0
+    assert sync_dc_module._cpu_mgr.upserts == []
+
+
+def test_sync_datacenter_happy_path_updates_existing_cpu_model(
+    sync_dc_module, monkeypatch
+):
+    endpoint = SimpleNamespace(pk=1, __str__=lambda _s: "ep-1")
+    monkeypatch.setattr(
+        sync_dc_module, "_resolve_endpoint_by_cluster_name", lambda _name: endpoint
+    )
+    row = {"cluster_name": "cluster-in", "cputype": "x86-64-v3", "flags": "aes"}
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status.return_value = None
+    mock_resp.json.return_value = [row]
+    with patch.object(sync_dc_module.requests, "get", return_value=mock_resp):
+        first = sync_dc_module.sync_datacenter(fastapi_url="http://backend:8000")
+        assert sync_dc_module._cpu_mgr.saves == []
+        assert sync_dc_module._cpu_mgr.persisted[1]["flags"] == "aes"
+        updated_row = {**row, "flags": "aes avx", "description": "updated"}
+        mock_resp.json.return_value = [updated_row]
+        second = sync_dc_module.sync_datacenter(fastapi_url="http://backend:8000")
+    assert first.cpu_models_created == 1
+    assert first.cpu_models_updated == 0
+    assert second.cpu_models_created == 0
+    assert second.cpu_models_updated == 1
+    assert sync_dc_module._cpu_mgr.saves == [1]
+    obj = next(iter(sync_dc_module._cpu_mgr._rows.values()))
+    assert obj.flags == "aes avx"
+    assert obj.description == "updated"
+    assert sync_dc_module._cpu_mgr.persisted[1]["flags"] == "aes avx"
+    assert sync_dc_module._cpu_mgr.persisted[1]["description"] == "updated"
+    assert sync_dc_module._cpu_mgr.persisted[1]["raw_config"] == updated_row
+    assert sync_dc_module._cpu_mgr.stale_marked == 2
+
+
+def test_sync_datacenter_skips_unresolvable_cluster_name(sync_dc_module, monkeypatch):
+    monkeypatch.setattr(
+        sync_dc_module, "_resolve_endpoint_by_cluster_name", lambda _name: None
+    )
+    payload = [{"cluster_name": "missing", "cputype": "x86-64-v3"}]
+    mock_resp = MagicMock()
+    mock_resp.raise_for_status.return_value = None
+    mock_resp.json.return_value = payload
+    with patch.object(sync_dc_module.requests, "get", return_value=mock_resp):
+        result = sync_dc_module.sync_datacenter(fastapi_url="http://backend:8000")
+    assert result.success is True
+    assert result.endpoints_processed == 0
+    assert sync_dc_module._cpu_mgr.upserts == []

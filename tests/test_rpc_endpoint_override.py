@@ -77,9 +77,13 @@ def test_model_defines_rpc_enabled_and_effective_resolution() -> None:
     assert "null=True" in block and "blank=True" in block
     method = src.split("def effective_rpc_enabled", 1)[1]
     assert "self.rpc_enabled is not None" in method
+    assert "if not is_netbox_rpc_installed():" in method
     # Optional, guarded, function-local netbox-rpc import (never top-level).
     assert "from netbox_rpc.models import RpcPluginSettings" in method
     assert "except ImportError" in method
+    assert method.index("if not is_netbox_rpc_installed():") < method.index(
+        "from netbox_rpc.models"
+    )
     assert method.index("from netbox_rpc.models") < method.index(
         "if self.rpc_enabled is not None"
     )

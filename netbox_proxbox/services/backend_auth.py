@@ -188,11 +188,12 @@ def wait_for_backend_ready(
         if remaining is not None and remaining <= 0:
             return False, "Job deadline reached while checking backend readiness."
         try:
+            request_timeout = min(5, remaining) if remaining is not None else 5
             response = requests.get(
                 health_url,
                 headers=headers,
                 verify=verify_ssl,
-                timeout=min(5, remaining) if remaining is not None else 5,
+                timeout=request_timeout,
                 allow_redirects=False,
             )
             result = _health_response_result(response)

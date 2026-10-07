@@ -1305,6 +1305,11 @@ class ProxmoxEndpoint(EndpointBase):
         is not installed. This module never imports netbox-rpc at load time and
         must never depend on an external control plane.
         """
+        from netbox_proxbox.integrations.rpc import is_netbox_rpc_installed
+
+        if not is_netbox_rpc_installed():
+            return False
+
         try:
             from netbox_rpc.models import RpcPluginSettings
         except ImportError:

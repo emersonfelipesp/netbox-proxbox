@@ -96,6 +96,10 @@ field creation route.
   `0105_reset_implicit_openbao_storage_default`
   is the current schema tip.
 
+  Optional PDM and RPC integrations require the companion plugin to be enabled
+  in NetBox, not merely importable. Installed-but-disabled packages must not
+  render companion tables or query unmigrated companion settings models.
+
   Proxmox node Device names use the effective endpoint/global
   `node_device_name_template`; Proxmox API paths and typed sync identity retain
   the original short node name.
@@ -148,12 +152,29 @@ Removing an inherited environment value cannot erase the original process
 environment from `/proc/<pid>/environ`. The bootstrap must remain non-consuming
 and must not be treated as a security gate.
 
+The Django compatibility matrix has eight independent jobs: five base NetBox
+versions, the PDM registry override, the NetBox 4.7 all-companion configuration,
+and the NetBox 4.7 OpenBao configuration. Keep the original `profile: [base]`
+axis and distinct `all-companions` and `openbao` profile values. Matching
+`include` entries merge into original GitHub matrix combinations; removing
+this discriminator collapses the companion contracts and selects the wrong
+hash lock. Keep each profile paired with its reviewed dependency lock.
+
 The Django workflow includes one immutable NetBox 4.7 cell that installs and
 registers netbox-proxbox together with netbox-ceph, netbox-pbs, netbox-pdm, and
 netbox-packer. Keep every companion checkout pinned by commit, verified by HEAD
 and pyproject digest, resolved from the reviewed hash-locked input, and covered
 by the post-migration registry and system-check assertions. This GitHub evidence
 does not replace a required Gitea pre-merge gate.
+
+The private PBS companion checkout requires the GitHub repository secret
+`COMPANION_READ_SSH_KEY`. Register its public key as a read-only deploy key
+for `emersonfelipesp/netbox-pbs` only and store its private key securely in
+the encrypted Actions secret. Supply it only to the
+conditional PBS credential diagnostic and checkout. Keep
+`persist-credentials: false`; never expose this credential to test processes,
+other checkouts, command text, logs, or artifacts. A missing credential must
+fail clearly without removing the pinned companion or its matrix coverage.
 
 The workflow also includes an immutable NetBox 4.7 OpenBao cell. Keep its
 netbox-openbao and netbox-rpc source commits, pyproject digests, composed input,
@@ -189,6 +210,10 @@ cascades, and OpenBao-to-legacy changes must refuse while owned references or
 assignments remain and require explicit cleanup. Readiness and generic
 assignment selectors may be exposed as secret-free metadata, but live node
 material remains confined to the authenticated hardware credential endpoint.
+Verified Fernet rotation and selective reset may cross the single-secret
+queryset guard only through the private exact model, database alias, field, and
+ciphertext permit. Ordinary or mismatched writes and reference mutations remain
+refused.
 `netbox_proxbox/api/device_openbao_ssh_resolver.py` resolves the by-node SSH
 secrets fallback (used only when no local `NodeSSHCredential` exists) against
 a netbox-openbao `ServiceEndpoint` + `Credential` pair on the node's linked

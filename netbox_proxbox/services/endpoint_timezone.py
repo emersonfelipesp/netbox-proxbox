@@ -74,6 +74,7 @@ def discover_endpoint_timezone(
         f"{quote(node_name, safe='')}/time"
     )
     try:
+        request_timeout = max(0.001, min(float(timeout), ENDPOINT_TIMEZONE_TIMEOUT))
         response = requests.get(
             url,
             params={
@@ -82,7 +83,7 @@ def discover_endpoint_timezone(
             },
             headers=context.headers or {},
             verify=bool(context.verify_ssl),
-            timeout=max(0.001, min(float(timeout), ENDPOINT_TIMEZONE_TIMEOUT)),
+            timeout=request_timeout,
             allow_redirects=False,
         )
         response.raise_for_status()

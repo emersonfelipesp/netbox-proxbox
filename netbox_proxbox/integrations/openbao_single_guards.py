@@ -62,10 +62,20 @@ def _is_owner_model(model: type) -> bool:
     return model._meta.model_name in SPECS
 
 
-def _guard_owner_update(queryset: Any, fields: set[str]) -> None:
+def _guard_owner_update(queryset: Any, updates: dict[str, Any]) -> None:
     spec = spec_for(queryset.model)
-    protected = {spec.reference_field, spec.encrypted_field}
-    if fields.intersection(protected) or _queryset_has_state(queryset):
+    fields = set(updates)
+    if spec.reference_field in fields:
+        raise ValidationError(_CLEANUP)
+    if spec.encrypted_field in fields:
+        from netbox_proxbox.services.encryption_recovery import (
+            _encrypted_queryset_write_permit_matches,
+        )
+
+        if _encrypted_queryset_write_permit_matches(queryset, updates):
+            return
+        raise ValidationError(_CLEANUP)
+    if _queryset_has_state(queryset):
         raise ValidationError(_CLEANUP)
 
 
@@ -134,7 +144,7 @@ def _guard_update(queryset: Any, updates: dict[str, Any]) -> None:
         return
 
     if _is_owner_model(queryset.model):
-        _guard_owner_update(queryset, set(updates))
+        _guard_owner_update(queryset, updates)
     elif queryset.model is ProxboxPluginSettings:
         if "credential_storage_backend" in updates:
             _guard_settings_downgrade(updates["credential_storage_backend"])

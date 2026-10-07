@@ -630,12 +630,13 @@ def sync_firewall(
     # HTTP phase — fetch the summary before touching the DB.
     # -----------------------------------------------------------------------
     try:
+        request_timeout = remaining_timeout(deadline, float(SYNC_TIMEOUT))
         resp = requests.get(
             f"{fastapi_url}/proxmox/firewall/summary",
             params=scope_params,
             headers=auth_headers,
             verify=verify_ssl,
-            timeout=remaining_timeout(deadline, float(SYNC_TIMEOUT)),
+            timeout=request_timeout,
             allow_redirects=False,
         )
         resp.raise_for_status()
@@ -796,6 +797,7 @@ def sync_node_firewall(
 
     # Fetch node rules
     try:
+        request_timeout = remaining_timeout(deadline, float(SYNC_TIMEOUT))
         resp = requests.get(
             f"{fastapi_url}/proxmox/firewall/nodes/{node_segment}/rules",
             params=(
@@ -805,7 +807,7 @@ def sync_node_firewall(
             ),
             headers=auth_headers,
             verify=verify_ssl,
-            timeout=remaining_timeout(deadline, float(SYNC_TIMEOUT)),
+            timeout=request_timeout,
             allow_redirects=False,
         )
         resp.raise_for_status()

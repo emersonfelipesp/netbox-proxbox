@@ -136,9 +136,14 @@ def credential_assignment_lookup(owner: Any) -> dict[str, str] | None:
     }
 
 
-def credential_assignment_readiness(owner: Any) -> tuple[bool, str]:
+def credential_assignment_readiness(
+    owner: Any, *, _uses_openbao_storage: bool | None = None
+) -> tuple[bool, str]:
     """Check assignment metadata without revealing provider material."""
-    if not owner_uses_openbao_storage(owner):
+    uses_openbao_storage = _uses_openbao_storage
+    if uses_openbao_storage is None:
+        uses_openbao_storage = owner_uses_openbao_storage(owner)
+    if not uses_openbao_storage:
         return True, "Legacy storage does not require a provider assignment."
     lookup = credential_assignment_lookup(owner)
     if lookup is None:

@@ -15,6 +15,10 @@ facts that an agent must have even when `@CLAUDE.md` expansion is unavailable:
 
 - Keep changes inside the canonical Emerson repository. Never target EdgeUno.
 - Preserve the public boundary and run `python scripts/check_public_boundary.py`.
+- The private PBS matrix checkout uses `COMPANION_READ_SSH_KEY`, an encrypted
+  Actions secret containing a read-only deploy key for
+  `emersonfelipesp/netbox-pbs` only. Keep credential persistence disabled and
+  keep the private key out of tests, logs, and artifacts.
 - Scan built wheel and source archives with `--artifact`; the reviewed manifest
   covers name, domain, URL, command, path, package, service, distribution,
   workspace, retired contract, and private host identifiers; inspection
@@ -130,6 +134,9 @@ requests, and PBS/PDM companion endpoint records. `ProxboxSyncJob` owns staged
 SSE synchronization; `ProxmoxServiceMonitoringJob` is the one-minute system
 job. The `pxb` CLI provides configuration, backend and inventory inspection,
 headless synchronization, and deterministic CLI documentation capture.
+Optional PDM and RPC integrations require the companion plugin to be enabled in
+NetBox, not merely importable. A package that is installed but disabled must not
+render its tables or query its unmigrated settings model.
 Staged runs isolate required-stage, firewall, and datacenter failures per
 Proxmox endpoint, continue later endpoints, persist each failed scope, and fail
 after all selected endpoints have been attempted. Backend-key and stage
@@ -162,6 +169,10 @@ and OpenBao-to-legacy changes must refuse while owned references or assignments
 remain and require explicit cleanup. Readiness and generic assignment selectors
 may be exposed as secret-free metadata, but live node material remains confined
 to the authenticated hardware credential endpoint.
+Verified Fernet rotation and selective reset may cross the single-secret
+queryset guard only through the private exact model, database alias, field, and
+ciphertext permit. Ordinary or mismatched writes and reference mutations remain
+refused.
 `netbox_proxbox/api/device_openbao_ssh_resolver.py` resolves the by-node SSH
 secrets fallback (used only when no local `NodeSSHCredential` exists) against
 a netbox-openbao `ServiceEndpoint` + `Credential` pair on the node's linked
@@ -231,6 +242,14 @@ with a mode-`0600` or stricter file; `GH_MATRIX_READ_TOKEN` is a weaker fallback
 Removing an inherited environment value cannot erase the original process
 environment from `/proc/<pid>/environ`. The bootstrap must remain non-consuming
 and must not be treated as a security gate.
+
+The Django compatibility matrix has eight independent jobs: five base NetBox
+versions, the PDM registry override, the NetBox 4.7 all-companion configuration,
+and the NetBox 4.7 OpenBao configuration. Keep the original `profile: [base]`
+axis and distinct `all-companions` and `openbao` profile values. Matching
+`include` entries merge into original GitHub matrix combinations; removing
+this discriminator collapses the companion contracts and selects the wrong
+hash lock. Keep each profile paired with its reviewed dependency lock.
 
 The Django workflow includes one immutable NetBox 4.7 cell that installs and
 registers netbox-proxbox together with netbox-ceph, netbox-pbs, netbox-pdm, and

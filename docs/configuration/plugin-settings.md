@@ -501,7 +501,10 @@ rotation** instead:
    private settings-locked internal permit. Rotation, reset, and
    backend-key adoption share one private one-call raw-update helper; it holds the
    settings-row lock and validates every outgoing non-empty ciphertext against
-   the key currently stored there. There is no bulk-write bypass.
+   the key currently stored there. The OpenBao single-secret queryset guard
+   recognizes only that exact model, database alias, field, and ciphertext
+   permit. It still refuses ordinary encrypted-field writes, mismatched permits,
+   and every reference-field mutation. There is no bulk-write bypass.
    Before changing the key, every enabled, adopted, operational proxbox-api
    target must also return
    a successful authenticated, versioned `GET /admin/encryption/status`

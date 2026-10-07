@@ -496,6 +496,7 @@ def sync_vm_templates(
 
     started = time.monotonic()
     try:
+        request_timeout = remaining_timeout(deadline, float(SYNC_TIMEOUT))
         response = requests.get(
             f"{fastapi_url}/proxmox/cluster/resources",
             params={
@@ -505,7 +506,7 @@ def sync_vm_templates(
             },
             headers=auth_headers,
             verify=verify_ssl,
-            timeout=remaining_timeout(deadline, float(SYNC_TIMEOUT)),
+            timeout=request_timeout,
             allow_redirects=False,
         )
         response.raise_for_status()

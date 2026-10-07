@@ -133,6 +133,9 @@ def _stub_proxmox_endpoint_dependencies(monkeypatch):
     utils_pkg = types.ModuleType("netbox_proxbox.utils")
     utils_pkg.encryption = enc_mod
 
+    rpc_integration = types.ModuleType("netbox_proxbox.integrations.rpc")
+    rpc_integration.is_netbox_rpc_installed = lambda: False
+
     attach_credential_storage_backend_choices(choices)
     for name, mod in [
         ("django", django),
@@ -154,6 +157,7 @@ def _stub_proxmox_endpoint_dependencies(monkeypatch):
         ("netbox_proxbox.models.base", base),
         ("netbox_proxbox.models.ssh_credential", ssh_credential),
         ("netbox_proxbox.models.primary_secrets", primary_secrets),
+        ("netbox_proxbox.integrations.rpc", rpc_integration),
         ("netbox_proxbox.utils", utils_pkg),
         ("netbox_proxbox.utils.encryption", enc_mod),
     ]:
@@ -171,6 +175,11 @@ def _stub_netbox_rpc(monkeypatch, *, enabled: bool = True) -> None:
             return types.SimpleNamespace(enabled=enabled)
 
     rpc_models.RpcPluginSettings = _RpcPluginSettings
+    monkeypatch.setattr(
+        sys.modules["netbox_proxbox.integrations.rpc"],
+        "is_netbox_rpc_installed",
+        lambda: True,
+    )
     monkeypatch.setitem(sys.modules, "netbox_rpc", rpc_pkg)
     monkeypatch.setitem(sys.modules, "netbox_rpc.models", rpc_models)
 
