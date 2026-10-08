@@ -813,10 +813,9 @@ def test_endpoint_serializer_openbao_metadata_query_is_list_wide(
         for index in range(endpoint_count)
     ]
     endpoints.append(
-        estate.Endpoint(
+        _saved_openbao_endpoint(
+            estate.Endpoint,
             name="metadata-legacy",
-            domain="pve.example.test",
-            enabled=False,
             credential_storage_backend="legacy_encrypted",
         )
     )
