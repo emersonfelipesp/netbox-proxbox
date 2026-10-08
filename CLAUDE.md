@@ -366,3 +366,15 @@ ordinary save, or upgrade. Failed or stale approval responses require another
 review. Backend health does not substitute for endpoint approval. Keep the
 existing sensitive-data, object permission, disabled-state, and exact-target
 checks authoritative on the server.
+
+Native OpenBao profile fixtures must state their intended storage explicitly.
+Local-encryption suites persist `legacy_encrypted` and a test key before creating
+owners. Target changes carry the authenticated actor through `current_request`
+and restore that context in `finally`. Successful hardware SSH fixtures persist
+`enabled=True` and `api_ssh` at endpoint creation; API-only and disabled-endpoint
+refusal coverage remains separate.
+Migration rewind tests use historical models. Migration `0103` intentionally
+retains physical columns on reversal, so disposable test databases may provide
+those columns with temporary defaults during historical INSERTs and remove the
+defaults immediately afterward. Never apply this fixture DDL to managed databases
+or modify published migrations to accommodate tests.

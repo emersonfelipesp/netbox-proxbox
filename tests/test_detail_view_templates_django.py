@@ -390,6 +390,7 @@ class MissingDetailTemplateRenderTest(TestCase):
         raw_update_fields(
             ProxboxPluginSettings,
             settings_obj.pk,
+            credential_storage_backend="legacy_encrypted",
             encryption_key=encryption_key,
         )
         cls.ssh_credential = NodeSSHCredential.objects.create(
