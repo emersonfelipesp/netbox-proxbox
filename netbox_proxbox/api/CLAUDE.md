@@ -53,6 +53,12 @@ lookup shape. Their create, update, delete, and bulk mutations must begin the
 provider transaction before NetBox enters its framework-owned atomic block and
 must carry the authenticated request actor through that boundary.
 
+Proxmox endpoint serializers resolve OpenBao SSH readiness from one response-
+local metadata query restricted by the authenticated request actor's `reveal`
+scope and the credential policy's group gate. Missing, dangling, unauthorized,
+policy-denied, or wrong-type references fail closed. Serialization never reads
+provider material.
+
 `device_openbao_ssh_resolver.py` resolves the by-node SSH secrets fallback
 against a netbox-openbao `ServiceEndpoint` + `Credential` pair on the node's
 linked `dcim.Device`, gated by the same SSH-access check the local-credential

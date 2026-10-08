@@ -306,8 +306,8 @@ backend target edits remain drafts.
   monitoring eligibility from non-secret endpoint metadata plus response-local
   SSH and RPC readiness, preserve the guarded netbox-rpc model import before
   endpoint overrides, read each required global setting at most once per
-  serializer, and derive SSH readiness only from UUID/ciphertext presence
-  without resolving credential material.
+  serializer, and derive OpenBao SSH readiness from one list-wide, actor-
+  authorized credential metadata query without resolving credential material.
 - Historical migrations are immutable compatibility records. Add a new migration
   for schema changes instead of rewriting an already released migration, except
   when sanitizing non-functional prose without changing migration behavior.

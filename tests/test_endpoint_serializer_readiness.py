@@ -58,6 +58,7 @@ class _Endpoint:
 def _install_storage_resolver(monkeypatch, resolver) -> None:
     module = types.ModuleType("netbox_proxbox.integrations.openbao")
     module.effective_credential_storage_backend = resolver
+    module.is_netbox_openbao_installed = lambda: False
     monkeypatch.setitem(sys.modules, module.__name__, module)
 
 
@@ -84,7 +85,7 @@ def test_global_storage_is_fresh_per_serializer_and_reused_within_one(
 
     assert first.get_has_ssh_password(_Endpoint(pk=1)) is True
     assert first.get_has_ssh_private_key(_Endpoint(pk=2)) is True
-    assert second.get_has_ssh_password(_Endpoint(pk=3)) is True
+    assert second.get_has_ssh_password(_Endpoint(pk=3)) is False
     assert calls == ["resolve", "resolve"]
 
 
@@ -100,7 +101,82 @@ def test_explicit_storage_overrides_do_not_resolve_the_global_default(
     serializer = module.ProxmoxEndpointSerializer()
 
     assert serializer.get_has_ssh_password(_Endpoint(pk=1, storage="legacy_encrypted"))
-    assert serializer.get_has_ssh_private_key(_Endpoint(pk=2, storage="openbao"))
+    assert not serializer.get_has_ssh_private_key(_Endpoint(pk=2, storage="openbao"))
+
+
+def test_openbao_readiness_uses_one_authorized_metadata_map(monkeypatch) -> None:
+    module = _load_endpoint_serializer(monkeypatch)
+    rows = [
+        ("api-password-uuid", "password", None),
+        ("ssh-password-uuid", "ssh-password", 7),
+        ("ssh-keypair-uuid", "wrong-type", None),
+    ]
+    calls = []
+
+    class _CredentialQuery:
+        def restrict(self, user, action):
+            calls.append(("restrict", user, action))
+            return self
+
+        def filter(self, **kwargs):
+            calls.append(("filter", kwargs))
+            return self
+
+        def values_list(self, *fields):
+            calls.append(("values_list", fields))
+            return rows
+
+    class _Groups:
+        def filter(self, **kwargs):
+            calls.append(("groups", kwargs))
+            return self
+
+        def values_list(self, *fields, **kwargs):
+            calls.append(("group_values", fields, kwargs))
+            return [7]
+
+    credential_model = types.SimpleNamespace(objects=_CredentialQuery())
+    django_apps = types.ModuleType("django.apps")
+    django_apps.apps = types.SimpleNamespace(
+        get_model=lambda app, model: credential_model
+    )
+    monkeypatch.setitem(sys.modules, django_apps.__name__, django_apps)
+    _install_storage_resolver(monkeypatch, lambda: "openbao")
+    sys.modules["netbox_proxbox.integrations.openbao"].is_netbox_openbao_installed = (
+        lambda: True
+    )
+    user = types.SimpleNamespace(
+        is_authenticated=True,
+        is_superuser=False,
+        groups=_Groups(),
+    )
+    request = types.SimpleNamespace(user=user)
+    endpoints = [_Endpoint(pk=1), _Endpoint(pk=2, source="reuse_endpoint")]
+    serializer = module.ProxmoxEndpointSerializer(
+        endpoints, many=True, context={"request": request}
+    )
+
+    representations = serializer.data
+
+    assert [item["has_ssh_password"] for item in representations] == [True, True]
+    assert [item["has_ssh_private_key"] for item in representations] == [False, False]
+    assert [item["has_ssh_terminal_credentials"] for item in representations] == [
+        True,
+        True,
+    ]
+    assert [call[0] for call in calls].count("restrict") == 1
+    assert [call[0] for call in calls].count("values_list") == 1
+
+
+def test_openbao_direct_readiness_without_actor_fails_closed(monkeypatch) -> None:
+    module = _load_endpoint_serializer(monkeypatch)
+    _install_storage_resolver(monkeypatch, lambda: "openbao")
+    endpoint = _Endpoint(pk=1, storage="openbao")
+
+    serializer = module.ProxmoxEndpointSerializer()
+
+    assert serializer.get_has_ssh_password(endpoint) is False
+    assert serializer.get_has_ssh_private_key(endpoint) is False
 
 
 def test_absent_rpc_is_checked_once_and_disables_endpoint_overrides(

@@ -52,6 +52,34 @@ SERVICE_MONITORING_ELIGIBILITY_FIELDS = (
 )
 
 
+def _group_openbao_credential_rows(rows) -> dict[str, tuple[str, set[int]]]:
+    """Group one joined metadata result by credential UUID."""
+    grouped: dict[str, tuple[str, set[int]]] = {}
+    for credential_uuid, credential_type, policy_group_id in rows:
+        key = str(credential_uuid)
+        _, policy_groups = grouped.setdefault(key, (credential_type, set()))
+        if policy_group_id is not None:
+            policy_groups.add(policy_group_id)
+    return grouped
+
+
+def _policy_authorized_credential_types(grouped, user) -> dict[str, str]:
+    """Apply the companion policy's empty-group and membership semantics."""
+    if getattr(user, "is_superuser", False):
+        return {key: value[0] for key, value in grouped.items()}
+    referenced_group_ids = {
+        group_id for _, groups in grouped.values() for group_id in groups
+    }
+    permitted_group_ids = set(
+        user.groups.filter(pk__in=referenced_group_ids).values_list("pk", flat=True)
+    )
+    return {
+        key: credential_type
+        for key, (credential_type, policy_groups) in grouped.items()
+        if not policy_groups or policy_groups & permitted_group_ids
+    }
+
+
 class NestedTokenSerializer(WritableNestedSerializer):
     """Minimal token shape for nested NetBox endpoint writes."""
 
@@ -150,16 +178,90 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
         states[key] = (ssh_password, ssh_private_key, terminal_ready)
         return states[key]
 
-    @staticmethod
+    def _openbao_credential_metadata(self, current: ProxmoxEndpoint) -> dict[str, str]:
+        """Return request-authorized credential types for this response."""
+        if hasattr(self, "_openbao_credential_types"):
+            return self._openbao_credential_types
+
+        references = self._openbao_references(current)
+        credential_types: dict[str, str] = {}
+        self._openbao_credential_types = credential_types
+        if not references:
+            return credential_types
+
+        context = getattr(
+            self, "context", getattr(self, "kwargs", {}).get("context", {})
+        )
+        request = context.get("request")
+        user = getattr(request, "user", None)
+        if user is None or not getattr(user, "is_authenticated", False):
+            return credential_types
+
+        from django.apps import apps
+
+        from netbox_proxbox.integrations.openbao import is_netbox_openbao_installed
+
+        if not is_netbox_openbao_installed():
+            return credential_types
+        try:
+            credential_model = apps.get_model("netbox_openbao", "Credential")
+        except LookupError:
+            return credential_types
+
+        rows = (
+            credential_model.objects.restrict(user, "reveal")
+            .filter(uuid__in=references)
+            .values_list("uuid", "credential_type", "policy__groups__pk")
+        )
+        credential_types.update(
+            _policy_authorized_credential_types(
+                _group_openbao_credential_rows(rows), user
+            )
+        )
+        return credential_types
+
+    def _openbao_references(self, current: ProxmoxEndpoint) -> set[str]:
+        """Collect only response-relevant OpenBao SSH references."""
+        parent_instance = getattr(getattr(self, "parent", None), "instance", None)
+        own_instance = getattr(self, "instance", None)
+        if own_instance is None and getattr(self, "args", ()):
+            own_instance = self.args[0]
+        instances = parent_instance if parent_instance is not None else own_instance
+        if instances is None:
+            instances = (current,)
+        if isinstance(instances, ProxmoxEndpoint):
+            instances = (instances,)
+        references = set()
+        for endpoint in instances:
+            if (
+                self._effective_storage_backend(endpoint)
+                != CredentialStorageBackendChoices.OPENBAO
+            ):
+                continue
+            references.update(
+                str(reference)
+                for reference in (
+                    endpoint.openbao_password_credential_uuid,
+                    endpoint.openbao_ssh_password_credential_uuid,
+                    endpoint.openbao_ssh_keypair_credential_uuid,
+                )
+                if reference
+            )
+        return references
+
     def _ssh_secret_presence(
-        obj: ProxmoxEndpoint, *, uses_openbao: bool
+        self, obj: ProxmoxEndpoint, *, uses_openbao: bool
     ) -> tuple[bool, bool, bool]:
-        """Read only UUID/ciphertext presence for endpoint and SSH secrets."""
+        """Read only authorized metadata or local ciphertext presence."""
         if uses_openbao:
+            credential_types = self._openbao_credential_metadata(obj)
             return (
-                bool(obj.openbao_password_credential_uuid),
-                bool(obj.openbao_ssh_password_credential_uuid),
-                bool(obj.openbao_ssh_keypair_credential_uuid),
+                credential_types.get(str(obj.openbao_password_credential_uuid))
+                == "password",
+                credential_types.get(str(obj.openbao_ssh_password_credential_uuid))
+                == "ssh-password",
+                credential_types.get(str(obj.openbao_ssh_keypair_credential_uuid))
+                == "ssh-keypair",
             )
         return (
             bool(obj.password_enc),

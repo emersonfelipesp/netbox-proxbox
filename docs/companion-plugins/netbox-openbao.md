@@ -6,10 +6,13 @@ Mandatory RPC writes and generic OpenBao-backed procedure variables are planned;
 the endpoint storage integration described here already exists.
 
 Unavailable required credentials fail explicitly at secret-access boundaries.
-Password-reuse readiness and list views report SSH as unavailable instead of
-failing the entire response. SSH password reuse returns a safe 503 when stored material cannot be
-resolved; a token-only endpoint still returns 422 because an API token is not an
-SSH password. Scheduled monitoring records an affected endpoint's failure and
+Password-reuse readiness and list views use one response-local metadata lookup
+restricted by the authenticated caller's `reveal` permission and the policy
+group gate. Missing, deleted, denied, or wrong-type references report SSH as
+unavailable without reading provider material or failing the entire response.
+SSH password reuse returns a safe 503 when stored material cannot be resolved;
+a token-only endpoint still returns 422 because an API token is not an SSH
+password. Scheduled monitoring records an affected endpoint's failure and
 continues evaluating other endpoints.
 
 Endpoint edit forms preserve masked values from the original storage backend,
