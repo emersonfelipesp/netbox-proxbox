@@ -1180,6 +1180,25 @@ def _github_event() -> dict:
 _NO_COMMIT = "0" * 40
 
 
+def _commit_tree_and_parents(commit: str) -> tuple[str, tuple[str, ...]]:
+    """Return a commit's nonempty tree and complete, ordered parent list."""
+    result = _git("show", "-s", "--format=%T%n%P", commit)
+    if result.returncode != 0:
+        pytest.fail(
+            f"cannot inspect commit {commit[:12]}: "
+            f"{result.stderr.strip() or 'git show failed'}"
+        )
+    lines = result.stdout.splitlines()
+    if len(lines) != 2 or not lines[0].strip():
+        pytest.fail(f"commit {commit[:12]} returned unusable tree/parent metadata")
+    return lines[0].strip(), tuple(lines[1].split())
+
+
+def _is_verified_metadata_only_replacement(before: str) -> bool:
+    """Whether ``HEAD`` replaced ``before`` without changing tree or parents."""
+    return _commit_tree_and_parents(before) == _commit_tree_and_parents("HEAD")
+
+
 def _push_review_base() -> str:
     """The commit a branch push is reviewed against: what the branch was before.
 
@@ -1187,7 +1206,9 @@ def _push_review_base() -> str:
     checkout the branch ref *is* ``HEAD``, so the merge base against the
     branch would be empty. ``before`` from the event payload is the last
     commit already on the branch; it must exist and be an ancestor of
-    ``HEAD``, otherwise the run is not reviewing what it thinks it is.
+    ``HEAD``. The only non-ancestor exception is a verified metadata-only
+    replacement: both commits must have the same nonempty tree and complete,
+    ordered parent list. The previous commit remains the scan base.
     """
     before = str(_github_event().get("before", "")).strip()
     if not before or before == _NO_COMMIT:
@@ -1196,7 +1217,13 @@ def _push_review_base() -> str:
         )
     if _git("rev-parse", "--verify", "--quiet", f"{before}^{{commit}}").returncode:
         pytest.fail(f"push before-commit {before[:12]} is not in this checkout")
-    if _git("merge-base", "--is-ancestor", before, "HEAD").returncode:
+    ancestry = _git("merge-base", "--is-ancestor", before, "HEAD")
+    if ancestry.returncode not in (0, 1):
+        pytest.fail(
+            f"cannot verify whether push before-commit {before[:12]} is an "
+            f"ancestor of HEAD: {ancestry.stderr.strip() or 'git merge-base failed'}"
+        )
+    if ancestry.returncode == 1 and not _is_verified_metadata_only_replacement(before):
         pytest.fail(f"push before-commit {before[:12]} is not an ancestor of HEAD")
     return before
 
@@ -1392,7 +1419,13 @@ def _fake_git(
 
     def run(args, **kwargs):
         calls.append(list(args))
-        key = " ".join(args[1:3]) if args[1] == "diff" else args[1]
+        key = (
+            " ".join(args[1:])
+            if args[1] == "show"
+            else " ".join(args[1:3])
+            if args[1] == "diff"
+            else args[1]
+        )
         code, out = responses.get(key, responses.get(args[1], (1, "")))
         return subprocess.CompletedProcess(
             args=args, returncode=code, stdout=out, stderr="fatal: bad revision"
@@ -1479,6 +1512,67 @@ def test_push_event_reviews_against_the_previous_branch_tip(
     assert ["git", "merge-base", "--is-ancestor", "a" * 40, "HEAD"] in calls
 
 
+def test_push_event_accepts_verified_message_only_replacement(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    before = "b" * 40
+    tree = "1" * 40
+    parent = "2" * 40
+    _set_event(monkeypatch, tmp_path, "push", before=before, forced=True)
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/develop")
+    calls = _fake_git(
+        monkeypatch,
+        {
+            "rev-parse": (0, f"{before}\n"),
+            "merge-base": (1, ""),
+            f"show -s --format=%T%n%P {before}": (0, f"{tree}\n{parent}\n"),
+            "show -s --format=%T%n%P HEAD": (0, f"{tree}\n{parent}\n"),
+        },
+    )
+
+    assert _review_base() == before
+    assert ["git", "show", "-s", "--format=%T%n%P", before] in calls
+    assert ["git", "show", "-s", "--format=%T%n%P", "HEAD"] in calls
+
+
+@pytest.mark.parametrize(
+    ("before_metadata", "head_metadata"),
+    (
+        pytest.param(
+            f"{'1' * 40}\n{'2' * 40}\n",
+            f"{'3' * 40}\n{'2' * 40}\n",
+            id="changed-tree",
+        ),
+        pytest.param(
+            f"{'1' * 40}\n{'2' * 40}\n",
+            f"{'1' * 40}\n{'3' * 40}\n",
+            id="changed-parents-unrelated-history",
+        ),
+    ),
+)
+def test_push_event_rejects_nonancestor_with_changed_commit_identity(
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
+    before_metadata: str,
+    head_metadata: str,
+) -> None:
+    before = "c" * 40
+    _set_event(monkeypatch, tmp_path, "push", before=before, forced=True)
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/develop")
+    _fake_git(
+        monkeypatch,
+        {
+            "rev-parse": (0, f"{before}\n"),
+            "merge-base": (1, ""),
+            f"show -s --format=%T%n%P {before}": (0, before_metadata),
+            "show -s --format=%T%n%P HEAD": (0, head_metadata),
+        },
+    )
+
+    with pytest.raises(pytest.fail.Exception, match="not an ancestor of HEAD"):
+        _review_base()
+
+
 @pytest.mark.parametrize("before", ["", "0" * 40])
 def test_push_event_without_a_before_commit_fails(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path, before: str
@@ -1495,11 +1589,92 @@ def test_push_event_with_a_foreign_before_commit_fails(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
 ) -> None:
     """A ``before`` that is not an ancestor means the run reviews the wrong range."""
-    _set_event(monkeypatch, tmp_path, "push", before="b" * 40)
+    before = "b" * 40
+    _set_event(monkeypatch, tmp_path, "push", before=before)
     monkeypatch.setenv("GITHUB_REF", "refs/heads/main")
-    _fake_git(monkeypatch, {"rev-parse": (0, "bbb\n"), "merge-base": (1, "")})
+    _fake_git(
+        monkeypatch,
+        {
+            "rev-parse": (0, "bbb\n"),
+            "merge-base": (1, ""),
+            f"show -s --format=%T%n%P {before}": (
+                0,
+                f"{'1' * 40}\n{'2' * 40}\n",
+            ),
+            "show -s --format=%T%n%P HEAD": (
+                0,
+                f"{'1' * 40}\n{'3' * 40}\n",
+            ),
+        },
+    )
 
     with pytest.raises(pytest.fail.Exception, match="not an ancestor of HEAD"):
+        _review_base()
+
+
+def test_push_event_with_a_missing_before_object_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    before = "d" * 40
+    _set_event(monkeypatch, tmp_path, "push", before=before)
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/develop")
+    _fake_git(monkeypatch, {"rev-parse": (1, "")})
+
+    with pytest.raises(pytest.fail.Exception, match="is not in this checkout"):
+        _review_base()
+
+
+def test_push_event_rejects_empty_replacement_metadata(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    before = "e" * 40
+    _set_event(monkeypatch, tmp_path, "push", before=before)
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/develop")
+    _fake_git(
+        monkeypatch,
+        {
+            "rev-parse": (0, f"{before}\n"),
+            "merge-base": (1, ""),
+            f"show -s --format=%T%n%P {before}": (0, "\n\n"),
+        },
+    )
+
+    with pytest.raises(pytest.fail.Exception, match="unusable tree/parent metadata"):
+        _review_base()
+
+
+def test_push_event_fails_when_replacement_metadata_command_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    before = "f" * 40
+    _set_event(monkeypatch, tmp_path, "push", before=before)
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/develop")
+    _fake_git(
+        monkeypatch,
+        {
+            "rev-parse": (0, f"{before}\n"),
+            "merge-base": (1, ""),
+            f"show -s --format=%T%n%P {before}": (128, ""),
+        },
+    )
+
+    with pytest.raises(pytest.fail.Exception, match="cannot inspect commit"):
+        _review_base()
+
+
+@pytest.mark.parametrize("returncode", [128, -9])
+def test_push_event_fails_when_ancestry_command_errors(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path, returncode: int
+) -> None:
+    before = "9" * 40
+    _set_event(monkeypatch, tmp_path, "push", before=before)
+    monkeypatch.setenv("GITHUB_REF", "refs/heads/develop")
+    _fake_git(
+        monkeypatch,
+        {"rev-parse": (0, f"{before}\n"), "merge-base": (returncode, "")},
+    )
+
+    with pytest.raises(pytest.fail.Exception, match="cannot verify whether"):
         _review_base()
 
 
