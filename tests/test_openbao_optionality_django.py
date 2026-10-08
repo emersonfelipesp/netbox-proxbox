@@ -758,7 +758,7 @@ def test_endpoint_serializer_uses_authorized_openbao_metadata(
         rpc_enabled=True,
     )
     endpoint.allow_writes = True
-    request = SimpleNamespace(user=actor)
+    request = _endpoint_readiness_request(actor)
 
     with patch.object(
         openbao,
@@ -776,8 +776,17 @@ def test_endpoint_serializer_uses_authorized_openbao_metadata(
     reveal.assert_not_called()
 
 
+def _endpoint_readiness_request(actor):
+    from django.test import RequestFactory
+
+    request = RequestFactory().get("/", HTTP_HOST="localhost")
+    request.user = actor
+    return request
+
+
+@pytest.mark.parametrize("endpoint_count", [1, 3])
 def test_endpoint_serializer_openbao_metadata_query_is_list_wide(
-    endpoint_readiness_openbao_estate,
+    endpoint_readiness_openbao_estate, endpoint_count
 ):
     from django.db import connection
     from django.test.utils import CaptureQueriesContext
@@ -801,7 +810,7 @@ def test_endpoint_serializer_openbao_metadata_query_is_list_wide(
             openbao_ssh_keypair_credential_uuid=keypair.uuid,
             rpc_enabled=True,
         )
-        for index in range(3)
+        for index in range(endpoint_count)
     ]
     endpoints.append(
         estate.Endpoint(
@@ -811,7 +820,7 @@ def test_endpoint_serializer_openbao_metadata_query_is_list_wide(
             credential_storage_backend="legacy_encrypted",
         )
     )
-    request = SimpleNamespace(user=estate.superuser)
+    request = _endpoint_readiness_request(estate.superuser)
 
     with (
         patch.object(
@@ -831,13 +840,15 @@ def test_endpoint_serializer_openbao_metadata_query_is_list_wide(
         if "netbox_openbao_credential" in query["sql"].lower()
     ]
     assert len(metadata_queries) == 1
-    assert [item["has_ssh_password"] for item in data[:3]] == [True, True, True]
-    assert [item["has_ssh_private_key"] for item in data[:3]] == [True, True, True]
-    assert [item["has_ssh_terminal_credentials"] for item in data[:3]] == [
-        True,
-        True,
-        True,
-    ]
+    assert [item["has_ssh_password"] for item in data[:endpoint_count]] == [
+        True
+    ] * endpoint_count
+    assert [item["has_ssh_private_key"] for item in data[:endpoint_count]] == [
+        True
+    ] * endpoint_count
+    assert [item["has_ssh_terminal_credentials"] for item in data[:endpoint_count]] == [
+        True
+    ] * endpoint_count
     reveal.assert_not_called()
 
     legacy = endpoints[-1]
