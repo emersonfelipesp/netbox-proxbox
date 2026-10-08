@@ -536,7 +536,7 @@ def test_fastapi_openbao_retains_material_and_revalidates_unchanged_token(
 
     owner.domain = "retained-fastapi-moved.example.invalid"
     owner.token = "retained-fastapi-token"
-    request_token = current_request.set(SimpleNamespace(user=actor))
+    request_token = current_request.set(SimpleNamespace(user=actor, id=uuid4()))
     try:
         owner.save()
     finally:
@@ -572,7 +572,7 @@ def test_fastapi_openbao_replaces_failed_legacy_ciphertext_and_partial_rotates(
     owner.refresh_from_db()
     owner.enabled = True
     owner.token = "replacement-provider-token"
-    request_token = current_request.set(SimpleNamespace(user=actor))
+    request_token = current_request.set(SimpleNamespace(user=actor, id=uuid4()))
     try:
         owner.save()
     finally:

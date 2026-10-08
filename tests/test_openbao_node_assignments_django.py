@@ -1099,7 +1099,7 @@ def test_hardware_consumer_api_resolves_fake_material_with_real_token(
     response = client.get(
         reverse(
             "plugins-api:netbox_proxbox-api:api-ssh-credential-secrets",
-            args=[owner.node_id],
+            args=[node.netbox_device_id],
         ),
         HTTP_AUTHORIZATION=f"Token {token.token}",
         secure=True,
