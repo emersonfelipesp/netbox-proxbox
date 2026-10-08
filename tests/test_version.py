@@ -104,12 +104,12 @@ CERTIFICATION_PATH = REPO_ROOT / "CERTIFICATION.md"
 DOCS_CERTIFICATION_PATH = REPO_ROOT / "docs" / "certification.md"
 APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
-CURRENT_PLUGIN_VERSION = "0.0.29.post1"
-CURRENT_RELEASE_VERSION = "0.0.29.post1"
-CURRENT_PACKAGE_VERSION = "0.0.29.post1"
+CURRENT_PLUGIN_VERSION = "0.0.29.post2"
+CURRENT_RELEASE_VERSION = "0.0.29.post2"
+CURRENT_PACKAGE_VERSION = "0.0.29.post2"
 CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.23.post3"
 CURRENT_PAIRING_LINE = (
-    "Current backend-runtime pairing: netbox-proxbox 0.0.29.post1 <-> proxbox-api "
+    "Current backend-runtime pairing: netbox-proxbox 0.0.29.post2 <-> proxbox-api "
     "0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST "
     "dependency only and does not provide the semantic MCP bridge."
 )
@@ -280,7 +280,7 @@ PREVIOUS_PLUGIN_VERSION = "0.0.22"
 PREVIOUS_PROXBOX_API_VERSION = "0.0.19.post5"
 RELEASE_NOTES_029_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.29.md"
 CURRENT_RELEASE_NOTES_PATH = (
-    REPO_ROOT / "docs" / "release-notes" / "version-0.0.29.post1.md"
+    REPO_ROOT / "docs" / "release-notes" / "version-0.0.29.post2.md"
 )
 
 

@@ -112,7 +112,12 @@ configured SSRF policy. Migration `0104_security_hardening` grants
 that view-only permission to the users behind tokens already configured on
 enabled NetBox endpoints at upgrade time. System check `netbox_proxbox.W105`
 (`manage.py check --database default`) reports a configured backend token that
-cannot read the settings. Provision proxbox-api's own local encryption key before
+cannot read the settings. System check `netbox_proxbox.W107` reports a
+configured backend token whose user has no sensitive-data grant. That token
+cannot read the runtime encryption key, so a proxbox-api that relies on the
+plugin key fails every synchronization with HTTP 503. No migration creates the
+grant automatically; prefer proxbox-api's own key, or have an active superuser
+create the grant as an explicit decision. Provision proxbox-api's own local encryption key before
 this deprecated compatibility fallback is removed.
 
 ---

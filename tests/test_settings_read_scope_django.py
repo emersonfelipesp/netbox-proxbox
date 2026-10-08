@@ -426,3 +426,55 @@ class BackendSettingsReadMigrationTests(TestCase):
                 get_user_model().objects.get(pk=self.v1_user.pk), "change"
             ).exists()
         )
+
+
+class BackendSensitiveAccessCheckTests(BackendSettingsAccessCheckTests):
+    """W107 warns when proxbox-api's token cannot receive the runtime key."""
+
+    test_token_without_settings_view_permission_is_reported = None
+    test_token_with_settings_view_permission_is_not_reported = None
+    test_v2_key_identity_is_resolved_too = None
+    test_disabled_endpoint_is_ignored = None
+    test_prefixed_v2_key_is_resolved = None
+    test_unresolvable_configured_identity_is_reported = None
+
+    def test_token_without_sensitive_access_is_reported(self) -> None:
+        self._endpoint(token=self.token)
+
+        self.assertIn("netbox_proxbox.W107", self._ids())
+
+    def test_warning_recommends_independent_key_first(self) -> None:
+        from netbox_proxbox.security_checks import insecure_transport_check
+
+        self._endpoint(token=self.token)
+        warning = next(
+            m
+            for m in insecure_transport_check(databases=["default"])
+            if m.id == "netbox_proxbox.W107"
+        )
+
+        self.assertIn("relies on the plugin key", warning.msg)
+        self.assertTrue(warning.hint.startswith("Prefer giving proxbox-api its own"))
+
+    def test_token_with_sensitive_access_is_not_reported(self) -> None:
+        from netbox_proxbox.models import ProxboxSensitiveDataAccess
+
+        ProxboxSensitiveDataAccess.objects.create(
+            user=self.service_user, can_access_sensitive_data=True
+        )
+        self._endpoint(token=self.token)
+
+        self.assertNotIn("netbox_proxbox.W107", self._ids())
+
+    def test_unresolvable_identity_is_left_to_w105_only(self) -> None:
+        self._endpoint(token=None, token_version="v2", token_key="nbt_doesnotexist0")
+
+        self.assertNotIn("netbox_proxbox.W107", self._ids())
+
+
+def test_security_check_ids_are_unique() -> None:
+    import re as _re
+
+    source = (REPO_ROOT / "netbox_proxbox" / "security_checks.py").read_text()
+    ids = _re.findall(r'id="(netbox_proxbox\.W\d+)"', source)
+    assert len(ids) == len(set(ids)), ids

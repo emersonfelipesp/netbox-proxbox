@@ -107,6 +107,41 @@ def _backend_token_user(endpoint: Any) -> Any:
     return getattr(token, "user", None)
 
 
+def _backend_sensitive_access_warnings() -> list[DjangoWarning]:
+    """Report backend token users that cannot receive the runtime key."""
+    from netbox_proxbox.models import NetBoxEndpoint
+    from netbox_proxbox.sensitive_data import can_access_sensitive_data
+
+    missing: list[str] = []
+    endpoints = NetBoxEndpoint.objects.filter(enabled=True).select_related(
+        "token__user"
+    )
+    for endpoint in endpoints:
+        user = _backend_token_user(endpoint)
+        if user is None or user is _UNRESOLVED:
+            continue
+        if not can_access_sensitive_data(user):
+            missing.append(str(endpoint.name))
+    if not missing:
+        return []
+    return [
+        DjangoWarning(
+            "The NetBox token that proxbox-api uses has no sensitive-data "
+            f"access: {', '.join(missing[:_MAX_LISTED_NAMES])}. That token "
+            "cannot read the plugin encryption key. A proxbox-api that relies "
+            "on the plugin key, instead of its own key, then fails every "
+            "synchronization with HTTP 503.",
+            hint=(
+                "Prefer giving proxbox-api its own encryption key. If it must "
+                "keep using the plugin key, an active superuser can create a "
+                "sensitive-data access grant for the token's user "
+                "(/api/plugins/proxbox/sensitive-data-access/)."
+            ),
+            id="netbox_proxbox.W107",
+        )
+    ]
+
+
 def _backend_settings_access_warnings() -> list[DjangoWarning]:
     from netbox_proxbox.models import NetBoxEndpoint, ProxboxPluginSettings
 
@@ -296,6 +331,7 @@ def insecure_transport_check(app_configs: Any = None, **kwargs: Any) -> list[Any
         _unverified_proxmox_warnings,
         _legacy_key_warnings,
         _backend_settings_access_warnings,
+        _backend_sensitive_access_warnings,
         _unavailable_openbao_storage_warnings,
     )
     results: list[Any] = []
