@@ -83,12 +83,18 @@ def _device(name: str):
     return create_test_device(name)
 
 
-def _node(*, device=None, name: str = "OpenBao node", access_methods: str = "api"):
+def _node(
+    *,
+    device=None,
+    name: str = "OpenBao node",
+    access_methods: str = "api",
+    enabled: bool = False,
+):
     from netbox_proxbox.models import ProxmoxEndpoint, ProxmoxNode
 
     endpoint = ProxmoxEndpoint.objects.create(
         name=f"{name} endpoint",
-        enabled=False,
+        enabled=enabled,
         access_methods=access_methods,
         credential_storage_backend="openbao",
     )
@@ -1073,13 +1079,21 @@ def test_hardware_consumer_api_resolves_fake_material_with_real_token(
         device=_device("hardware-api-device"),
         name="hardware-api-node",
         access_methods="api_ssh",
+        enabled=True,
     )
+    assert node.endpoint.enabled is True
     assert node.endpoint.access_methods == "api_ssh"
     assert (
         type(node.endpoint)
         .objects.values_list("access_methods", flat=True)
         .get(pk=node.endpoint_id)
         == "api_ssh"
+    )
+    assert (
+        type(node.endpoint)
+        .objects.values_list("enabled", flat=True)
+        .get(pk=node.endpoint_id)
+        is True
     )
     owner = _owner(
         node,
