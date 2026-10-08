@@ -16,7 +16,9 @@ from rest_framework import serializers
 from users.models import Token
 
 from netbox_proxbox.choices import (
+    CredentialStorageBackendChoices,
     NetBoxTokenVersionChoices,
+    ProxmoxAccessMethodChoices,
     ProxmoxEndpointEnvironmentChoices,
     ProxmoxModeChoices,
 )
@@ -24,6 +26,10 @@ from netbox_proxbox.constants import OVERWRITE_FIELDS, SYNC_MODE_FIELDS
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
 from netbox_proxbox.models.proxmox_endpoint import (
     SERVICE_MONITORING_INELIGIBLE_MESSAGE,
+)
+from netbox_proxbox.models.ssh_credential import (
+    AUTH_METHOD_KEY,
+    SSH_CRED_SOURCE_REUSE,
 )
 
 
@@ -44,6 +50,34 @@ SERVICE_MONITORING_ELIGIBILITY_FIELDS = (
     "rpc_enabled",
     "service_monitoring_enabled",
 )
+
+
+def _group_openbao_credential_rows(rows) -> dict[str, tuple[str, set[int]]]:
+    """Group one joined metadata result by credential UUID."""
+    grouped: dict[str, tuple[str, set[int]]] = {}
+    for credential_uuid, credential_type, policy_group_id in rows:
+        key = str(credential_uuid)
+        _, policy_groups = grouped.setdefault(key, (credential_type, set()))
+        if policy_group_id is not None:
+            policy_groups.add(policy_group_id)
+    return grouped
+
+
+def _policy_authorized_credential_types(grouped, user) -> dict[str, str]:
+    """Apply the companion policy's empty-group and membership semantics."""
+    if getattr(user, "is_superuser", False):
+        return {key: value[0] for key, value in grouped.items()}
+    referenced_group_ids = {
+        group_id for _, groups in grouped.values() for group_id in groups
+    }
+    permitted_group_ids = set(
+        user.groups.filter(pk__in=referenced_group_ids).values_list("pk", flat=True)
+    )
+    return {
+        key: credential_type
+        for key, (credential_type, policy_groups) in grouped.items()
+        if not policy_groups or policy_groups & permitted_group_ids
+    }
 
 
 class NestedTokenSerializer(WritableNestedSerializer):
@@ -92,19 +126,228 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     site = SiteSerializer(nested=True, required=False, allow_null=True)
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
     allowed_tenants = TenantSerializer(nested=True, many=True, required=False)
-    has_ssh_password = serializers.BooleanField(read_only=True)
-    has_ssh_private_key = serializers.BooleanField(read_only=True)
-    has_ssh_terminal_credentials = serializers.BooleanField(read_only=True)
-    service_monitoring_eligible = serializers.BooleanField(read_only=True)
+    has_ssh_password = serializers.SerializerMethodField(read_only=True)
+    has_ssh_private_key = serializers.SerializerMethodField(read_only=True)
+    has_ssh_terminal_credentials = serializers.SerializerMethodField(read_only=True)
+    service_monitoring_eligible = serializers.SerializerMethodField(read_only=True)
     service_monitoring_last_success_at = serializers.DateTimeField(read_only=True)
     service_monitoring_last_status = serializers.CharField(read_only=True)
     service_monitoring_last_error = serializers.CharField(read_only=True)
     packer_template_builds_backend_authorized = serializers.BooleanField(read_only=True)
     effective_rpc_enabled = serializers.SerializerMethodField(read_only=True)
 
+    def _effective_storage_backend(self, obj: ProxmoxEndpoint) -> str:
+        """Resolve an endpoint override before the request-local global default."""
+        override = str(getattr(obj, "credential_storage_backend", "") or "")
+        if override:
+            return override
+
+        backend = getattr(self, "_global_credential_storage_backend", None)
+        if backend is None:
+            from netbox_proxbox.integrations.openbao import (
+                effective_credential_storage_backend,
+            )
+
+            backend = effective_credential_storage_backend()
+            self._global_credential_storage_backend = backend
+        return backend
+
+    def _ssh_readiness(self, obj: ProxmoxEndpoint) -> tuple[bool, bool, bool]:
+        """Return password, key, and terminal readiness without reading material."""
+        states = getattr(self, "_ssh_readiness_states", None)
+        if states is None:
+            states = {}
+            self._ssh_readiness_states = states
+        key = getattr(obj, "pk", None) or id(obj)
+        if key in states:
+            return states[key]
+
+        uses_openbao = (
+            self._effective_storage_backend(obj)
+            == CredentialStorageBackendChoices.OPENBAO
+        )
+        endpoint_password, ssh_password, ssh_private_key = self._ssh_secret_presence(
+            obj, uses_openbao=uses_openbao
+        )
+        terminal_ready = self._ssh_terminal_ready(
+            obj,
+            endpoint_password=endpoint_password,
+            ssh_password=ssh_password,
+            ssh_private_key=ssh_private_key,
+        )
+        states[key] = (ssh_password, ssh_private_key, terminal_ready)
+        return states[key]
+
+    def _openbao_credential_metadata(self, current: ProxmoxEndpoint) -> dict[str, str]:
+        """Return request-authorized credential types for this response."""
+        if hasattr(self, "_openbao_credential_types"):
+            return self._openbao_credential_types
+
+        references = self._openbao_references(current)
+        credential_types: dict[str, str] = {}
+        self._openbao_credential_types = credential_types
+        if not references:
+            return credential_types
+
+        context = getattr(
+            self, "context", getattr(self, "kwargs", {}).get("context", {})
+        )
+        request = context.get("request")
+        user = getattr(request, "user", None)
+        if user is None or not getattr(user, "is_authenticated", False):
+            return credential_types
+
+        from django.apps import apps
+
+        from netbox_proxbox.integrations.openbao import is_netbox_openbao_installed
+
+        if not is_netbox_openbao_installed():
+            return credential_types
+        try:
+            credential_model = apps.get_model("netbox_openbao", "Credential")
+        except LookupError:
+            return credential_types
+
+        rows = (
+            credential_model.objects.restrict(user, "reveal")
+            .filter(uuid__in=references)
+            .values_list("uuid", "credential_type", "policy__groups__pk")
+        )
+        credential_types.update(
+            _policy_authorized_credential_types(
+                _group_openbao_credential_rows(rows), user
+            )
+        )
+        return credential_types
+
+    def _openbao_references(self, current: ProxmoxEndpoint) -> set[str]:
+        """Collect only response-relevant OpenBao SSH references."""
+        parent_instance = getattr(getattr(self, "parent", None), "instance", None)
+        own_instance = getattr(self, "instance", None)
+        if own_instance is None and getattr(self, "args", ()):
+            own_instance = self.args[0]
+        instances = parent_instance if parent_instance is not None else own_instance
+        if instances is None:
+            instances = (current,)
+        if isinstance(instances, ProxmoxEndpoint):
+            instances = (instances,)
+        references = set()
+        for endpoint in instances:
+            if (
+                self._effective_storage_backend(endpoint)
+                != CredentialStorageBackendChoices.OPENBAO
+            ):
+                continue
+            references.update(
+                str(reference)
+                for reference in (
+                    endpoint.openbao_password_credential_uuid,
+                    endpoint.openbao_ssh_password_credential_uuid,
+                    endpoint.openbao_ssh_keypair_credential_uuid,
+                )
+                if reference
+            )
+        return references
+
+    def _ssh_secret_presence(
+        self, obj: ProxmoxEndpoint, *, uses_openbao: bool
+    ) -> tuple[bool, bool, bool]:
+        """Read only authorized metadata or local ciphertext presence."""
+        if uses_openbao:
+            credential_types = self._openbao_credential_metadata(obj)
+            return (
+                credential_types.get(str(obj.openbao_password_credential_uuid))
+                == "password",
+                credential_types.get(str(obj.openbao_ssh_password_credential_uuid))
+                == "ssh-password",
+                credential_types.get(str(obj.openbao_ssh_keypair_credential_uuid))
+                == "ssh-keypair",
+            )
+        return (
+            bool(obj.password_enc),
+            bool(obj.ssh_password_enc),
+            bool(obj.ssh_private_key_enc),
+        )
+
+    @staticmethod
+    def _ssh_terminal_ready(
+        obj: ProxmoxEndpoint,
+        *,
+        endpoint_password: bool,
+        ssh_password: bool,
+        ssh_private_key: bool,
+    ) -> bool:
+        """Combine non-secret endpoint metadata with the selected secret state."""
+        if obj.ssh_credential_source == SSH_CRED_SOURCE_REUSE:
+            return bool(
+                obj.ssh_host
+                and obj.ssh_known_host_fingerprint
+                and obj.effective_ssh_username
+                and endpoint_password
+            )
+        selected_secret = (
+            ssh_private_key if obj.ssh_auth_method == AUTH_METHOD_KEY else ssh_password
+        )
+        return bool(
+            obj.ssh_host
+            and obj.ssh_username
+            and obj.ssh_known_host_fingerprint
+            and selected_secret
+        )
+
+    def get_has_ssh_password(self, obj: ProxmoxEndpoint) -> bool:
+        return self._ssh_readiness(obj)[0]
+
+    def get_has_ssh_private_key(self, obj: ProxmoxEndpoint) -> bool:
+        return self._ssh_readiness(obj)[1]
+
+    def get_has_ssh_terminal_credentials(self, obj: ProxmoxEndpoint) -> bool:
+        return self._ssh_readiness(obj)[2]
+
+    def get_service_monitoring_eligible(self, obj: ProxmoxEndpoint) -> bool:
+        """Return secret-free, response-local service-monitoring readiness."""
+        return bool(
+            obj.allow_writes
+            and obj.access_methods == ProxmoxAccessMethodChoices.API_SSH
+            and self._ssh_readiness(obj)[2]
+            and self.get_effective_rpc_enabled(obj)
+        )
+
+    def _rpc_settings_model(self) -> type | None:
+        """Cache the optional companion's guarded settings-model import."""
+        if hasattr(self, "_rpc_plugin_settings_model"):
+            return self._rpc_plugin_settings_model
+
+        from netbox_proxbox.integrations.rpc import is_netbox_rpc_installed
+
+        if not is_netbox_rpc_installed():
+            settings_model = None
+        else:
+            try:
+                from netbox_rpc.models import RpcPluginSettings
+            except ImportError:
+                settings_model = None
+            else:
+                settings_model = RpcPluginSettings
+        self._rpc_plugin_settings_model = settings_model
+        return settings_model
+
     def get_effective_rpc_enabled(self, obj: ProxmoxEndpoint) -> bool:
         """Resolved netbox-rpc enablement: installed, then endpoint override/global."""
-        return obj.effective_rpc_enabled()
+        settings_model = self._rpc_settings_model()
+        if settings_model is None:
+            return False
+        if obj.rpc_enabled is not None:
+            return bool(obj.rpc_enabled)
+
+        enabled = getattr(self, "_global_rpc_enabled", None)
+        if enabled is None:
+            try:
+                enabled = bool(settings_model.get_solo().enabled)
+            except Exception:  # noqa: BLE001 - preserve fail-closed readiness
+                enabled = False
+            self._global_rpc_enabled = enabled
+        return enabled
 
     def validate_credential_storage_backend(self, value: str) -> str:
         """Reject a newly selected unavailable companion backend."""

@@ -251,6 +251,26 @@ def _stub_endpoint_serializer_dependencies(monkeypatch):
         def validate(self, attrs):
             return attrs
 
+        def _serialize(self, instance):
+            representation = {}
+            for field_name in self.Meta.fields:
+                getter = getattr(self, f"get_{field_name}", None)
+                if getter is not None:
+                    representation[field_name] = getter(instance)
+                    continue
+                field = getattr(type(self), field_name, None)
+                if getattr(field, "kwargs", {}).get("write_only"):
+                    continue
+                representation[field_name] = getattr(instance, field_name, None)
+            return representation
+
+        @property
+        def data(self):
+            instance = self.args[0]
+            if self.kwargs.get("many"):
+                return [self._serialize(item) for item in instance]
+            return self._serialize(instance)
+
     rest_framework = types.ModuleType("rest_framework")
     serializers = types.ModuleType("rest_framework.serializers")
     for name in (
@@ -289,6 +309,7 @@ def _stub_endpoint_serializer_dependencies(monkeypatch):
     choices.NetBoxTokenVersionChoices = types.SimpleNamespace(V1="v1", V2="v2")
     choices.ProxmoxEndpointEnvironmentChoices = []
     choices.ProxmoxModeChoices = []
+    choices.ProxmoxAccessMethodChoices = types.SimpleNamespace(API_SSH="api_ssh")
 
     constants = types.ModuleType("netbox_proxbox.constants")
     constants.OVERWRITE_FIELDS = ()
@@ -326,6 +347,9 @@ def _stub_endpoint_serializer_dependencies(monkeypatch):
 
     proxmox_endpoint = types.ModuleType("netbox_proxbox.models.proxmox_endpoint")
     proxmox_endpoint.SERVICE_MONITORING_INELIGIBLE_MESSAGE = "ineligible"
+    ssh_credential = types.ModuleType("netbox_proxbox.models.ssh_credential")
+    ssh_credential.AUTH_METHOD_KEY = "key"
+    ssh_credential.SSH_CRED_SOURCE_REUSE = "reuse_endpoint"
 
     np_pkg = types.ModuleType("netbox_proxbox")
     np_pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox")]
@@ -356,6 +380,7 @@ def _stub_endpoint_serializer_dependencies(monkeypatch):
         ("netbox_proxbox.constants", constants),
         ("netbox_proxbox.models", models),
         ("netbox_proxbox.models.proxmox_endpoint", proxmox_endpoint),
+        ("netbox_proxbox.models.ssh_credential", ssh_credential),
     ]:
         monkeypatch.setitem(sys.modules, name, mod)
 

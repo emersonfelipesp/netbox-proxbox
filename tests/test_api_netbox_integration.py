@@ -37,6 +37,7 @@ except Exception as exc:  # pragma: no cover - depends on external test services
         f"NetBox test environment is not available: {exc}", allow_module_level=True
     )
 
+from django.conf import settings  # noqa: E402
 from django.urls import reverse  # noqa: E402
 from ipam.models import IPAddress  # noqa: E402
 from users.models import Token  # noqa: E402
@@ -88,6 +89,12 @@ class _ProxboxAPIViewTestCase(
         comparison_version, _display_version = detect_netbox_version()
         if comparison_version == "4.6.6":
             return f"{model_name}-netbox-4-6-6"
+        if (
+            comparison_version == "4.7.0"
+            and model_name == "proxmoxendpoint"
+            and "netbox_rpc" in settings.PLUGINS
+        ):
+            return f"{model_name}-netbox-4-7-0-rpc"
         return model_name
 
     def _get_detail_url(self, instance):

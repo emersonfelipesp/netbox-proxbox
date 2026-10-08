@@ -6,6 +6,7 @@ import sys
 import types
 from types import SimpleNamespace
 from unittest.mock import patch
+from uuid import uuid4
 
 from cryptography.fernet import Fernet
 import pytest
@@ -649,6 +650,216 @@ def test_endpoint_list_serializes_failed_openbao_ssh_readiness(
     assert data[0]["has_ssh_terminal_credentials"] is False
     assert data[0]["service_monitoring_eligible"] is False
     assert "secret-canary" not in str(data)
+
+
+@pytest.fixture
+def endpoint_readiness_openbao_estate(optionality_models):
+    from django.contrib.auth import get_user_model
+    from django.contrib.contenttypes.models import ContentType
+    from netbox_proxbox.integrations.openbao import is_netbox_openbao_installed
+    from users.models import Group, ObjectPermission
+
+    if not is_netbox_openbao_installed():
+        pytest.skip("The native metadata estate requires enabled netbox-openbao.")
+    from netbox_openbao.models import Credential, CredentialPolicy, SecretEngine
+
+    _, Endpoint = optionality_models
+    engine = SecretEngine.objects.create(
+        name=f"Serializer readiness {uuid4()}",
+        slug=f"serializer-readiness-{uuid4()}",
+        api_url="https://bao.invalid:8200",
+        kv_mount="secret",
+    )
+    policy = CredentialPolicy.objects.create(
+        name=f"Serializer readiness {uuid4()}",
+        slug=f"serializer-readiness-{uuid4()}",
+        engine=engine,
+        openbao_policy="netbox-proxbox-readiness",
+    )
+    allowed_group = Group.objects.create(name=f"readiness-allowed-{uuid4()}")
+    denied_group = Group.objects.create(name=f"readiness-denied-{uuid4()}")
+    reveal_permission = ObjectPermission.objects.create(
+        name=f"Readiness reveal {uuid4()}", actions=["reveal"]
+    )
+    reveal_permission.object_types.add(ContentType.objects.get_for_model(Credential))
+    user_model = get_user_model()
+    authorized = user_model.objects.create_user(username=f"authorized-{uuid4()}")
+    reveal_permission.users.add(authorized)
+    authorized.groups.add(allowed_group)
+    denied = user_model.objects.create_user(username=f"denied-{uuid4()}")
+    policy_denied = user_model.objects.create_user(username=f"policy-denied-{uuid4()}")
+    reveal_permission.users.add(policy_denied)
+    policy_denied.groups.add(denied_group)
+    superuser = user_model.objects.create_superuser(
+        username=f"superuser-{uuid4()}", email="", password=None
+    )
+
+    def credential(credential_type: str):
+        credential_uuid = uuid4()
+        return Credential.objects.create(
+            name=f"Readiness {credential_uuid}",
+            uuid=credential_uuid,
+            credential_type=credential_type,
+            policy=policy,
+            engine=engine,
+            path=f"credentials/{credential_uuid}",
+        )
+
+    return SimpleNamespace(
+        Endpoint=Endpoint,
+        policy=policy,
+        allowed_group=allowed_group,
+        authorized=authorized,
+        denied=denied,
+        policy_denied=policy_denied,
+        superuser=superuser,
+        credential=credential,
+    )
+
+
+@pytest.mark.parametrize(
+    ("case", "expected"),
+    [
+        ("missing", False),
+        ("deleted", False),
+        ("denied", False),
+        ("authorized", True),
+        ("wrong_type", False),
+        ("policy_denied", False),
+    ],
+)
+def test_endpoint_serializer_uses_authorized_openbao_metadata(
+    endpoint_readiness_openbao_estate, case, expected
+):
+    from netbox_proxbox.api.serializers.endpoints import ProxmoxEndpointSerializer
+    from netbox_proxbox.integrations import openbao
+
+    estate = endpoint_readiness_openbao_estate
+    actor = estate.authorized
+    reference = None
+    if case != "missing":
+        credential = estate.credential(
+            "api-token" if case == "wrong_type" else "password"
+        )
+        reference = credential.uuid
+        if case == "deleted":
+            credential.delete()
+        elif case == "denied":
+            actor = estate.denied
+        elif case == "policy_denied":
+            estate.policy.groups.add(estate.allowed_group)
+            actor = estate.policy_denied
+    endpoint = _saved_openbao_endpoint(
+        estate.Endpoint,
+        ssh_credential_source="reuse_endpoint",
+        access_methods="api_ssh",
+        ssh_known_host_fingerprint="SHA256:test",
+        openbao_password_credential_uuid=reference,
+        rpc_enabled=True,
+    )
+    endpoint.allow_writes = True
+    request = _endpoint_readiness_request(actor)
+
+    with patch.object(
+        openbao,
+        "reveal_credential_material",
+        side_effect=AssertionError("serialization must not reveal material"),
+    ) as reveal:
+        data = ProxmoxEndpointSerializer(
+            [endpoint], many=True, context={"request": request}
+        ).data[0]
+
+    assert data["has_ssh_terminal_credentials"] is expected
+    assert data["service_monitoring_eligible"] is expected
+    assert data["has_ssh_password"] is False
+    assert data["has_ssh_private_key"] is False
+    reveal.assert_not_called()
+
+
+def _endpoint_readiness_request(actor):
+    from django.test import RequestFactory
+
+    request = RequestFactory().get("/", HTTP_HOST="localhost")
+    request.user = actor
+    return request
+
+
+@pytest.mark.parametrize("endpoint_count", [1, 3])
+def test_endpoint_serializer_openbao_metadata_query_is_list_wide(
+    endpoint_readiness_openbao_estate, endpoint_count
+):
+    from django.db import connection
+    from django.test.utils import CaptureQueriesContext
+    from netbox_proxbox.api.serializers.endpoints import ProxmoxEndpointSerializer
+    from netbox_proxbox.integrations import openbao
+
+    estate = endpoint_readiness_openbao_estate
+    password = estate.credential("password")
+    ssh_password = estate.credential("ssh-password")
+    keypair = estate.credential("ssh-keypair")
+    endpoints = [
+        _saved_openbao_endpoint(
+            estate.Endpoint,
+            f"metadata-{index}",
+            ssh_credential_source="dedicated",
+            ssh_auth_method="key" if index == 2 else "password",
+            ssh_username="root",
+            ssh_known_host_fingerprint="SHA256:test",
+            openbao_password_credential_uuid=password.uuid,
+            openbao_ssh_password_credential_uuid=ssh_password.uuid,
+            openbao_ssh_keypair_credential_uuid=keypair.uuid,
+            rpc_enabled=True,
+        )
+        for index in range(endpoint_count)
+    ]
+    endpoints.append(
+        _saved_openbao_endpoint(
+            estate.Endpoint,
+            name="metadata-legacy",
+            credential_storage_backend="legacy_encrypted",
+        )
+    )
+    request = _endpoint_readiness_request(estate.superuser)
+
+    with (
+        patch.object(
+            openbao,
+            "reveal_credential_material",
+            side_effect=AssertionError("serialization must not reveal material"),
+        ) as reveal,
+        CaptureQueriesContext(connection) as captured,
+    ):
+        data = ProxmoxEndpointSerializer(
+            endpoints, many=True, context={"request": request}
+        ).data
+
+    metadata_queries = [
+        query["sql"]
+        for query in captured.captured_queries
+        if "netbox_openbao_credential" in query["sql"].lower()
+    ]
+    assert len(metadata_queries) == 1
+    assert [item["has_ssh_password"] for item in data[:endpoint_count]] == [
+        True
+    ] * endpoint_count
+    assert [item["has_ssh_private_key"] for item in data[:endpoint_count]] == [
+        True
+    ] * endpoint_count
+    assert [item["has_ssh_terminal_credentials"] for item in data[:endpoint_count]] == [
+        True
+    ] * endpoint_count
+    reveal.assert_not_called()
+
+    legacy = endpoints[-1]
+    with CaptureQueriesContext(connection) as legacy_queries:
+        ProxmoxEndpointSerializer(
+            [legacy], many=True, context={"request": request}
+        ).data
+    assert not [
+        query["sql"]
+        for query in legacy_queries.captured_queries
+        if "netbox_openbao_credential" in query["sql"].lower()
+    ]
 
 
 @pytest.mark.parametrize("eligibility_raises", [False, True])

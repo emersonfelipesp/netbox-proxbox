@@ -113,7 +113,9 @@ def test_serializer_exposes_rpc_fields() -> None:
     assert '"rpc_enabled"' in src
     assert '"effective_rpc_enabled"' in src
     assert "def get_effective_rpc_enabled" in src
-    assert "obj.effective_rpc_enabled()" in src
+    assert "is_netbox_rpc_installed()" in src
+    assert "settings_model.get_solo().enabled" in src
+    assert "except ImportError" in src
 
 
 def test_migration_adds_rpc_enabled_field() -> None:
