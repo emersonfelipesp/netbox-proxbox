@@ -82,7 +82,12 @@ class NetBoxEndpointTablePrefetchTests(TestCase):
         )
         table = NetBoxEndpointTable(NetBoxEndpoint.objects.all())
         table.columns.show("token")
-        table._apply_prefetching(columns=["token"])
+        # NetBox 4.5.8 only accepts the no-argument form; 4.6+/4.7 keep that
+        # visible-column path when columns=None. Show the token column first so
+        # shared prefetching schedules the relation on every supported release.
+        table._apply_prefetching()
+
+        self.assertIn("token", table.data.data._prefetch_related_lookups)
 
         rows = list(table.data.data)
         self.assertEqual(len(rows), 1)

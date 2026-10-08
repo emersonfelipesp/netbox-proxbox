@@ -269,6 +269,9 @@ a newer app-registry class identity; narrow the compatibility fixture while
 retaining isolated coverage of the published behavior. Version-specific
 query-count baselines are allowed only for a demonstrated NetBox core query-plan
 difference and must be verified in the affected and adjacent matrix lanes.
+Native table tests must exercise shared supported NetBox table behavior across
+4.5.8 through 4.7.0: keep the token column visible before calling no-argument
+`_apply_prefetching()`, which every supported release accepts.
 
 ## Connection approval recovery
 
