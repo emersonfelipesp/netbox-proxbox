@@ -115,9 +115,9 @@ CURRENT_PAIRING_LINE = (
 )
 PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.23.post3"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
-# Ceiling of the backward-compatible stable tier, including NetBox 4.7 GA.
-CURRENT_NETBOX_STABLE_MAX_VERSION = "4.7.0"
-CURRENT_NETBOX_MAX_VERSION = "4.7.0"
+# Ceiling of the backward-compatible stable tier: the whole NetBox 4.7 series.
+CURRENT_NETBOX_STABLE_MAX_VERSION = "4.7.99"
+CURRENT_NETBOX_MAX_VERSION = "4.7.99"
 CURRENT_NETBOX_EXPERIMENTAL_TAG = "pre-release"
 CURRENT_NETBOX_SUPPORT_LABEL = "4.5.8-4.7.0 GA"
 LATEST_CERTIFIED_NETBOX_VERSION = "4.7.0"
@@ -507,6 +507,8 @@ def test_certified_netbox_versions_are_documented():
         INSTALL_GIT_PATH,
         UPGRADING_PATH,
         CURRENT_RELEASE_NOTES_PATH,
+        RELEASE_NOTES_INDEX_PATH,
+        DOCS_CERTIFICATION_PATH,
     )
     for path in docs_with_explicit_range:
         text = _read(path)

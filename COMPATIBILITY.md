@@ -11,15 +11,15 @@ vendored byte-identically across the whole Proxbox plugin stack
 
 | Tier | NetBox range | Constant | Behaviour |
 |---|---|---|---|
-| Stable | `4.5.8` – `4.7.0` | `STABLE_MIN_NETBOX_VERSION` / `STABLE_MAX_NETBOX_VERSION` | Admitted silently. CI exercises NetBox 4.5.8, 4.5.10, 4.6.0, 4.6.6, and 4.7.0. |
+| Stable | `4.5.8` – `4.7.99` | `STABLE_MIN_NETBOX_VERSION` / `STABLE_MAX_NETBOX_VERSION` | Admitted silently. CI exercises NetBox 4.5.8, 4.5.10, 4.6.0, 4.6.6, and 4.7.0; the rest of the 4.7 patch series up to 4.7.99 (for example 4.7.2) is admitted by the numeric gate without a dedicated CI cell. |
 | Experimental | NetBox 4.7.0 pre-release builds within the declared loader range | Advisory warning via system check `netbox_proxbox.W001`; not a GA support promise. |
 
 `PluginConfig.min_version` is `4.5.8` and `PluginConfig.max_version` is
-`4.7.0`. Official NetBox 4.7.0 GA is stable, so an operator can upgrade
+`4.7.99`, so every NetBox 4.7 patch release (4.7.0, 4.7.2, and later; only 4.7.0 has a dedicated CI cell) is admitted without a plugin update. Official NetBox 4.7 GA is stable, so an operator can upgrade
 NetBox without changing plugin configuration or database state. Pre-release
 builds are outside the GA promise and receive an advisory warning.
 
-Anything below `4.5.8` or above `4.7.0` is refused by NetBox's own plugin
+Anything below `4.5.8` or above `4.7.99` is refused by NetBox's own plugin
 version gate. The pre-release advisory is silenceable through the
 `silence_netbox_compatibility_warning` key in this plugin's `PLUGINS_CONFIG`
 entry.

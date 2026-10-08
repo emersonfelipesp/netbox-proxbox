@@ -2,7 +2,7 @@
 
 ## Read This First
 
-The current repository code targets NetBox `4.5.8` through `4.7.0`, including
+The current repository code targets NetBox `4.5.8` through `4.7.99`, including
 official `v4.7.0` GA (validated against `v4.5.8` through `v4.5.10`, `v4.6.0`
 through `v4.6.6`, and `v4.7.0`).
 

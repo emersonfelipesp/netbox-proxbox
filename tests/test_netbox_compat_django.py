@@ -73,7 +73,7 @@ def test_plugin_config_sources_its_bounds_from_compat() -> None:
     )
 
     assert ProxboxConfig.min_version == PLUGIN_MIN_VERSION == STABLE_MIN_NETBOX_VERSION
-    assert ProxboxConfig.max_version == PLUGIN_MAX_VERSION == "4.7.0"
+    assert ProxboxConfig.max_version == PLUGIN_MAX_VERSION == "4.7.99"
 
 
 def test_running_netbox_release_is_admitted_by_the_declared_range() -> None:

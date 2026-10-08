@@ -41,8 +41,10 @@ plugin key after the plugin's per-sync endpoint push until they restarted.
 
 ## Compatibility baseline
 
-The support contract remains NetBox `4.5.8` through `4.7.0` GA. This maintenance
-source retains the preceding backend pairing.
+The support contract was NetBox `4.5.8` through `4.7.0` GA when this maintenance
+source was cut. Current source widens the plugin ceiling to `4.7.99` so NetBox
+4.7 patch releases such as `4.7.2` load without a plugin update. This
+maintenance source retains the preceding backend pairing.
 
 Current backend-runtime pairing: netbox-proxbox 0.0.29.post2 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 

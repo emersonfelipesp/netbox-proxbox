@@ -3,8 +3,9 @@
 This module is vendored byte-for-byte in ``netbox-proxbox``, ``netbox-ceph``,
 ``netbox-packer``, ``netbox-pbs``, and ``netbox-pdm``. Keep the five copies
 identical. The Emerson-owned stack retains its NetBox 4.5.8 floor while adding
-official NetBox 4.7.0 GA support, so existing installations can
-upgrade NetBox without changing plugin configuration or database state.
+support for the whole NetBox 4.7 series (through 4.7.99), so existing
+installations can upgrade NetBox patch releases without changing plugin
+configuration or database state.
 
 NetBox imports this module while its settings are still loading. It therefore
 must not import Django or read settings at module scope.
@@ -39,7 +40,7 @@ __all__ = [
 
 CONTRACT_VERSION = "netbox-compat-v5"
 STABLE_MIN_NETBOX_VERSION = "4.5.8"
-STABLE_MAX_NETBOX_VERSION = "4.7.0"
+STABLE_MAX_NETBOX_VERSION = "4.7.99"
 PLUGIN_MIN_VERSION = STABLE_MIN_NETBOX_VERSION
 PLUGIN_MAX_VERSION = STABLE_MAX_NETBOX_VERSION
 SILENCE_SETTING_NAME = "silence_netbox_compatibility_warning"
@@ -253,5 +254,5 @@ def validate_held_netbox_release_identity(
 
     Release identity is now verified by the exact CI source and package
     provenance. Runtime compatibility uses the stock numeric gate across the
-    stable 4.5.8–4.7.0 range and performs no release-metadata reads.
+    stable 4.5.8–4.7.99 range and performs no release-metadata reads.
     """

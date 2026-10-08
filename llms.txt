@@ -63,7 +63,7 @@ backend target edits remain drafts.
 
 ### Requirements
 
-- NetBox 4.5.8 through 4.7.0, including official v4.7.0 GA
+- NetBox 4.5.8 through 4.7.99, including official v4.7.0 GA
 - Python 3.12+
 - cryptography 50.0.0 or newer
 - Proxmox VE 7.x, 8.x, or 9.x
@@ -89,7 +89,7 @@ topology.
 ### Version
 
 - Plugin version: `0.0.29.post2`
-- NetBox compatibility: `4.5.8` through `4.7.0`
+- NetBox compatibility: `4.5.8` through `4.7.99`
 - Current source pairing: `netbox-proxbox 0.0.29.post2`, `proxbox-api 0.0.23.post3`,
   `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`
 - Last documented released runtime pairing: `netbox-proxbox 0.0.27rc4`,
