@@ -251,6 +251,26 @@ def _stub_endpoint_serializer_dependencies(monkeypatch):
         def validate(self, attrs):
             return attrs
 
+        def _serialize(self, instance):
+            representation = {}
+            for field_name in self.Meta.fields:
+                getter = getattr(self, f"get_{field_name}", None)
+                if getter is not None:
+                    representation[field_name] = getter(instance)
+                    continue
+                field = getattr(type(self), field_name, None)
+                if getattr(field, "kwargs", {}).get("write_only"):
+                    continue
+                representation[field_name] = getattr(instance, field_name, None)
+            return representation
+
+        @property
+        def data(self):
+            instance = self.args[0]
+            if self.kwargs.get("many"):
+                return [self._serialize(item) for item in instance]
+            return self._serialize(instance)
+
     rest_framework = types.ModuleType("rest_framework")
     serializers = types.ModuleType("rest_framework.serializers")
     for name in (
@@ -289,6 +309,7 @@ def _stub_endpoint_serializer_dependencies(monkeypatch):
     choices.NetBoxTokenVersionChoices = types.SimpleNamespace(V1="v1", V2="v2")
     choices.ProxmoxEndpointEnvironmentChoices = []
     choices.ProxmoxModeChoices = []
+    choices.ProxmoxAccessMethodChoices = types.SimpleNamespace(API_SSH="api_ssh")
 
     constants = types.ModuleType("netbox_proxbox.constants")
     constants.OVERWRITE_FIELDS = ()

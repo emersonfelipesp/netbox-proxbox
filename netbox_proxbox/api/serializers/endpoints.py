@@ -18,6 +18,7 @@ from users.models import Token
 from netbox_proxbox.choices import (
     CredentialStorageBackendChoices,
     NetBoxTokenVersionChoices,
+    ProxmoxAccessMethodChoices,
     ProxmoxEndpointEnvironmentChoices,
     ProxmoxModeChoices,
 )
@@ -100,7 +101,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     has_ssh_password = serializers.SerializerMethodField(read_only=True)
     has_ssh_private_key = serializers.SerializerMethodField(read_only=True)
     has_ssh_terminal_credentials = serializers.SerializerMethodField(read_only=True)
-    service_monitoring_eligible = serializers.BooleanField(read_only=True)
+    service_monitoring_eligible = serializers.SerializerMethodField(read_only=True)
     service_monitoring_last_success_at = serializers.DateTimeField(read_only=True)
     service_monitoring_last_status = serializers.CharField(read_only=True)
     service_monitoring_last_error = serializers.CharField(read_only=True)
@@ -201,15 +202,38 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     def get_has_ssh_terminal_credentials(self, obj: ProxmoxEndpoint) -> bool:
         return self._ssh_readiness(obj)[2]
 
+    def get_service_monitoring_eligible(self, obj: ProxmoxEndpoint) -> bool:
+        """Return secret-free, response-local service-monitoring readiness."""
+        return bool(
+            obj.allow_writes
+            and obj.access_methods == ProxmoxAccessMethodChoices.API_SSH
+            and self._ssh_readiness(obj)[2]
+            and self.get_effective_rpc_enabled(obj)
+        )
+
+    def _rpc_settings_model(self) -> type | None:
+        """Cache the optional companion's guarded settings-model import."""
+        if hasattr(self, "_rpc_plugin_settings_model"):
+            return self._rpc_plugin_settings_model
+
+        from netbox_proxbox.integrations.rpc import is_netbox_rpc_installed
+
+        if not is_netbox_rpc_installed():
+            settings_model = None
+        else:
+            try:
+                from netbox_rpc.models import RpcPluginSettings
+            except ImportError:
+                settings_model = None
+            else:
+                settings_model = RpcPluginSettings
+        self._rpc_plugin_settings_model = settings_model
+        return settings_model
+
     def get_effective_rpc_enabled(self, obj: ProxmoxEndpoint) -> bool:
         """Resolved netbox-rpc enablement: installed, then endpoint override/global."""
-        installed = getattr(self, "_netbox_rpc_installed", None)
-        if installed is None:
-            from netbox_proxbox.integrations.rpc import is_netbox_rpc_installed
-
-            installed = is_netbox_rpc_installed()
-            self._netbox_rpc_installed = installed
-        if not installed:
+        settings_model = self._rpc_settings_model()
+        if settings_model is None:
             return False
         if obj.rpc_enabled is not None:
             return bool(obj.rpc_enabled)
@@ -217,9 +241,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
         enabled = getattr(self, "_global_rpc_enabled", None)
         if enabled is None:
             try:
-                from netbox_rpc.models import RpcPluginSettings
-
-                enabled = bool(RpcPluginSettings.get_solo().enabled)
+                enabled = bool(settings_model.get_solo().enabled)
             except Exception:  # noqa: BLE001 - preserve fail-closed readiness
                 enabled = False
             self._global_rpc_enabled = enabled

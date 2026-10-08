@@ -5,6 +5,8 @@ from __future__ import annotations
 import sys
 import types
 
+import pytest
+
 from tests.test_service_monitoring_model import _load_endpoint_serializer
 
 
@@ -25,6 +27,9 @@ class _Endpoint:
         self.ssh_credential_source = source
         self.ssh_auth_method = auth_method
         self.rpc_enabled = rpc_enabled
+        self.allow_writes = True
+        self.access_methods = "api_ssh"
+        self.name = f"endpoint-{pk}"
         self.domain = "pve.example.test"
         self.ip = ""
         self.ssh_host = self.domain
@@ -42,6 +47,12 @@ class _Endpoint:
     @property
     def password(self) -> str:
         raise AssertionError("readiness must not resolve credential material")
+
+    @property
+    def service_monitoring_eligible(self) -> bool:
+        raise AssertionError(
+            "serialization must not invoke model readiness or provider authorization"
+        )
 
 
 def _install_storage_resolver(monkeypatch, resolver) -> None:
@@ -131,6 +142,15 @@ def test_enabled_rpc_settings_are_request_local_and_endpoint_overrides_win(
 
     rpc_models.RpcPluginSettings = RpcPluginSettings
     monkeypatch.setitem(sys.modules, rpc_models.__name__, rpc_models)
+    import_calls = []
+    real_import = __import__
+
+    def counted_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "netbox_rpc.models":
+            import_calls.append("import")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr("builtins.__import__", counted_import)
     serializer = module.ProxmoxEndpointSerializer()
 
     assert (
@@ -142,7 +162,86 @@ def test_enabled_rpc_settings_are_request_local_and_endpoint_overrides_win(
     )
     assert serializer.get_effective_rpc_enabled(_Endpoint(pk=3)) is True
     assert serializer.get_effective_rpc_enabled(_Endpoint(pk=4)) is True
+    assert import_calls == ["import"]
     assert calls == ["settings"]
+
+
+def test_rpc_override_fails_closed_when_enabled_companion_model_is_missing(
+    monkeypatch,
+) -> None:
+    module = _load_endpoint_serializer(monkeypatch)
+    _install_rpc_gate(monkeypatch, True)
+    rpc_models = types.ModuleType("netbox_rpc.models")
+    monkeypatch.setitem(sys.modules, rpc_models.__name__, rpc_models)
+
+    serializer = module.ProxmoxEndpointSerializer()
+
+    assert (
+        serializer.get_effective_rpc_enabled(_Endpoint(pk=1, rpc_enabled=True)) is False
+    )
+
+
+def test_rpc_override_propagates_non_import_failure(monkeypatch) -> None:
+    module = _load_endpoint_serializer(monkeypatch)
+    _install_rpc_gate(monkeypatch, True)
+    real_import = __import__
+
+    def broken_import(name, globals=None, locals=None, fromlist=(), level=0):
+        if name == "netbox_rpc.models":
+            raise RuntimeError("broken enabled companion")
+        return real_import(name, globals, locals, fromlist, level)
+
+    monkeypatch.setattr("builtins.__import__", broken_import)
+
+    with pytest.raises(RuntimeError, match="broken enabled companion"):
+        module.ProxmoxEndpointSerializer().get_effective_rpc_enabled(
+            _Endpoint(pk=1, rpc_enabled=True)
+        )
+
+
+def test_full_dedicated_and_reuse_representations_are_secret_free(monkeypatch) -> None:
+    module = _load_endpoint_serializer(monkeypatch)
+    storage_calls = []
+    settings_calls = []
+
+    def resolve_storage() -> str:
+        storage_calls.append("storage")
+        return "legacy_encrypted"
+
+    class RpcPluginSettings:
+        @classmethod
+        def get_solo(cls):
+            settings_calls.append("settings")
+            return types.SimpleNamespace(enabled=True)
+
+    _install_storage_resolver(monkeypatch, resolve_storage)
+    _install_rpc_gate(monkeypatch, True)
+    rpc_models = types.ModuleType("netbox_rpc.models")
+    rpc_models.RpcPluginSettings = RpcPluginSettings
+    monkeypatch.setitem(sys.modules, rpc_models.__name__, rpc_models)
+    serializer = module.ProxmoxEndpointSerializer(
+        [
+            _Endpoint(pk=1),
+            _Endpoint(
+                pk=2,
+                source="reuse_endpoint",
+            ),
+        ],
+        many=True,
+    )
+
+    representations = serializer.data
+
+    assert [item["service_monitoring_eligible"] for item in representations] == [
+        True,
+        True,
+    ]
+    assert [item["has_ssh_terminal_credentials"] for item in representations] == [
+        True,
+        True,
+    ]
+    assert storage_calls == ["storage"]
+    assert settings_calls == ["settings"]
 
 
 def test_dedicated_and_reused_ssh_readiness_never_resolve_material(monkeypatch) -> None:
