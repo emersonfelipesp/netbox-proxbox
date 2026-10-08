@@ -37,6 +37,14 @@ monitoring scheduling; token-pair repairs; original-store preservation after
 clears; actor propagation; and missing-address form errors. These caller tests
 complement helper coverage and must remain in the native Django lane.
 
+Native encryption-recovery fixtures must cover both optional PBS registry states
+even in the all-companions profile: simulate an absent app through the registry,
+use the migrated companion-owned settings row when enabled, and use an isolated
+disposable dormant-table fixture when absent. Create and drop that table only
+when the test owns it; never replace or drop an existing companion table.
+System-check tests require database access because enabled companions may query
+their models.
+
 It also proves that netbox-openbao is optional: migration 0105 resets the
 historical implicit `openbao` setting only without references; Automatic
 endpoint creation encrypts with Fernet; new explicit OpenBao selections are

@@ -162,12 +162,40 @@ class EncryptionKeyRecoveryTest(TestCase):
             "ssh_private_key_enc": "pve-private-key-recovery-test",
             "token_enc": "backend-key-recovery-test",
             "pbs_token_secret_enc": "pbs-secret-recovery-test",
+            "proxbox_api_key_enc": "pbs-fallback-recovery-test",
             "pdm_token_secret_enc": "pdm-secret-recovery-test",
             "node_password_enc": "node-password-recovery-test",
             "node_private_key_enc": "node-private-key-recovery-test",
             "sshkeys_enc": "ssh-ed25519 recovery-test-public-key",
             "agent_token_enc": "firecracker-agent-recovery-test",
             "metrics_query_token_enc": "metrics-query-token-recovery-test",
+        }
+        self.family_plaintexts = {
+            "proxmox_api": {
+                "password_enc": self.plaintexts["password_enc"],
+                "token_value_enc": self.plaintexts["token_value_enc"],
+            },
+            "proxmox_ssh": {
+                "ssh_password_enc": self.plaintexts["ssh_password_enc"],
+                "ssh_private_key_enc": self.plaintexts["ssh_private_key_enc"],
+            },
+            "fastapi_backend_key": {"token_enc": self.plaintexts["token_enc"]},
+            "pbs_api": {"token_secret_enc": self.plaintexts["pbs_token_secret_enc"]},
+            "pbs_fallback_api": {
+                "proxbox_api_key_enc": self.plaintexts["proxbox_api_key_enc"]
+            },
+            "pdm_api": {"token_secret_enc": self.plaintexts["pdm_token_secret_enc"]},
+            "node_ssh": {
+                "password_enc": self.plaintexts["node_password_enc"],
+                "private_key_enc": self.plaintexts["node_private_key_enc"],
+            },
+            "cloud_init_ssh_keys": {"sshkeys_enc": self.plaintexts["sshkeys_enc"]},
+            "firecracker_agent": {
+                "agent_token_enc": self.plaintexts["agent_token_enc"]
+            },
+            "influxdb_metrics": {
+                "query_token_enc": self.plaintexts["metrics_query_token_enc"]
+            },
         }
 
         self.proxmox = ProxmoxEndpoint(
@@ -248,6 +276,14 @@ class EncryptionKeyRecoveryTest(TestCase):
             token_secret_enc=secret(self.plaintexts["pbs_token_secret_enc"]),
         )
         self.pbs.refresh_from_db()
+        self.pbs_fallback = None
+        if apps.is_installed("netbox_pbs"):
+            pbs_settings_model = apps.get_model("netbox_pbs.PBSPluginSettings")
+            self.pbs_fallback = pbs_settings_model.get_solo()
+            self.pbs_fallback.set_proxbox_api_key(
+                self.plaintexts["proxbox_api_key_enc"]
+            )
+            self.pbs_fallback.save(update_fields=("proxbox_api_key_enc",))
         self.pdm = PDMEndpoint(
             name="recovery-pdm",
             domain="recovery-pdm.example.test",
@@ -317,12 +353,14 @@ class EncryptionKeyRecoveryTest(TestCase):
             audit_request_id=request_id,
         )
 
-        self.assertEqual(result.rows_rotated, 8)
-        self.assertEqual(result.ciphertext_values_rotated, 12)
+        expected_pbs_fallback_values = int(self.pbs_fallback is not None)
+        self.assertEqual(result.rows_rotated, 8 + expected_pbs_fallback_values)
+        self.assertEqual(
+            result.ciphertext_values_rotated, 12 + expected_pbs_fallback_values
+        )
         self.settings_obj.refresh_from_db()
         self.assertEqual(self.settings_obj.encryption_key, self.new_key)
 
-        expected_plaintexts = iter(self.plaintexts.values())
         for family in available_encrypted_field_families():
             model = apps.get_model(family.model_label)
             row = model.objects.get()
@@ -330,7 +368,7 @@ class EncryptionKeyRecoveryTest(TestCase):
                 ciphertext = str(getattr(row, field_name))
                 self.assertEqual(
                     enc_helpers.decrypt(ciphertext, key=self.new_key),
-                    next(expected_plaintexts),
+                    self.family_plaintexts[family.key][field_name],
                 )
                 with self.assertRaises(enc_helpers.DecryptionFailed):
                     enc_helpers.decrypt(ciphertext, key=self.old_key)
@@ -569,7 +607,9 @@ class EncryptionKeyRecoveryTest(TestCase):
             audit_request_id=uuid.uuid4(),
         )
 
-        self.assertEqual(result.ciphertext_values_rotated, 12)
+        self.assertEqual(
+            result.ciphertext_values_rotated, 12 + int(self.pbs_fallback is not None)
+        )
         self.settings_obj.refresh_from_db()
         self.assertEqual(self.settings_obj.encryption_key, self.new_key)
         self.proxmox.refresh_from_db()
@@ -721,14 +761,21 @@ class EncryptionKeyRecoveryTest(TestCase):
         self.assertNotIn("192.0.2.81", called_url)
 
     def test_absent_optional_pbs_app_is_the_only_skipped_registry_state(self) -> None:
-        self.assertFalse(apps.is_installed("netbox_pbs"))
+        real_get_app_config = apps.get_app_config
+
+        def get_app_config(app_label: str) -> object:
+            if app_label == "netbox_pbs":
+                raise LookupError("simulated absent netbox-pbs app")
+            return real_get_app_config(app_label)
+
         self.assertIn(
             "pbs_fallback_api", {family.key for family in ENCRYPTED_FIELD_FAMILIES}
         )
-        self.assertNotIn(
-            "pbs_fallback_api",
-            {family.key for family in available_encrypted_field_families()},
-        )
+        with patch.object(apps, "get_app_config", side_effect=get_app_config):
+            self.assertNotIn(
+                "pbs_fallback_api",
+                {family.key for family in available_encrypted_field_families()},
+            )
 
     def test_dormant_optional_pbs_ciphertext_blocks_rotation(self) -> None:
         if connection.vendor != "postgresql":
@@ -740,17 +787,54 @@ class EncryptionKeyRecoveryTest(TestCase):
         table_name = "netbox_pbs_pbspluginsettings"
         quoted_table = connection.ops.quote_name(table_name)
         quoted_column = connection.ops.quote_name("proxbox_api_key_enc")
-        with connection.cursor() as cursor:
-            cursor.execute(
-                f"CREATE TABLE {quoted_table} "
-                f"(id bigint PRIMARY KEY, {quoted_column} text NOT NULL)"
+        table_created_by_test = False
+
+        if self.pbs_fallback is not None:
+            pbs_settings_model = type(self.pbs_fallback)
+            _raw_update_fields(
+                pbs_settings_model,
+                self.pbs_fallback.pk,
+                proxbox_api_key_enc=dormant_ciphertext,
             )
-            cursor.execute(
-                f"INSERT INTO {quoted_table} (id, {quoted_column}) VALUES (%s, %s)",
-                [1, dormant_ciphertext],
-            )
+        else:
+            with connection.cursor() as cursor:
+                existing_tables = set(connection.introspection.table_names(cursor))
+                if table_name not in existing_tables:
+                    cursor.execute(
+                        f"CREATE TABLE {quoted_table} "
+                        f"(id bigint PRIMARY KEY, {quoted_column} text NOT NULL)"
+                    )
+                    table_created_by_test = True
+                    cursor.execute(
+                        f"INSERT INTO {quoted_table} "
+                        f"(id, {quoted_column}) VALUES (%s, %s)",
+                        [1, dormant_ciphertext],
+                    )
+                else:
+                    cursor.execute(
+                        f"UPDATE {quoted_table} SET {quoted_column} = %s",
+                        [dormant_ciphertext],
+                    )
+                    self.assertGreater(
+                        cursor.rowcount,
+                        0,
+                        "An existing dormant PBS settings table must retain a row.",
+                    )
+        real_get_app_config = apps.get_app_config
+
+        def get_app_config(app_label: str) -> object:
+            if app_label == "netbox_pbs":
+                raise LookupError("simulated dormant netbox-pbs app")
+            return real_get_app_config(app_label)
+
         try:
-            with self.assertRaises(EncryptionRecoveryConfigurationError):
+            with (
+                patch.object(apps, "get_app_config", side_effect=get_app_config),
+                self.assertRaisesRegex(
+                    EncryptionRecoveryConfigurationError,
+                    "unloaded optional companion still owns shared-key ciphertext",
+                ),
+            ):
                 rotate_encryption_key(
                     old_key=self.old_key,
                     new_key=self.new_key,
@@ -759,17 +843,23 @@ class EncryptionKeyRecoveryTest(TestCase):
                 )
             with connection.cursor() as cursor:
                 cursor.execute(
-                    f"SELECT {quoted_column} FROM {quoted_table} WHERE id = %s", [1]
+                    f"SELECT {quoted_column} FROM {quoted_table} "
+                    f"WHERE {quoted_column} = %s",
+                    [dormant_ciphertext],
                 )
                 stored = cursor.fetchone()
             self.assertIsNotNone(stored)
+            self.assertEqual(str(stored[0]), dormant_ciphertext)
             self.assertEqual(
                 enc_helpers.decrypt(str(stored[0]), key=self.old_key),
                 "dormant-pbs-fallback-key",
             )
+            self.settings_obj.refresh_from_db()
+            self.assertEqual(self.settings_obj.encryption_key, self.old_key)
         finally:
-            with connection.cursor() as cursor:
-                cursor.execute(f"DROP TABLE {quoted_table}")
+            if table_created_by_test:
+                with connection.cursor() as cursor:
+                    cursor.execute(f"DROP TABLE {quoted_table}")
 
     def test_installed_optional_pbs_app_with_unresolved_model_fails_closed(
         self,

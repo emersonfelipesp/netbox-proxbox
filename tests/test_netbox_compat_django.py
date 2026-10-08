@@ -103,6 +103,7 @@ def test_detect_netbox_version_matches_the_real_release_metadata() -> None:
     assert display_version == settings.RELEASE.full_version
 
 
+@pytest.mark.django_db
 def test_system_check_matches_the_running_release_band() -> None:
     """The registered check must agree with the release actually under test.
 
@@ -147,6 +148,7 @@ def test_plugin_is_actually_installed_and_loaded() -> None:
     assert apps.is_installed("netbox_proxbox")
 
 
+@pytest.mark.django_db
 def test_ready_registered_the_check_by_injecting_a_4_7_release() -> None:
     """An independent oracle for the `ready()` registration itself.
 
@@ -190,6 +192,7 @@ def test_ready_registered_the_check_by_injecting_a_4_7_release() -> None:
     assert "pre-release" in messages[0].msg.lower()
 
 
+@pytest.mark.django_db
 def test_injecting_a_stable_release_produces_no_notice() -> None:
     """The other direction, so the test above cannot pass by always firing."""
     from unittest.mock import patch
