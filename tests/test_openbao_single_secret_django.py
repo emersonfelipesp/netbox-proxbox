@@ -514,6 +514,7 @@ def test_fastapi_openbao_retains_material_and_revalidates_unchanged_token(
     openbao_single_estate,
     monkeypatch,
 ) -> None:
+    from netbox.context import current_request
     from netbox_openbao.models import Credential
 
     actor, _policy, _backend = openbao_single_estate
@@ -535,7 +536,11 @@ def test_fastapi_openbao_retains_material_and_revalidates_unchanged_token(
 
     owner.domain = "retained-fastapi-moved.example.invalid"
     owner.token = "retained-fastapi-token"
-    owner.save()
+    request_token = current_request.set(SimpleNamespace(user=actor))
+    try:
+        owner.save()
+    finally:
+        current_request.reset(request_token)
     credential.refresh_from_db()
     assert credential.kv_version == 1
     assert owner.openbao_token_credential_uuid == original_uuid
@@ -547,16 +552,17 @@ def test_fastapi_openbao_replaces_failed_legacy_ciphertext_and_partial_rotates(
     openbao_single_estate,
     monkeypatch,
 ) -> None:
+    from netbox.context import current_request
     from netbox_openbao.models import Credential
     from netbox_proxbox.models import ProxboxPluginSettings
     from tests.django_support import raw_update_fields
 
-    _actor, _policy, _backend = openbao_single_estate
+    actor, _policy, _backend = openbao_single_estate
     settings = ProxboxPluginSettings.get_solo()
     settings.credential_storage_backend = "legacy_encrypted"
     settings.encryption_key = ""
     settings.save()
-    owner = _fastapi_owner(_actor, "failed-legacy-fastapi", enabled=False)
+    owner = _fastapi_owner(actor, "failed-legacy-fastapi", enabled=False)
     owner.save()
     raw_update_fields(type(owner), owner.pk, token_enc="invalid-fernet-ciphertext")
     settings.credential_storage_backend = "openbao"
@@ -566,7 +572,11 @@ def test_fastapi_openbao_replaces_failed_legacy_ciphertext_and_partial_rotates(
     owner.refresh_from_db()
     owner.enabled = True
     owner.token = "replacement-provider-token"
-    owner.save()
+    request_token = current_request.set(SimpleNamespace(user=actor))
+    try:
+        owner.save()
+    finally:
+        current_request.reset(request_token)
     credential = Credential.objects.get(uuid=owner.openbao_token_credential_uuid)
     credential_uuid = credential.uuid
     assert owner.token_enc == ""

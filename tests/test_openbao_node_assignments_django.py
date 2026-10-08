@@ -83,12 +83,13 @@ def _device(name: str):
     return create_test_device(name)
 
 
-def _node(*, device=None, name: str = "OpenBao node"):
+def _node(*, device=None, name: str = "OpenBao node", access_methods: str = "api"):
     from netbox_proxbox.models import ProxmoxEndpoint, ProxmoxNode
 
     endpoint = ProxmoxEndpoint.objects.create(
         name=f"{name} endpoint",
         enabled=False,
+        access_methods=access_methods,
         credential_storage_backend="openbao",
     )
     return ProxmoxNode.objects.create(
@@ -1068,9 +1069,18 @@ def test_hardware_consumer_api_resolves_fake_material_with_real_token(
     from netbox_proxbox.models.ssh_credential import AUTH_METHOD_PASSWORD
 
     actor, _policy, _backend = openbao_node_estate
-    node = _node(device=_device("hardware-api-device"), name="hardware-api-node")
-    node.endpoint.access_methods = "api_ssh"
-    node.endpoint.save(update_fields=["access_methods"])
+    node = _node(
+        device=_device("hardware-api-device"),
+        name="hardware-api-node",
+        access_methods="api_ssh",
+    )
+    assert node.endpoint.access_methods == "api_ssh"
+    assert (
+        type(node.endpoint)
+        .objects.values_list("access_methods", flat=True)
+        .get(pk=node.endpoint_id)
+        == "api_ssh"
+    )
     owner = _owner(
         node,
         actor,
@@ -1168,7 +1178,23 @@ def test_node_reference_migration_state_and_round_trip(
         assert "openbao_password_credential_uuid" not in {
             field.name for field in OldOwner._meta.get_fields()
         }
-        endpoint = OldEndpoint.objects.create(name="migration-node-endpoint")
+        # Migration 0103 deliberately retains this physical column when
+        # reversed, but the 0099 historical model cannot name it. A temporary
+        # physical default permits the fresh historical ORM INSERT without
+        # importing or creating through the current model in the old state.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "ALTER TABLE netbox_proxbox_proxmoxendpoint "
+                "ALTER COLUMN node_device_name_template SET DEFAULT ''"
+            )
+        try:
+            endpoint = OldEndpoint.objects.create(name="migration-node-endpoint")
+        finally:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "ALTER TABLE netbox_proxbox_proxmoxendpoint "
+                    "ALTER COLUMN node_device_name_template DROP DEFAULT"
+                )
         node = OldNode.objects.create(
             endpoint_id=endpoint.pk,
             name="migration-node",

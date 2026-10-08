@@ -612,6 +612,31 @@ def test_policy_slug_migration_round_trip(pytestconfig, transactional_db) -> Non
         assert "openbao_policy_slug" not in {
             field.name for field in old_model._meta.get_fields()
         }
+        # Migration 0103 deliberately retains physical columns when reversed,
+        # while the 0098 historical model cannot name them. Supply only those
+        # later non-null column defaults long enough to exercise a fresh 0098
+        # ORM INSERT, then restore the physical no-default contract.
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "ALTER TABLE netbox_proxbox_proxboxpluginsettings "
+                "ALTER COLUMN node_device_name_template SET DEFAULT '{node}'"
+            )
+            cursor.execute(
+                "ALTER TABLE netbox_proxbox_proxboxpluginsettings "
+                "ALTER COLUMN sync_job_timeout SET DEFAULT 7200"
+            )
+        try:
+            old_row = old_model.objects.create(singleton_key="default")
+        finally:
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "ALTER TABLE netbox_proxbox_proxboxpluginsettings "
+                    "ALTER COLUMN node_device_name_template DROP DEFAULT"
+                )
+                cursor.execute(
+                    "ALTER TABLE netbox_proxbox_proxboxpluginsettings "
+                    "ALTER COLUMN sync_job_timeout DROP DEFAULT"
+                )
 
         executor = MigrationExecutor(connection)
         executor.migrate([after])
@@ -619,7 +644,7 @@ def test_policy_slug_migration_round_trip(pytestconfig, transactional_db) -> Non
             "netbox_proxbox", "ProxboxPluginSettings"
         )
         assert new_model._meta.get_field("openbao_policy_slug").default == "proxbox"
-        row = new_model.objects.create(singleton_key="default")
+        row = new_model.objects.get(pk=old_row.pk)
         assert row.openbao_policy_slug == "proxbox"
 
         executor = MigrationExecutor(connection)

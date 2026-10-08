@@ -13,6 +13,7 @@ from unittest.mock import patch
 import uuid
 
 import pytest
+from cryptography.fernet import Fernet
 
 from tests.netbox_test_paths import netbox_source_roots
 
@@ -80,7 +81,11 @@ from netbox_proxbox.forms.fastapi import (  # noqa: E402
     FastAPIEndpointForm,
     FastAPIEndpointImportForm,
 )
-from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint  # noqa: E402
+from netbox_proxbox.models import (  # noqa: E402
+    FastAPIEndpoint,
+    NetBoxEndpoint,
+    ProxboxPluginSettings,
+)
 from netbox_proxbox.services.backend_auth import (  # noqa: E402
     ensure_backend_key_registered,
 )
@@ -303,6 +308,12 @@ class BackendKeyPersistenceTests(TransactionTestCase):
     def setUp(self) -> None:
         from netbox.context import current_request
 
+        plugin_settings = ProxboxPluginSettings.get_solo()
+        plugin_settings.credential_storage_backend = "legacy_encrypted"
+        plugin_settings.encryption_key = Fernet.generate_key().decode("ascii")
+        plugin_settings.save(
+            update_fields=["credential_storage_backend", "encryption_key"]
+        )
         actor = make_user("backend-target-reviewer", is_superuser=True)
         context_token = current_request.set(
             SimpleNamespace(user=actor, id=uuid.uuid4())
