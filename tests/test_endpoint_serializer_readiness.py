@@ -1,0 +1,158 @@
+"""Request-local readiness tests for ``ProxmoxEndpointSerializer``."""
+
+from __future__ import annotations
+
+import sys
+import types
+
+from tests.test_service_monitoring_model import _load_endpoint_serializer
+
+
+class _Endpoint:
+    """Secret-presence endpoint whose plaintext accessor must remain unused."""
+
+    def __init__(
+        self,
+        *,
+        pk: int,
+        storage: str = "",
+        source: str = "dedicated",
+        auth_method: str = "password",
+        rpc_enabled: bool | None = None,
+    ) -> None:
+        self.pk = pk
+        self.credential_storage_backend = storage
+        self.ssh_credential_source = source
+        self.ssh_auth_method = auth_method
+        self.rpc_enabled = rpc_enabled
+        self.domain = "pve.example.test"
+        self.ip = ""
+        self.ssh_host = self.domain
+        self.ssh_username = "root"
+        self.username = "root@pam"
+        self.effective_ssh_username = "root"
+        self.ssh_known_host_fingerprint = "SHA256:test"
+        self.password_enc = "encrypted-api-password"
+        self.ssh_password_enc = "encrypted-ssh-password"
+        self.ssh_private_key_enc = "encrypted-private-key"
+        self.openbao_password_credential_uuid = "api-password-uuid"
+        self.openbao_ssh_password_credential_uuid = "ssh-password-uuid"
+        self.openbao_ssh_keypair_credential_uuid = "ssh-keypair-uuid"
+
+    @property
+    def password(self) -> str:
+        raise AssertionError("readiness must not resolve credential material")
+
+
+def _install_storage_resolver(monkeypatch, resolver) -> None:
+    module = types.ModuleType("netbox_proxbox.integrations.openbao")
+    module.effective_credential_storage_backend = resolver
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+
+
+def _install_rpc_gate(monkeypatch, installed: bool) -> None:
+    module = types.ModuleType("netbox_proxbox.integrations.rpc")
+    module.is_netbox_rpc_installed = lambda: installed
+    monkeypatch.setitem(sys.modules, module.__name__, module)
+
+
+def test_global_storage_is_fresh_per_serializer_and_reused_within_one(
+    monkeypatch,
+) -> None:
+    module = _load_endpoint_serializer(monkeypatch)
+    resolutions = iter(("legacy_encrypted", "openbao"))
+    calls = []
+
+    def resolve() -> str:
+        calls.append("resolve")
+        return next(resolutions)
+
+    _install_storage_resolver(monkeypatch, resolve)
+    first = module.ProxmoxEndpointSerializer()
+    second = module.ProxmoxEndpointSerializer()
+
+    assert first.get_has_ssh_password(_Endpoint(pk=1)) is True
+    assert first.get_has_ssh_private_key(_Endpoint(pk=2)) is True
+    assert second.get_has_ssh_password(_Endpoint(pk=3)) is True
+    assert calls == ["resolve", "resolve"]
+
+
+def test_explicit_storage_overrides_do_not_resolve_the_global_default(
+    monkeypatch,
+) -> None:
+    module = _load_endpoint_serializer(monkeypatch)
+
+    def unexpected_resolution() -> str:
+        raise AssertionError("explicit endpoint storage must win")
+
+    _install_storage_resolver(monkeypatch, unexpected_resolution)
+    serializer = module.ProxmoxEndpointSerializer()
+
+    assert serializer.get_has_ssh_password(_Endpoint(pk=1, storage="legacy_encrypted"))
+    assert serializer.get_has_ssh_private_key(_Endpoint(pk=2, storage="openbao"))
+
+
+def test_absent_rpc_is_checked_once_and_disables_endpoint_overrides(
+    monkeypatch,
+) -> None:
+    module = _load_endpoint_serializer(monkeypatch)
+    calls = []
+    rpc = types.ModuleType("netbox_proxbox.integrations.rpc")
+
+    def is_installed() -> bool:
+        calls.append("gate")
+        return False
+
+    rpc.is_netbox_rpc_installed = is_installed
+    monkeypatch.setitem(sys.modules, rpc.__name__, rpc)
+    monkeypatch.delitem(sys.modules, "netbox_rpc.models", raising=False)
+    serializer = module.ProxmoxEndpointSerializer()
+
+    assert (
+        serializer.get_effective_rpc_enabled(_Endpoint(pk=1, rpc_enabled=True)) is False
+    )
+    assert serializer.get_effective_rpc_enabled(_Endpoint(pk=2)) is False
+    assert calls == ["gate"]
+
+
+def test_enabled_rpc_settings_are_request_local_and_endpoint_overrides_win(
+    monkeypatch,
+) -> None:
+    module = _load_endpoint_serializer(monkeypatch)
+    _install_rpc_gate(monkeypatch, True)
+    calls = []
+    rpc_models = types.ModuleType("netbox_rpc.models")
+
+    class RpcPluginSettings:
+        @classmethod
+        def get_solo(cls):
+            calls.append("settings")
+            return types.SimpleNamespace(enabled=True)
+
+    rpc_models.RpcPluginSettings = RpcPluginSettings
+    monkeypatch.setitem(sys.modules, rpc_models.__name__, rpc_models)
+    serializer = module.ProxmoxEndpointSerializer()
+
+    assert (
+        serializer.get_effective_rpc_enabled(_Endpoint(pk=1, rpc_enabled=False))
+        is False
+    )
+    assert (
+        serializer.get_effective_rpc_enabled(_Endpoint(pk=2, rpc_enabled=True)) is True
+    )
+    assert serializer.get_effective_rpc_enabled(_Endpoint(pk=3)) is True
+    assert serializer.get_effective_rpc_enabled(_Endpoint(pk=4)) is True
+    assert calls == ["settings"]
+
+
+def test_dedicated_and_reused_ssh_readiness_never_resolve_material(monkeypatch) -> None:
+    module = _load_endpoint_serializer(monkeypatch)
+    _install_storage_resolver(monkeypatch, lambda: "legacy_encrypted")
+    serializer = module.ProxmoxEndpointSerializer()
+    dedicated = _Endpoint(pk=1, source="dedicated", auth_method="key")
+    reused = _Endpoint(pk=2, source="reuse_endpoint")
+
+    assert serializer.get_has_ssh_password(dedicated) is True
+    assert serializer.get_has_ssh_private_key(dedicated) is True
+    assert serializer.get_has_ssh_terminal_credentials(dedicated) is True
+    assert serializer.get_has_ssh_terminal_credentials(reused) is True

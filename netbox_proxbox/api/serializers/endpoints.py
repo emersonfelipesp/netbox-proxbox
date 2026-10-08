@@ -16,6 +16,7 @@ from rest_framework import serializers
 from users.models import Token
 
 from netbox_proxbox.choices import (
+    CredentialStorageBackendChoices,
     NetBoxTokenVersionChoices,
     ProxmoxEndpointEnvironmentChoices,
     ProxmoxModeChoices,
@@ -24,6 +25,10 @@ from netbox_proxbox.constants import OVERWRITE_FIELDS, SYNC_MODE_FIELDS
 from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
 from netbox_proxbox.models.proxmox_endpoint import (
     SERVICE_MONITORING_INELIGIBLE_MESSAGE,
+)
+from netbox_proxbox.models.ssh_credential import (
+    AUTH_METHOD_KEY,
+    SSH_CRED_SOURCE_REUSE,
 )
 
 
@@ -92,9 +97,9 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     site = SiteSerializer(nested=True, required=False, allow_null=True)
     tenant = TenantSerializer(nested=True, required=False, allow_null=True)
     allowed_tenants = TenantSerializer(nested=True, many=True, required=False)
-    has_ssh_password = serializers.BooleanField(read_only=True)
-    has_ssh_private_key = serializers.BooleanField(read_only=True)
-    has_ssh_terminal_credentials = serializers.BooleanField(read_only=True)
+    has_ssh_password = serializers.SerializerMethodField(read_only=True)
+    has_ssh_private_key = serializers.SerializerMethodField(read_only=True)
+    has_ssh_terminal_credentials = serializers.SerializerMethodField(read_only=True)
     service_monitoring_eligible = serializers.BooleanField(read_only=True)
     service_monitoring_last_success_at = serializers.DateTimeField(read_only=True)
     service_monitoring_last_status = serializers.CharField(read_only=True)
@@ -102,9 +107,123 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     packer_template_builds_backend_authorized = serializers.BooleanField(read_only=True)
     effective_rpc_enabled = serializers.SerializerMethodField(read_only=True)
 
+    def _effective_storage_backend(self, obj: ProxmoxEndpoint) -> str:
+        """Resolve an endpoint override before the request-local global default."""
+        override = str(getattr(obj, "credential_storage_backend", "") or "")
+        if override:
+            return override
+
+        backend = getattr(self, "_global_credential_storage_backend", None)
+        if backend is None:
+            from netbox_proxbox.integrations.openbao import (
+                effective_credential_storage_backend,
+            )
+
+            backend = effective_credential_storage_backend()
+            self._global_credential_storage_backend = backend
+        return backend
+
+    def _ssh_readiness(self, obj: ProxmoxEndpoint) -> tuple[bool, bool, bool]:
+        """Return password, key, and terminal readiness without reading material."""
+        states = getattr(self, "_ssh_readiness_states", None)
+        if states is None:
+            states = {}
+            self._ssh_readiness_states = states
+        key = getattr(obj, "pk", None) or id(obj)
+        if key in states:
+            return states[key]
+
+        uses_openbao = (
+            self._effective_storage_backend(obj)
+            == CredentialStorageBackendChoices.OPENBAO
+        )
+        endpoint_password, ssh_password, ssh_private_key = self._ssh_secret_presence(
+            obj, uses_openbao=uses_openbao
+        )
+        terminal_ready = self._ssh_terminal_ready(
+            obj,
+            endpoint_password=endpoint_password,
+            ssh_password=ssh_password,
+            ssh_private_key=ssh_private_key,
+        )
+        states[key] = (ssh_password, ssh_private_key, terminal_ready)
+        return states[key]
+
+    @staticmethod
+    def _ssh_secret_presence(
+        obj: ProxmoxEndpoint, *, uses_openbao: bool
+    ) -> tuple[bool, bool, bool]:
+        """Read only UUID/ciphertext presence for endpoint and SSH secrets."""
+        if uses_openbao:
+            return (
+                bool(obj.openbao_password_credential_uuid),
+                bool(obj.openbao_ssh_password_credential_uuid),
+                bool(obj.openbao_ssh_keypair_credential_uuid),
+            )
+        return (
+            bool(obj.password_enc),
+            bool(obj.ssh_password_enc),
+            bool(obj.ssh_private_key_enc),
+        )
+
+    @staticmethod
+    def _ssh_terminal_ready(
+        obj: ProxmoxEndpoint,
+        *,
+        endpoint_password: bool,
+        ssh_password: bool,
+        ssh_private_key: bool,
+    ) -> bool:
+        """Combine non-secret endpoint metadata with the selected secret state."""
+        if obj.ssh_credential_source == SSH_CRED_SOURCE_REUSE:
+            return bool(
+                obj.ssh_host
+                and obj.ssh_known_host_fingerprint
+                and obj.effective_ssh_username
+                and endpoint_password
+            )
+        selected_secret = (
+            ssh_private_key if obj.ssh_auth_method == AUTH_METHOD_KEY else ssh_password
+        )
+        return bool(
+            obj.ssh_host
+            and obj.ssh_username
+            and obj.ssh_known_host_fingerprint
+            and selected_secret
+        )
+
+    def get_has_ssh_password(self, obj: ProxmoxEndpoint) -> bool:
+        return self._ssh_readiness(obj)[0]
+
+    def get_has_ssh_private_key(self, obj: ProxmoxEndpoint) -> bool:
+        return self._ssh_readiness(obj)[1]
+
+    def get_has_ssh_terminal_credentials(self, obj: ProxmoxEndpoint) -> bool:
+        return self._ssh_readiness(obj)[2]
+
     def get_effective_rpc_enabled(self, obj: ProxmoxEndpoint) -> bool:
         """Resolved netbox-rpc enablement: installed, then endpoint override/global."""
-        return obj.effective_rpc_enabled()
+        installed = getattr(self, "_netbox_rpc_installed", None)
+        if installed is None:
+            from netbox_proxbox.integrations.rpc import is_netbox_rpc_installed
+
+            installed = is_netbox_rpc_installed()
+            self._netbox_rpc_installed = installed
+        if not installed:
+            return False
+        if obj.rpc_enabled is not None:
+            return bool(obj.rpc_enabled)
+
+        enabled = getattr(self, "_global_rpc_enabled", None)
+        if enabled is None:
+            try:
+                from netbox_rpc.models import RpcPluginSettings
+
+                enabled = bool(RpcPluginSettings.get_solo().enabled)
+            except Exception:  # noqa: BLE001 - preserve fail-closed readiness
+                enabled = False
+            self._global_rpc_enabled = enabled
+        return enabled
 
     def validate_credential_storage_backend(self, value: str) -> str:
         """Reject a newly selected unavailable companion backend."""

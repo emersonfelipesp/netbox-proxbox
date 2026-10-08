@@ -302,6 +302,10 @@ backend target edits remain drafts.
 - netbox-openbao is optional. Automatic credential storage selects OpenBao only
   when the companion is enabled and otherwise selects local Fernet storage;
   explicit selections never fall back.
+- Keep Proxmox endpoint API readiness response-local: resolve explicit endpoint
+  storage and RPC overrides first, read each required global setting at most
+  once per serializer, and derive SSH readiness only from UUID/ciphertext
+  presence without resolving credential material.
 - Historical migrations are immutable compatibility records. Add a new migration
   for schema changes instead of rewriting an already released migration, except
   when sanitizing non-functional prose without changing migration behavior.

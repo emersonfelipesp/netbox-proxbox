@@ -34,6 +34,10 @@ facts that an agent must have even when `@CLAUDE.md` expansion is unavailable:
 - netbox-openbao is optional. Automatic credential storage selects OpenBao only
   when the companion is enabled and otherwise selects local Fernet storage;
   explicit selections never fall back.
+- Keep Proxmox endpoint API readiness response-local: resolve explicit endpoint
+  storage and RPC overrides first, read each required global setting at most
+  once per serializer, and derive SSH readiness only from UUID/ciphertext
+  presence without resolving credential material.
 - Keep historical migrations immutable and add a migration for schema changes.
 - Keep `ProxboxPluginSettings.sync_job_timeout` UI-backed and bounded to
   3600–604800 seconds. Resolve it when enqueueing a sync job, preserve explicit

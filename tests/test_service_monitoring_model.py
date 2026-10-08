@@ -326,6 +326,9 @@ def _stub_endpoint_serializer_dependencies(monkeypatch):
 
     proxmox_endpoint = types.ModuleType("netbox_proxbox.models.proxmox_endpoint")
     proxmox_endpoint.SERVICE_MONITORING_INELIGIBLE_MESSAGE = "ineligible"
+    ssh_credential = types.ModuleType("netbox_proxbox.models.ssh_credential")
+    ssh_credential.AUTH_METHOD_KEY = "key"
+    ssh_credential.SSH_CRED_SOURCE_REUSE = "reuse_endpoint"
 
     np_pkg = types.ModuleType("netbox_proxbox")
     np_pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox")]
@@ -356,6 +359,7 @@ def _stub_endpoint_serializer_dependencies(monkeypatch):
         ("netbox_proxbox.constants", constants),
         ("netbox_proxbox.models", models),
         ("netbox_proxbox.models.proxmox_endpoint", proxmox_endpoint),
+        ("netbox_proxbox.models.ssh_credential", ssh_credential),
     ]:
         monkeypatch.setitem(sys.modules, name, mod)
 
