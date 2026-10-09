@@ -1576,9 +1576,9 @@ sqlparse==0.6.0 \
     # via
     #   django
     #   django-debug-toolbar
-strawberry-graphql==0.327.1 \
-    --hash=sha256:70334da7c7071ae954a1b9818d25547d764a3c3f17771fb87df55080de95a8de \
-    --hash=sha256:ebdf088744da95330c352fbc07c3f786a626bda424008dba7241b51d3403b4c1
+strawberry-graphql==0.327.2 \
+    --hash=sha256:ea9ce282d7407939650d6db252c85f100ccfcc608e5a8a4233ab77df24da52a2 \
+    --hash=sha256:fb058028319367032aeb91d8620222c581e85e9de2a2d69309579332632b8c4a
     # via
     #   -r ci/netbox-requirements/v4.7.0-py312-linux-x86_64.in
     #   strawberry-graphql-django

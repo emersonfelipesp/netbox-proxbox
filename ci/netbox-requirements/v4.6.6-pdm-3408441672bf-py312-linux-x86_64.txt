@@ -2604,9 +2604,9 @@ starlette==1.6.0 \
     --hash=sha256:a86dd39d14bb45f85a3d18525215a9ef0cfd1f192ac793220e72598c90335f0c \
     --hash=sha256:d4e3ac5e546444960c710297a3c9fc3f7ebae1b7e963f3d36173b49da535be9b
     # via fastapi
-strawberry-graphql==0.323.2 \
-    --hash=sha256:870d00880d9caef454f4364af1c4e5808b1c180d6fef2c0d32de1d095f1b53b2 \
-    --hash=sha256:e3ba1f24596fc5e943a13dc75c8d071befc7c9f471c3b1a5def39ecb483a2f62
+strawberry-graphql==0.327.2 \
+    --hash=sha256:ea9ce282d7407939650d6db252c85f100ccfcc608e5a8a4233ab77df24da52a2 \
+    --hash=sha256:fb058028319367032aeb91d8620222c581e85e9de2a2d69309579332632b8c4a
     # via
     #   -r ci/netbox-requirements/v4.6.6-py312-linux-x86_64.in
     #   strawberry-graphql-django
