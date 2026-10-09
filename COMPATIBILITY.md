@@ -11,15 +11,15 @@ vendored byte-identically across the whole Proxbox plugin stack
 
 | Tier | NetBox range | Constant | Behaviour |
 |---|---|---|---|
-| Stable | `4.5.8` – `4.7.0` | `STABLE_MIN_NETBOX_VERSION` / `STABLE_MAX_NETBOX_VERSION` | Admitted silently. CI exercises NetBox 4.5.8, 4.5.10, 4.6.0, 4.6.6, and 4.7.0. |
+| Stable | `4.5.8` – `4.7.99` | `STABLE_MIN_NETBOX_VERSION` / `STABLE_MAX_NETBOX_VERSION` | Admitted silently. CI exercises NetBox 4.5.8, 4.5.10, 4.6.0, 4.6.6, and 4.7.0; the rest of the 4.7 patch series up to 4.7.99 (for example 4.7.2) is admitted by the numeric gate without a dedicated CI cell. |
 | Experimental | NetBox 4.7.0 pre-release builds within the declared loader range | Advisory warning via system check `netbox_proxbox.W001`; not a GA support promise. |
 
 `PluginConfig.min_version` is `4.5.8` and `PluginConfig.max_version` is
-`4.7.0`. Official NetBox 4.7.0 GA is stable, so an operator can upgrade
+`4.7.99`, so every NetBox 4.7 patch release (4.7.0, 4.7.2, and later; only 4.7.0 has a dedicated CI cell) is admitted without a plugin update. Official NetBox 4.7 GA is stable, so an operator can upgrade
 NetBox without changing plugin configuration or database state. Pre-release
 builds are outside the GA promise and receive an advisory warning.
 
-Anything below `4.5.8` or above `4.7.0` is refused by NetBox's own plugin
+Anything below `4.5.8` or above `4.7.99` is refused by NetBox's own plugin
 version gate. The pre-release advisory is silenceable through the
 `silence_netbox_compatibility_warning` key in this plugin's `PLUGINS_CONFIG`
 entry.
@@ -108,15 +108,16 @@ explicit PyPI first-index policy.
 
 Current source pairing: netbox-proxbox 0.0.29 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This is the current sibling-source development stack. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29.post2 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.29.post3 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29.post2 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.29.post3 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The next row records current source compatibility. The following row preserves
 the last released runtime pairing for the same prerelease plugin identity.
 
 | netbox-proxbox | NetBox | Python | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |---|---|---|---|---|---|
+| v0.0.29.post3 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
 | v0.0.29.post2 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
 | v0.0.29.post1 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
 | v0.0.29 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.23.post3 | v0.0.13 | v0.0.15 |

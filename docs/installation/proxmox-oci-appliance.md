@@ -114,8 +114,16 @@ is required; an unprivileged LXC cannot safely change that host-level setting.
 
 ## Image tags and updates
 
-`oci` tracks the latest successfully tested stable PyPI releases. Versioned tags
-encode all application versions plus the source commit:
+`oci` tracks the latest successfully tested stable PyPI releases. For a
+GitHub Release, the image installs exactly the plugin version named by the
+release tag. The build waits for that version to appear on PyPI and fails if it
+does not, and it verifies the installed plugin version before publishing. For
+manual and pull-request runs, the image uses the newest stable PyPI release.
+After the versioned image is published, the `oci` tag moves only when the released plugin version is the newest stable
+published stable release (yanked or Python-incompatible newer releases still
+count), so rebuilding an older release never downgrades it. Prerelease tags are
+not published as images.
+Versioned tags encode all application versions plus the source commit:
 
 ```text
 netbox-4.7.0-proxbox-<plugin-version>-api-<backend-version>-<source-sha>

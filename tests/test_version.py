@@ -104,20 +104,20 @@ CERTIFICATION_PATH = REPO_ROOT / "CERTIFICATION.md"
 DOCS_CERTIFICATION_PATH = REPO_ROOT / "docs" / "certification.md"
 APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
-CURRENT_PLUGIN_VERSION = "0.0.29.post2"
-CURRENT_RELEASE_VERSION = "0.0.29.post2"
-CURRENT_PACKAGE_VERSION = "0.0.29.post2"
+CURRENT_PLUGIN_VERSION = "0.0.29.post3"
+CURRENT_RELEASE_VERSION = "0.0.29.post3"
+CURRENT_PACKAGE_VERSION = "0.0.29.post3"
 CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.23.post3"
 CURRENT_PAIRING_LINE = (
-    "Current backend-runtime pairing: netbox-proxbox 0.0.29.post2 <-> proxbox-api "
+    "Current backend-runtime pairing: netbox-proxbox 0.0.29.post3 <-> proxbox-api "
     "0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST "
     "dependency only and does not provide the semantic MCP bridge."
 )
 PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.23.post3"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
-# Ceiling of the backward-compatible stable tier, including NetBox 4.7 GA.
-CURRENT_NETBOX_STABLE_MAX_VERSION = "4.7.0"
-CURRENT_NETBOX_MAX_VERSION = "4.7.0"
+# Ceiling of the backward-compatible stable tier: the whole NetBox 4.7 series.
+CURRENT_NETBOX_STABLE_MAX_VERSION = "4.7.99"
+CURRENT_NETBOX_MAX_VERSION = "4.7.99"
 CURRENT_NETBOX_EXPERIMENTAL_TAG = "pre-release"
 CURRENT_NETBOX_SUPPORT_LABEL = "4.5.8-4.7.0 GA"
 LATEST_CERTIFIED_NETBOX_VERSION = "4.7.0"
@@ -280,7 +280,7 @@ PREVIOUS_PLUGIN_VERSION = "0.0.22"
 PREVIOUS_PROXBOX_API_VERSION = "0.0.19.post5"
 RELEASE_NOTES_029_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.29.md"
 CURRENT_RELEASE_NOTES_PATH = (
-    REPO_ROOT / "docs" / "release-notes" / "version-0.0.29.post2.md"
+    REPO_ROOT / "docs" / "release-notes" / "version-0.0.29.post3.md"
 )
 
 
@@ -507,6 +507,8 @@ def test_certified_netbox_versions_are_documented():
         INSTALL_GIT_PATH,
         UPGRADING_PATH,
         CURRENT_RELEASE_NOTES_PATH,
+        RELEASE_NOTES_INDEX_PATH,
+        DOCS_CERTIFICATION_PATH,
     )
     for path in docs_with_explicit_range:
         text = _read(path)

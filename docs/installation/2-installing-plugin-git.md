@@ -34,8 +34,8 @@ PLUGINS = ["netbox_proxbox"]
 
 ## Notes
 
-- The plugin declares `min_version = "4.5.8"` and `max_version = "4.7.0"`,
-  both sourced from `netbox_proxbox/compat.py`. NetBox `4.5.8` - `4.7.0` is
+- The plugin declares `min_version = "4.5.8"` and `max_version = "4.7.99"`,
+  both sourced from `netbox_proxbox/compat.py`. NetBox `4.5.8` - `4.7.99` is
   the backward-compatible **stable** tier, including official v4.7.0 GA.
   Silence it with `PLUGINS_CONFIG = {"netbox_proxbox": {"silence_netbox_compatibility_warning": True}}` — NetBox does not read `SILENCED_SYSTEM_CHECKS` from `configuration.py`.
 - Proxbox uses NetBox's JobRunner queue APIs and runs on the default RQ queue (`RQ_QUEUE_DEFAULT`).

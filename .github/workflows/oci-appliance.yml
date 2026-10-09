@@ -19,7 +19,10 @@ permissions:
   contents: read
 
 concurrency:
-  group: oci-appliance-publication
+  # Only release publication shares the serialized group. Pull-request and
+  # manual validation runs get their own group so they can never replace a
+  # release that is waiting for its turn.
+  group: ${{ github.event_name == 'release' && 'oci-appliance-publication' || format('oci-appliance-validation-{0}', github.ref) }}
   cancel-in-progress: false
 
 env:
@@ -29,7 +32,7 @@ env:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 360
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
@@ -39,9 +42,19 @@ jobs:
 
       - name: Resolve current stable packages
         id: versions
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           python -m pip install 'packaging==26.0'
-          python scripts/resolve_oci_versions.py --github-output "$GITHUB_OUTPUT"
+          if [ -n "$RELEASE_TAG" ]; then
+            # Install exactly the released version; wait for PyPI to serve it.
+            python scripts/resolve_oci_versions.py \
+              --plugin-version "$RELEASE_TAG" \
+              --wait-seconds 18000 \
+              --github-output "$GITHUB_OUTPUT"
+          else
+            python scripts/resolve_oci_versions.py --github-output "$GITHUB_OUTPUT"
+          fi
 
       - uses: docker/setup-qemu-action@99012661954931238ded8c8b007157a8430204e1  # v4.4.0
       - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
@@ -65,6 +78,14 @@ jobs:
             NETBOX_PROXBOX_VERSION=${{ steps.versions.outputs.netbox_proxbox_version }}
             PROXBOX_API_VERSION=${{ steps.versions.outputs.proxbox_api_version }}
             PROXBOX_API_PYTHON=${{ steps.versions.outputs.proxbox_api_python }}
+
+      - name: Verify the image contains the resolved plugin version
+        env:
+          EXPECTED_VERSION: ${{ steps.versions.outputs.netbox_proxbox_version }}
+        run: |
+          set -eu
+          installed=$(docker run --rm --entrypoint /opt/netbox/venv/bin/python netbox-proxbox-oci:test -c 'from importlib.metadata import version; print(version("netbox-proxbox"))')
+          test "$installed" = "$EXPECTED_VERSION"
 
       - name: Verify the appliance boots
         run: |
@@ -106,11 +127,27 @@ jobs:
           file: Dockerfile.oci
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: |
-            ${{ env.IMAGE_NAME }}:oci
-            ${{ env.IMAGE_NAME }}:netbox-4.7.0-proxbox-${{ steps.versions.outputs.netbox_proxbox_version }}-api-${{ steps.versions.outputs.proxbox_api_version }}-${{ github.sha }}
+          tags: ${{ env.IMAGE_NAME }}:netbox-4.7.0-proxbox-${{ steps.versions.outputs.netbox_proxbox_version }}-api-${{ steps.versions.outputs.proxbox_api_version }}-${{ github.sha }}
           build-args: |
             NETBOX_IMAGE=${{ env.NETBOX_IMAGE }}
             NETBOX_PROXBOX_VERSION=${{ steps.versions.outputs.netbox_proxbox_version }}
             PROXBOX_API_VERSION=${{ steps.versions.outputs.proxbox_api_version }}
             PROXBOX_API_PYTHON=${{ steps.versions.outputs.proxbox_api_python }}
+
+      - name: Decide whether the released version may move the mutable tag
+        id: promotion
+        if: github.event_name == 'release'
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
+        run: |
+          python scripts/resolve_oci_versions.py \
+            --check-promotion "$RELEASE_TAG" \
+            --wait-seconds 600 \
+            --github-output "$GITHUB_OUTPUT"
+
+      - name: Move the mutable tag to the published image
+        if: github.event_name == 'release' && steps.promotion.outputs.publish_moving_tag == 'true'
+        env:
+          VERSIONED_TAG: ${{ env.IMAGE_NAME }}:netbox-4.7.0-proxbox-${{ steps.versions.outputs.netbox_proxbox_version }}-api-${{ steps.versions.outputs.proxbox_api_version }}-${{ github.sha }}
+        run: |
+          docker buildx imagetools create --tag "$IMAGE_NAME:oci" "$VERSIONED_TAG"

@@ -20,7 +20,7 @@ the certification process.
 
 The certification matrix covers NetBox `v4.5.8` through `v4.5.10`, `v4.6.0`
 through `v4.6.6`, and official `v4.7.0` GA in the **stable** tier. The
-plugin declares `min_version = "4.5.8"` and `max_version = "4.7.0"`, sourced
+plugin declares `min_version = "4.5.8"` and `max_version = "4.7.99"`, sourced
 from its vendored `compat.py`. NetBox 4.7.x pre-release builds within the
 declared loader range are admitted for evaluation in the **experimental** tier
 and receive an advisory warning; they do not change the GA support promise.
@@ -64,6 +64,6 @@ evidence on disposable data — not a production certification.
 
 ## Maintenance source
 
-The current maintenance source is `0.0.29.post2`.
+The current maintenance source is `0.0.29.post3`.
 The artifact and certification evidence described above remain the preceding
 `0.0.29` baseline; this source identity does not establish new certification.

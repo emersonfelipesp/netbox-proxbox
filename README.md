@@ -244,16 +244,18 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
-## What's New in v0.0.29.post2
+## What's New in v0.0.29.post3
 
-The source maintenance release adds system check `netbox_proxbox.W107`, which
-reports a backend token user that cannot receive the plugin encryption key.
-See [Release Notes - v0.0.29.post2](docs/release-notes/version-0.0.29.post2.md)
-and [v0.0.29.post1](docs/release-notes/version-0.0.29.post1.md) for upgrade guidance.
+This maintenance release admits every NetBox 4.7 patch release (the plugin
+ceiling is `4.7.99`) and makes the OCI testing appliance image install exactly
+the plugin version named by its release. It adds no migration.
+See [Release Notes - v0.0.29.post3](docs/release-notes/version-0.0.29.post3.md),
+[v0.0.29.post3](docs/release-notes/version-0.0.29.post3.md), and
+[v0.0.29.post1](docs/release-notes/version-0.0.29.post1.md) for upgrade guidance.
 
 ## What's New in v0.0.29
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29.post2 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.29.post3 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 Version 0.0.29 is the preceding security-hardening release:
 
@@ -472,7 +474,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
-| 4.5.8-4.7.0 GA | v0.0.29.post2 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
+| 4.5.8-4.7.0 GA | v0.0.29.post3 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.29 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc18 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
@@ -511,7 +513,7 @@ across the whole Proxbox plugin stack:
 
 | Tier | NetBox range | What it means |
 |---|---|---|
-| **Stable** | `4.5.8` – `4.7.0` | Admitted silently. CI exercises v4.5.8, v4.5.10, v4.6.0, v4.6.6, and v4.7.0 GA. |
+| **Stable** | `4.5.8` – `4.7.99` | Admitted silently. CI exercises v4.5.8, v4.5.10, v4.6.0, v4.6.6, and v4.7.0 GA. |
 | **Experimental** | NetBox 4.7.x pre-release builds within the declared loader range | Loads for evaluation and warns once at startup; this is not a GA support promise. |
 
 The GA support needs **no configuration at all** — no setting, opt-in flag, or
@@ -523,7 +525,7 @@ upgraded to NetBox 4.7 without changing plugin configuration or database state.
 WARNINGS:
 ?: (netbox_proxbox.W001) Proxbox is running on NetBox 4.7.0-beta2, which is
    supported on an experimental basis only. Certified support covers NetBox
-   4.5.8 through 4.7.0. NetBox 4.7.0-beta2 is also an upstream pre-release:
+   4.5.8 through 4.7.99. NetBox 4.7.0-beta2 is also an upstream pre-release:
    upstream does not support pre-releases in production and does not guarantee
    an upgrade path from a pre-release to the final release. Use it for
    evaluation on disposable data only.
@@ -557,7 +559,7 @@ That silences both the system check and the startup log line.
 > It only applies through NetBox's `local_settings.py` hatch, which upstream
 > labels unsupported. Use the `PLUGINS_CONFIG` key above.
 
-NetBox releases below `4.5.8` and above `4.7.0` are refused by NetBox's stock
+NetBox releases below `4.5.8` and above `4.7.99` are refused by NetBox's stock
 plugin version gate. Pre-release builds receive an advisory warning; exact GA
 source and dependency provenance are verified by the CI matrix.
 
@@ -572,11 +574,11 @@ source and dependency provenance are verified by the CI matrix.
 
 > **On upgrades.** Keep all installed Proxbox-family plugins on GA-capable
 > releases before upgrading NetBox. The 4.5.8 floor remains supported, while
-> the declared ceiling is now `4.7.0`.
+> the declared ceiling is now `4.7.99`.
 
 ## Requirements
 
-- NetBox 4.5.8 through 4.7.0, including official v4.7.0 GA
+- NetBox 4.5.8 through 4.7.99, including official v4.7.0 GA
 - Verified with NetBox v4.5.8 through v4.5.10, v4.6.0 through v4.6.6, and
   exact v4.7.0 commit `5f06007e4c9bacc93ce17c1e645fc1143d60df3d`; the source
   matrix verifies release metadata and installs commit-bound, hash-checked
