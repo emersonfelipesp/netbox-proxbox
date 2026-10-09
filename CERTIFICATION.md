@@ -30,6 +30,6 @@ This checklist tracks readiness for the NetBox Plugin Certification Program.
 
 ## Maintenance source
 
-The current maintenance source is `0.0.29.post2`.
+The current maintenance source is `0.0.29.post3`.
 The artifact and certification evidence described above remain the preceding
 `0.0.29` baseline; this source identity does not establish new certification.

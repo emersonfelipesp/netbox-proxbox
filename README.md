@@ -244,16 +244,18 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
-## What's New in v0.0.29.post2
+## What's New in v0.0.29.post3
 
-The source maintenance release adds system check `netbox_proxbox.W107`, which
-reports a backend token user that cannot receive the plugin encryption key.
-See [Release Notes - v0.0.29.post2](docs/release-notes/version-0.0.29.post2.md)
-and [v0.0.29.post1](docs/release-notes/version-0.0.29.post1.md) for upgrade guidance.
+This maintenance release admits every NetBox 4.7 patch release (the plugin
+ceiling is `4.7.99`) and makes the OCI testing appliance image install exactly
+the plugin version named by its release. It adds no migration.
+See [Release Notes - v0.0.29.post3](docs/release-notes/version-0.0.29.post3.md),
+[v0.0.29.post3](docs/release-notes/version-0.0.29.post3.md), and
+[v0.0.29.post1](docs/release-notes/version-0.0.29.post1.md) for upgrade guidance.
 
 ## What's New in v0.0.29
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29.post2 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current backend-runtime pairing: netbox-proxbox 0.0.29.post3 <-> proxbox-api 0.0.23.post3 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 Version 0.0.29 is the preceding security-hardening release:
 
@@ -472,7 +474,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
-| 4.5.8-4.7.0 GA | v0.0.29.post2 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
+| 4.5.8-4.7.0 GA | v0.0.29.post3 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.29 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.27rc18 | v0.0.23.post2 | v0.0.13 | v0.0.15 |
