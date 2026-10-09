@@ -61,7 +61,7 @@ def test_quality_and_docs_install_only_their_locked_dependency_scope() -> None:
     )
 
     assert (
-        "uv sync --no-dev --extra test --extra dev --extra cli --locked"
+        "uv sync --no-dev --extra test --extra dev --extra cli --extra e2e --locked"
         in quality_install
     )
     assert "--group dev" not in quality_install

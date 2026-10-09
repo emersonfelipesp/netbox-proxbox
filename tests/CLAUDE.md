@@ -623,3 +623,14 @@ rather than real NetBox. Two failure modes are easy to hit and hard to read:
 ## Links
 
 - Parent: [`../CLAUDE.md`](../CLAUDE.md)
+
+## Local mock telemetry
+
+The public E2E Proxmox mock uses FastAPI[standard]>=0.143.0 native telemetry,
+with no collector or service defaults. Set `FASTAPI_OTEL_AUTO_CONFIGURE=true` to enable automatic setup; standard
+OpenTelemetry environment variables select exporters or disable signals. Preserve the script/module
+entry points, route operation identities and shared VM state. Selected SDK
+providers retain ownership; scoped privacy must precede caller exporters.
+See `../docs/developer/proxmox-mock-local.md` and `e2e/CLAUDE.md` for controls
+and the actual loopback/domain regression commands. These mock checks do not
+replace the existing real-NetBox and companion-plugin compatibility gates.

@@ -1570,3 +1570,16 @@ Disabled endpoints cannot transmit credentials. Failed or stale approval
 requests require a new review. The panel never approves automatically. After
 upgrading from 0.0.27 to 0.0.29, existing endpoint approvals are blank; successful
 FastAPI health does not replace this explicit endpoint approval step.
+
+## Local E2E mock telemetry
+
+The local Proxmox mock uses optional FastAPI[standard]>=0.143.0 native telemetry.
+It configures no collector or service defaults. FASTAPI_OTEL_AUTO_CONFIGURE=true and standard OpenTelemetry variables
+opt into HTTP/WebSocket traces, metrics and logs; operators retain exporter and
+disable controls. The factory preserves shared VM state and script/module
+entry points. Selected SDK providers keep their ownership; native path/query and
+exception privacy processors precede automatically configured exporters, while
+earlier caller exporters require caller redaction. See
+`docs/developer/proxmox-mock-local.md` for the authoritative controls and local
+protobuf/domain regression commands. Existing real-NetBox companion gates remain
+separate from these mock tests.

@@ -3,11 +3,19 @@
 from __future__ import annotations
 
 import argparse
+import os
+from typing import TYPE_CHECKING
 
-from fastapi import FastAPI, Query
+from fastapi import APIRouter, FastAPI, Query
+from fastapi.telemetry import TelemetryConfig
 from pydantic import BaseModel
 
-app = FastAPI(title="proxmox-mock")
+if TYPE_CHECKING or __package__:
+    from .mock_telemetry import configure_telemetry_privacy
+else:
+    from mock_telemetry import configure_telemetry_privacy
+
+router = APIRouter()
 
 
 VM_RESOURCES: dict[int, dict] = {
@@ -42,12 +50,12 @@ def _ok(data):
     return {"data": data}
 
 
-@app.get("/api2/json/version")
+@router.get("/api2/json/version")
 def version():
     return _ok({"release": "8.2", "repoid": "mock"})
 
 
-@app.get("/api2/json/cluster/status")
+@router.get("/api2/json/cluster/status")
 def cluster_status():
     return _ok(
         [
@@ -65,7 +73,7 @@ def cluster_status():
     )
 
 
-@app.get("/api2/json/cluster/config/join")
+@router.get("/api2/json/cluster/config/join")
 def cluster_config_join():
     return _ok(
         {
@@ -80,14 +88,14 @@ def cluster_config_join():
     )
 
 
-@app.get("/api2/json/cluster/resources")
+@router.get("/api2/json/cluster/resources")
 def cluster_resources():
     resources = [{"type": "node", "node": "pve01", "status": "online", "maxcpu": 8}]
     resources.extend(VM_RESOURCES.values())
     return _ok(resources)
 
 
-@app.post("/__admin/vm/{vmid}/status")
+@router.post("/__admin/vm/{vmid}/status")
 def set_vm_status(vmid: int, body: VmStatusUpdate):
     vm = VM_RESOURCES.get(vmid)
     if vm is None:
@@ -96,7 +104,7 @@ def set_vm_status(vmid: int, body: VmStatusUpdate):
     return {"ok": True, "vmid": vmid, "status": vm["status"]}
 
 
-@app.get("/api2/json/storage")
+@router.get("/api2/json/storage")
 def storage_list():
     return _ok(
         [
@@ -118,7 +126,7 @@ def storage_list():
     )
 
 
-@app.get("/api2/json/nodes/{node}/qemu/{vmid}/config")
+@router.get("/api2/json/nodes/{node}/qemu/{vmid}/config")
 def qemu_config(node: str, vmid: int):
     return _ok(
         {
@@ -135,7 +143,7 @@ def qemu_config(node: str, vmid: int):
     )
 
 
-@app.get("/api2/json/nodes/{node}/lxc/{vmid}/config")
+@router.get("/api2/json/nodes/{node}/lxc/{vmid}/config")
 def lxc_config(node: str, vmid: int):
     return _ok(
         {
@@ -150,7 +158,7 @@ def lxc_config(node: str, vmid: int):
     )
 
 
-@app.get("/api2/json/nodes/{node}/storage/{storage}/content")
+@router.get("/api2/json/nodes/{node}/storage/{storage}/content")
 def storage_content(
     node: str,
     storage: str,
@@ -190,7 +198,7 @@ def storage_content(
     return _ok([])
 
 
-@app.get("/api2/json/nodes/{node}/tasks")
+@router.get("/api2/json/nodes/{node}/tasks")
 def tasks(node: str, source: str | None = Query(default=None)):
     _ = source
     return _ok(
@@ -211,13 +219,13 @@ def tasks(node: str, source: str | None = Query(default=None)):
     )
 
 
-@app.get("/api2/json/nodes/{node}/tasks/{upid}/status")
+@router.get("/api2/json/nodes/{node}/tasks/{upid}/status")
 def task_status(node: str, upid: str):
     _ = (node, upid)
     return _ok({"status": "stopped", "exitstatus": "OK"})
 
 
-@app.get("/api2/json/nodes/{node}/qemu/{vmid}/snapshot")
+@router.get("/api2/json/nodes/{node}/qemu/{vmid}/snapshot")
 def qemu_snapshot(node: str, vmid: int):
     return _ok(
         [
@@ -234,7 +242,7 @@ def qemu_snapshot(node: str, vmid: int):
     )
 
 
-@app.get("/api2/json/nodes/{node}/lxc/{vmid}/snapshot")
+@router.get("/api2/json/nodes/{node}/lxc/{vmid}/snapshot")
 def lxc_snapshot(node: str, vmid: int):
     return _ok(
         [
@@ -249,6 +257,25 @@ def lxc_snapshot(node: str, vmid: int):
             }
         ]
     )
+
+
+def create_app(*, telemetry: TelemetryConfig | None = None) -> FastAPI:
+    """Create the public E2E mock with operator-configured native telemetry."""
+    configuration: TelemetryConfig = telemetry.copy() if telemetry is not None else {}
+    configuration.setdefault(
+        "auto_configure", os.getenv("FASTAPI_OTEL_AUTO_CONFIGURE", "").lower() == "true"
+    )
+    if os.getenv("OTEL_SDK_DISABLED", "").lower() == "true":
+        configuration.update(
+            {"auto_configure": False, "tracing": False, "metrics": False, "logs": False}
+        )
+    configure_telemetry_privacy(configuration)
+    application = FastAPI(title="proxmox-mock", telemetry=configuration)
+    application.include_router(router)
+    return application
+
+
+app = create_app()
 
 
 def main() -> None:

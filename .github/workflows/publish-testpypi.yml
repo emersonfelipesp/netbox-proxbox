@@ -416,7 +416,7 @@ jobs:
           PY
 
       - name: Sync development environment
-        run: uv sync --extra test --extra dev --extra cli --locked
+        run: uv sync --extra test --extra dev --extra cli --extra e2e --locked
 
       - name: Compile package
         run: uv run python -m compileall netbox_proxbox tests
@@ -466,7 +466,7 @@ jobs:
           version: "0.11.28"
 
       - name: Sync development environment
-        run: uv sync --extra test --extra dev --extra cli --locked
+        run: uv sync --extra test --extra dev --extra cli --extra e2e --locked
 
       - name: Compile package
         run: uv run python -m compileall netbox_proxbox tests

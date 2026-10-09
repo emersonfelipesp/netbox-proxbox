@@ -85,3 +85,13 @@ transitive change required to make the safe resolution coherent. Update the
 input and lock checksums in `.github/workflows/django-tests.yml` and
 `tests/test_version.py` together. The lock is CI evidence for the source
 matrix, not a runtime dependency declaration for the published plugin package.
+
+## Native mock dependency composition
+
+The shared plugin test input includes `fastapi[standard]>=0.143.0` and Uvicorn
+for the actual native mock tests. Resolve all eight current matrix profiles
+with that shared input. Preserve the distinct PDM, all-companion, and OpenBao
+inputs and their exact source identities. The current hash locks and workflow
+checksums must be regenerated and reviewed together before executing this
+changed source. This requirement does not permit copying older complete locks
+or changing unrelated security pins.

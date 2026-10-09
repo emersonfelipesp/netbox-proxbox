@@ -14,3 +14,7 @@ pytest-django>=4.11.1
 hatchling>=1.27,<1.32
 # Hatchling imports this only for PEP 660 editable builds.
 editables>=0.3
+
+# Native E2E factory and actual loopback telemetry regression dependencies.
+fastapi[standard]>=0.143.0
+uvicorn>=0.35.0

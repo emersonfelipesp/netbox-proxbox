@@ -163,7 +163,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
         ),
         "netbox_input_sha256": "904ecc650c02df62fa83f59ed714e9b16737fc558cff5a909ca9b31004e593b9",
         "netbox_lock": "ci/netbox-requirements/v4.5.8-py312-linux-x86_64.txt",
-        "netbox_lock_sha256": "23f8362f4299c34f2f77772a87954351489f4f0b87c740de1b94f3dad21f032d",
+        "netbox_lock_sha256": "9e5831dd463224b3171b9470f628652fb6f8ffdf4c8ed29fbfcde8e185dcbbe2",
     },
     {
         "netbox": "v4.5.10",
@@ -177,7 +177,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
         ),
         "netbox_input_sha256": "fba47c0891dc3aac0917550698436f326f650469c052ab2ecad69a5bbe29683b",
         "netbox_lock": "ci/netbox-requirements/v4.5.10-py312-linux-x86_64.txt",
-        "netbox_lock_sha256": "3ed1782b53f7a40a1a0ab8aaea11ae2bc3445d712483061aba80c80684b2819e",
+        "netbox_lock_sha256": "444227344949ece88098311b4d36a42ee179c2e325cc19bbd1b69efc51d8ec61",
     },
     {
         "netbox": "v4.6.0",
@@ -191,7 +191,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
         ),
         "netbox_input_sha256": "d290172ade3a4b57221c1b008d2a91132041aafd2f2d38ec0612b316bad74dcc",
         "netbox_lock": "ci/netbox-requirements/v4.6.0-py312-linux-x86_64.txt",
-        "netbox_lock_sha256": "dddb68317d8eb9875beeb70cb9a61219e51ac661245738822296100375e858df",
+        "netbox_lock_sha256": "2ff751fc6cbd1d6b8bfb73a65b9f5341cdf180df4fbb0833a2a3a6b3eece53df",
     },
     {
         "netbox": "v4.6.6",
@@ -205,7 +205,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
         ),
         "netbox_input_sha256": "58bf25c4c923034bc02ab2535a6221f1485171617985b0969136776a21f86a96",
         "netbox_lock": "ci/netbox-requirements/v4.6.6-py312-linux-x86_64.txt",
-        "netbox_lock_sha256": "034ca954a0f641db1c0fe6b8450fe4788097ff55c7c3494091304a923cdbf473",
+        "netbox_lock_sha256": "ee0227ffde613b6b08954c08f7142df73306734b4460e64b1a53a3be452ea92a",
     },
     {
         "netbox": "v4.7.0",
@@ -219,7 +219,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
         ),
         "netbox_input_sha256": "2cbc54404b9e1e0a700c416077069c79f2220005b977111da9da8d13b5a6e688",
         "netbox_lock": "ci/netbox-requirements/v4.7.0-py312-linux-x86_64.txt",
-        "netbox_lock_sha256": "6f9ac88a3df8bb0fa6eb10dabaf0a663deedb85e20dd3c250bb8184889f8960a",
+        "netbox_lock_sha256": "1b389b1010274e31be11c4c82d5cd8c110a77d3d7ccb667b70c69d30c309f9f1",
     },
     {
         "netbox": "v4.6.6",
@@ -233,7 +233,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
         ),
         "netbox_input_sha256": "58bf25c4c923034bc02ab2535a6221f1485171617985b0969136776a21f86a96",
         "netbox_lock": "ci/netbox-requirements/v4.6.6-pdm-3408441672bf-py312-linux-x86_64.txt",
-        "netbox_lock_sha256": "156a840d02b2f77c3852412857d2bea8691594d5eafdd995549aa631179a0998",
+        "netbox_lock_sha256": "8994b5db006872b2784e778d83d58ad02c615117571d4ea84daacab59cf0e424",
     },
     {
         "netbox": "v4.7.0",
@@ -249,7 +249,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
         "netbox_input_sha256": "2cbc54404b9e1e0a700c416077069c79f2220005b977111da9da8d13b5a6e688",
         "netbox_lock": "ci/netbox-requirements/v4.7.0-all-companions-py312-linux-x86_64.txt",
         "netbox_lock_sha256": (
-            "0f74bb0a623cf22e4ebdaa8ff4ee103188be6f462144e25fffcd8eed0411864a"
+            "e2f5e25817aa3cf3548e8a7a17cd8ae5ccbda2da466452aac07b38ff01b78177"
         ),
         "pdm_ref": "c96b425b69677107635749860e240576e91041ee",
         "ceph_ref": "227f386148219522476423a85156a72ab215ece5",
@@ -270,7 +270,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
         "netbox_input_sha256": "2cbc54404b9e1e0a700c416077069c79f2220005b977111da9da8d13b5a6e688",
         "netbox_lock": "ci/netbox-requirements/v4.7.0-openbao-58677ef-py312-linux-x86_64.txt",
         "netbox_lock_sha256": (
-            "5e3fe5c5fcf744e5cb91821e54d5ccebcf3a8f2c5fcdea0d63656d08ec96b2a4"
+            "25554c1dd25bf42f8c52077f2f53799f62598915bc8332884dcd8184f2f302c7"
         ),
         "openbao_ref": "58677efdd595c34cf0d597ca3efa1951b05ea25e",
         "rpc_ref": "eae471d601423195c28ffa8482422b4c1cb4344d",
@@ -681,6 +681,7 @@ def test_composed_project_input_matches_runtime_and_test_metadata():
     expected = {
         *project["project"]["dependencies"],
         *project["project"]["optional-dependencies"]["test"],
+        *project["project"]["optional-dependencies"]["e2e"],
         *project["build-system"]["requires"],
         "editables>=0.3",
     }
@@ -1044,7 +1045,7 @@ def test_django_tests_verify_composed_dependency_artifact_checksums():
             "${{ matrix.netbox_requirements_sha256 }}",
             "${{ matrix.netbox_input_sha256 }}",
             "${{ matrix.netbox_lock_sha256 }}",
-            "afd7a585213672dca2ced84b25641cf2585f01bc50efeeb0adada06440b14ae4",
+            "431e09b72b9bfcba6e4e3776bd49a8449425dea345677c60ea12e7e839ca8b6a",
             "424c8807691eaa50c53762e6b1dbddbbe4489fe0b2a9bd15d142acb17699d50e",
             "496d7924629f7aa98452d302a33ce9b47c1533079f4a4320b92ee8b18133cfce",
             "7b277c8c7baf88778fac40258dca059212097e36dede04d1250f920a3ec7994b",

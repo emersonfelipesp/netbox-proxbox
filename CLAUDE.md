@@ -384,3 +384,13 @@ retains physical columns on reversal, so disposable test databases may provide
 those columns with temporary defaults during historical INSERTs and remove the
 defaults immediately afterward. Never apply this fixture DDL to managed databases
 or modify published migrations to accommodate tests.
+
+## Native local mock telemetry
+
+The E2E mock uses the public native FastAPI factory described in
+`docs/developer/proxmox-mock-local.md`. Preserve opt-in export with no implicit
+collector or service identity, SDK-disabled application signals, selected
+caller provider ownership, scoped privacy, and excluded nested-context
+normal/error regressions. Install the E2E extra for the mocked suite and retain
+all eight exact real-Django dependency profiles. Local observer provider
+shutdown is not the application's shipping lifespan ownership contract.

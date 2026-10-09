@@ -89,7 +89,7 @@ test = [
     "pytest-django>=4.11.1",
 ]
 e2e = [
-    "fastapi>=0.136.1",
+    "fastapi[standard]>=0.143.0",
     "uvicorn>=0.35.0",
 ]
 screenshot = [

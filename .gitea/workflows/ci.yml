@@ -81,7 +81,7 @@ jobs:
           uv venv --python 3.12 .venv
           # The optional `dev` extra owns lint/type tools. The dependency-group
           # named `dev` owns MkDocs and belongs only in docs-and-package.
-          uv sync --no-dev --extra test --extra dev --extra cli --locked
+          uv sync --no-dev --extra test --extra dev --extra cli --extra e2e --locked
 
       - name: Ruff lint and format
         shell: bash
