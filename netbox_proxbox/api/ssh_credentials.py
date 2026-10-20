@@ -43,6 +43,7 @@ from netbox_proxbox.models import (
 from netbox_proxbox.models.ssh_credential import (
     AUTH_METHOD_PASSWORD,
     SSH_CRED_SOURCE_REUSE,
+    SSH_CRED_SOURCE_SERVICE,
 )
 from netbox_proxbox.utils import encryption as enc_helpers
 from netbox_proxbox.sensitive_data import (
@@ -128,31 +129,32 @@ def _metadata_payload(cred: NodeSSHCredential) -> dict:
 
 
 def _endpoint_metadata_payload(endpoint: ProxmoxEndpoint) -> dict:
-    reuse_endpoint_credentials = (
-        getattr(endpoint, "ssh_credential_source", "") == SSH_CRED_SOURCE_REUSE
-    )
+    source = getattr(endpoint, "ssh_credential_source", "")
+    reuse_endpoint_credentials = source == SSH_CRED_SOURCE_REUSE
     return {
         "endpoint_id": endpoint.pk,
         "host": endpoint.ssh_host,
         "username": (
             endpoint.effective_ssh_username
-            if reuse_endpoint_credentials
+            if reuse_endpoint_credentials or source == SSH_CRED_SOURCE_SERVICE
             else endpoint.ssh_username
         ),
         "port": endpoint.ssh_port,
         "auth_method": (
             AUTH_METHOD_PASSWORD
             if reuse_endpoint_credentials
-            else endpoint.ssh_auth_method
+            else getattr(
+                endpoint, "effective_ssh_auth_method", endpoint.ssh_auth_method
+            )
         ),
         "known_host_fingerprint": endpoint.ssh_known_host_fingerprint,
-        "has_password": (
-            bool(endpoint.password_enc)
-            if reuse_endpoint_credentials
-            else bool(endpoint.ssh_password_enc)
-        ),
-        "has_private_key": (
-            False if reuse_endpoint_credentials else bool(endpoint.ssh_private_key_enc)
+        "has_password": bool(endpoint.password_enc)
+        if reuse_endpoint_credentials
+        else getattr(endpoint, "has_ssh_password", bool(endpoint.ssh_password_enc)),
+        "has_private_key": False
+        if reuse_endpoint_credentials
+        else getattr(
+            endpoint, "has_ssh_private_key", bool(endpoint.ssh_private_key_enc)
         ),
     }
 
@@ -481,6 +483,19 @@ class NodeSSHCredentialSecretsAPIView(APIView):
         return _ssh_secret_response(payload)
 
 
+def _service_credential_visible(endpoint: ProxmoxEndpoint, user: object) -> bool:
+    """Service-sourced material also requires view access to its credential row."""
+    if endpoint.ssh_credential_source != SSH_CRED_SOURCE_SERVICE:
+        return True
+    from netbox_proxbox.models import ServiceSSHCredential
+
+    return (
+        ServiceSSHCredential.objects.restrict(user, "view")
+        .filter(service_id=endpoint.ssh_service_id)
+        .exists()
+    )
+
+
 class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
     """Return decrypted endpoint fallback SSH credentials for proxbox-api."""
 
@@ -498,12 +513,12 @@ class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
                 status=status.HTTP_403_FORBIDDEN,
             )
 
-        endpoint = get_object_or_404(
-            ProxmoxEndpoint.objects.restrict(request.user, "view").restrict(
-                request.user, "open_ssh_terminal"
-            ),
-            pk=endpoint_id,
+        queryset = ProxmoxEndpoint.objects.restrict(request.user, "view").restrict(
+            request.user, "open_ssh_terminal"
         )
+        if hasattr(queryset, "select_related"):
+            queryset = queryset.select_related("ssh_service__ssh_credential")
+        endpoint = get_object_or_404(queryset, pk=endpoint_id)
         endpoint._openbao_actor_user = request.user
         # Load-bearing SSH access-method gate: refuse to release SSH secrets
         # (and thus block the browser terminal) unless the endpoint opted into
@@ -520,6 +535,11 @@ class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
                 {"detail": "No endpoint SSH fallback credential configured."},
                 status=status.HTTP_404_NOT_FOUND,
             )
+        if not _service_credential_visible(endpoint, request.user):
+            return Response(
+                {"detail": "You do not have permission to view this SSH credential."},
+                status=status.HTTP_403_FORBIDDEN,
+            )
         return self._dedicated_credentials_response(endpoint)
 
     @staticmethod
@@ -528,18 +548,36 @@ class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
         """Resolve dedicated endpoint material after all request gates pass."""
         from netbox_proxbox.integrations.openbao import endpoint_uses_openbao_storage
 
-        if endpoint_uses_openbao_storage(endpoint):
+        service_credential = (
+            endpoint._service_ssh_credential()
+            if endpoint.ssh_credential_source == SSH_CRED_SOURCE_SERVICE
+            else None
+        )
+        service_uses_openbao = bool(
+            endpoint.ssh_credential_source == SSH_CRED_SOURCE_SERVICE
+            and service_credential is not None
+            and service_credential.storage_backend == "openbao"
+        )
+        uses_openbao = (
+            service_uses_openbao
+            if endpoint.ssh_credential_source == SSH_CRED_SOURCE_SERVICE
+            else endpoint_uses_openbao_storage(endpoint)
+        )
+        has_password = getattr(
+            endpoint, "has_ssh_password", bool(endpoint.ssh_password_enc)
+        )
+        has_private_key = getattr(
+            endpoint, "has_ssh_private_key", bool(endpoint.ssh_private_key_enc)
+        )
+
+        if uses_openbao:
             try:
-                password = (
-                    endpoint.get_ssh_password(key="")
-                    if endpoint.has_ssh_password
-                    else ""
-                )
+                password = endpoint.get_ssh_password(key="") if has_password else ""
                 private_key = (
-                    endpoint.get_ssh_private_key(key="")
-                    if endpoint.has_ssh_private_key
-                    else ""
+                    endpoint.get_ssh_private_key(key="") if has_private_key else ""
                 )
+            except PermissionDenied as exc:
+                return Response({"detail": str(exc)}, status=status.HTTP_403_FORBIDDEN)
             except Exception as exc:
                 if not isinstance(exc, ValidationError):
                     raise
@@ -563,13 +601,9 @@ class ProxmoxEndpointSSHCredentialSecretsAPIView(APIView):
             )
 
         try:
-            password = (
-                endpoint.get_ssh_password(key=key) if endpoint.ssh_password_enc else ""
-            )
+            password = endpoint.get_ssh_password(key=key) if has_password else ""
             private_key = (
-                endpoint.get_ssh_private_key(key=key)
-                if endpoint.ssh_private_key_enc
-                else ""
+                endpoint.get_ssh_private_key(key=key) if has_private_key else ""
             )
         except enc_helpers.EncryptionError:
             return Response(

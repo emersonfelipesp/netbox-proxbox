@@ -16,7 +16,7 @@ from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from pathlib import Path
 from types import SimpleNamespace
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -5792,6 +5792,9 @@ def _recording_proxmox_endpoint(*, update_error=None):
     calls = {"filter": [], "update": [], "save": []}
 
     class _Manager:
+        def using(self, _alias: str) -> object:
+            return self
+
         def filter(self, **kwargs):
             calls["filter"].append(kwargs)
             return self
@@ -5821,6 +5824,7 @@ def _recording_proxmox_endpoint(*, update_error=None):
         access_methods="api",
         verify_ssl=False,
         pushed_credential_fingerprint="",
+        cloud_image_ssh_binding_fingerprint="",
         effective_connection_tuning=lambda: {
             "timeout": 5,
             "max_retries": 0,
@@ -5852,6 +5856,504 @@ def test_recording_a_pushed_proxmox_fingerprint_updates_the_row_without_saving_i
     # Mirrored onto the instance too, so the soft push budget reads the endpoint
     # as current for the rest of this request without a refetch.
     assert backend_sync.proxmox_push_credentials_unchanged(endpoint, payload) is True
+
+
+_CLOUD_IMAGE_SSH_KEYS = {
+    "ssh_target_node",
+    "ssh_host",
+    "ssh_username",
+    "ssh_port",
+    "ssh_identity_file",
+    "ssh_known_host_fingerprint",
+}
+_CLOUD_IMAGE_IP = ".".join(("192", "0", "2", "22"))
+_CLOUD_IMAGE_OTHER_IP = ".".join(("192", "0", "2", "23"))
+_CLOUD_IMAGE_FIRST_IP = ".".join(("192", "0", "2", "21"))
+_CLOUD_IMAGE_STALE_IP = ".".join(("192", "0", "2", "99"))
+
+
+def _cloud_image_endpoint(**overrides: object) -> SimpleNamespace:
+    endpoint, _calls = _recording_proxmox_endpoint()
+    values = {
+        "access_methods": "api_ssh",
+        "enabled": True,
+        "allow_writes": True,
+        "allow_packer_template_builds": True,
+        "cloud_image_ssh_target_node": "pve-node-2",
+        "ssh_host": _CLOUD_IMAGE_IP,
+        "ssh_username": "image-builder",
+        "ssh_port": 2222,
+        "cloud_image_ssh_identity_file": "/srv/proxbox/ssh/image-builder",
+        "ssh_known_host_fingerprint": "SHA256:cloud-image-host-key",
+        "cloud_image_ssh_binding_fingerprint": "",
+    }
+    values.update(overrides)
+    values["effective_ssh_username"] = values["ssh_username"]
+    for name, value in values.items():
+        setattr(endpoint, name, value)
+    return endpoint
+
+
+def _cloud_image_payload(
+    endpoint: SimpleNamespace, nodes: list[SimpleNamespace] | None = None
+) -> dict[str, object]:
+    backend_sync = load_real_backend_sync()
+    module_names = (
+        "netbox_proxbox.integrations",
+        "netbox_proxbox.integrations.openbao",
+        "netbox_proxbox.services.connection_authority",
+    )
+    saved = {name: sys.modules.get(name) for name in module_names}
+    integrations = types.ModuleType("netbox_proxbox.integrations")
+    integrations.__path__ = []
+    openbao = types.ModuleType("netbox_proxbox.integrations.openbao")
+    openbao.resolve_endpoint_api_credentials = lambda row: {
+        "password": row.password or "",
+        "token_value": row.token_value or "",
+    }
+    authority = types.ModuleType("netbox_proxbox.services.connection_authority")
+    authority.require_approved_connection = lambda _row: None
+    try:
+        sys.modules["netbox_proxbox.integrations"] = integrations
+        sys.modules["netbox_proxbox.integrations.openbao"] = openbao
+        sys.modules["netbox_proxbox.services.connection_authority"] = authority
+        cloud_image_module = sys.modules["netbox_proxbox.cloud_image_ssh"]
+        with patch.object(
+            cloud_image_module,
+            "_candidate_nodes",
+            return_value=nodes
+            if nodes is not None
+            else [
+                SimpleNamespace(name="PVE-NODE-2", ip_address=f"{_CLOUD_IMAGE_IP}/32")
+            ],
+        ):
+            return backend_sync._proxmox_backend_payload(endpoint)
+    finally:
+        for name, previous in saved.items():
+            if previous is None:
+                sys.modules.pop(name, None)
+            else:
+                sys.modules[name] = previous
+
+
+def test_proxmox_payload_includes_complete_cloud_image_ssh_binding():
+    payload = _cloud_image_payload(_cloud_image_endpoint())
+
+    assert {key: payload[key] for key in _CLOUD_IMAGE_SSH_KEYS} == {
+        "ssh_target_node": "pve-node-2",
+        "ssh_host": _CLOUD_IMAGE_IP,
+        "ssh_username": "image-builder",
+        "ssh_port": 2222,
+        "ssh_identity_file": "/srv/proxbox/ssh/image-builder",
+        "ssh_known_host_fingerprint": "SHA256:cloud-image-host-key",
+    }
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("cloud_image_ssh_target_node", ""),
+        ("ssh_host", ""),
+        ("ssh_username", ""),
+        ("ssh_port", None),
+        ("cloud_image_ssh_identity_file", ""),
+        ("ssh_known_host_fingerprint", ""),
+        ("access_methods", "api"),
+        ("allow_packer_template_builds", False),
+    ],
+)
+def test_proxmox_payload_omits_incomplete_or_ungated_cloud_image_binding(
+    field: str,
+    value: object,
+):
+    payload = _cloud_image_payload(_cloud_image_endpoint(**{field: value}))
+
+    assert _CLOUD_IMAGE_SSH_KEYS.isdisjoint(payload)
+    if field not in {"access_methods", "allow_packer_template_builds"}:
+        assert payload["allow_packer_template_builds"] is False
+
+
+def test_vpve_reuse_shape_omits_cloud_image_ssh_binding():
+    endpoint = _cloud_image_endpoint(
+        ssh_credential_source="reuse_endpoint",
+        ssh_username="",
+        cloud_image_ssh_target_node="",
+    )
+
+    payload = _cloud_image_payload(endpoint)
+
+    assert _CLOUD_IMAGE_SSH_KEYS.isdisjoint(payload)
+
+
+def test_cloud_image_identity_file_path_passes_through_unchanged():
+    identity_file = "/var/lib/proxbox/keys/cloud-image_ed25519"
+
+    payload = _cloud_image_payload(
+        _cloud_image_endpoint(cloud_image_ssh_identity_file=identity_file)
+    )
+
+    assert payload["ssh_identity_file"] == identity_file
+
+
+def test_cloud_image_identity_file_path_is_normalized():
+    payload = _cloud_image_payload(
+        _cloud_image_endpoint(
+            cloud_image_ssh_identity_file=("/etc/proxbox/ssh_keys/./image-builder")
+        )
+    )
+
+    assert payload["ssh_identity_file"] == "/etc/proxbox/ssh_keys/image-builder"
+
+
+def test_service_credential_binding_uses_endpoint_ssh_host_for_node_verification():
+    endpoint = _cloud_image_endpoint(
+        ssh_credential_source="service",
+        ssh_host=_CLOUD_IMAGE_IP,
+    )
+
+    payload = _cloud_image_payload(
+        endpoint,
+        [SimpleNamespace(name="pve-node-2", ip_address=f"{_CLOUD_IMAGE_IP}/32")],
+    )
+
+    assert payload["ssh_host"] == _CLOUD_IMAGE_IP
+    assert payload["ssh_target_node"] == "pve-node-2"
+
+
+def test_cloud_image_binding_is_omitted_when_broad_writes_are_revoked():
+    payload = _cloud_image_payload(_cloud_image_endpoint(allow_writes=False))
+
+    assert payload["allow_packer_template_builds"] is False
+    assert _CLOUD_IMAGE_SSH_KEYS.isdisjoint(payload)
+
+
+def test_cloud_image_binding_is_omitted_when_node_address_does_not_match():
+    endpoint = _cloud_image_endpoint()
+
+    payload = _cloud_image_payload(
+        endpoint, [SimpleNamespace(name="pve-node-2", ip_address=_CLOUD_IMAGE_OTHER_IP)]
+    )
+
+    assert _CLOUD_IMAGE_SSH_KEYS.isdisjoint(payload)
+    assert payload["allow_packer_template_builds"] is False
+
+
+def test_cluster_endpoint_emits_only_the_node_at_its_ssh_address():
+    endpoint = _cloud_image_endpoint()
+
+    payload = _cloud_image_payload(
+        endpoint,
+        [
+            SimpleNamespace(name="pve-node-1", ip_address=_CLOUD_IMAGE_FIRST_IP),
+            SimpleNamespace(name="pve-node-2", ip_address=_CLOUD_IMAGE_IP),
+        ],
+    )
+
+    assert payload["ssh_target_node"] == "pve-node-2"
+
+
+@pytest.mark.parametrize(
+    ("nodes", "target", "expected"),
+    [
+        (
+            [
+                SimpleNamespace(name="node-a", ip_address=_CLOUD_IMAGE_IP),
+                SimpleNamespace(name="node-b", ip_address=f"{_CLOUD_IMAGE_IP}/32"),
+            ],
+            "node-a",
+            False,
+        ),
+        (
+            [
+                SimpleNamespace(name="NODE-A", ip_address=_CLOUD_IMAGE_IP),
+                SimpleNamespace(name="node-a", ip_address=f"{_CLOUD_IMAGE_IP}/32"),
+            ],
+            "node-a",
+            True,
+        ),
+        (
+            [SimpleNamespace(name="node-a", ip_address=_CLOUD_IMAGE_OTHER_IP)],
+            "node-a",
+            False,
+        ),
+    ],
+)
+def test_cloud_image_node_address_mapping_fails_closed(
+    monkeypatch, nodes, target, expected
+):
+    load_real_backend_sync()
+    cloud_image_ssh = sys.modules["netbox_proxbox.cloud_image_ssh"]
+
+    monkeypatch.setattr(cloud_image_ssh, "_candidate_nodes", lambda _endpoint: nodes)
+
+    assert (
+        cloud_image_ssh.cloud_image_ssh_target_matches_host(
+            SimpleNamespace(), target_node=target, ssh_host=_CLOUD_IMAGE_IP
+        )
+        is expected
+    )
+
+
+_CLOUD_IMAGE_CLEAR = {
+    "ssh_target_node": None,
+    "ssh_host": None,
+    "ssh_username": None,
+    "ssh_identity_file": None,
+    "ssh_known_host_fingerprint": None,
+}
+
+
+@pytest.mark.parametrize(
+    ("overrides", "nodes", "expected_binding", "expected_packer"),
+    [
+        (
+            {"cloud_image_ssh_binding_fingerprint": "a" * 64},
+            [SimpleNamespace(name="pve-node-2", ip_address=_CLOUD_IMAGE_STALE_IP)],
+            _CLOUD_IMAGE_CLEAR,
+            False,
+        ),
+        (
+            {
+                "cloud_image_ssh_binding_fingerprint": "a" * 64,
+                "cloud_image_ssh_identity_file": "",
+            },
+            None,
+            _CLOUD_IMAGE_CLEAR,
+            False,
+        ),
+        (
+            {
+                "cloud_image_ssh_binding_fingerprint": "a" * 64,
+                "cloud_image_ssh_target_node": "",
+                "cloud_image_ssh_identity_file": "",
+            },
+            None,
+            _CLOUD_IMAGE_CLEAR,
+            True,
+        ),
+        (
+            {"cloud_image_ssh_target_node": "", "cloud_image_ssh_identity_file": ""},
+            None,
+            {},
+            True,
+        ),
+        # API-only clears the managed SSH binding but keeps the narrow Packer
+        # grant: the existing operator/enabled/broad/narrow contract carries no
+        # access-method term, proxbox-api's own SSH gate already refuses SSH
+        # pipeline bakes, and its direct-API build path needs no SSH at all.
+        (
+            {"cloud_image_ssh_binding_fingerprint": "a" * 64, "access_methods": "api"},
+            None,
+            _CLOUD_IMAGE_CLEAR,
+            True,
+        ),
+    ],
+)
+def test_cloud_image_managed_binding_lifecycle(
+    monkeypatch, overrides, nodes, expected_binding, expected_packer
+):
+    endpoint = _cloud_image_endpoint(**overrides)
+    payload = _cloud_image_payload(endpoint, nodes)
+
+    actual = {key: payload[key] for key in _CLOUD_IMAGE_CLEAR if key in payload}
+    assert actual == expected_binding
+    assert "ssh_port" not in payload or payload["ssh_port"] is not None
+    assert payload["allow_packer_template_builds"] is expected_packer
+
+    backend_sync = load_real_backend_sync()
+    row = _cloud_image_backend_row(payload)
+    monkeypatch.setattr(backend_sync, "_proxmox_backend_payload", lambda _row: payload)
+    monkeypatch.setattr(
+        backend_sync, "proxmox_push_credentials_unchanged", lambda *_args: True
+    )
+    assert backend_sync._proxmox_row_is_current(endpoint, row) is True
+    if expected_binding:
+        row["ssh_target_node"] = "stale-node"
+    elif expected_packer is False:
+        row["allow_packer_template_builds"] = True
+    else:
+        row["ssh_target_node"] = "external-node"
+    assert backend_sync._proxmox_row_is_current(endpoint, row) is (
+        not expected_binding and expected_packer
+    )
+
+
+def test_cloud_image_clear_currency_requires_each_null(monkeypatch):
+    endpoint = _cloud_image_endpoint(
+        cloud_image_ssh_binding_fingerprint="a" * 64,
+        cloud_image_ssh_target_node="",
+        cloud_image_ssh_identity_file="",
+    )
+    backend_sync = load_real_backend_sync()
+    payload = _cloud_image_payload(endpoint)
+    row = _cloud_image_backend_row(payload)
+    row["ssh_host"] = _CLOUD_IMAGE_IP
+    monkeypatch.setattr(backend_sync, "_proxmox_backend_payload", lambda _row: payload)
+    monkeypatch.setattr(
+        backend_sync, "proxmox_push_credentials_unchanged", lambda *_args: True
+    )
+
+    assert backend_sync._proxmox_row_is_current(endpoint, row) is False
+
+
+def test_cloud_image_binding_fingerprint_records_values_and_cas_clear(monkeypatch):
+    backend_sync = load_real_backend_sync()
+    endpoint, calls = _recording_proxmox_endpoint()
+    monkeypatch.setitem(sys.modules, "django.db", django_stub_modules()["django.db"])
+    monkeypatch.setattr(
+        sys.modules["django.db"],
+        "router",
+        SimpleNamespace(db_for_write=lambda *_args, **_kwargs: "default"),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        sys.modules["django.db"],
+        "transaction",
+        SimpleNamespace(
+            get_connection=lambda _alias: SimpleNamespace(
+                in_atomic_block=False,
+                get_autocommit=lambda: True,
+            ),
+            atomic=lambda **_kwargs: nullcontext(),
+        ),
+        raising=False,
+    )
+    values = {
+        "ssh_target_node": "pve-node-2",
+        "ssh_host": _CLOUD_IMAGE_IP,
+        "ssh_username": "image-builder",
+        "ssh_port": 2222,
+        "ssh_identity_file": "/srv/proxbox/ssh/image-builder",
+        "ssh_known_host_fingerprint": "SHA256:cloud-image-host-key",
+    }
+
+    backend_sync._record_cloud_image_ssh_binding_fingerprint(endpoint, values)
+    assert calls["update"] == [
+        {
+            "cloud_image_ssh_binding_fingerprint": (
+                "7802e66b7dbf68328a74c271f14356fab910c656fe32ff4f623f270ccb82599d"
+            )
+        }
+    ]
+
+    calls["update"].clear()
+    expected = endpoint.cloud_image_ssh_binding_fingerprint
+    backend_sync._erase_cloud_image_ssh_binding_fingerprint(endpoint, expected=expected)
+    assert calls["update"] == [{"cloud_image_ssh_binding_fingerprint": ""}]
+    assert calls["filter"][-1] == {
+        "pk": 7,
+        "cloud_image_ssh_binding_fingerprint": expected,
+    }
+
+
+def test_cloud_image_clear_cas_preserves_a_newer_receipt():
+    backend_sync = load_real_backend_sync()
+    endpoint, calls = _recording_proxmox_endpoint()
+    receipt_a = "a" * 64
+    receipt_b = "b" * 64
+    endpoint.cloud_image_ssh_binding_fingerprint = receipt_b
+
+    class _NoMatchManager:
+        def filter(self, **kwargs):
+            calls["filter"].append(kwargs)
+            return self
+
+        def update(self, **kwargs):
+            calls["update"].append(kwargs)
+            return 0
+
+    type(endpoint).objects = _NoMatchManager()
+    backend_sync._erase_cloud_image_ssh_binding_fingerprint(
+        endpoint, expected=receipt_a
+    )
+
+    assert endpoint.cloud_image_ssh_binding_fingerprint == receipt_b
+    assert calls["filter"] == [
+        {"pk": 7, "cloud_image_ssh_binding_fingerprint": receipt_a}
+    ]
+
+
+def _cloud_image_backend_row(payload: dict[str, object]) -> dict[str, object]:
+    return {
+        key: payload[key]
+        for key in (
+            "name",
+            "domain",
+            "ip_address",
+            "port",
+            "username",
+            "enabled",
+            "verify_ssl",
+            "access_methods",
+            "allow_packer_template_builds",
+            "timeout",
+            "max_retries",
+            "retry_backoff",
+            *_CLOUD_IMAGE_SSH_KEYS,
+        )
+        if key in payload
+    }
+
+
+@pytest.mark.parametrize(
+    ("key", "rotated"),
+    (
+        ("ssh_target_node", "pve-node-3"),
+        ("ssh_identity_file", "/srv/proxbox/ssh/rotated"),
+        ("ssh_known_host_fingerprint", "SHA256:rotated"),
+    ),
+)
+def test_backend_currency_detects_cloud_image_binding_rotation(
+    monkeypatch, key, rotated
+):
+    endpoint = _cloud_image_endpoint()
+    backend_sync = load_real_backend_sync()
+    payload = _cloud_image_payload(endpoint)
+    row = _cloud_image_backend_row(payload)
+    row[key] = rotated
+    monkeypatch.setattr(backend_sync, "_proxmox_backend_payload", lambda _row: payload)
+    monkeypatch.setattr(
+        backend_sync, "proxmox_push_credentials_unchanged", lambda *_args: True
+    )
+
+    assert backend_sync._proxmox_row_is_current(endpoint, row) is False
+
+
+def test_backend_currency_normalizes_cloud_image_identity_path(monkeypatch):
+    endpoint = _cloud_image_endpoint(
+        cloud_image_ssh_identity_file="/etc/proxbox/ssh_keys/./image-builder"
+    )
+    backend_sync = load_real_backend_sync()
+    payload = _cloud_image_payload(endpoint)
+    row = _cloud_image_backend_row(payload)
+    row["ssh_identity_file"] = "/etc/proxbox/ssh_keys/./image-builder"
+    monkeypatch.setattr(backend_sync, "_proxmox_backend_payload", lambda _row: payload)
+    monkeypatch.setattr(
+        backend_sync, "proxmox_push_credentials_unchanged", lambda *_args: True
+    )
+
+    assert backend_sync._proxmox_row_is_current(endpoint, row) is True
+
+
+def test_backend_currency_ignores_an_external_binding(monkeypatch):
+    endpoint = _cloud_image_endpoint(allow_writes=False)
+    backend_sync = load_real_backend_sync()
+    payload = _cloud_image_payload(endpoint)
+    row = _cloud_image_backend_row(payload)
+    row.update(
+        ssh_target_node="old-node",
+        ssh_host=_CLOUD_IMAGE_STALE_IP,
+        ssh_username="old-user",
+        ssh_port=22,
+        ssh_identity_file="/srv/proxbox/ssh/old",
+        ssh_known_host_fingerprint="SHA256:old",
+    )
+    monkeypatch.setattr(backend_sync, "_proxmox_backend_payload", lambda _row: payload)
+    monkeypatch.setattr(
+        backend_sync, "proxmox_push_credentials_unchanged", lambda *_args: True
+    )
+
+    assert backend_sync._proxmox_row_is_current(endpoint, row) is True
 
 
 def test_recording_a_pushed_proxmox_fingerprint_survives_an_unapplied_migration():

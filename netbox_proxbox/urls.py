@@ -222,6 +222,24 @@ urlpatterns = [
         include(get_model_urls("netbox_proxbox", "proxmoxendpoint", detail=False)),
     ),
     path(
+        "endpoint-services/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "proxmoxendpointservice")),
+    ),
+    path(
+        "endpoint-services/",
+        include(
+            get_model_urls("netbox_proxbox", "proxmoxendpointservice", detail=False)
+        ),
+    ),
+    path(
+        "service-ssh-credentials/<int:pk>/",
+        include(get_model_urls("netbox_proxbox", "servicesshcredential")),
+    ),
+    path(
+        "service-ssh-credentials/",
+        include(get_model_urls("netbox_proxbox", "servicesshcredential", detail=False)),
+    ),
+    path(
         "endpoints/netbox/<int:pk>/",
         include(get_model_urls("netbox_proxbox", "netboxendpoint")),
     ),

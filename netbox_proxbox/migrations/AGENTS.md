@@ -24,10 +24,12 @@ introspect the live schema and only invoke the actual schema change when
 the target column / table is missing. The ``state_operations`` keep the
 original ``AddField`` / ``CreateModel`` verbatim so Django's project state,
 serializer parity, and ``makemigrations --check`` output match the
-non-idempotent original. Reverse handling is conservative and leaves
+non-idempotent original. Reverse handling is conservative by default and leaves
 idempotent additive columns in place because the helper cannot know whether a
-partial legacy install owned an existing column; explicit retirement
-migrations own destructive removal.
+partial legacy install owned an existing column. An unpublished release
+consolidation may pass ``remove_on_reverse=True`` only for fields whose ownership
+and clean downgrade contract are explicit; every other destructive removal
+belongs to a later retirement migration.
 
 Use these helpers for every new additive migration in this chain. Both
 ``0037_v0_0_15_release`` and ``0038_v0_0_16_release`` declare
@@ -452,6 +454,74 @@ fake historical models for both generations.
   approvals are not changed, and reverse data migration is intentionally a
   no-op.
 
+- Migration `0107_v0_0_30_release` is the single 0.0.30 migration. It
+  consolidates the unpublished development migrations
+  `0107_endpoint_native_cluster_binding`, `0108_ssh_service_chain`, and
+  `0109_proxmoxendpoint_cloud_image_ssh_binding`. It binds Proxmox endpoints to
+  native NetBox clusters, creates the endpoint-owned
+  `ProxmoxEndpointService` and `ServiceSSHCredential` tables and nullable SSH
+  service foreign key, and adds the Cloud Image SSH binding fields. Forward
+  operations are idempotent for staging installations that already applied the
+  development 0107. The migration is atomic: all schema changes, deferred
+  constraints and indexes, and the ownership backfill commit or roll back
+  together. All endpoint-table DDL precedes the backfill, which flushes pending
+  deferred constraint triggers before the schema editor executes its deferred
+  SQL at transaction exit. Those installations keep
+  its ignored orphan migration-recorder row because the release migration uses
+  a distinct name.
+  Reversal removes the SSH-service foreign key and tables and the Cloud Image
+  fields, while retaining the physical native-cluster ownership column,
+  constraint, and values. Reapplication adopts that retained ownership without
+  overwriting it and recreates the cleanly reversed schema.
+
 ## Links
 
 - Parent: [`../CLAUDE.md`](../CLAUDE.md)
+
+## Physical postcondition for objects introduced by 0107
+
+`_release_0107_schema.py` validates the consolidated 0107 objects from the new 0108 release migration.
+Keep the shared historical `_idempotent_ops.py` behavior unchanged. The final
+0108 operation drains and clears any framework-deferred SQL and validates the
+historical release schema inside its own atomic PostgreSQL transaction, then
+emits a secret-free pending-commit receipt. The existing 0107 backfill, trigger
+flush, and original deferred DDL have already committed separately.
+It must remain the last operation. Reject malformed adoption rather than
+silently repairing types, nullability, unique indexes, foreign keys, service
+columns, declared constraints, generated IDs, or database defaults. Nullable
+ownership must support multiple unbound rows; PostgreSQL 15+ NULLS NOT DISTINCT
+is incompatible, and its catalog column must never be parsed on PostgreSQL 14.
+The success marker requires the following successful migration command and
+commit result; it is not a commit receipt by itself. Preserve deployed migration
+bytes through 0107 and the conservative ownership-column reverse contract.
+
+Expected good keys cannot mask conflicting additional unique/check/exclusion/FK
+enforcement. Inspect expression and predicate column dependencies, scoped to the
+five new endpoint fields and whole release-owned tables. Preserve literal CHECK
+conkey zero and actual whole-row VAR attribute zero in bounded catalog node text,
+including expression, predicate, and exclusion-index representations. Ordinary
+expression indkey zero and automatic table dependencies alone are not whole-row
+proof. Reject uninspectable representations and preserve unrelated scalar
+endpoint policies. Acquire all four historical table names in stable
+order with SHARE UPDATE EXCLUSIVE locks and a transaction-local lock timeout of
+at most five seconds, without relaxing a shorter existing value. Hold the locks
+through atomic commit; restore the prior timeout after success and let rollback
+restore it after failure. ACCESS SHARE alone does not block index creation.
+
+
+## Post-candidate validation boundary
+
+Release 0.0.31rc1 adds only `0108_v0_0_31_schema_validation` after the applied,
+immutable `0107_v0_0_30_release`. Keep every numbered migration through 0107
+byte- and mode-identical. The unchanged private `_release_0107_schema.py`
+checks objects introduced by 0107; its marker identifies that invariant while
+the actual migration executing it is 0108. It must remain 0108's last operation.
+The source-bound full function audit and native qualification belong to this new
+migration boundary, not a relabeling of the earlier pre-candidate experiment.
+
+The 0107 and 0108 transactions commit separately. A failure in 0108 preserves
+an already committed 0107 and leaves 0108 unrecorded. Do not claim joint rollback,
+rewrite deployed history, or silently repair an unexpected schema. Reverse of
+0108 is a no-op for schema/data; reapply validates again. Preserve actual recorder
+and data evidence for explicit reviewed recovery. The original 0107 reverse
+controls remain historical and do not prove that 0108 removes those objects.

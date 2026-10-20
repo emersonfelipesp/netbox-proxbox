@@ -36,6 +36,35 @@ backend target edits remain drafts.
   exports omit all usable tokens, and export-specific token creation is removed.
   See `docs/features/endpoint-import-export.md` for the role and API contracts.
 - **Clusters and Nodes** — Proxmox cluster and node information
+- **Cloud Image SSH binding** — `ProxmoxEndpoint` stores the Proxmox target node
+  and proxbox-api-host identity-file path. Backend synchronization sends the
+  complete six-field binding only when the effective write gates are open, every
+  value is populated, and inventory verifies that the selected node is reached at
+  the endpoint SSH host. Service credentials use the endpoint IP even when a
+  domain is configured; other sources keep domain-first transport. Binding and
+  approval use the effective SSH username and normalized actual SSH host. Configured bake bindings require explicit reapproval after this authority correction. DNS hosts do not match literal node
+  IP addresses. Every row at that address must have the same case-insensitive target
+  name, so conflicting names fail closed. Identity-file paths use POSIX
+  normalization for payload and currency comparison. A value push records a
+  SHA-256 receipt in a durable transaction before transmission. Receipt failures,
+  missing owners, and outer uncommitted transactions block value pushes.
+  API-only main-form edits explicitly reject service-secret clears; use the SSH
+  credential settings before changing the access method. Commit-then-timeout remains managed.
+  Gate closure or clearing both bake fields clears a managed binding;
+  incomplete or failed verification also revokes Packer. Stale approval still
+  permits credential-free managed-binding revocation. Successful clears erase
+  only the prepared receipt, preserving a newer concurrent receipt. An empty receipt leaves
+  an external binding untouched. Forms skip this inventory check when submitted
+  gates are closed, preserving stale draft values while permitting revocation.
+  Once a target node or identity file is configured,
+  binding authority changes require sensitive connection re-approval; endpoints
+  with neither value keep their pre-existing approval fingerprint. Failed
+  rotations remain stale in the backend currency check, while
+  intentional omission ignores an existing backend binding. Migration
+  `0107_v0_0_30_release` supplies database defaults during forward application;
+  its reverse removes the Cloud Image fields and SSH-service schema while
+  retaining native-cluster ownership. Re-saving the endpoint triggers the
+  rollout push.
 - **Configurable node Device names** — a global template and optional
   per-endpoint override render NetBox Device names from `{node}`, `{cluster}`,
   `{cluster_slug}`, and `{endpoint}`. Proxmox paths and typed sync identity keep
@@ -76,7 +105,7 @@ backend target edits remain drafts.
   combined calendar node selection is capped at 50.
 - **Extended inventory** — guest OS interfaces, SDN, firewall, Firecracker, Proxmox metrics, service-monitoring samples, and PBS/PDM endpoint records. Optional PDM and RPC integrations activate only when their NetBox plugins are enabled; an importable but disabled package is not queried or rendered.
 - **Endpoint-isolated synchronization** — required SSE stages, firewall, and datacenter passes continue with later Proxmox endpoints after one endpoint fails, then fail the job with persisted per-endpoint evidence. Backend-key and stage retries share bounded delta-seconds and HTTP-date `Retry-After` parsing. Staged work uses one monotonic RQ-timeout deadline with a 120-second persistence reserve, records the current and remaining endpoint failures on exhaustion, and returns through finalization before the hard timeout. Successful UI enqueue redirects directly to the NetBox job detail page.
-- **OpenBao endpoint, node, and cloud-init credentials** — exact-policy password, API-token, and SSH material writes with provider-owned transactionality, UUID references, purpose-aware assignments, and shared-credential-safe unlinking. Selected node SSH password/keypair material becomes the primary `login` credential on the linked `dcim.Device`; FastAPI/PBS/PDM tokens use primary `api` assignments and Firecracker agent tokens use a primary `agent` assignment. VM cloud-init password/keypair material is assigned to the parent VM for `login`, with `ssh_pwauth` selecting the primary credential; public SSH keys never enter provider payloads. Required OpenBao reads never downgrade to Fernet, `credential_reference_id`, or an unrelated credential-provider fallback. UI/API mutations enter the outer provider transaction while the connection is in autocommit and carry the request actor; inside its durable transaction the settings singleton is the first row lock, before owner, assignment, and credential locks. Every material family then revalidates the effective backend from the locked settings and owner graph before provider or assignment writes. Raw/bulk/cascade/downgrade bypasses refuse remaining state. Global storage changes lock the settings singleton before final guard checks and persistence. Default and base manager querysets bind locks, final reads, and persistence to the write-router alias; blank endpoint overrides inherit the effective global selection from that database, conflict upserts are rejected, and validated literal bulk updates receive only a context-local permit for Django's internal expression persistence. Supported endpoint deletion clears assignments before `pre_delete`; explicitly legacy assignment-only endpoints authorize every exact assignment against the fresh request actor before plain ORM cleanup in the current application transaction, without entering a provider transaction, while assignment-only state at the signal refuses unsupported queryset or bulk deletion. Verified Fernet recovery may cross the single-secret queryset guard only with its private exact model, database alias, field, and ciphertext permit; ordinary or mismatched writes and reference mutations remain refused. Endpoint SSH readiness uses one response-local metadata lookup restricted by the authenticated caller's `reveal` scope and policy groups; it fails closed for missing, dangling, denied, or wrong-type references without reading provider material. Generic assignment selectors support automation while live material remains confined to authenticated consumers.
+- **OpenBao endpoint, service, node, and cloud-init credentials** — exact-policy password, API-token, and SSH material writes with provider-owned transactionality, UUID references, purpose-aware assignments, and shared-credential-safe unlinking. Endpoint browser-terminal SSH can use a plugin-owned `ProxmoxEndpointService` bound to the endpoint IP and a one-to-one `ServiceSSHCredential`; OpenBao material is assigned to that service as the primary `console` credential, while the selected backend never falls back. Service material reveal requires object-level `reveal` access and the exact enabled `console` assignment. Service creation, references, assignments, and material commit together; stale intents and provider failures roll back the chain. Supported service, credential, and endpoint deletion removes authorized assignments but preserves shared credentials, while raw deletion refuses remaining state. Selected node SSH password/keypair material becomes the primary `login` credential on the linked `dcim.Device`; FastAPI/PBS/PDM tokens use primary `api` assignments and Firecracker agent tokens use a primary `agent` assignment. VM cloud-init password/keypair material is assigned to the parent VM for `login`, with `ssh_pwauth` selecting the primary credential; public SSH keys never enter provider payloads. Required OpenBao reads never downgrade to Fernet, `credential_reference_id`, or an unrelated credential-provider fallback. UI/API mutations enter the outer provider transaction while the connection is in autocommit and carry the request actor; inside its durable transaction the settings singleton is the first row lock, before owner, assignment, and credential locks. Every material family then revalidates the effective backend from the locked settings and owner graph before provider or assignment writes. Raw/bulk/cascade/downgrade bypasses refuse remaining state. Global storage changes lock the settings singleton before final guard checks and persistence. Default and base manager querysets bind locks, final reads, and persistence to the write-router alias; blank endpoint overrides inherit the effective global selection from that database, conflict upserts are rejected, and validated literal bulk updates receive only a context-local permit for Django's internal expression persistence. Supported endpoint deletion clears assignments before `pre_delete`; explicitly legacy assignment-only endpoints authorize every exact assignment against the fresh request actor before plain ORM cleanup in the current application transaction, without entering a provider transaction, while assignment-only state at the signal refuses unsupported queryset or bulk deletion. Verified Fernet recovery may cross the single-secret queryset guard only with its private exact model, database alias, field, and ciphertext permit; ordinary or mismatched writes and reference mutations remain refused. Endpoint SSH readiness uses one response-local metadata lookup restricted by the authenticated caller's `reveal` scope and policy groups; it fails closed for missing, dangling, denied, or wrong-type references without reading provider material. Generic assignment selectors support automation while live material remains confined to authenticated consumers.
 - **OpenBao structural setup** — `proxbox_openbao_setup --check` and the settings card share a typed, secret-free composed readiness snapshot. Interactive material writes validate only the provider, default engine, and exact policy; RPC and the automation user remain composed diagnostics. Writable setup creates only an explicitly configured default engine and policy, never users or material, and rolls back every write when final readiness fails. Opt-in assignment backfill adds only missing relations, is concurrency-safe and idempotent, and refuses incomplete node ownership, unresolved references, credential-type mismatches, disabled or primary-state-drifted exact rows, and conflicting shared-owner primaries without rewriting operator-owned state or disclosing UUIDs. This structural check does not certify the broader RPC/backend protected-write rollout.
 
 ### Requirements
@@ -111,10 +140,9 @@ topology.
 
 ### Version
 
-- Plugin version: `0.0.29.post6`
+- Plugin version: `0.0.31rc1`
 - NetBox compatibility: `4.5.8` through `4.7.99`
-- Current source pairing: `netbox-proxbox 0.0.29.post6`, `proxbox-api 0.0.27.post4`,
-  `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`
+- Current source compatibility: `netbox-proxbox 0.0.31rc1` requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), with `proxmox-sdk 0.0.15` and `netbox-sdk 0.0.13`.
 - Documented released runtime pairing: `netbox-proxbox 0.0.29.post6`,
   `proxbox-api 0.0.27.post4`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`
 
@@ -203,16 +231,16 @@ invalidates the hint and immediately retries full discovery and registration.
 This generated context summary follows the executable source. The authoritative
 inventories are `netbox_proxbox/models/`, `netbox_proxbox/urls.py`,
 `netbox_proxbox/api/urls.py`, `netbox_proxbox/jobs.py`, `proxbox_cli/`, and the
-workflow files. The current schema tip is
-`0105_reset_implicit_openbao_storage_default`, a data-only migration that
-resets the plugin-wide credential storage backend from the historical implicit
-`openbao` default to Automatic when no OpenBao credential reference exists on
-any owner model, so installations without the optional netbox-openbao
-companion use local Fernet storage. It keeps the value when any reference
-exists. Migration `0102_vm_cloudinit_openbao_references` adds opaque OpenBao
-password and keypair references for VM cloud-init intent after the FastAPI,
-PBS, PDM, and Firecracker token references from `0101`. It preserves explicit
-legacy credential references and public SSH-key fields without moving material.
+workflow files. The current schema tip is `0107_v0_0_30_release`. It consolidates
+the three unpublished development migrations for native cluster binding,
+endpoint-owned SSH services, and Cloud Image SSH binding. Staging installations
+that applied the former development `0107_endpoint_native_cluster_binding` keep
+its ignored orphan recorder row while the release migration safely adopts the
+existing schema and data. The plugin-owned `ProxmoxEndpointService` is parented
+directly by `ProxmoxEndpoint`, binds one or more NetBox IP addresses, and does not
+depend on core `ipam.Service`. Its one-to-one `ServiceSSHCredential` stores either
+Fernet ciphertext or OpenBao UUID references and exposes only secret-free
+readiness metadata.
 
 ---
 
@@ -1622,3 +1650,29 @@ earlier caller exporters require caller redaction. See
 `docs/developer/proxmox-mock-local.md` for the authoritative controls and local
 protobuf/domain regression commands. Existing real-NetBox companion gates remain
 separate from these mock tests.
+
+## Endpoint ownership of native clusters
+
+`ProxmoxEndpoint.netbox_cluster` is the read-only nullable one-to-one authority
+for native cluster identity. The local `sync-cluster` action atomically links
+endpoint, native cluster, tracking record, and typed sidecar, preserves identity
+across names changing, and never adopts a native cluster by name alone. Exact
+endpoint and native-cluster permissions and API-token write scope are required.
+The action derives tracking and sidecar maintenance authority from these exact
+grants. Ordinary tracking CRUD cannot establish ownership; ordinary sidecar
+metadata writes may repeat but cannot replace the server-owned link. All writers
+share endpoint, native cluster, tracking, then sidecar lock order. The additive
+`changed` response flag reports substantive native updates, excluding timestamps.
+Ambiguous historical tracking pairs stay unclaimed; ordinary synchronization
+cannot transfer existing ownership. Relations render only when the related
+object is visible to the caller, including native clusters without sidecars.
+See `docs/features/proxmox-cluster-binding.md` and the real-Django regressions in
+`tests/test_endpoint_cluster_binding_django.py` for the complete contract.
+
+## Post-candidate physical schema validation
+
+Version 0.0.31rc1 adds 0108_v0_0_31_schema_validation after the immutable
+0107_v0_0_30_release. The unchanged private helper validates physical 0107
+objects. Failure in 0108 leaves committed 0107 recorded; reversing 0108 preserves
+those objects and values. Preserve database backup, source and recorder evidence,
+and use reviewed explicit recovery rather than rewriting applied history.

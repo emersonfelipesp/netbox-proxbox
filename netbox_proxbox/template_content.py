@@ -18,6 +18,7 @@ from netbox_proxbox.jobs import is_proxbox_sync_job
 from netbox_proxbox.intent.firewall_common import resolve_firewall_endpoint
 from netbox_proxbox.models import (
     ProxmoxCluster,
+    ProxmoxEndpointService,
     ProxmoxFirewallAlias,
     ProxmoxFirewallIPSet,
     ProxmoxFirewallIPSetEntry,
@@ -41,6 +42,7 @@ from netbox_proxbox.branch_intent_template import branch_intent_template_extensi
 
 __all__ = (
     "ProxboxJobTemplateExtension",
+    "ProxboxIPAddressServicesTemplateExtension",
     "ProxboxSyncStateTemplateExtension",
     "ProxboxVirtualMachineTemplateExtension",
     "ProxmoxClusterTemplateExtension",
@@ -686,6 +688,24 @@ class ProxmoxClusterTemplateExtension(_SyncNowButtonExtension):
     context_key = "cluster"
     tracking_attr = "proxmox_cluster_tracking"
 
+    def left_page(self) -> str:
+        """Show the authoritative endpoint even when no typed sidecar exists."""
+        from netbox_proxbox.models import ProxmoxEndpoint
+
+        user = getattr(self.context.get("request"), "user", None)
+        if user is None:
+            return ""
+        endpoint = (
+            ProxmoxEndpoint.objects.restrict(user, "view")
+            .filter(netbox_cluster_id=self.context["object"].pk)
+            .first()
+        )
+        if endpoint is None:
+            return ""
+        return self.render(
+            "netbox_proxbox/inc/cluster_endpoint_card.html", {"endpoint": endpoint}
+        )
+
 
 class ProxmoxNodeTemplateExtension(_SyncNowButtonExtension):
     """Inject Sync Now action on dcim.Device detail pages for Proxmox nodes."""
@@ -798,6 +818,27 @@ class ProxmoxFirewallPushTemplateExtension(PluginTemplateExtension):
         )
 
 
+class ProxboxIPAddressServicesTemplateExtension(PluginTemplateExtension):
+    """List visible Proxbox application services bound to an IP address."""
+
+    models = ["ipam.ipaddress"]
+
+    def right_page(self) -> str:
+        ip_address = self.context["object"]
+        user = self.context["request"].user
+        services = (
+            ProxmoxEndpointService.objects.restrict(user, "view")
+            .filter(ipaddresses=ip_address)
+            .select_related("endpoint")
+        )
+        if not services.exists():
+            return ""
+        return self.render(
+            "netbox_proxbox/inc/ip_address_application_services.html",
+            {"proxbox_application_services": services},
+        )
+
+
 def _firewall_api_action_url(obj: object, action: str) -> str:
     basename = obj._meta.model_name
     return reverse(
@@ -817,5 +858,6 @@ template_extensions = [
     VMSnapshotTemplateExtension,
     VMTaskHistoryTemplateExtension,
     ProxmoxFirewallPushTemplateExtension,
+    ProxboxIPAddressServicesTemplateExtension,
     *branch_intent_template_extensions(),
 ]

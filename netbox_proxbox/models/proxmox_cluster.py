@@ -2,7 +2,8 @@
 
 from __future__ import annotations
 
-from django.db import models
+from django.core.exceptions import ValidationError
+from django.db import models, transaction
 from django.urls import NoReverseMatch, reverse
 from django.utils.translation import gettext_lazy as _
 
@@ -88,3 +89,105 @@ class ProxmoxCluster(NetBoxModel):
             return reverse("plugins:netbox_proxbox:proxmoxcluster", args=[self.pk])
         except NoReverseMatch:
             return ""
+
+    def _validate_existing_identity(self, previous) -> None:
+        if previous is None:
+            return
+        if previous.endpoint_id != self.endpoint_id:
+            raise ValidationError(
+                {"endpoint": "An existing tracking row cannot change endpoints."}
+            )
+        if previous.netbox_cluster_id and self.netbox_cluster_id not in (
+            None,
+            previous.netbox_cluster_id,
+        ):
+            raise ValidationError(
+                {
+                    "netbox_cluster": "Clear an obsolete tracking link explicitly before replacing it."
+                }
+            )
+
+    def _validate_claim_authority(self, previous) -> None:
+        from netbox_proxbox.services.cluster_binding_authority import (
+            cluster_binding_write_allowed,
+        )
+
+        previous_id = getattr(previous, "netbox_cluster_id", None)
+        if self.netbox_cluster_id is None or self.netbox_cluster_id == previous_id:
+            return
+        if not cluster_binding_write_allowed(self.netbox_cluster_id, self.endpoint_id):
+            raise ValidationError(
+                {
+                    "netbox_cluster": "Native cluster claims require the protected synchronization action."
+                }
+            )
+
+    def _validate_binding(self, endpoint) -> None:
+        """Refuse implicit ownership transfer through supported tracking writes."""
+        previous = type(self).objects.filter(pk=self.pk).first() if self.pk else None
+        self._validate_existing_identity(previous)
+        self._validate_claim_authority(previous)
+        if self.netbox_cluster_id is None:
+            return
+        if endpoint.netbox_cluster_id not in (None, self.netbox_cluster_id):
+            raise ValidationError(
+                {
+                    "netbox_cluster": "The endpoint already owns a different native cluster."
+                }
+            )
+        if (
+            type(endpoint)
+            .objects.filter(netbox_cluster_id=self.netbox_cluster_id)
+            .exclude(pk=endpoint.pk)
+            .exists()
+        ):
+            raise ValidationError(
+                {"netbox_cluster": "Another endpoint owns this native cluster."}
+            )
+        self._validate_other_claims(endpoint)
+
+    def _validate_other_claims(self, endpoint) -> None:
+        claims = (
+            type(self)
+            .objects.exclude(pk=self.pk)
+            .filter(netbox_cluster_id__isnull=False)
+        )
+        if (
+            claims.filter(endpoint=endpoint)
+            .exclude(netbox_cluster_id=self.netbox_cluster_id)
+            .exists()
+        ):
+            raise ValidationError(
+                {
+                    "netbox_cluster": "Resolve this endpoint's conflicting tracking links first."
+                }
+            )
+        if (
+            claims.filter(netbox_cluster_id=self.netbox_cluster_id)
+            .exclude(endpoint=endpoint)
+            .exists()
+        ):
+            raise ValidationError(
+                {
+                    "netbox_cluster": "Another endpoint's tracking row claims this native cluster."
+                }
+            )
+
+    def clean(self) -> None:
+        super().clean()
+        if self.endpoint_id:
+            self._validate_binding(self.endpoint)
+
+    def save(self, *args, **kwargs) -> None:
+        """Serialize tracking claims with endpoint synchronization and native deletion."""
+        from virtualization.models import Cluster
+        from netbox_proxbox.models.proxmox_endpoint import ProxmoxEndpoint
+
+        with transaction.atomic():
+            endpoint = ProxmoxEndpoint.objects.select_for_update().get(
+                pk=self.endpoint_id
+            )
+            if self.netbox_cluster_id:
+                Cluster.objects.select_for_update().get(pk=self.netbox_cluster_id)
+            self._validate_binding(endpoint)
+            super().save(*args, **kwargs)

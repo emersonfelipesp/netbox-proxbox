@@ -46,6 +46,7 @@ from .fastapi import *
 from .guest_vm_interface import *
 from .netbox import *
 from .proxmox import *
+from .proxmox_endpoint_service import *
 from .proxmox_metrics import (
     ProxmoxMetricsInfluxDBFilterForm,
     ProxmoxMetricsInfluxDBForm,

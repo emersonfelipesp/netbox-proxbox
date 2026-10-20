@@ -6,7 +6,7 @@ import logging
 from decimal import Decimal
 from typing import TypedDict
 
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
 from django.urls import reverse
@@ -29,6 +29,7 @@ from netbox_proxbox.models.ssh_credential import (
     SSH_CRED_SOURCE_CHOICES,
     SSH_CRED_SOURCE_DEDICATED,
     SSH_CRED_SOURCE_REUSE,
+    SSH_CRED_SOURCE_SERVICE,
     normalize_fingerprint,
 )
 from netbox_proxbox.models.primary_secrets import (
@@ -62,6 +63,16 @@ SERVICE_MONITORING_INELIGIBLE_MESSAGE = _(
 
 class ProxmoxEndpoint(EndpointBase):
     """Credentials and address for a Proxmox VE instance or cluster."""
+
+    netbox_cluster = models.OneToOneField(
+        "virtualization.Cluster",
+        on_delete=models.SET_NULL,
+        related_name="proxbox_endpoint",
+        null=True,
+        blank=True,
+        editable=False,
+        help_text=_("Native NetBox cluster owned by this endpoint's synchronization."),
+    )
 
     name = models.CharField(
         default="Proxmox Endpoint",
@@ -413,8 +424,8 @@ class ProxmoxEndpoint(EndpointBase):
         default=SSH_CRED_SOURCE_DEDICATED,
         verbose_name=_("SSH credential source"),
         help_text=_(
-            "Choose a dedicated SSH credential or reuse this endpoint's "
-            "Proxmox username/password for SSH. Reuse strips the realm "
+            "Choose an application-service credential, a dedicated endpoint "
+            "credential, or the endpoint's Proxmox username/password. Reuse strips the realm "
             "(for example, root@pam becomes root); only PAM-backed Proxmox "
             "users usually map to local SSH accounts."
         ),
@@ -442,6 +453,37 @@ class ProxmoxEndpoint(EndpointBase):
             "unless the host key matches this exact value."
         ),
     )
+    cloud_image_ssh_target_node = models.CharField(
+        max_length=255,
+        blank=True,
+        default="",
+        db_default="",
+        verbose_name=_("Cloud Image SSH target node"),
+        help_text=_("Proxmox node that the Cloud Image bake SSH host belongs to."),
+    )
+    cloud_image_ssh_identity_file = models.CharField(
+        max_length=4096,
+        blank=True,
+        default="",
+        db_default="",
+        verbose_name=_("Cloud Image SSH identity file"),
+        help_text=_(
+            "Absolute path on the proxbox-api host. proxbox-api validates that "
+            "the path is under PROXBOX_SSH_KEY_DIR."
+        ),
+    )
+    cloud_image_ssh_binding_fingerprint = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_default="",
+        editable=False,
+        help_text=_(
+            "SHA-256 of the Cloud Image SSH binding NetBox last pushed; empty "
+            "means NetBox has not pushed one (an externally managed backend "
+            "binding is left untouched)."
+        ),
+    )
     ssh_password_enc = models.TextField(
         blank=True,
         default="",
@@ -453,6 +495,15 @@ class ProxmoxEndpoint(EndpointBase):
         default="",
         verbose_name=_("Encrypted SSH private key"),
         help_text=_("Fernet-encrypted fallback SSH private key ciphertext. Internal."),
+    )
+    ssh_service = models.ForeignKey(
+        to="netbox_proxbox.ProxmoxEndpointService",
+        on_delete=models.SET_NULL,
+        related_name="+",
+        null=True,
+        blank=True,
+        verbose_name=_("SSH application service"),
+        help_text=_("Application service that owns this endpoint's SSH credential."),
     )
     service_monitoring_enabled = models.BooleanField(
         default=False,
@@ -981,12 +1032,22 @@ class ProxmoxEndpoint(EndpointBase):
 
     @property
     def ssh_host(self) -> str:
-        """Host string used by the endpoint-level SSH terminal fallback."""
+        """Host string used by the endpoint-level SSH terminal fallback.
+
+        The service source connects to the endpoint IP that its application
+        service is validated to bind, never to a domain that may resolve
+        elsewhere. Other sources keep their historical domain-first host.
+        """
+        if self.ssh_credential_source == SSH_CRED_SOURCE_SERVICE and self.ip:
+            return self.ip.strip()
         return (self.domain or self.ip or "").strip()
 
     @property
     def has_ssh_password(self) -> bool:
         """Return whether an endpoint fallback SSH password is stored."""
+        if self.ssh_credential_source == SSH_CRED_SOURCE_SERVICE:
+            credential = self._service_ssh_credential()
+            return bool(credential and credential.has_password)
         from netbox_proxbox.integrations.openbao import endpoint_uses_openbao_storage
 
         if endpoint_uses_openbao_storage(self):
@@ -996,6 +1057,9 @@ class ProxmoxEndpoint(EndpointBase):
     @property
     def has_ssh_private_key(self) -> bool:
         """Return whether an endpoint fallback SSH private key is stored."""
+        if self.ssh_credential_source == SSH_CRED_SOURCE_SERVICE:
+            credential = self._service_ssh_credential()
+            return bool(credential and credential.has_private_key)
         from netbox_proxbox.integrations.openbao import endpoint_uses_openbao_storage
 
         if endpoint_uses_openbao_storage(self):
@@ -1007,7 +1071,30 @@ class ProxmoxEndpoint(EndpointBase):
         """Return the SSH login username selected by the endpoint SSH source."""
         if self.ssh_credential_source == SSH_CRED_SOURCE_REUSE:
             return (self.username or "").split("@", 1)[0].strip()
+        if self.ssh_credential_source == SSH_CRED_SOURCE_SERVICE:
+            credential = self._service_ssh_credential()
+            return (getattr(credential, "username", "") or "").strip()
         return (self.ssh_username or "").strip()
+
+    @property
+    def effective_ssh_auth_method(self) -> str:
+        """Return the authentication method selected by the active SSH source."""
+        if self.ssh_credential_source == SSH_CRED_SOURCE_REUSE:
+            return AUTH_METHOD_PASSWORD
+        if self.ssh_credential_source == SSH_CRED_SOURCE_SERVICE:
+            credential = self._service_ssh_credential()
+            return getattr(credential, "auth_method", self.ssh_auth_method)
+        return self.ssh_auth_method
+
+    def _service_ssh_credential(self) -> object | None:
+        """Return the linked service credential without leaking relation failures."""
+        service = getattr(self, "ssh_service", None)
+        if service is None:
+            return None
+        try:
+            return service.ssh_credential
+        except (AttributeError, ObjectDoesNotExist):
+            return None
 
     @property
     def ssh_access_enabled(self) -> bool:
@@ -1035,12 +1122,12 @@ class ProxmoxEndpoint(EndpointBase):
             )
         has_secret = (
             self.has_ssh_private_key
-            if self.ssh_auth_method == AUTH_METHOD_KEY
+            if self.effective_ssh_auth_method == AUTH_METHOD_KEY
             else self.has_ssh_password
         )
         return bool(
             self.ssh_host
-            and self.ssh_username
+            and self.effective_ssh_username
             and self.ssh_known_host_fingerprint
             and has_secret
         )
@@ -1101,6 +1188,13 @@ class ProxmoxEndpoint(EndpointBase):
 
     def get_ssh_password(self, *, key: str) -> str:
         """Return the endpoint fallback SSH password."""
+        if self.ssh_credential_source == SSH_CRED_SOURCE_SERVICE:
+            credential = self._service_ssh_credential()
+            if credential is None:
+                return ""
+            return credential.get_password(
+                key=key, user=self._openbao_interaction_user()
+            )
         from netbox_proxbox.integrations.openbao import (
             endpoint_uses_openbao_storage,
             resolve_endpoint_ssh_password,
@@ -1148,6 +1242,13 @@ class ProxmoxEndpoint(EndpointBase):
 
     def get_ssh_private_key(self, *, key: str) -> str:
         """Return the endpoint fallback SSH private key."""
+        if self.ssh_credential_source == SSH_CRED_SOURCE_SERVICE:
+            credential = self._service_ssh_credential()
+            if credential is None:
+                return ""
+            return credential.get_private_key(
+                key=key, user=self._openbao_interaction_user()
+            )
         from netbox_proxbox.integrations.openbao import (
             endpoint_uses_openbao_storage,
             resolve_endpoint_ssh_private_key,
@@ -1162,9 +1263,29 @@ class ProxmoxEndpoint(EndpointBase):
     def _openbao_interaction_user(self) -> object | None:
         return getattr(self, "_openbao_actor_user", None)
 
+    def _validate_ssh_service_ownership(self) -> None:
+        """Refuse an SSH service owned by another endpoint, whatever the source."""
+        service_id = getattr(self, "ssh_service_id", None)
+        if service_id is None:
+            return
+        from netbox_proxbox.models.proxmox_endpoint_service import (
+            ProxmoxEndpointService,
+        )
+
+        owner_id = (
+            ProxmoxEndpointService.objects.filter(pk=service_id)
+            .values_list("endpoint_id", flat=True)
+            .first()
+        )
+        if self.pk is None or owner_id != self.pk:
+            raise ValidationError(
+                {"ssh_service": "The SSH service must belong to this endpoint."}
+            )
+
     def clean(self) -> None:
         """Validate endpoint identity plus optional SSH terminal fallback fields."""
         super().clean()
+        self._validate_ssh_service_ownership()
         from netbox_proxbox.integrations.openbao import (
             validate_write_mode_openbao_requirements,
         )
@@ -1213,6 +1334,10 @@ class ProxmoxEndpoint(EndpointBase):
                 and self.effective_ssh_username
                 and password_available
             )
+        elif self.ssh_credential_source == SSH_CRED_SOURCE_SERVICE and hasattr(
+            self, "_pending_service_credentials_ready"
+        ):
+            credentials_ready = bool(self._pending_service_credentials_ready)
         else:
             credentials_ready = self.has_ssh_terminal_credentials
         return bool(
@@ -1231,7 +1356,15 @@ class ProxmoxEndpoint(EndpointBase):
         if self.ssh_credential_source == SSH_CRED_SOURCE_REUSE:
             self._validate_reused_ssh_credentials()
             return
+        if self.ssh_credential_source == SSH_CRED_SOURCE_SERVICE:
+            if getattr(self, "_pending_service_chain_validation", False):
+                return
+            self._validate_service_ssh_credentials()
+            return
+        self._validate_dedicated_ssh_configuration()
 
+    def _validate_dedicated_ssh_configuration(self) -> None:
+        """Validate endpoint-owned SSH identity and selected authentication secret."""
         has_any_ssh = any(
             (
                 self.ssh_username,
@@ -1250,10 +1383,64 @@ class ProxmoxEndpoint(EndpointBase):
             errors["ssh_known_host_fingerprint"] = (
                 "Pinned host-key fingerprint is required for endpoint fallback."
             )
-        if self.ssh_auth_method == AUTH_METHOD_KEY and not self.ssh_private_key_enc:
+        password_ready, private_key_ready = (
+            self._dedicated_ssh_secret_presence_for_validation()
+        )
+        if self.ssh_auth_method == AUTH_METHOD_KEY and not private_key_ready:
             errors["ssh_auth_method"] = "Key authentication requires a private key."
-        if self.ssh_auth_method == AUTH_METHOD_PASSWORD and not self.ssh_password_enc:
+        if self.ssh_auth_method == AUTH_METHOD_PASSWORD and not password_ready:
             errors["ssh_auth_method"] = "Password authentication requires a password."
+        if errors:
+            raise ValidationError(errors)
+
+    def _dedicated_ssh_secret_presence_for_validation(self) -> tuple[bool, bool]:
+        """Include write-only form material in model validation without storing it."""
+        pending = getattr(self, "_pending_dedicated_ssh_secrets", None)
+        if pending is not None:
+            return pending.password, pending.private_key
+        return bool(self.ssh_password_enc), bool(self.ssh_private_key_enc)
+
+    def _validate_service_ssh_credentials(self) -> None:
+        """Validate the endpoint, service, IP, port, and credential chain."""
+        from netbox_proxbox.services.ssh_service_chain import service_exposes_tcp_port
+
+        errors: dict[str, str] = {}
+        service = self.ssh_service
+        if service is None:
+            errors["ssh_service"] = "An SSH application service is required."
+        elif service.endpoint_id != self.pk:
+            errors["ssh_service"] = (
+                "The SSH application service must belong to this endpoint."
+            )
+        elif (
+            self.ip_address is None
+            or not service.ipaddresses.filter(pk=self.ip_address_id).exists()
+        ):
+            errors["ssh_service"] = (
+                "The SSH application service must include the endpoint IP address."
+            )
+        elif not service_exposes_tcp_port(service, self.ssh_port):
+            errors["ssh_service"] = (
+                "The SSH application service must expose the endpoint TCP SSH port."
+            )
+        else:
+            credential = self._service_ssh_credential()
+            if credential is None:
+                errors["ssh_service"] = (
+                    "The SSH application service must have a Proxbox SSH credential."
+                )
+            elif not self.effective_ssh_username:
+                errors["ssh_service"] = (
+                    "The SSH application service credential must have a username."
+                )
+            elif not self.ssh_known_host_fingerprint:
+                errors["ssh_known_host_fingerprint"] = (
+                    "Pinned host-key fingerprint is required for endpoint SSH."
+                )
+            elif not self.has_ssh_terminal_credentials:
+                errors["ssh_service"] = (
+                    "The SSH application service credential must contain the selected authentication secret."
+                )
         if errors:
             raise ValidationError(errors)
 

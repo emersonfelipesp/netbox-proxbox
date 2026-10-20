@@ -69,6 +69,10 @@ from netbox_proxbox.tables.vm_snapshot import VMSnapshotTable
 from netbox_proxbox.tables.vm_task_history import VMTaskHistoryTable
 from netbox_proxbox.tables.pdm_remote import PDMRemoteTable
 from netbox_proxbox.tables.proxmox_metrics import ProxmoxMetricsInfluxDBTable
+from netbox_proxbox.tables.proxmox_endpoint_service import (
+    ProxmoxEndpointServiceTable,
+    ServiceSSHCredentialTable,
+)
 from netbox_proxbox.tables.vm_template import ProxmoxVMTemplateTable
 
 STATUS_BADGE_TEMPLATE = """

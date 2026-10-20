@@ -18,6 +18,7 @@ from being attributed the first endpoint's clusters/nodes/VMs:
 
 from __future__ import annotations
 
+from contextlib import nullcontext
 import importlib.util
 import sys
 import types
@@ -192,6 +193,43 @@ def _backend_row(backend_id, endpoint, **overrides):
     return row
 
 
+def _managed_endpoint(endpoint, receipt="a" * 64):
+    calls = {"filter": [], "update": []}
+
+    class _Manager:
+        def using(self, _alias) -> object:
+            return self
+
+        def filter(self, **kwargs):
+            calls["filter"].append(kwargs)
+            return self
+
+        def update(self, **kwargs):
+            calls["update"].append(kwargs)
+            return 1
+
+    class _Endpoint(type(endpoint)):
+        objects = _Manager()
+
+    managed = _Endpoint(**vars(endpoint))
+    managed.cloud_image_ssh_binding_fingerprint = receipt
+    return managed, calls
+
+
+def _stale_authority(monkeypatch):
+    authority = types.ModuleType("netbox_proxbox.services.connection_authority")
+
+    class ConnectionAuthorityError(Exception):
+        pass
+
+    authority.ConnectionAuthorityError = ConnectionAuthorityError
+    authority.require_approved_connection = lambda _endpoint: None
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.services.connection_authority", authority
+    )
+    return ConnectionAuthorityError
+
+
 def test_proxmox_backend_name_embeds_plugin_pk(monkeypatch):
     backend_sync = _load_backend_sync_module(monkeypatch, endpoints_payload=[])
     assert backend_sync.proxmox_backend_name(_endpoint(3, "PVE")) == "PVE (nb:3)"
@@ -283,6 +321,214 @@ def test_disabled_policy_update_revokes_existing_backend_grant(monkeypatch):
     assert endpoint.packer_template_builds_backend_authorized is False
 
 
+def test_disabled_policy_update_clears_managed_binding_with_cas(monkeypatch):
+    endpoint, writes = _managed_endpoint(_endpoint(1, "Disabled PVE", enabled=False))
+    backend_sync = _load_backend_sync_module(
+        monkeypatch, endpoints_payload=[_backend_row(17, endpoint, enabled=True)]
+    )
+    calls = []
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "put",
+        lambda url, **kwargs: calls.append(kwargs["json"]) or _FakeResponse({}),
+    )
+
+    result = backend_sync.sync_proxmox_endpoint_to_backend(
+        endpoint,
+        base_url="http://backend:8000",
+        allow_disabled_policy_update=True,
+    )
+
+    assert result == (True, None, None)
+    assert calls == [
+        {
+            "enabled": False,
+            "allow_packer_template_builds": False,
+            "ssh_target_node": None,
+            "ssh_host": None,
+            "ssh_username": None,
+            "ssh_identity_file": None,
+            "ssh_known_host_fingerprint": None,
+        }
+    ]
+    assert writes["filter"][0] == {
+        "pk": 1,
+        "cloud_image_ssh_binding_fingerprint": "a" * 64,
+    }
+    assert endpoint.cloud_image_ssh_binding_fingerprint == ""
+
+
+def test_stale_approval_revokes_managed_binding_without_credentials(monkeypatch):
+    endpoint, writes = _managed_endpoint(_endpoint(3, "PVE"))
+    backend_sync = _load_backend_sync_module(
+        monkeypatch, endpoints_payload=[_backend_row(17, endpoint)]
+    )
+    error = _stale_authority(monkeypatch)
+    monkeypatch.setattr(
+        backend_sync,
+        "_prepare_proxmox_push",
+        lambda *_args: (_ for _ in ()).throw(error()),
+    )
+    calls = []
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "put",
+        lambda url, **kwargs: calls.append((url, kwargs["json"])) or _FakeResponse({}),
+    )
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "post",
+        lambda *args, **kwargs: pytest.fail("revocation created a backend row"),
+    )
+
+    result = backend_sync.sync_proxmox_endpoint_to_backend(
+        endpoint, base_url="http://backend:8000"
+    )
+
+    assert result == (
+        False,
+        "The managed SSH binding was revoked; the full update requires connection approval.",
+        None,
+    )
+    assert calls == [
+        (
+            "http://backend:8000/proxmox/endpoints/17",
+            {
+                "allow_packer_template_builds": False,
+                "ssh_target_node": None,
+                "ssh_host": None,
+                "ssh_username": None,
+                "ssh_identity_file": None,
+                "ssh_known_host_fingerprint": None,
+            },
+        )
+    ]
+    assert writes["filter"] == [
+        {"pk": 3, "cloud_image_ssh_binding_fingerprint": "a" * 64}
+    ]
+
+
+def test_stale_approval_failed_revocation_retains_receipt(monkeypatch):
+    endpoint, writes = _managed_endpoint(_endpoint(3, "PVE"))
+    backend_sync = _load_backend_sync_module(
+        monkeypatch, endpoints_payload=[_backend_row(17, endpoint)]
+    )
+    error = _stale_authority(monkeypatch)
+    monkeypatch.setattr(
+        backend_sync,
+        "_prepare_proxmox_push",
+        lambda *_args: (_ for _ in ()).throw(error()),
+    )
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "put",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            backend_sync.requests.exceptions.ReadTimeout("commit status unknown")
+        ),
+    )
+
+    result = backend_sync.sync_proxmox_endpoint_to_backend(
+        endpoint, base_url="http://backend:8000"
+    )
+
+    assert result[0] is False
+    assert "commit status unknown" in result[1]
+    assert writes == {"filter": [], "update": []}
+    assert endpoint.cloud_image_ssh_binding_fingerprint == "a" * 64
+
+
+def test_value_push_records_binding_before_commit_then_timeout(monkeypatch):
+    endpoint, writes = _managed_endpoint(_endpoint(3, "PVE"), receipt="")
+    backend_sync = _load_backend_sync_module(
+        monkeypatch, endpoints_payload=[_backend_row(17, endpoint)]
+    )
+    database = sys.modules["django.db"]
+    monkeypatch.setattr(
+        database,
+        "router",
+        SimpleNamespace(db_for_write=lambda *a, **kw: "default"),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        database,
+        "transaction",
+        SimpleNamespace(
+            get_connection=lambda _alias: SimpleNamespace(
+                in_atomic_block=False, get_autocommit=lambda: True
+            ),
+            atomic=lambda **kwargs: nullcontext(),
+        ),
+        raising=False,
+    )
+    _stale_authority(monkeypatch)
+    payload = {
+        "enabled": True,
+        "allow_packer_template_builds": True,
+        "ssh_target_node": "pve-node-2",
+        "ssh_host": ".".join(("192", "0", "2", "22")),
+        "ssh_username": "image-builder",
+        "ssh_port": 2222,
+        "ssh_identity_file": "/srv/proxbox/ssh/image-builder",
+        "ssh_known_host_fingerprint": "SHA256:cloud-image-host-key",
+    }
+    monkeypatch.setattr(
+        backend_sync,
+        "_prepare_proxmox_push",
+        lambda *_args: (payload, "payload-fingerprint", None),
+    )
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "put",
+        lambda *args, **kwargs: (_ for _ in ()).throw(
+            backend_sync.requests.exceptions.ReadTimeout("response lost after commit")
+        ),
+    )
+
+    result = backend_sync.sync_proxmox_endpoint_to_backend(
+        endpoint,
+        base_url="http://backend:8000",
+        existing_endpoints=[_backend_row(17, endpoint)],
+    )
+
+    assert result[0] is False
+    assert "response lost after commit" in result[1]
+    assert writes["update"] == [
+        {
+            "cloud_image_ssh_binding_fingerprint": (
+                "7802e66b7dbf68328a74c271f14356fab910c656fe32ff4f623f270ccb82599d"
+            )
+        }
+    ]
+    assert endpoint.cloud_image_ssh_binding_fingerprint == (
+        "7802e66b7dbf68328a74c271f14356fab910c656fe32ff4f623f270ccb82599d"
+    )
+
+    endpoint.enabled = False
+    clears = []
+    monkeypatch.setattr(
+        backend_sync.requests,
+        "put",
+        lambda url, **kwargs: clears.append(kwargs["json"]) or _FakeResponse({}),
+    )
+    assert backend_sync.sync_proxmox_endpoint_to_backend(
+        endpoint,
+        base_url="http://backend:8000",
+        existing_endpoints=[_backend_row(17, endpoint, enabled=True)],
+        allow_disabled_policy_update=True,
+    ) == (True, None, None)
+    assert clears == [
+        {
+            "enabled": False,
+            "allow_packer_template_builds": False,
+            "ssh_target_node": None,
+            "ssh_host": None,
+            "ssh_username": None,
+            "ssh_identity_file": None,
+            "ssh_known_host_fingerprint": None,
+        }
+    ]
+
+
 def test_failed_policy_revocation_preserves_confirmed_backend_grant(monkeypatch):
     endpoint = _endpoint(
         1,
@@ -324,6 +570,7 @@ def test_successful_normal_push_records_effective_backend_grant(monkeypatch):
         "Authorized PVE",
         allow_writes=True,
         allow_packer_template_builds=True,
+        access_methods="api_ssh",
     )
     backend_sync = _load_backend_sync_module(monkeypatch, endpoints_payload=[])
     monkeypatch.setattr(

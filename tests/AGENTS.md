@@ -648,3 +648,46 @@ rather than real NetBox. Two failure modes are easy to hit and hard to read:
 ## Links
 
 - Parent: [`../CLAUDE.md`](../CLAUDE.md)
+
+`test_release_0107_schema_validation.py` tests the private release catalog and
+ordered deferred-DDL boundary without a database. The real PostgreSQL
+`ReleaseSchemaValidationTest` in `test_release_0108_schema_validation_django.py`
+uses the existing task-owned historical-database harness to challenge malformed
+ownership and adopted service schema, invalid concurrent indexes, actual physical
+ownership enforcement, complete unrecorded adoption, and deferred-DDL
+rollback/retry. Run it with `Production0106ValidationUpgradeTest` and the existing historical
+`SSHServiceChainMigrationTest` to retain
+clean, retained-owner, reverse, and reapply controls. Mocked catalog tests do not
+establish a real migration result. Use immutable source and isolated local
+PostgreSQL fixtures; never use a managed database or another session’s database.
+
+Release validation controls must retain good expected constraints while adding
+conflicting enforcement; sole-invalid-index tests do not cover additive schema
+drift. The real migration suite includes additional NULLS NOT DISTINCT,
+not-null CHECK, credential username UNIQUE, expression/predicate dependency, and
+unrelated endpoint-policy controls. Independent local database connections prove
+that ordinary and concurrent index DDL cannot race the receipt and that bounded
+lock contention fails without recording the migration, then permits a clean retry.
+Whole-row controls include an actual JSON CHECK, mixed scalar/whole-row CHECK,
+functional unique expression, unique predicate, and exclusion expression. Retain
+unrelated scalar-expression and function-CHECK positive controls so an automatic
+table dependency cannot cause blanket rejection. The earlier JSON CHECK discriminating control remains historical evidence.
+New 0108 results require their own exact source identity.
+
+
+## Post-candidate validation boundary
+
+Release 0.0.31rc1 adds only `0108_v0_0_31_schema_validation` after the applied,
+immutable `0107_v0_0_30_release`. Keep every numbered migration through 0107
+byte- and mode-identical. The unchanged private `_release_0107_schema.py`
+checks objects introduced by 0107; its marker identifies that invariant while
+the actual migration executing it is 0108. It must remain 0108's last operation.
+The source-bound full function audit and native qualification belong to this new
+migration boundary, not a relabeling of the earlier pre-candidate experiment.
+
+The 0107 and 0108 transactions commit separately. A failure in 0108 preserves
+an already committed 0107 and leaves 0108 unrecorded. Do not claim joint rollback,
+rewrite deployed history, or silently repair an unexpected schema. Reverse of
+0108 is a no-op for schema/data; reapply validates again. Preserve actual recorder
+and data evidence for explicit reviewed recovery. The original 0107 reverse
+controls remain historical and do not prove that 0108 removes those objects.

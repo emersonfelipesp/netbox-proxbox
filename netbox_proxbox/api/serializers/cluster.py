@@ -2,6 +2,10 @@
 
 from __future__ import annotations
 
+from django.core.exceptions import ValidationError
+from django.db import IntegrityError, transaction
+from django.db.models import QuerySet
+
 from netbox.api.fields import ChoiceField
 from netbox.api.serializers import NetBoxModelSerializer, WritableNestedSerializer
 from rest_framework import serializers
@@ -31,6 +35,11 @@ class NestedProxmoxEndpointSerializer(WritableNestedSerializer):
     url = serializers.HyperlinkedIdentityField(
         view_name="plugins-api:netbox_proxbox-api:endpoints:proxmoxendpoint-detail",
     )
+
+    def get_queryset(self) -> QuerySet:
+        queryset = super().get_queryset()
+        user = getattr(self.context.get("request"), "user", None)
+        return queryset.restrict(user, "view") if user is not None else queryset.none()
 
     class Meta:
         from netbox_proxbox.models import ProxmoxEndpoint
@@ -66,6 +75,15 @@ class NestedProxmoxNodeSerializer(WritableNestedSerializer):
         brief_fields = ("id", "url", "display", "name", "node_id", "online")
 
 
+class VisibleNativeClusterSerializer(ClusterSerializer):
+    """Resolve native cluster references only in the caller's view scope."""
+
+    def get_queryset(self) -> QuerySet:
+        queryset = super().get_queryset()
+        user = getattr(self.context.get("request"), "user", None)
+        return queryset.restrict(user, "view") if user is not None else queryset.none()
+
+
 class ProxmoxClusterSerializer(NetBoxModelSerializer):
     """Full ProxmoxCluster serializer with nested relationships."""
 
@@ -73,9 +91,31 @@ class ProxmoxClusterSerializer(NetBoxModelSerializer):
         view_name="plugins-api:netbox_proxbox-api:proxmoxcluster-detail",
     )
     endpoint = NestedProxmoxEndpointSerializer()
-    netbox_cluster = ClusterSerializer(nested=True, required=False, allow_null=True)
+    netbox_cluster = VisibleNativeClusterSerializer(
+        nested=True, required=False, allow_null=True
+    )
     mode = ChoiceField(choices=ProxmoxModeChoices)
     node_count = serializers.IntegerField(source="nodes_count", read_only=True)
+
+    def create(self, validated_data: dict) -> ProxmoxCluster:
+        """Return a conflict when an ownership claim changes after validation."""
+        from netbox_proxbox.services.cluster_binding import ClusterBindingConflict
+
+        try:
+            with transaction.atomic():
+                return super().create(validated_data)
+        except (ValidationError, IntegrityError) as exc:
+            raise ClusterBindingConflict() from exc
+
+    def update(self, instance: ProxmoxCluster, validated_data: dict) -> ProxmoxCluster:
+        """Keep ordinary tracking CRUD inside the persisted ownership boundary."""
+        from netbox_proxbox.services.cluster_binding import ClusterBindingConflict
+
+        try:
+            with transaction.atomic():
+                return super().update(instance, validated_data)
+        except (ValidationError, IntegrityError) as exc:
+            raise ClusterBindingConflict() from exc
 
     class Meta:
         model = ProxmoxCluster

@@ -63,6 +63,7 @@ from netbox_proxbox.models import (
 from netbox_proxbox.models.ssh_credential import (
     AUTH_METHOD_KEY,
     AUTH_METHOD_PASSWORD,
+    SSH_CRED_SOURCE_SERVICE,
 )
 from netbox_proxbox.services.backend_context import (
     _build_request_candidates,
@@ -73,6 +74,10 @@ from netbox_proxbox.schemas.backend_proxy import BackendRequestContext
 from netbox_proxbox.tables import ProxmoxEndpointTable
 from netbox_proxbox.utils import encryption as enc_helpers
 from netbox_proxbox.views.proxbox_access import permission_open_ssh_terminal
+from netbox_proxbox.views.confirmed_cleanup import (
+    ConfirmedCleanupBulkDeleteMixin,
+    ConfirmedCleanupDeleteMixin,
+)
 from netbox_proxbox.views.endpoints.proxmox_export import (
     _proxmox_export_fieldnames,
     _serialize_proxmox_endpoint,
@@ -161,7 +166,69 @@ class ProxmoxEndpointView(generic.ObjectView):
     Display a single Proxmox endpoint.
     """
 
-    queryset = ProxmoxEndpoint.objects.all()
+    queryset = ProxmoxEndpoint.objects.select_related("ssh_service__ssh_credential")
+
+    def get_extra_context(
+        self, request: HttpRequest, instance: ProxmoxEndpoint
+    ) -> dict[str, object]:
+        """Expose visible SSH metadata and the authorized native-cluster link."""
+        from virtualization.models import Cluster
+
+        from netbox_proxbox.models import ProxmoxEndpointService, ServiceSSHCredential
+
+        service_id = (
+            instance.ssh_service_id
+            if instance.ssh_credential_source == SSH_CRED_SOURCE_SERVICE
+            else None
+        )
+        service = (
+            ProxmoxEndpointService.objects.restrict(request.user, "view")
+            .filter(pk=service_id)
+            .first()
+        )
+        credential = (
+            ServiceSSHCredential.objects.restrict(request.user, "view")
+            .filter(service=service)
+            .first()
+            if service is not None
+            else None
+        )
+        openbao_credential = None
+        if credential is not None and credential.storage_backend == "openbao":
+            reference = (
+                credential.openbao_keypair_credential_uuid
+                if credential.auth_method == AUTH_METHOD_KEY
+                else credential.openbao_password_credential_uuid
+            )
+            openbao_credential = _visible_openbao_credential(request.user, reference)
+        return {
+            "service_ssh_credential": credential,
+            "ssh_application_service": service,
+            "openbao_ssh_credential": openbao_credential,
+            "application_services": instance.application_services.restrict(
+                request.user, "view"
+            ).order_by("name"),
+            "visible_netbox_cluster": Cluster.objects.restrict(request.user, "view")
+            .filter(pk=instance.netbox_cluster_id)
+            .first(),
+        }
+
+
+def _visible_openbao_credential(user: object, reference: object) -> object | None:
+    """Resolve a provider link only when the companion and object are visible."""
+    if reference is None:
+        return None
+    from django.apps import apps
+
+    from netbox_proxbox.integrations.openbao import is_netbox_openbao_installed
+
+    if not is_netbox_openbao_installed():
+        return None
+    try:
+        model = apps.get_model("netbox_openbao", "Credential")
+    except LookupError:
+        return None
+    return model.objects.restrict(user, "view").filter(uuid=reference).first()
 
 
 @register_model_view(ProxmoxEndpoint, "list", path="", detail=False)
@@ -170,7 +237,7 @@ class ProxmoxEndpointListView(CredentialSafeListMixin, generic.ObjectListView):
     Display a list of Proxmox endpoints.
     """
 
-    queryset = ProxmoxEndpoint.objects.all()
+    queryset = ProxmoxEndpoint.objects.select_related("ssh_service__ssh_credential")
     table = ProxmoxEndpointTable
     filterset = ProxmoxEndpointFilterSet
     filterset_form = ProxmoxEndpointFilterForm
@@ -433,6 +500,24 @@ class ProxmoxEndpointEditView(generic.ObjectEditView):
     form = ProxmoxEndpointForm
     template_name = "netbox_proxbox/proxmoxendpoint_edit.html"
 
+    @sensitive_variables()
+    def post(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> HttpResponse:
+        """Enter provider ownership before NetBox opens its edit transaction."""
+        from netbox_proxbox.integrations.openbao_service import (
+            service_chain_request_boundary,
+        )
+
+        endpoint = self.get_object(**kwargs)
+        with service_chain_request_boundary(
+            endpoint,
+            request.POST,
+            actor=request.user,
+            request=request,
+        ):
+            return super().post(request, *args, **kwargs)
+
     def get_form_kwargs(self) -> dict[str, object]:
         kwargs = super().get_form_kwargs()
         kwargs["request_user"] = self.request.user
@@ -527,6 +612,29 @@ class ProxmoxEndpointSSHSettingsView(ActionsMixin, generic.ObjectEditView):
         permission="netbox_proxbox.change_proxmoxendpoint",
         weight=925,
     )
+
+    @sensitive_variables()
+    def post(
+        self, request: HttpRequest, *args: object, **kwargs: object
+    ) -> HttpResponse:
+        """Enter provider ownership before NetBox opens its edit transaction."""
+        from netbox_proxbox.integrations.openbao_service import (
+            service_chain_request_boundary,
+        )
+
+        endpoint = self.get_object(**kwargs)
+        with service_chain_request_boundary(
+            endpoint,
+            request.POST,
+            actor=request.user,
+            request=request,
+        ):
+            return super().post(request, *args, **kwargs)
+
+    def get_form_kwargs(self) -> dict[str, object]:
+        kwargs = super().get_form_kwargs()
+        kwargs["request_user"] = self.request.user
+        return kwargs
 
     def get_extra_context(
         self, request: HttpRequest, instance: ProxmoxEndpoint
@@ -1260,8 +1368,33 @@ class ProxmoxEndpointSyncJobsTabView(generic.ObjectView):
         )
 
 
+class _EndpointServiceCleanupMixin:
+    """Clean endpoint-owned service state in the confirmed delete scope."""
+
+    def cleanup_boundary(self, request, objects):
+        from netbox_proxbox.integrations.openbao_service import (
+            endpoint_service_cleanup_boundary,
+        )
+
+        return endpoint_service_cleanup_boundary(
+            objects, actor=request.user, request=request
+        )
+
+    def cleanup_objects(self, request, objects) -> None:
+        from netbox_proxbox.integrations.openbao_service import (
+            cleanup_endpoint_services,
+        )
+
+        for endpoint in objects:
+            cleanup_endpoint_services(endpoint, actor=request.user)
+
+
 @register_model_view(ProxmoxEndpoint, "delete")
-class ProxmoxEndpointDeleteView(generic.ObjectDeleteView):
+class ProxmoxEndpointDeleteView(
+    _EndpointServiceCleanupMixin,
+    ConfirmedCleanupDeleteMixin,
+    generic.ObjectDeleteView,
+):
     """
     Delete a Proxmox endpoint.
     """
@@ -1273,7 +1406,11 @@ class ProxmoxEndpointDeleteView(generic.ObjectDeleteView):
 
 
 @register_model_view(ProxmoxEndpoint, "bulk_delete", detail=False)
-class ProxmoxEndpointBulkDeleteView(generic.BulkDeleteView):
+class ProxmoxEndpointBulkDeleteView(
+    _EndpointServiceCleanupMixin,
+    ConfirmedCleanupBulkDeleteMixin,
+    generic.BulkDeleteView,
+):
     """Bulk-delete Proxmox endpoint records."""
 
     queryset = ProxmoxEndpoint.objects.filter(

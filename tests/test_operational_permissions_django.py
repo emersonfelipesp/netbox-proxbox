@@ -71,12 +71,12 @@ from netbox_proxbox.choices import FirewallRuleTypeChoices, FirewallZoneChoices 
 from netbox_proxbox.intent import firewall_common  # noqa: E402
 from netbox_proxbox.models import (  # noqa: E402
     ProxboxVirtualMachineSyncState,
-    ProxmoxCluster,
     ProxmoxEndpoint,
     ProxmoxFirewallRule,
 )
 from netbox_proxbox.views import firewall, operational, proxmox_create_instance  # noqa: E402
 from tests.django_support import (  # noqa: E402
+    create_legacy_proxmox_cluster,
     grant_user_permissions,
     make_api_token,
     make_user,
@@ -188,7 +188,7 @@ class OperationalPermissionTests(TestCase):
         vm_type: str = "qemu",
     ) -> VirtualMachine:
         cluster = Cluster.objects.create(name=name, type=cluster_type)
-        proxmox_cluster = ProxmoxCluster.objects.create(
+        proxmox_cluster = create_legacy_proxmox_cluster(
             endpoint=endpoint,
             netbox_cluster=cluster,
             name=name,

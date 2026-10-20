@@ -91,6 +91,47 @@ def _fetch_cluster_and_node_data(
     return cluster_data, node_details
 
 
+def _locked_cluster_endpoint(endpoint_id: int) -> ProxmoxEndpoint:
+    """Acquire endpoint, then native cluster, before any tracking row lock."""
+    from virtualization.models import Cluster
+
+    endpoint = ProxmoxEndpoint.objects.select_for_update().get(pk=endpoint_id)
+    if not endpoint.enabled:
+        raise ValueError(
+            "Disabled endpoints cannot persist synchronized cluster inventory."
+        )
+    if endpoint.netbox_cluster_id is not None:
+        Cluster.objects.select_for_update().get(pk=endpoint.netbox_cluster_id)
+    return endpoint
+
+
+def _select_cluster_tracking(
+    endpoint: ProxmoxEndpoint, cluster_name: str
+) -> ProxmoxCluster | None:
+    linked = (
+        ProxmoxCluster.objects.select_for_update().filter(
+            endpoint=endpoint, netbox_cluster_id=endpoint.netbox_cluster_id
+        )
+        if endpoint.netbox_cluster_id
+        else ProxmoxCluster.objects.none()
+    )
+    if linked.count() > 1:
+        raise ValueError(
+            "Resolve ambiguous linked cluster tracking before synchronization."
+        )
+    existing = linked.first()
+    named = (
+        ProxmoxCluster.objects.select_for_update()
+        .filter(endpoint=endpoint, name=cluster_name)
+        .first()
+    )
+    if existing is not None and named is not None and existing.pk != named.pk:
+        raise ValueError(
+            "Resolve the conflicting named tracking row before synchronization."
+        )
+    return existing or named
+
+
 def _sync_cluster_record(
     endpoint: ProxmoxEndpoint,
     endpoint_id: int,
@@ -103,10 +144,30 @@ def _sync_cluster_record(
     """Upsert or resolve the cluster row for the node phase."""
     if not cluster_record:
         return None
+    with transaction.atomic():
+        endpoint = _locked_cluster_endpoint(endpoint_id)
+        return _sync_locked_cluster_record(
+            endpoint,
+            endpoint_id,
+            cluster_record,
+            node_records,
+            cluster_mode,
+            mode,
+            result,
+        )
+
+
+def _sync_locked_cluster_record(
+    endpoint: ProxmoxEndpoint,
+    endpoint_id: int,
+    cluster_record: object,
+    node_records: list,
+    cluster_mode: str,
+    mode: str,
+    result: ClusterSyncResult,
+) -> ProxmoxCluster | None:
     cluster_name = cluster_record.name or endpoint.name
-    existing = ProxmoxCluster.objects.filter(
-        endpoint=endpoint, name=cluster_name
-    ).first()
+    existing = _select_cluster_tracking(endpoint, cluster_name)
     if cluster_mode == SyncModeChoices.DISABLED:
         return existing
     if existing and _bootstrap_only_should_skip_existing(existing, cluster_mode):
@@ -116,23 +177,13 @@ def _sync_cluster_record(
             endpoint_id,
         )
         return existing
-    cluster, created = ProxmoxCluster.objects.update_or_create(
-        endpoint=endpoint,
-        name=cluster_name,
-        defaults={
-            "cluster_id": cluster_record.id or "",
-            "mode": mode,
-            "nodes_count": cluster_record.nodes or len(node_records),
-            "quorate": bool(cluster_record.quorate or 0),
-            "version": cluster_record.version,
-        },
-    )
-    if created and cluster_mode == SyncModeChoices.BOOTSTRAP_ONLY:
-        _add_bootstrap_only_tag(cluster)
-    if created:
-        result.clusters_created += 1
-    else:
-        result.clusters_updated += 1
+    created = existing is None
+    cluster = existing or ProxmoxCluster(endpoint=endpoint, name=cluster_name)
+    values = _cluster_tracking_values(cluster_record, cluster_name, mode, node_records)
+    for field, value in values.items():
+        setattr(cluster, field, value)
+    cluster.save()
+    _record_cluster_sync_outcome(cluster, created, cluster_mode, result)
     logger.info(
         "%s cluster %s for endpoint %s",
         "Created" if created else "Updated",
@@ -140,6 +191,30 @@ def _sync_cluster_record(
         endpoint_id,
     )
     return cluster
+
+
+def _record_cluster_sync_outcome(
+    cluster: ProxmoxCluster, created: bool, cluster_mode: str, result: ClusterSyncResult
+) -> None:
+    if created and cluster_mode == SyncModeChoices.BOOTSTRAP_ONLY:
+        _add_bootstrap_only_tag(cluster)
+    if created:
+        result.clusters_created += 1
+    else:
+        result.clusters_updated += 1
+
+
+def _cluster_tracking_values(
+    record: object, name: str, mode: str, nodes: list
+) -> dict[str, object]:
+    return {
+        "name": name,
+        "cluster_id": record.id or "",
+        "mode": mode,
+        "nodes_count": record.nodes or len(nodes),
+        "quorate": bool(record.quorate or 0),
+        "version": record.version,
+    }
 
 
 def _sync_node_records(
@@ -238,6 +313,7 @@ def _persist_cluster_and_nodes(
 ) -> None:
     """Persist one endpoint's prefetched cluster and node inventory atomically."""
     with transaction.atomic():
+        endpoint = _locked_cluster_endpoint(endpoint_id)
         existing_names = set(
             ProxmoxNode.objects.filter(endpoint=endpoint).values_list("name", flat=True)
         )

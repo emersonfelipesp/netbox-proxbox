@@ -54,6 +54,14 @@
                             <td>{{ object.name }}</td>
                         </tr>
                         <tr>
+                            <th scope="row">{% trans "NetBox cluster" %}</th>
+                            <td>
+                                {% if visible_netbox_cluster %}
+                                    <a href="{{ visible_netbox_cluster.get_absolute_url }}">{{ visible_netbox_cluster }}</a>
+                                {% else %}{{ ''|placeholder }}{% endif %}
+                            </td>
+                        </tr>
+                        <tr>
                             <th scope="row">Site</th>
                             <td>
                                 {% if object.site %}
@@ -228,9 +236,42 @@
                     </table>
                 </div>
             </div>
+            <div class="card mt-3">
+                <div class="card-header">
+                    <h5 class="mb-0">{% trans "Cloud Image bake binding" %}</h5>
+                </div>
+                <div class="card-body">
+                    <table class="table table-hover attr-table">
+                        <tr>
+                            <th scope="row">{% trans "Target node" %}</th>
+                            <td>{{ object.cloud_image_ssh_target_node|placeholder }}</td>
+                        </tr>
+                        <tr>
+                            <th scope="row">{% trans "Identity file" %}</th>
+                            <td>{{ object.cloud_image_ssh_identity_file|placeholder }}</td>
+                        </tr>
+                    </table>
+                </div>
+            </div>
             {% include 'inc/panels/custom_fields.html' %}
         </div>
         <div class="col col-md-6">
+            <div class="card mb-3">
+                <h5 class="card-header">{% trans "SSH credential chain" %}</h5>
+                <table class="table table-hover attr-table mb-0">
+                    <tr><th>{% trans "SSH credential" %}</th><td>{% if service_ssh_credential %}<a href="{{ service_ssh_credential.get_absolute_url }}">{{ service_ssh_credential }}</a> <span class="badge text-bg-secondary">{{ service_ssh_credential.get_storage_backend_display }}</span>{% else %}<a href="{% url 'plugins:netbox_proxbox:proxmoxendpoint_ssh_settings' pk=object.pk %}">{% trans "Configure on the SSH tab" %}</a>{% endif %}</td></tr>
+                    {% if openbao_ssh_credential %}<tr><th>{% trans "OpenBao credential" %}</th><td><a href="{{ openbao_ssh_credential.get_absolute_url }}">{{ openbao_ssh_credential }}</a></td></tr>{% endif %}
+                    <tr><th>{% trans "Application service" %}</th><td>{% if ssh_application_service %}<a href="{{ ssh_application_service.get_absolute_url }}">{{ ssh_application_service }}</a>{% else %}<a href="{% url 'plugins:netbox_proxbox:proxmoxendpoint_ssh_settings' pk=object.pk %}">{% trans "Select or create on the SSH tab" %}</a>{% endif %}</td></tr>
+                    <tr><th>{% trans "IP address" %}</th><td>{% if object.ip_address %}<a href="{{ object.ip_address.get_absolute_url }}">{{ object.ip_address }}</a>{% else %}<a href="{% url 'plugins:netbox_proxbox:proxmoxendpoint_ssh_settings' pk=object.pk %}">{% trans "Add on the SSH tab" %}</a>{% endif %}</td></tr>
+                    <tr><th>{% trans "Endpoint" %}</th><td><a href="{{ object.get_absolute_url }}">{{ object }}</a></td></tr>
+                </table>
+            </div>
+            <div class="card mb-3">
+                <div class="card-header d-flex justify-content-between align-items-center"><h5 class="mb-0">{% trans "Application services" %}</h5><a class="btn btn-sm btn-primary" href="{% url 'plugins:netbox_proxbox:proxmoxendpointservice_add' %}?endpoint={{ object.pk }}">{% trans "Add" %}</a></div>
+                <table class="table table-hover mb-0">
+                    {% for service in application_services %}<tr><td><a href="{{ service.get_absolute_url }}">{{ service.name }}</a></td><td>{{ service.get_protocol_display }}/{{ service.ports|join:", " }}</td></tr>{% empty %}<tr><td class="text-muted">{% trans "No application services" %}</td></tr>{% endfor %}
+                </table>
+            </div>
             {% include 'inc/panels/tags.html' %}
             {% include 'inc/panels/comments.html' %}
         </div>

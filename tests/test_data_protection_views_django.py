@@ -56,13 +56,15 @@ from virtualization.models import Cluster, ClusterType, VirtualMachine  # noqa: 
 
 from netbox_proxbox.models import (  # noqa: E402
     BackupRoutine,
-    ProxmoxCluster,
     ProxmoxEndpoint,
     ProxmoxNode,
     Replication,
     VMBackup,
     VMSnapshot,
 )
+
+
+from tests.django_support import create_legacy_proxmox_cluster  # noqa: E402
 
 
 class DataProtectionCalendarRenderTest(TestCase):
@@ -125,12 +127,12 @@ class DataProtectionCalendarRenderTest(TestCase):
             name="calendar-native-cluster-b", type=cluster_type
         )
         cls.second_endpoint = ProxmoxEndpoint.objects.create(name="calendar-endpoint-b")
-        first_proxmox_cluster = ProxmoxCluster.objects.create(
+        first_proxmox_cluster = create_legacy_proxmox_cluster(
             endpoint=cls.endpoint,
             netbox_cluster=first_cluster,
             name="calendar-proxmox-cluster-a",
         )
-        second_proxmox_cluster = ProxmoxCluster.objects.create(
+        second_proxmox_cluster = create_legacy_proxmox_cluster(
             endpoint=cls.second_endpoint,
             netbox_cluster=second_cluster,
             name="calendar-proxmox-cluster-b",

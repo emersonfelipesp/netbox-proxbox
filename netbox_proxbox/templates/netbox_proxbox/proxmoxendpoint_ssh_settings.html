@@ -154,6 +154,10 @@
     </h5>
     <div class="card-body">
       {% render_field form.ssh_credential_source %}
+      {% render_field form.ip_address %}
+      {% render_field form.ssh_service %}
+      {% render_field form.ssh_storage %}
+      {% if form.openbao_credential %}{% render_field form.openbao_credential %}{% endif %}
       {% render_field form.ssh_username %}
       {% render_field form.ssh_port %}
       {% render_field form.ssh_auth_method %}

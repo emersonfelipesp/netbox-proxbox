@@ -188,7 +188,7 @@ class ProxboxConfig(PluginConfig):
     name = "netbox_proxbox"
     verbose_name = "Proxbox"
     description = "Integrates Proxmox and Netbox"
-    version = "0.0.29.post6"
+    version = "0.0.31rc1"
     author = "Emerson Felipe (@emersonfelipesp)"
     author_email = "emersonfelipe.2003@gmail.com"
     # Sourced from .compat so the backward-compatible and GA contract is
@@ -239,6 +239,9 @@ class ProxboxConfig(PluginConfig):
         from .integrations.openbao_node_guards import install_node_material_guards
 
         install_node_material_guards()
+        from .integrations.openbao_service import install_service_material_guards
+
+        install_service_material_guards()
         from .integrations.openbao_single_writer import (
             install_single_secret_material_writer,
         )

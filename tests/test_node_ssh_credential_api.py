@@ -174,6 +174,7 @@ def _stub_for_ssh_credentials(
     np_models_ssh = types.ModuleType("netbox_proxbox.models.ssh_credential")
     np_models_ssh.AUTH_METHOD_PASSWORD = "password"
     np_models_ssh.SSH_CRED_SOURCE_REUSE = "reuse_endpoint"
+    np_models_ssh.SSH_CRED_SOURCE_SERVICE = "service"
 
     enc_mod = types.ModuleType("netbox_proxbox.utils.encryption")
 

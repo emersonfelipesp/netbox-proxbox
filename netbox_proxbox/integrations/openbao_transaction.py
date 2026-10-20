@@ -48,6 +48,15 @@ def current_endpoint_material_context() -> EndpointMaterialContext | None:
     return _CURRENT.get()
 
 
+def _inside_application_transaction() -> bool:
+    """Return the real Django connection state; mocked unit harnesses have none."""
+    try:
+        from django.db import transaction
+    except ImportError:
+        return False
+    return transaction.get_connection("default").in_atomic_block
+
+
 def _locked_settings() -> Any:
     from netbox_proxbox.models import ProxboxPluginSettings
 
@@ -169,6 +178,18 @@ def endpoint_material_transaction(
     allow_new: bool = False,
 ) -> Iterator[EndpointMaterialContext]:
     """Enter outside framework atomics and predeclare the complete owner graph."""
+    existing = _CURRENT.get()
+    if existing is not None:
+        for endpoint in endpoints:
+            existing.admit(endpoint)
+        yield existing
+        return
+    if _inside_application_transaction():
+        raise ValidationError(
+            "OpenBao endpoint material requires its provider transaction to begin "
+            "before the NetBox database transaction. Use the supported UI or API "
+            "material request boundary."
+        )
     try:
         from netbox_openbao.material_transactions import (
             MATERIAL_TRANSACTION_CONTRACT_VERSION,
@@ -185,12 +206,6 @@ def endpoint_material_transaction(
             "A compatible OpenBao material transaction contract is required."
         )
     with material_transaction():
-        existing = _CURRENT.get()
-        if existing is not None:
-            for endpoint in endpoints:
-                existing.admit(endpoint)
-            yield existing
-            return
         context = _declare_context(endpoints, allow_new=allow_new)
         for endpoint in endpoints:
             context.admit(endpoint)

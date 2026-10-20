@@ -23,6 +23,7 @@ NetBox warns, omits the plugin, and continues startup.
 
 | NetBox   | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
+| 4.5.8-4.7.0 GA | v0.0.31rc1 | proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.29.post6 | v0.0.27.post4 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.29.post5 | v0.0.27.post3 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.29 | v0.0.23.post3 | v0.0.13 | v0.0.15 |
@@ -69,7 +70,7 @@ and WebSocket.
 The current repository code declares support for:
 
 - NetBox `4.5.8` through `4.7.99`, including official `v4.7.0` GA
-- Plugin version `0.0.29.post6` in source
+- Plugin version `0.0.31rc1` in source
 
 That support comes directly from the plugin config in this repository:
 
@@ -93,9 +94,9 @@ proxbox-api relays short-lived, origin-bound, one-use QEMU noVNC/terminal and
 LXC terminal sessions. The path does not navigate to or depend on another management UI. See
 [Standalone Browser Console](features/browser-console.md).
 
-Current source pairing: netbox-proxbox 0.0.29.post6 <-> proxbox-api 0.0.27.post4 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This is the current sibling-source development stack, not a rewrite of historical release compatibility. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source compatibility: netbox-proxbox 0.0.31rc1 requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. This is the current sibling-source development stack, not a rewrite of historical release compatibility. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29.post6 <-> proxbox-api 0.0.27.post4 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current release-candidate runtime requirement: deploy proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) before netbox-proxbox 0.0.31rc1. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
 The current released runtime pairing for this release line is proxbox-api
 `0.0.27.post4`, proxmox-sdk `0.0.15`, and netbox-sdk `0.0.13`.

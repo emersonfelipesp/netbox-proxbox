@@ -172,6 +172,12 @@ ENCRYPTED_FIELD_FAMILIES: Final = (
         trust_fields=("known_host_fingerprint",),
     ),
     EncryptedFieldFamily(
+        key="service_ssh",
+        label="Application-service SSH credentials",
+        model_label="netbox_proxbox.ServiceSSHCredential",
+        encrypted_fields=("password_enc", "private_key_enc"),
+    ),
+    EncryptedFieldFamily(
         key="cloud_init_ssh_keys",
         label="Cloud-init SSH public-key bundles",
         model_label="netbox_proxbox.ProxmoxVMCloudInit",

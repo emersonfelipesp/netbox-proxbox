@@ -135,7 +135,8 @@ API paths retain `prox01`; only the NetBox Device name is rendered. Template
 changes rename a legacy short name or a name previously managed by Proxbox,
 including a switch back to `{node}`. Operator-assigned names are preserved.
 | `packer_template_builds_backend_authorized` | boolean (read-only) | Last effective Packer template-build grant successfully confirmed on proxbox-api. Endpoint deletion remains blocked while this is true, including after a local revocation whose backend update failed. |
-| `ssh_credential_source` | choice | Browser terminal endpoint SSH source. `dedicated` (default) uses the encrypted endpoint `ssh_*` fields. `reuse_endpoint` sends the realm-stripped endpoint username plus endpoint plaintext password to `proxbox-api` as password SSH auth. |
+| `ssh_credential_source` | choice | Browser terminal endpoint SSH source. `dedicated` (model/API default) uses the encrypted endpoint `ssh_*` fields, `reuse_endpoint` uses the realm-stripped endpoint username and password, and `service` resolves a `ServiceSSHCredential` through `ssh_service`. The UI defaults new SSH configuration to `service`. |
+| `ssh_service` | nested application service (nullable) | Writable by ID. The service must belong to this endpoint, include its IP address, use TCP, and expose `ssh_port`. |
 | `ssh_username` / `ssh_port` / `ssh_auth_method` / `ssh_known_host_fingerprint` | mixed | Dedicated endpoint SSH credential metadata for browser terminal sessions. The pinned host-key fingerprint is also required when `ssh_credential_source=reuse_endpoint`. |
 | `has_ssh_password` / `has_ssh_private_key` / `has_ssh_terminal_credentials` | boolean | Read-only browser terminal credential readiness flags. In reuse mode, readiness depends on endpoint host, pinned fingerprint, realm-stripped username, and endpoint password. OpenBao references must identify an expected credential type visible through the authenticated caller's `reveal` scope and policy groups; serialization does not read material. |
 | `service_monitoring_enabled` | boolean | Opt-in flag for async systemd service monitoring via the optional `netbox-rpc` plugin. Eligibility also requires netbox-rpc installed and enabled. |
@@ -198,12 +199,34 @@ See [Connection target approval](../features/endpoint-import-export.md#connectio
 !!! tip "Endpoint SSH terminal credentials"
     SSH secret reads also require the sensitive-data grant, API-token authentication,
     HTTPS outside development, object visibility, and provider reveal rights.
-    The endpoint SSH secrets endpoint keeps the same response shape for both
-    credential sources. Dedicated mode decrypts stored `ssh_*_enc` fields and
+    The endpoint SSH secrets endpoint keeps the same response shape for all
+    credential sources. Service mode resolves metadata and material through
+    `ssh_service → ServiceSSHCredential`; dedicated mode decrypts stored `ssh_*_enc` fields and
     requires the plugin encryption key. Reuse mode returns
     `auth_method=password`, the realm-stripped endpoint username, the endpoint
     password, and an empty `private_key`; token-only endpoints return a 4xx
     error instead of an empty password.
+
+### Endpoint application services
+
+Endpoint-owned services have full CRUD at:
+
+```text
+GET,POST       /api/plugins/proxbox/endpoint-services/
+GET,PUT,PATCH,DELETE /api/plugins/proxbox/endpoint-services/{id}/
+```
+
+Fields are `endpoint`, `name`, `protocol`, `ports`, `ipaddresses`,
+`description`, `comments`, tags, and custom fields. Names are unique per
+endpoint, `protocol` is `tcp`, `udp`, or `sctp`, and `ports` must contain at
+least one integer from 1 through 65535. Filter by `endpoint_id` when populating
+an endpoint form.
+
+Secret-free SSH credential metadata is read-only at
+`/api/plugins/proxbox/service-ssh-credentials/`. It exposes the service,
+username, authentication method, selected storage backend, description, and
+the `has_password`/`has_private_key` readiness flags. It never serializes
+ciphertext, provider UUIDs, passwords, or private keys.
 
 !!! tip "Endpoint service monitoring"
     The API route

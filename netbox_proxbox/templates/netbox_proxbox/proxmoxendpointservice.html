@@ -1,0 +1,26 @@
+{% extends 'generic/object.html' %}
+{% load helpers %}
+{% load i18n %}
+
+{% block content %}
+  <div class="row mb-3">
+    <div class="col col-md-6">
+      <div class="card">
+        <h5 class="card-header">{% trans "Application service" %}</h5>
+        <table class="table table-hover attr-table mb-0">
+          <tr><th>{% trans "Endpoint" %}</th><td>{{ object.endpoint|linkify }}</td></tr>
+          <tr><th>{% trans "Protocol" %}</th><td>{{ object.get_protocol_display }}</td></tr>
+          <tr><th>{% trans "Ports" %}</th><td>{{ object.ports|join:", " }}</td></tr>
+          <tr><th>{% trans "IP addresses" %}</th><td>{% for ip in object.ipaddresses.all %}{{ ip|linkify }}{% if not forloop.last %}, {% endif %}{% empty %}{% trans "None" %}{% endfor %}</td></tr>
+          <tr><th>{% trans "Description" %}</th><td>{{ object.description|placeholder }}</td></tr>
+          <tr><th>{% trans "SSH credential" %}</th><td>{% if service_ssh_credential %}{{ service_ssh_credential|linkify }}{% else %}{% trans "Not configured or restricted" %}{% endif %}</td></tr>
+        </table>
+      </div>
+      {% include 'inc/panels/custom_fields.html' %}
+    </div>
+    <div class="col col-md-6">
+      {% include 'inc/panels/tags.html' %}
+      {% include 'inc/panels/comments.html' %}
+    </div>
+  </div>
+{% endblock %}

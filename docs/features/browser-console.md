@@ -126,6 +126,22 @@ The terminal client uses the existing vendored xterm.js assets. It follows Proxm
 
 A `ResizeObserver` updates the terminal dimensions. The observer, socket, xterm instance, and event listeners are all released during disconnect and page teardown.
 
+### Endpoint SSH credential chain
+
+The endpoint-level SSH terminal uses the server-side credential facade. New
+configuration defaults to a `ServiceSSHCredential` attached one-to-one to a
+`ProxmoxEndpointService`, which is bound to the endpoint's `IPAddress` and TCP
+SSH port. The endpoint detail page shows every link in that chain and directs
+operators to the SSH tab when one is missing. Existing dedicated credentials
+and endpoint-password reuse remain supported.
+
+The host and pinned host-key fingerprint continue to come from the
+`ProxmoxEndpoint`; moving credential material to the application service does
+not change connection approval or host-key verification. The browser and
+rendered pages receive only readiness metadata. Plaintext material is resolved
+only by the protected endpoint SSH secrets API and its response shape is
+unchanged.
+
 ## Migration from the external handoff
 
 Migration `0084_proxboxpluginsettings_console_url.py` remains immutable release history. Migration `0095_standalone_vm_console.py` removes `ProxboxPluginSettings.console_url` and adds the `open_console_proxmoxendpoint` permission. The settings form, settings API, template extension button, and external-link template no longer expose the retired handoff.

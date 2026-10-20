@@ -84,6 +84,14 @@ def _native_instance(model_name) -> object:
                 pk=103, name="endpoint"
             ),
         )
+    elif model_name == "servicesshcredential":
+        instance.service = apps.get_model("netbox_proxbox", "ProxmoxEndpointService")(
+            pk=102,
+            name="ssh",
+            endpoint=apps.get_model("netbox_proxbox", "ProxmoxEndpoint")(
+                pk=103, name="endpoint"
+            ),
+        )
     elif model_name == "firecrackerhost":
         instance.pool = apps.get_model("netbox_proxbox", "FirecrackerHostPool")(
             pk=102, name="pool"

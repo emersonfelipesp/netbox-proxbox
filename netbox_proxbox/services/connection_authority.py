@@ -8,6 +8,8 @@ import json
 from contextvars import ContextVar
 from collections.abc import Callable
 
+from netbox_proxbox.cloud_image_ssh import normalize_host
+
 
 BINDING_FIELD = "approved_connection_target_fingerprint"
 _UNAPPROVED = "Connection target approval is missing or stale. Review and approve the current target before sending credentials."
@@ -57,6 +59,26 @@ def _netbox_token_identity(endpoint: object, token_version: str) -> str:
     return str(token_id or "")
 
 
+def _cloud_image_ssh_authority(endpoint: object) -> dict[str, object]:
+    """Return the secret-free Cloud Image SSH authority tuple."""
+    return {
+        "cloud_image_ssh_target_node": str(
+            getattr(endpoint, "cloud_image_ssh_target_node", "") or ""
+        ).strip(),
+        "cloud_image_ssh_identity_file": str(
+            getattr(endpoint, "cloud_image_ssh_identity_file", "") or ""
+        ).strip(),
+        "ssh_username": str(
+            getattr(endpoint, "effective_ssh_username", "") or ""
+        ).strip(),
+        "ssh_host": normalize_host(getattr(endpoint, "ssh_host", "")),
+        "ssh_port": int(getattr(endpoint, "ssh_port", 0) or 0),
+        "ssh_known_host_fingerprint": str(
+            getattr(endpoint, "ssh_known_host_fingerprint", "") or ""
+        ).strip(),
+    }
+
+
 def connection_target_data(endpoint: object) -> dict[str, object]:
     """Describe both the primary and fallback target, without reading material."""
     data = {
@@ -76,6 +98,16 @@ def connection_target_data(endpoint: object) -> dict[str, object]:
         token_version = _effective_netbox_token_version(endpoint)
         data["token_version"] = token_version
         data["token_identity"] = _netbox_token_identity(endpoint, token_version)
+    elif data["kind"] == "proxmoxendpoint":
+        authority = _cloud_image_ssh_authority(endpoint)
+        # Bind the SSH authority only once a Cloud Image bake binding is
+        # configured. Endpoints without one keep the exact pre-existing
+        # fingerprint, so an upgrade does not invalidate every approval.
+        if (
+            authority["cloud_image_ssh_target_node"]
+            or authority["cloud_image_ssh_identity_file"]
+        ):
+            data.update(authority)
     return data
 
 
@@ -256,6 +288,27 @@ def _approval_write_is_exact(endpoint: object) -> bool:
     )
 
 
+def _preserve_cluster_binding(
+    endpoint: object, current: object | None, update_fields: object
+) -> None:
+    """Keep synchronization-owned identity fresh under the endpoint row lock."""
+    if _model_name(endpoint) != "proxmoxendpoint":
+        return
+    from django.core.exceptions import ValidationError
+
+    if update_fields is not None:
+        if {"netbox_cluster", "netbox_cluster_id"}.intersection(update_fields):
+            raise ValidationError(
+                "Native cluster ownership requires the protected synchronization action."
+            )
+        return
+    if current is None and getattr(endpoint, "netbox_cluster_id", None) is not None:
+        raise ValidationError(
+            "A new endpoint cannot claim native cluster ownership through an ordinary save."
+        )
+    endpoint.netbox_cluster_id = getattr(current, "netbox_cluster_id", None)
+
+
 def save_bound_endpoint(
     endpoint: object, persist: Callable[..., object], *args: object, **kwargs: object
 ) -> object:
@@ -276,6 +329,7 @@ def save_bound_endpoint(
             if endpoint.pk is not None
             else None
         )
+        _preserve_cluster_binding(endpoint, current, kwargs.get("update_fields"))
         if _approval_write_is_exact(endpoint):
             if set(kwargs.get("update_fields") or ()) != {BINDING_FIELD}:
                 raise ValidationError(

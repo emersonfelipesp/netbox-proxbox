@@ -113,7 +113,19 @@ from netbox_proxbox.models import (  # noqa: E402
     ProxmoxNode,
     ProxmoxStorage,
 )
-from tests.django_support import ForwardOnlyMigrationTestCase, make_user  # noqa: E402
+from tests.django_support import (  # noqa: E402
+    ForwardOnlyMigrationTestCase,
+    make_user,
+    create_legacy_proxmox_cluster,
+    create_legacy_cluster_sync_state,
+)
+
+
+def _create_sync_state_fixture(model: type, **values) -> object:
+    """Seed historical owned sidecars without exposing an ordinary claim path."""
+    if model is ProxboxClusterSyncState:
+        return create_legacy_cluster_sync_state(**values)
+    return model.objects.create(**values)
 
 
 SYNC_STATE_MODELS = (
@@ -318,7 +330,7 @@ class _SyncStateFixturesMixin:
         cls.vm_for_api.cluster = cls.cluster
         cls.vm_for_api.save()
         cls.endpoint = ProxmoxEndpoint.objects.create(name="sync-state-endpoint")
-        cls.proxmox_cluster = ProxmoxCluster.objects.create(
+        cls.proxmox_cluster = create_legacy_proxmox_cluster(
             endpoint=cls.endpoint,
             netbox_cluster=cls.cluster,
             name="pve-sync",
@@ -440,7 +452,9 @@ class ProxboxSyncStateModelTest(_SyncStateFixturesMixin, TestCase):
     def test_models_create_with_one_to_one_parent(self) -> None:
         for model, parent_field, parent, defaults in self.model_cases():
             with self.subTest(model=model.__name__):
-                row = model.objects.create(**{parent_field: parent}, **defaults)
+                row = _create_sync_state_fixture(
+                    model, **{parent_field: parent}, **defaults
+                )
                 self.assertEqual(getattr(row, parent_field), parent)
                 self.assertIn("Proxbox sync state", str(row))
                 self.assertEqual(parent.proxbox_sync_state, row)
@@ -449,10 +463,12 @@ class ProxboxSyncStateModelTest(_SyncStateFixturesMixin, TestCase):
     def test_one_to_one_uniqueness_is_enforced(self) -> None:
         for model, parent_field, parent, defaults in self.model_cases():
             with self.subTest(model=model.__name__):
-                model.objects.create(**{parent_field: parent}, **defaults)
+                _create_sync_state_fixture(model, **{parent_field: parent}, **defaults)
                 with self.assertRaises(IntegrityError):
                     with transaction.atomic():
-                        model.objects.create(**{parent_field: parent}, **defaults)
+                        _create_sync_state_fixture(
+                            model, **{parent_field: parent}, **defaults
+                        )
 
     def test_resolved_fk_fields_can_be_null(self) -> None:
         vm_row = ProxboxVirtualMachineSyncState.objects.create(
@@ -491,7 +507,7 @@ class ProxboxSyncStateModelTest(_SyncStateFixturesMixin, TestCase):
             type=self.cluster_type,
             group=self.cluster_group,
         )
-        other_proxmox_cluster = ProxmoxCluster.objects.create(
+        other_proxmox_cluster = create_legacy_proxmox_cluster(
             endpoint=self.endpoint,
             netbox_cluster=other_cluster,
             name="pve-model-other-cluster",
@@ -548,7 +564,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
             )
         sidecar_only_permission.users.add(cls.sidecar_only_user)
         for model, parent_field, parent, defaults in cls.model_cases():
-            model.objects.create(**{parent_field: parent}, **defaults)
+            _create_sync_state_fixture(model, **{parent_field: parent}, **defaults)
 
     def _auth_headers(self, token: Token | None = None) -> dict[str, str]:
         if token is None:
@@ -568,7 +584,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
         endpoint = ProxmoxEndpoint.objects.create(
             name=f"sync-state-api-nplus-{prefix}-endpoint-{index}",
         )
-        proxmox_cluster = ProxmoxCluster.objects.create(
+        proxmox_cluster = create_legacy_proxmox_cluster(
             endpoint=endpoint,
             netbox_cluster=netbox_cluster,
             name=f"sync-state-api-nplus-{prefix}-cluster-{index}",
@@ -794,7 +810,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
                     netbox_cluster=cluster,
                 )
             )
-            ProxboxClusterSyncState.objects.create(
+            create_legacy_cluster_sync_state(
                 cluster=cluster,
                 proxmox_cluster=cluster_relation,
                 proxmox_cluster_name=f"pve-sync-{cluster_endpoint.pk}",
@@ -923,7 +939,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
 
     def test_api_enforces_relation_coherence_and_parent_immutability(self) -> None:
         other_endpoint = ProxmoxEndpoint.objects.create(name="sync-state-other")
-        other_cluster = ProxmoxCluster.objects.create(
+        other_cluster = create_legacy_proxmox_cluster(
             endpoint=other_endpoint,
             name="pve-other",
             cluster_id="999",
@@ -1053,7 +1069,7 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
             type=self.cluster_type,
             group=self.cluster_group,
         )
-        other_proxmox_cluster = ProxmoxCluster.objects.create(
+        other_proxmox_cluster = create_legacy_proxmox_cluster(
             endpoint=self.endpoint,
             netbox_cluster=other_netbox_cluster,
             name="pve-api-other-cluster",

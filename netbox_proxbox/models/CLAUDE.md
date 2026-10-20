@@ -1,4 +1,10 @@
 # Model Guide
+
+The current schema tip is migration `0107_v0_0_30_release`. It consolidates the
+three unpublished development migrations for native cluster binding,
+endpoint-owned SSH services, and Cloud Image SSH binding. A staging installation
+that applied the former development `0107_endpoint_native_cluster_binding` keeps
+that ignored orphan recorder row while the release migration adopts its schema.
 SSH secret APIs require the same fresh sensitive-data grant in addition to
 API-token authentication, HTTPS, object visibility, and provider permissions.
 New ObjectChange snapshots redact settings keys, credential material,
@@ -34,6 +40,11 @@ because a referenced secret is unavailable.
 - [`__init__.py`](./__init__.py): re-exports all plugin model classes and shared model helpers.
 - [`base.py`](./base.py): shared endpoint base classes and common validators/properties.
 - [`proxmox_endpoint.py`](./proxmox_endpoint.py): Proxmox endpoint model.
+- [`proxmox_endpoint_service.py`](./proxmox_endpoint_service.py): endpoint-owned
+  application services, including protocol, ports, and bound IP addresses.
+- [`service_ssh_credential.py`](./service_ssh_credential.py): one-to-one SSH
+  credential metadata and selected-backend material references for an endpoint
+  application service.
 - [`netbox_endpoint.py`](./netbox_endpoint.py): remote NetBox endpoint model.
 - [`fastapi_endpoint.py`](./fastapi_endpoint.py): ProxBox backend endpoint model.
 - [`proxmox_cluster.py`](./proxmox_cluster.py): discovered Proxmox cluster model linked to endpoint and NetBox cluster data.
@@ -60,6 +71,16 @@ because a referenced secret is unavailable.
   changes, or infrastructure operations. Disclosure policy reads grants afresh.
 - `EndpointBase`: shared endpoint identity and URL-building fields.
 - `ProxmoxEndpoint`: stores Proxmox API connection settings, credentials, mode, and version metadata. Its `open_console_proxmoxendpoint` custom permission is the endpoint-object authorization boundary for the standalone browser console; it does not imply any write capability. Its default-off `allow_packer_template_builds` field is a narrow capability subordinate to endpoint `enabled` and `allow_writes`; it authorizes only netbox-packer Cloud-Init template-image creation, and only the effective three-gate result is propagated to proxbox-api for an independent final-boundary check. `effective_connection_tuning()` owns the nullable endpoint timeout/retry/back-off contract: endpoint values win when not `None` (including zero retries/back-off), otherwise the matching `ProxboxPluginSettings` value is returned, and all three outputs are concrete typed values. The model also carries `pushed_credential_fingerprint` (migration 0074) — the Proxmox twin of the `NetBoxEndpoint` field below, under a distinct HMAC salt so the two namespaces can never compare equal. It lets the preflight's soft push budget detect a secret rotated *in place* (invisible on the wire: `ProxmoxEndpointPublic` withholds `password`/`token_name`/`token_value`) and re-push instead of skipping. Unlike the NetBox twin it fails **toward pushing**: an empty or stale fingerprint costs one extra push, never a blocked run. Written by the push itself with `queryset.update()`, never `save()`, because the model's `post_save` handler re-pushes to the backend. `iana_timezone` is read-only discovered state populated best-effort through proxbox-api's generated node-time route; its writer also uses `queryset.update()` so refresh cannot re-enter that signal.
+- `ProxmoxEndpointService`: stores a layer-four application service whose parent
+  is a `ProxmoxEndpoint`. Its SSH use binds the endpoint IP and TCP port without
+  relying on core `ipam.Service`, whose supported parents do not include a
+  Proxmox endpoint or cluster.
+- `ServiceSSHCredential`: stores one SSH username/auth selection per endpoint
+  application service. Fernet ciphertext and OpenBao UUID references are
+  mutually exclusive, and accessors resolve only the selected backend. OpenBao
+  reads require reveal scope plus the exact enabled `console` assignment;
+  supported deletion removes authorized assignments but preserves shared
+  credentials, while raw cascades refuse remaining provider state.
 - `NetBoxEndpoint`: stores the remote NetBox API target and either v1 token or v2 key/secret credentials. Also carries `pushed_credential_fingerprint` (migration 0073) — a keyed HMAC-SHA256 digest of the credentials the last **successful** push handed proxbox-api. It is **not** a credential and must never be treated as one: `salted_hmac` keys the digest off NetBox's `SECRET_KEY`, so it is non-reversible and meaningless outside this install. It exists because `NetBoxEndpointResponse` withholds `token`/`token_key`, leaving an in-place token rotation invisible to any comparison against what the backend returns; the sync-job preflight reads it through `views/backend_sync.py::netbox_push_credentials_unchanged()`. Written by the push itself with `queryset.update()`, never `save()`, because the model's `post_save` handler re-pushes to the backend. An **empty** value means "credentials changed" (fail-closed), so nothing should back-fill it.
 - `FastAPIEndpoint`: stores the ProxBox backend HTTP/WebSocket target and its
   selected-backend token plus the credential-free
@@ -201,6 +222,25 @@ explicitly legacy endpoint while preserving assignments for other owners.
 ## Notes
 
 - `CommonProperties` and `EndpointBase` centralize endpoint URL semantics.
+- `ProxmoxEndpoint.cloud_image_ssh_target_node` and
+  `cloud_image_ssh_identity_file` are plain Cloud Image bake binding fields.
+  Backend synchronization sends all six proxbox-api SSH binding values only
+  when the endpoint's effective write gates are open, the binding is complete,
+  and synchronized inventory verifies that every node row at the endpoint SSH
+  host's normalized address has the same case-insensitive target name. The host
+  is domain-first, but node addresses are IPs, so Cloud Image bake endpoints must
+  use a literal IP. Identity-file paths use POSIX normalization for payload and
+  currency comparison. A value push stores a SHA-256 management receipt before
+  transmission, so commit-then-timeout remains managed. Managed
+  bindings clear when gates close or both bake fields clear; incomplete or failed
+  verification also revokes Packer. Stale approval still permits credential-free
+  managed-binding revocation. Successful clears erase only the prepared receipt,
+  preserving a newer concurrent receipt. Empty receipts preserve external bindings.
+  Form validation skips inventory when the submitted state closes a gate, allowing
+  revocation while preserving stale draft values. The binding fields participate in sensitive connection
+  approval. The consolidated release migration provides database defaults on
+  forward application and removes these fields on reverse.
+  proxbox-api alone validates the normalized path against `PROXBOX_SSH_KEY_DIR`.
 - `EndpointBase.enabled` is operational: `False` means inventory-only. Service, startup, OpenAPI, and sync code must return before any backend or remote-service connection attempt for disabled endpoint-like rows. The one signal exception is a normal disabled `ProxmoxEndpoint.save()`: after commit it may authenticate to proxbox-api solely to revoke `enabled` and `allow_packer_template_builds` on an already existing backend row; it must not contact Proxmox, create a backend row, or send endpoint credentials. `ProxmoxEndpoint.packer_template_builds_backend_authorized` records the last successfully confirmed effective narrow grant. Deletion and local-only bulk toggles stay blocked while either it or the desired narrow flag is true. Bulk enable/disable uses `queryset.update()` and remains local-only.
 - `FastAPIEndpoint.websocket_url` is distinct from the backend HTTP URL and is used by `websocket_client.py`.
 - `FastAPIEndpoint.save()` is the backend-key persistence boundary. New enabled
@@ -317,3 +357,11 @@ explicitly legacy endpoint while preserving assignments for other owners.
 Do not rewrite released schema history. Add migrations for field renames,
 constraints, indexes, and retirement. Migration tests must cover upgrades as
 well as fresh database construction.
+
+The endpoint's read-only `netbox_cluster` one-to-one relation is authoritative.
+Tracking saves enforce that relation under endpoint/native-cluster row locks;
+existing tracking identities cannot move endpoints or change a committed core
+link without explicit cleanup of obsolete tracking evidence. Native deletion
+uses SET_NULL; endpoint deletion preserves the native cluster.
+New claims are protected-action-only. Sidecar ownership is server-owned, with
+native-parent serialization for metadata writes and repeated-link compatibility.

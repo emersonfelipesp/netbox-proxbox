@@ -381,10 +381,9 @@ def test_cluster_serializer_uses_supported_netbox_virtualization_import():
         "virtualization.api.serializers_.clusters import ClusterSerializer" in contents
     )
     assert "NestedClusterSerializer" not in contents
-    assert (
-        "netbox_cluster = ClusterSerializer(nested=True, required=False, allow_null=True)"
-        in contents
-    )
+    assert "class VisibleNativeClusterSerializer(ClusterSerializer):" in contents
+    assert "netbox_cluster = VisibleNativeClusterSerializer(" in contents
+    assert 'queryset.restrict(user, "view")' in contents
 
 
 def test_endpoint_serializers_do_not_override_create_semantics():
@@ -789,6 +788,8 @@ def test_plugin_api_routes_register_all_plugin_objects():
         "settings",
         "sensitive-data-access",
         "ssh-credentials",
+        "endpoint-services",
+        "service-ssh-credentials",
         "storage",
         "sync-jobs",
         "sync-state/cluster-groups",

@@ -126,6 +126,7 @@ def template_content_module(monkeypatch):
         name: _model_class(name, app_label="netbox_proxbox")
         for name in (
             "ProxmoxCluster",
+            "ProxmoxEndpointService",
             "ProxmoxFirewallAlias",
             "ProxmoxFirewallIPSet",
             "ProxmoxFirewallIPSetEntry",

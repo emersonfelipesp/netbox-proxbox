@@ -1,6 +1,6 @@
 # netbox-proxbox Repository Guide
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29.post6 <-> proxbox-api 0.0.27.post4 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current release-candidate source: netbox-proxbox 0.0.31rc1 requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings). The backend must be released and deployed before the plugin. The netbox-sdk dependency remains proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 > **LLM Agent Safety:** Before any destruction-adjacent operation, read
 > `AGENTS.md` § "LLM Agent Safety Guardrails". Automated agents may inspect and
@@ -80,16 +80,16 @@ operator contract is in the Docker installation guide.
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.99` (the whole 4.7 series is admitted by the numeric gate; CI verifies GA `4.7.0`). The current
-plugin version is `0.0.29.post6`.
+plugin version is `0.0.31rc1`.
 
-Current source pairing: netbox-proxbox 0.0.29.post6 <-> proxbox-api 0.0.27.post4 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source compatibility: netbox-proxbox 0.0.31rc1 requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The documented released runtime pairing for this release line is
 netbox-proxbox 0.0.29.post6 <-> proxbox-api 0.0.27.post4 <-> proxmox-sdk 0.0.15
 <-> netbox-sdk 0.0.13. Preserve release-note and compatibility rows as
 historical records unless a release workflow changes them.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29.post6 <-> proxbox-api 0.0.27.post4 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current release-candidate runtime requirement: deploy proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) before netbox-proxbox 0.0.31rc1. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
 CI pairing: the E2E Docker, page-coverage, documentation-screenshot, and
 release-validation workflow defaults consume proxbox-api `0.0.27.post4`. E2E uses the
@@ -108,9 +108,19 @@ field creation route.
   data, typed sync-state sidecars, guest interfaces, SDN and firewall
   inventory, Firecracker inventory, service-monitoring collections, metrics,
   intent/apply records, deletion requests, cloud-init records, and companion
-  PBS/PDM endpoint records. Migration
-  `0106_device_sync_scope_and_netbox_token_approval`
-  is the current schema tip.
+  PBS/PDM endpoint records. Endpoint SSH may use an endpoint-owned
+  `ProxmoxEndpointService` bound to the endpoint IP and a one-to-one
+  `ServiceSSHCredential`; provider assignments target that service for the
+  primary `console` purpose without depending on core `ipam.Service`. Service
+  material reads require object-level reveal access and the exact enabled
+  assignment. Provider writes and supported assignment cleanup run inside one
+  settings-first transaction; raw deletes refuse remaining provider state.
+  Migration `0107_v0_0_30_release` is the current schema tip. It consolidates
+  the three unpublished development migrations for native cluster binding,
+  endpoint-owned SSH services, and Cloud Image SSH binding. Installations that
+  applied the former development `0107_endpoint_native_cluster_binding` retain
+  its ignored orphan migration-recorder row; the new migration safely adopts
+  the existing schema and data.
 
   Optional PDM and RPC integrations require the companion plugin to be enabled
   in NetBox, not merely importable. Installed-but-disabled packages must not
@@ -130,6 +140,37 @@ field creation route.
   non-secret v1 token reference or effective v2 key selected for transmission.
   Token changes require explicit
   reapproval, and token secrets never enter the fingerprint.
+  Cloud Image bakes store the Proxmox target node and proxbox-api-host identity
+  file path on `ProxmoxEndpoint`. Backend synchronization sends the complete
+  six-field SSH binding only for API + SSH endpoints whose effective enabled,
+  broad-write, and Packer gates are open, with every value populated and the
+  selected inventory node verified at the endpoint SSH host. Verification compares
+  the selected source's effective SSH host with node IP addresses. Service
+  credentials use the endpoint IP even with a configured domain; other sources
+  remain domain-first. Binding and approval use the effective SSH username and normalized actual SSH host. Configured bake bindings require explicit reapproval after this authority correction; endpoints without bake fields retain their approval formula.
+  Every row at that address must have the same
+  case-insensitive target name; conflicting names fail closed. Identity-file paths
+  use POSIX normalization for payload and currency comparison. Value pushes store a
+  SHA-256 management receipt in a durable transaction before transmission.
+  Receipt failures, missing owners, and outer uncommitted transactions block
+  value pushes. API-only explicit service-secret clears are rejected before
+  save; use the separate credential settings. Commit-then-timeout remains
+  managed. Gate closure or clearing both bake
+  fields clears a managed binding; incomplete or failed verification also revokes
+  Packer. Stale approval still permits credential-free managed-binding revocation.
+  Successful clears erase only the prepared receipt, preserving a newer concurrent
+  receipt. An empty receipt preserves an external binding. Form inventory validation
+  is skipped when the submitted state closes a gate, allowing revocation while
+  preserving draft values. Once a target node or
+  identity file is configured, SSH binding authority changes require sensitive
+  connection re-approval; endpoints with neither value keep their pre-existing
+  approval fingerprint, so an upgrade does not invalidate their approvals. Backend currency compares
+  emitted binding keys so a failed rotation remains retryable, while intentional
+  omission ignores an existing backend binding. The consolidated release
+  migration supplies database defaults during forward application. Its reverse
+  removes the Cloud Image fields and SSH-service schema while retaining the
+  native-cluster ownership column and values. Re-saving the endpoint triggers
+  rollout through the post-save push.
 - UI routes include the home/dashboard, data-protection calendar, HA, endpoint
   and inventory views, model-scoped Sync Now actions, repair/recovery flows,
   soft-deleted VM review, and standalone VM console sessions. Cluster and node
@@ -482,3 +523,41 @@ caller provider ownership, scoped privacy, and excluded nested-context
 normal/error regressions. Install the E2E extra for the mocked suite and retain
 all eight exact real-Django dependency profiles. Local observer provider
 shutdown is not the application's shipping lifespan ownership contract.
+
+## Native cluster ownership
+
+`ProxmoxEndpoint.netbox_cluster` is the nullable one-to-one authority for native
+cluster identity. `services/cluster_binding.py` implements the endpoint-locked,
+local-only `sync-cluster` action. It uses an existing authoritative relation or
+unambiguous exact tracking links, never a matching name, and persists native
+cluster, endpoint, tracking, and typed sidecar changes in one transaction.
+Tracking model saves enforce ownership and ordinary CRUD cannot silently move a
+tracking record to another endpoint or native cluster. Preflight cluster
+metadata synchronization reuses the linked tracking identity across renames.
+Claims are exclusive to the protected action; ordinary tracking saves can clear
+obsolete evidence but cannot populate endpoint authority. Sidecar ownership is
+server-owned and metadata writes serialize on the native parent. Keep endpoint,
+native cluster, tracking, then sidecar lock order. The action explicitly derives
+tracking/sidecar maintenance authority from endpoint/core grants and reports
+substantive native updates through its additive `changed` response flag.
+UI and API relation disclosure require visibility of the related object.
+See [the operator contract](docs/features/proxmox-cluster-binding.md) and
+`tests/test_endpoint_cluster_binding_django.py` for the real-Django regressions.
+
+
+## Post-candidate validation boundary
+
+Release 0.0.31rc1 adds only `0108_v0_0_31_schema_validation` after the applied,
+immutable `0107_v0_0_30_release`. Keep every numbered migration through 0107
+byte- and mode-identical. The unchanged private `_release_0107_schema.py`
+checks objects introduced by 0107; its marker identifies that invariant while
+the actual migration executing it is 0108. It must remain 0108's last operation.
+The source-bound full function audit and native qualification belong to this new
+migration boundary, not a relabeling of the earlier pre-candidate experiment.
+
+The 0107 and 0108 transactions commit separately. A failure in 0108 preserves
+an already committed 0107 and leaves 0108 unrecorded. Do not claim joint rollback,
+rewrite deployed history, or silently repair an unexpected schema. Reverse of
+0108 is a no-op for schema/data; reapply validates again. Preserve actual recorder
+and data evidence for explicit reviewed recovery. The original 0107 reverse
+controls remain historical and do not prove that 0108 removes those objects.

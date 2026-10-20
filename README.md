@@ -244,6 +244,22 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
+## What's New in v0.0.31rc1
+
+This candidate adds fail-closed physical schema validation in a new 0108
+migration after the immutable 0.0.30 candidate. A failed validation leaves the
+prior 0107 transaction recorded and preserves its data for reviewed recovery.
+See [Release Notes - v0.0.31](docs/release-notes/version-0.0.31.md).
+
+## What's New in v0.0.30rc1
+
+This release candidate adds protected native NetBox cluster binding,
+endpoint-owned SSH application services, and verified Cloud Image SSH bindings
+with durable ownership receipts. It requires the proxbox-api release that adds
+endpoint-owned cluster bindings, which must be released and deployed before the
+plugin. See [Release Notes - v0.0.30](docs/release-notes/version-0.0.30.md) for
+features, fixes, migration behavior, permissions, and upgrade guidance.
+
 ## What's New in v0.0.29.post6
 
 This maintenance release gives paginated guest interface address and
@@ -284,7 +300,7 @@ See [Release Notes - v0.0.29.post3](docs/release-notes/version-0.0.29.post3.md),
 
 ## What's New in v0.0.29
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29.post6 <-> proxbox-api 0.0.27.post4 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+The documented released runtime pairing for version 0.0.29 remains netbox-proxbox 0.0.29.post6 <-> proxbox-api 0.0.27.post4 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This historical pairing does not satisfy the endpoint-owned cluster binding required by 0.0.31rc1.
 
 Version 0.0.29 is the preceding security-hardening release:
 
@@ -503,6 +519,8 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| 4.5.8-4.7.0 GA | v0.0.31rc1 | proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) | v0.0.13 | v0.0.15 |
+| 4.5.8-4.7.0 GA | v0.0.30rc1 | proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.29.post6 | v0.0.27.post4 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.29.post5 | v0.0.27.post3 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.29 | v0.0.23.post3 | v0.0.13 | v0.0.15 |

@@ -39,6 +39,7 @@ from .models import (
     NodeSSHCredential,
     ProxmoxCluster,
     ProxmoxEndpoint,
+    ProxmoxEndpointService,
     ProxmoxFirewallAlias,
     ProxmoxFirewallIPSet,
     ProxmoxFirewallIPSetEntry,
@@ -75,6 +76,7 @@ from .models import (
     ProxmoxVMCloudInit,
     ProxmoxVMIntent,
     ProxmoxVMTemplate,
+    ServiceSSHCredential,
     Replication,
     VMBackup,
     VMSnapshot,
@@ -486,6 +488,44 @@ class NodeSSHCredentialFilterSet(ProxboxModelFilterSet):
             Q(username__icontains=value)
             | Q(node__name__icontains=value)
             | Q(node__netbox_device__name__icontains=value)
+        )
+
+
+@register_filterset
+class ProxmoxEndpointServiceFilterSet(ProxboxModelFilterSet):
+    """Filter endpoint-owned application services."""
+
+    endpoint_id = MultiValueNumberFilter(field_name="endpoint_id")
+
+    class Meta:
+        model = ProxmoxEndpointService
+        fields = ("id", "endpoint_id", "name", "protocol", "ipaddresses")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(name__icontains=value)
+            | Q(endpoint__name__icontains=value)
+            | Q(description__icontains=value)
+        )
+
+
+@register_filterset
+class ServiceSSHCredentialFilterSet(ProxboxModelFilterSet):
+    """Filter read-only service SSH credential metadata."""
+
+    class Meta:
+        model = ServiceSSHCredential
+        fields = ("id", "service", "username", "auth_method", "storage_backend")
+
+    def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
+        if not value.strip():
+            return queryset
+        return queryset.filter(
+            Q(username__icontains=value)
+            | Q(service__name__icontains=value)
+            | Q(service__endpoint__name__icontains=value)
         )
 
 

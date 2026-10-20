@@ -107,6 +107,17 @@ from .guest_vm_interface import (
     GuestVMInterfaceListView,
     GuestVMInterfaceView,
 )
+from .proxmox_endpoint_service import (
+    ProxmoxEndpointServiceBulkDeleteView,
+    ProxmoxEndpointServiceDeleteView,
+    ProxmoxEndpointServiceEditView,
+    ProxmoxEndpointServiceListView,
+    ProxmoxEndpointServiceView,
+    ServiceSSHCredentialDeleteView,
+    ServiceSSHCredentialBulkDeleteView,
+    ServiceSSHCredentialListView,
+    ServiceSSHCredentialView,
+)
 from .backup_routine import (
     BackupRoutineBulkDeleteView,
     BackupRoutineDeleteView,

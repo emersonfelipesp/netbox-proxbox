@@ -465,6 +465,10 @@ jobs:
             tests/test_proxmox_endpoint_api_only_ssh_optional.py
             tests/test_proxmox_endpoint_ssh_credential_source.py
             tests/test_endpoint_ssh_complexity_django.py
+            tests/test_ssh_service_chain_django.py
+            tests/test_ssh_sync_guards_django.py
+            tests/test_ssh_service_chain_migration_django.py
+            tests/test_release_0108_schema_validation_django.py
             tests/test_proxmox_export_view.py
             tests/test_changelog_secret_redaction_django.py
             tests/test_connection_authority_django.py
@@ -474,6 +478,7 @@ jobs:
             tests/test_job_stream_django.py
             tests/test_ceph_runtime_settings_django.py
             tests/test_credential_reference_migration_django.py
+            tests/test_cloud_image_ssh_binding_migration_django.py
             tests/test_data_protection_views_django.py
             tests/test_influxdb_metrics_django.py
             tests/test_node_ssh_credential_form_django.py
@@ -501,6 +506,7 @@ jobs:
             tests/test_settings_read_scope_django.py
             tests/test_device_sync_state_filters_django.py
             tests/test_device_sync_state_ownership_django.py
+            tests/test_endpoint_cluster_binding_django.py
             tests/test_device_scope_and_netbox_approval_migration_django.py
             tests/test_netbox_endpoint_table_django.py
           )
@@ -510,6 +516,7 @@ jobs:
             tests/test_openbao_single_secret_django.py
             tests/test_openbao_cloudinit_django.py
             tests/test_openbao_setup_django.py
+            tests/test_ssh_service_chain_openbao_django.py
           )
           selected_tests=("${common_tests[@]}")
           if [[ "${{ matrix.openbao }}" == "true" ]]; then

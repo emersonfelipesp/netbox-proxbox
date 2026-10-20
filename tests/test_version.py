@@ -104,15 +104,10 @@ CERTIFICATION_PATH = REPO_ROOT / "CERTIFICATION.md"
 DOCS_CERTIFICATION_PATH = REPO_ROOT / "docs" / "certification.md"
 APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
-CURRENT_PLUGIN_VERSION = "0.0.29.post6"
-CURRENT_RELEASE_VERSION = "0.0.29.post6"
-CURRENT_PACKAGE_VERSION = "0.0.29.post6"
-CURRENT_PROXBOX_API_PAIRING_LABEL = "v0.0.27.post4"
-CURRENT_PAIRING_LINE = (
-    "Current backend-runtime pairing: netbox-proxbox 0.0.29.post6 <-> proxbox-api "
-    "0.0.27.post4 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST "
-    "dependency only and does not provide the semantic MCP bridge."
-)
+CURRENT_PLUGIN_VERSION = "0.0.31rc1"
+CURRENT_RELEASE_VERSION = "0.0.31rc1"
+CURRENT_PACKAGE_VERSION = "0.0.31rc1"
+CURRENT_BACKEND_REQUIREMENT = "proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings)"
 PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.27.post4"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
 # Ceiling of the backward-compatible stable tier: the whole NetBox 4.7 series.
@@ -279,9 +274,7 @@ DJANGO_TESTED_NETBOX_ROWS = (
 PREVIOUS_PLUGIN_VERSION = "0.0.22"
 PREVIOUS_PROXBOX_API_VERSION = "0.0.19.post5"
 RELEASE_NOTES_029_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.29.md"
-CURRENT_RELEASE_NOTES_PATH = (
-    REPO_ROOT / "docs" / "release-notes" / "version-0.0.29.post6.md"
-)
+CURRENT_RELEASE_NOTES_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.31.md"
 
 
 def _class_constants(class_name: str) -> dict[str, str]:
@@ -1328,26 +1321,14 @@ def test_e2e_workflow_supports_proxbox_api_package_index_runtime_modes():
 
 
 def test_current_source_pairing_is_documented_in_primary_docs():
-    current_row = (
-        CURRENT_NETBOX_SUPPORT_LABEL,
-        f"v{CURRENT_RELEASE_VERSION}",
-        CURRENT_PROXBOX_API_PAIRING_LABEL,
-        "v0.0.13",
-        "v0.0.15",
-    )
     for path in (README_PATH, DOCS_INDEX_PATH):
         text = _read(path)
-        _assert_markdown_table_row(text, current_row)
+        assert f"v{CURRENT_RELEASE_VERSION}" in text
+        assert CURRENT_BACKEND_REQUIREMENT in text
 
-    compatibility_row = (
-        f"v{CURRENT_RELEASE_VERSION}",
-        CURRENT_NETBOX_SUPPORT_LABEL,
-        ">=3.12",
-        CURRENT_PROXBOX_API_PAIRING_LABEL,
-        "v0.0.13",
-        "v0.0.15",
-    )
-    _assert_markdown_table_row(_read(COMPATIBILITY_PATH), compatibility_row)
+    compatibility = _read(COMPATIBILITY_PATH)
+    assert f"| v{CURRENT_RELEASE_VERSION} |" in compatibility
+    assert CURRENT_BACKEND_REQUIREMENT in compatibility
     assert f"Plugin version `{CURRENT_PLUGIN_VERSION}` in source" in _read(
         DOCS_INDEX_PATH
     )
@@ -1362,10 +1343,9 @@ def test_current_source_pairing_is_documented_in_primary_docs():
         text = _read(path)
         assert CURRENT_RELEASE_VERSION in text, f"{path} missing release version"
         assert CURRENT_PLUGIN_VERSION in text, f"{path} missing plugin version"
-        assert CURRENT_PROXBOX_API_PAIRING_LABEL.removeprefix("v") in text, (
-            f"{path} missing backend pairing label"
+        assert CURRENT_BACKEND_REQUIREMENT in text, (
+            f"{path} missing backend requirement"
         )
-        assert CURRENT_PAIRING_LINE in text, f"{path} missing pairing line"
 
 
 def test_0_0_23_historical_compatibility_row_is_kept():

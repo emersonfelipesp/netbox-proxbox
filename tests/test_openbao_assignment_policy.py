@@ -88,6 +88,7 @@ def test_registry_runs_only_for_enabled_plugin(monkeypatch, installed: bool) -> 
     if installed:
         registry.register_assignable_models.assert_called_once_with(
             "netbox_proxbox.proxmoxendpoint",
+            "netbox_proxbox.proxmoxendpointservice",
             "netbox_proxbox.fastapiendpoint",
             "netbox_proxbox.pbsendpoint",
             "netbox_proxbox.pdmendpoint",

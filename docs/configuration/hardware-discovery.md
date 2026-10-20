@@ -242,6 +242,56 @@ source**:
   endpoint password exists to reuse. A pinned SSH host-key fingerprint is still
   required.
 
+Cloud Image template bakes have a separate **Cloud Image bake binding** fieldset.
+Set the Proxmox target node and the absolute identity-file path on the proxbox-api
+host. NetBox applies POSIX path normalization, and proxbox-api validates that path
+against `PROXBOX_SSH_KEY_DIR`; NetBox does not impose a second path policy. NetBox pushes the complete six-field binding only
+when the endpoint is enabled, broad writes and Packer template builds are allowed,
+the endpoint uses **API + SSH**, and every value is populated. The selected target
+must also be an inventory node owned by the endpoint (directly or through its
+cluster), and every inventory row at that normalized address must have the same
+case-insensitive node name matching the target. Two different node names sharing
+an address are ambiguous and fail closed. Verification compares the endpoint SSH
+host with node IP addresses. The service credential source uses the endpoint IP
+even when a domain is configured. Dedicated and reused endpoint credentials keep
+their domain-first host; a DNS host does not match a literal inventory IP.
+The binding and connection approval use the selected source's effective SSH
+username, including the username stored on `ServiceSSHCredential`, and normalized
+actual SSH host. A source change that changes the host requires new approval even
+when the effective login stays the same. Identical effective host and login do not
+require approval merely because the credential source label changes.
+Before NetBox sends a complete binding, it commits a SHA-256 receipt and owns that
+backend binding even when proxbox-api commits but the response is lost. Closing a gate or clearing both bake fields clears a
+managed binding. Incomplete or failed verification clears a managed binding and
+revokes Packer authorization. Stale connection approval does not block this
+credential-free revocation. A successful clear erases its prepared receipt with a
+compare-and-set, so a delayed response cannot erase a newer binding receipt. An empty receipt identifies an external binding,
+which omission leaves untouched. The edit form skips inventory validation when
+the submitted state disables the endpoint, broad writes, Packer, or API + SSH, so
+stale draft values do not prevent revocation and remain available for repair.
+Once a target node or identity file
+is configured, changes to the target node, identity file, SSH host, SSH username, SSH port,
+or pinned host-key fingerprint invalidate sensitive connection approval; review
+and approve the updated target before credentials can be sent. An endpoint with
+neither value configured keeps its existing approval fingerprint, so upgrading
+does not invalidate approvals for endpoints that do not use Cloud Image bakes.
+Existing configured bake approvals require a one-time explicit review and
+reapproval because the actual selected SSH host is now included. Service-backed
+approvals also bind the effective service login instead of the legacy username.
+Review and explicitly approve the effective host and login before retrying.
+Dedicated credentials retain the same username;
+reused endpoint credentials now bind their effective login too. No approval is
+granted automatically, and no transport or host-key policy changes.
+After configuring or upgrading, re-save the endpoint to trigger the post-save
+push.
+
+A database error, missing endpoint, non-single-row receipt update, or outer
+uncommitted transaction prevents the binding value push. The diagnostic contains
+no credential material. Retry after the endpoint is saved and its transaction
+commits, or after database recovery. Normal endpoint saves schedule their push
+after commit. Credential-free managed revocation remains available; receipt
+checks do not turn an external binding into a managed binding.
+
 The endpoint API consumed by `proxbox-api`
 (`/api/plugins/proxbox/ssh-credentials/by-endpoint/<id>/credentials/`) keeps the
 same response keys in both modes: host, username, port, auth method, host-key

@@ -31,6 +31,7 @@ def _stub_proxmox_endpoint_dependencies(monkeypatch):
             )
 
     core_exceptions.ValidationError = _ValidationError
+    core_exceptions.ObjectDoesNotExist = type("ObjectDoesNotExist", (Exception,), {})
 
     core_validators = types.ModuleType("django.core.validators")
     core_validators.MaxValueValidator = lambda value: ("max", value)
@@ -118,9 +119,11 @@ def _stub_proxmox_endpoint_dependencies(monkeypatch):
     ssh_credential.SSH_CRED_SOURCE_CHOICES = (
         ("dedicated", "Dedicated"),
         ("reuse_endpoint", "Reuse"),
+        ("service", "Service"),
     )
     ssh_credential.SSH_CRED_SOURCE_DEDICATED = "dedicated"
     ssh_credential.SSH_CRED_SOURCE_REUSE = "reuse_endpoint"
+    ssh_credential.SSH_CRED_SOURCE_SERVICE = "service"
     ssh_credential.normalize_fingerprint = lambda value: value.strip()
 
     primary_secrets = types.ModuleType("netbox_proxbox.models.primary_secrets")
@@ -344,12 +347,14 @@ def _stub_endpoint_serializer_dependencies(monkeypatch):
     models.FastAPIEndpoint = type("FastAPIEndpoint", (), {})
     models.NetBoxEndpoint = type("NetBoxEndpoint", (), {})
     models.ProxmoxEndpoint = _Endpoint
+    models.ProxmoxEndpointService = type("ProxmoxEndpointService", (), {})
 
     proxmox_endpoint = types.ModuleType("netbox_proxbox.models.proxmox_endpoint")
     proxmox_endpoint.SERVICE_MONITORING_INELIGIBLE_MESSAGE = "ineligible"
     ssh_credential = types.ModuleType("netbox_proxbox.models.ssh_credential")
     ssh_credential.AUTH_METHOD_KEY = "key"
     ssh_credential.SSH_CRED_SOURCE_REUSE = "reuse_endpoint"
+    ssh_credential.SSH_CRED_SOURCE_SERVICE = "service"
 
     np_pkg = types.ModuleType("netbox_proxbox")
     np_pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox")]
@@ -412,6 +417,7 @@ def _stub_proxmox_form_dependencies(monkeypatch):
             )
 
     core_exceptions.ValidationError = ValidationError
+    core_exceptions.ObjectDoesNotExist = type("ObjectDoesNotExist", (Exception,), {})
     core.exceptions = core_exceptions
 
     class _Field:
@@ -494,6 +500,7 @@ def _stub_proxmox_form_dependencies(monkeypatch):
 
     models = types.ModuleType("netbox_proxbox.models")
     models.ProxmoxEndpoint = type("ProxmoxEndpoint", (), {})
+    models.ProxmoxEndpointService = _model_class("ProxmoxEndpointService")
 
     class _Settings:
         @classmethod
@@ -515,9 +522,11 @@ def _stub_proxmox_form_dependencies(monkeypatch):
     ssh_credential.SSH_CRED_SOURCE_CHOICES = (
         ("dedicated", "Dedicated"),
         ("reuse_endpoint", "Reuse"),
+        ("service", "Service"),
     )
     ssh_credential.SSH_CRED_SOURCE_DEDICATED = "dedicated"
     ssh_credential.SSH_CRED_SOURCE_REUSE = "reuse_endpoint"
+    ssh_credential.SSH_CRED_SOURCE_SERVICE = "service"
 
     np_pkg = types.ModuleType("netbox_proxbox")
     np_pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox")]
@@ -613,6 +622,53 @@ def test_service_monitoring_eligible_requires_writes_ssh_and_credentials(monkeyp
     assert endpoint.service_monitoring_eligible is False
     endpoint.rpc_enabled = True
     assert endpoint.service_monitoring_eligible is True
+
+
+def test_ssh_facade_precedence_and_service_no_fallback(monkeypatch) -> None:
+    module = _load_proxmox_endpoint(monkeypatch)
+    openbao = types.ModuleType("netbox_proxbox.integrations.openbao")
+    openbao.endpoint_uses_openbao_storage = lambda _endpoint: False
+    openbao.resolve_endpoint_ssh_password = lambda *_args, **_kwargs: (
+        "provider-password"
+    )
+    openbao.resolve_endpoint_ssh_private_key = lambda *_args, **_kwargs: (
+        "provider-private-key"
+    )
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.integrations.openbao", openbao)
+    service_credential = types.SimpleNamespace(
+        username="service-user",
+        auth_method="password",
+        has_password=False,
+        has_private_key=False,
+        get_password=lambda **_kwargs: "",
+        get_private_key=lambda **_kwargs: "",
+    )
+    endpoint = module.ProxmoxEndpoint(
+        username="api-user@pam",
+        ssh_username="dedicated-user",
+        ssh_auth_method="key",
+        ssh_password_enc="enc:dedicated-password",
+        ssh_private_key_enc="enc:dedicated-key",
+        ssh_service=types.SimpleNamespace(ssh_credential=service_credential),
+        ssh_credential_source="service",
+    )
+
+    assert endpoint.effective_ssh_username == "service-user"
+    assert endpoint.effective_ssh_auth_method == "password"
+    assert endpoint.has_ssh_password is False
+    assert endpoint.has_ssh_private_key is False
+    assert endpoint.get_ssh_password(key="key") == ""
+    assert endpoint.get_ssh_private_key(key="key") == ""
+
+    endpoint.ssh_credential_source = "dedicated"
+    assert endpoint.effective_ssh_username == "dedicated-user"
+    assert endpoint.effective_ssh_auth_method == "key"
+    assert endpoint.get_ssh_password(key="key") == "dedicated-password"
+    assert endpoint.get_ssh_private_key(key="key") == "dedicated-key"
+
+    endpoint.ssh_credential_source = "reuse_endpoint"
+    assert endpoint.effective_ssh_username == "api-user"
+    assert endpoint.effective_ssh_auth_method == "password"
 
 
 def test_effective_rpc_enabled_tri_state_requires_netbox_rpc_install(monkeypatch):

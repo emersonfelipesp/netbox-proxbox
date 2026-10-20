@@ -205,6 +205,24 @@ explicitly legacy endpoint while preserving assignments for other owners.
   `ssh_access_enabled` (`access_methods == api_ssh`). An API-only endpoint may
   hold partial or stale SSH fields without blocking a save; every SSH consumer
   must keep gating on `ssh_access_enabled`.
+- `ProxmoxEndpoint.cloud_image_ssh_target_node` and
+  `cloud_image_ssh_identity_file` are plain Cloud Image bake binding fields.
+  Backend synchronization sends all six proxbox-api SSH binding values only
+  when the endpoint's effective write gates are open, the binding is complete,
+  and synchronized inventory verifies that every node row at the endpoint SSH
+  host's normalized address has the same case-insensitive target name. The host
+  is domain-first, but node addresses are IPs, so Cloud Image bake endpoints must
+  use a literal IP. Identity-file paths use POSIX normalization for payload and
+  currency comparison. A value push stores a SHA-256 management receipt before
+  transmission, so commit-then-timeout remains managed. Managed
+  bindings clear when gates close or both bake fields clear; incomplete or failed
+  verification also revokes Packer. Stale approval still permits credential-free
+  managed-binding revocation. Successful clears erase only the prepared receipt,
+  preserving a newer concurrent receipt. Empty receipts preserve external bindings.
+  Form validation skips inventory when the submitted state closes a gate, allowing
+  revocation while preserving stale draft values. The binding fields participate in sensitive connection
+  approval, and migration `0108` keeps database defaults for reversal-safe inserts.
+  proxbox-api alone validates the normalized path against `PROXBOX_SSH_KEY_DIR`.
 - `EndpointBase.enabled` is operational: `False` means inventory-only. Service, startup, OpenAPI, and sync code must return before any backend or remote-service connection attempt for disabled endpoint-like rows. The one signal exception is a normal disabled `ProxmoxEndpoint.save()`: after commit it may authenticate to proxbox-api solely to revoke `enabled` and `allow_packer_template_builds` on an already existing backend row; it must not contact Proxmox, create a backend row, or send endpoint credentials. `ProxmoxEndpoint.packer_template_builds_backend_authorized` records the last successfully confirmed effective narrow grant. Deletion and local-only bulk toggles stay blocked while either it or the desired narrow flag is true. Bulk enable/disable uses `queryset.update()` and remains local-only.
 - `FastAPIEndpoint.websocket_url` is distinct from the backend HTTP URL and is used by `websocket_client.py`.
 - `FastAPIEndpoint.save()` is the backend-key persistence boundary. New enabled
@@ -321,3 +339,11 @@ explicitly legacy endpoint while preserving assignments for other owners.
 Do not rewrite released schema history. Add migrations for field renames,
 constraints, indexes, and retirement. Migration tests must cover upgrades as
 well as fresh database construction.
+
+`ProxmoxEndpoint.netbox_cluster` is the authoritative nullable one-to-one native
+cluster mapping. `ProxmoxCluster.save()` locks the endpoint and native cluster,
+validates existing claims, and cannot populate endpoint authority through ordinary
+CRUD. New claims require the protected action's exact in-process pair permit.
+Sidecar metadata saves lock the native parent, preserve current ownership on
+stale full saves, and refuse explicit ownership reassignment. Ordinary endpoint
+saves preserve their authoritative relation under the existing endpoint lock.

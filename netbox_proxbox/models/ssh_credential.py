@@ -39,10 +39,12 @@ AUTH_METHOD_CHOICES = (
 
 SSH_CRED_SOURCE_DEDICATED = "dedicated"
 SSH_CRED_SOURCE_REUSE = "reuse_endpoint"
+SSH_CRED_SOURCE_SERVICE = "service"
 
 SSH_CRED_SOURCE_CHOICES = (
     (SSH_CRED_SOURCE_DEDICATED, _("Dedicated SSH credential")),
     (SSH_CRED_SOURCE_REUSE, _("Reuse endpoint username/password")),
+    (SSH_CRED_SOURCE_SERVICE, _("SSH credential on an application service")),
 )
 
 _FINGERPRINT_RE = re.compile(r"^SHA256:[A-Za-z0-9+/]{43}=?$")

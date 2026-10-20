@@ -646,6 +646,46 @@ flowchart TD
     display metadata remains excluded. A false "not current" costs one extra
     push, bounded by the hard ceiling.
 
+    For Cloud Image template bakes, the push includes proxbox-api's six-field SSH
+    binding only when `access_methods="api_ssh"`, the effective enabled + broad
+    write + narrow Packer gate is true, and every binding value is present. The
+    values are `cloud_image_ssh_target_node`, the endpoint `ssh_host`, the explicit
+    `ssh_username`, `ssh_port`, `cloud_image_ssh_identity_file`, and the pinned
+    `ssh_known_host_fingerprint`. The selected inventory node must belong to the
+    endpoint directly or through its cluster. Verification compares the endpoint
+    SSH host (domain first, otherwise IP address) with node IP addresses. All rows
+    at that normalized address must have the same case-insensitive name matching
+    the target; different node names sharing an address fail closed. DNS-addressed
+    Cloud Image endpoints therefore fail closed and must use a literal IP address.
+    Before transmission, a value push records a canonical SHA-256 receipt. That receipt marks
+    the backend binding as NetBox-managed: closing a gate or clearing both bake
+    fields sends the five nullable string keys as `null` and never sends
+    `ssh_port=null`; incomplete or failed verification also clears the managed
+    binding and forces `allow_packer_template_builds=false`. Stale approval does
+    not block this credential-free revocation. A successful clear erases only the
+    receipt read when the clear was prepared, so a concurrent value push survives
+    a delayed clear response. Without a receipt,
+    omission preserves an externally managed backend binding. The endpoint form
+    skips inventory validation when the submitted state closes any gate, preserving
+    draft values while allowing immediate revocation. All five configurable SSH
+    authority values participate in the sensitive connection fingerprint; changing
+    one requires another explicit review and approval before credential resolution.
+    Re-saving the endpoint triggers the post-save push and is the rollout step after
+    these fields are configured.
+
+    NetBox applies `posixpath.normpath` to the identity-file path before building
+    the payload and before comparing backend currency. `_proxmox_row_is_current()` compares every binding key emitted by the desired
+    payload. A failed push therefore leaves a rotated target node, identity file, or
+    fingerprint visibly stale and eligible for retry. When the desired payload
+    deliberately omits an external binding, existing backend binding keys are
+    ignored. A managed clear compares every emitted `null`, and a verification
+    revocation remains stale while the backend still reports Packer authorization.
+
+    Migration `0107_v0_0_30_release` uses database defaults for both non-null
+    binding columns. Reversing to `0106` removes all three Cloud Image binding
+    columns, so reapplication recreates them with empty defaults. The same
+    reversal removes the SSH-service schema but retains native-cluster ownership.
+
     Skipped endpoints are never silent — each gets a `warning` runtime phase, and they are
     named in a job-log warning and in the preflight hint, with wording that distinguishes a
     soft-budget skip from a hard-ceiling one.

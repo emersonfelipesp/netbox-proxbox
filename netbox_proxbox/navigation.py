@@ -190,6 +190,18 @@ fastapi_endpoints_item = PluginMenuItem(
     ),
 )
 
+endpoint_services_item = PluginMenuItem(
+    link="plugins:netbox_proxbox:proxmoxendpointservice_list",
+    link_text="Application Services",
+    buttons=(
+        PluginMenuButton(
+            "plugins:netbox_proxbox:proxmoxendpointservice_add",
+            "Add Application Service",
+            "mdi mdi-plus",
+        ),
+    ),
+)
+
 ssh_credentials_item = PluginMenuItem(
     link="plugins:netbox_proxbox:nodesshcredential_list",
     link_text="SSH Credentials",
@@ -479,6 +491,7 @@ menu = PluginMenu(
                 proxmox_endpoints_item,
                 netbox_endpoints_item,
                 fastapi_endpoints_item,
+                endpoint_services_item,
                 ssh_credentials_item,
             ),
         ),

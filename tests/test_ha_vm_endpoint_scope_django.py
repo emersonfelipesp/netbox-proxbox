@@ -71,11 +71,11 @@ from virtualization.models import Cluster, ClusterType, VirtualMachine  # noqa: 
 from netbox_proxbox.api import ha as api_ha  # noqa: E402
 from netbox_proxbox.models import (  # noqa: E402
     ProxboxVirtualMachineSyncState,
-    ProxmoxCluster,
     ProxmoxEndpoint,
     ProxmoxNode,
 )
 from netbox_proxbox.views import vm_ha  # noqa: E402
+from tests.django_support import create_legacy_proxmox_cluster  # noqa: E402
 
 
 class _HAResponse:
@@ -136,12 +136,12 @@ class HAVMEndpointScopeTests(TestCase):
             name="ha-untracked-netbox-cluster",
             type=cluster_type,
         )
-        cls.proxmox_cluster_a = ProxmoxCluster.objects.create(
+        cls.proxmox_cluster_a = create_legacy_proxmox_cluster(
             endpoint=cls.endpoint_a,
             netbox_cluster=cls.shared_netbox_cluster,
             name="ha-proxmox-cluster-a",
         )
-        cls.proxmox_cluster_b = ProxmoxCluster.objects.create(
+        cls.proxmox_cluster_b = create_legacy_proxmox_cluster(
             endpoint=cls.endpoint_b,
             netbox_cluster=cls.shared_netbox_cluster,
             name="ha-proxmox-cluster-b",
@@ -227,7 +227,7 @@ class HAVMEndpointScopeTests(TestCase):
             name="ha-removed-endpoint",
             enabled=True,
         )
-        removed_cluster = ProxmoxCluster.objects.create(
+        removed_cluster = create_legacy_proxmox_cluster(
             endpoint=cls.removed_endpoint,
             netbox_cluster=cls.shared_netbox_cluster,
             name="ha-removed-proxmox-cluster",

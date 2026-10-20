@@ -19,6 +19,11 @@ absent unselected counterpart is optional; an existing unresolved reference is
 not. Preserve `request_user` through the shared SSH form initializer so OpenBao
 reads and writes retain the initiating actor. Expected storage failures become
 field errors or false readiness, never uncaught form-validation exceptions.
+API-only main-form edits explicitly reject selected service-secret clears before
+save. Ordinary API-only edits preserve that owner. Dedicated clears and full SSH
+credential flows retain their existing authorization and transaction boundaries.
+Cloud Image node validation uses the submitted source's actual model SSH host;
+service credentials use the endpoint IP even with a configured domain.
 
 ## Files And Ownership
 

@@ -23,13 +23,19 @@ from netbox_proxbox.choices import (
     ProxmoxModeChoices,
 )
 from netbox_proxbox.constants import OVERWRITE_FIELDS, SYNC_MODE_FIELDS
-from netbox_proxbox.models import FastAPIEndpoint, NetBoxEndpoint, ProxmoxEndpoint
+from netbox_proxbox.models import (
+    FastAPIEndpoint,
+    NetBoxEndpoint,
+    ProxmoxEndpoint,
+    ProxmoxEndpointService,
+)
 from netbox_proxbox.models.proxmox_endpoint import (
     SERVICE_MONITORING_INELIGIBLE_MESSAGE,
 )
 from netbox_proxbox.models.ssh_credential import (
     AUTH_METHOD_KEY,
     SSH_CRED_SOURCE_REUSE,
+    SSH_CRED_SOURCE_SERVICE,
 )
 
 
@@ -40,6 +46,7 @@ SERVICE_MONITORING_ELIGIBILITY_FIELDS = (
     "allow_writes",
     "access_methods",
     "ssh_credential_source",
+    "ssh_service",
     "domain",
     "ip_address",
     "username",
@@ -95,6 +102,15 @@ class NestedTokenSerializer(WritableNestedSerializer):
         brief_fields = ("id", "url", "display")
 
 
+class NestedProxmoxEndpointServiceSerializer(WritableNestedSerializer):
+    """Brief writable application-service relation for endpoint payloads."""
+
+    class Meta:
+        model = ProxmoxEndpointService
+        fields = ("id", "url", "display", "name", "protocol", "ports")
+        brief_fields = fields
+
+
 class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     """Proxmox endpoint including secrets as write-only fields."""
 
@@ -115,6 +131,9 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
         style={"input_type": "password"},
     )
     ip_address = NestedIPAddressSerializer(required=False, allow_null=True)
+    ssh_service = NestedProxmoxEndpointServiceSerializer(
+        required=False, allow_null=True
+    )
     domain = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     mode = ChoiceField(choices=ProxmoxModeChoices)
     environment = ChoiceField(
@@ -135,6 +154,31 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     service_monitoring_last_error = serializers.CharField(read_only=True)
     packer_template_builds_backend_authorized = serializers.BooleanField(read_only=True)
     effective_rpc_enabled = serializers.SerializerMethodField(read_only=True)
+    netbox_cluster = serializers.SerializerMethodField(read_only=True)
+
+    def get_netbox_cluster(self, obj: ProxmoxEndpoint) -> dict | None:
+        """Expose the synchronized relation only when its core object is visible."""
+        context = getattr(
+            self, "context", getattr(self, "kwargs", {}).get("context", {})
+        )
+        request = context.get("request")
+        user = getattr(request, "user", None)
+        if (
+            not getattr(user, "is_authenticated", False)
+            or getattr(obj, "netbox_cluster_id", None) is None
+        ):
+            return None
+        from virtualization.api.serializers_.clusters import ClusterSerializer
+        from virtualization.models import Cluster
+
+        core = (
+            Cluster.objects.restrict(user, "view")
+            .filter(pk=obj.netbox_cluster_id)
+            .first()
+        )
+        if core is None:
+            return None
+        return ClusterSerializer(core, nested=True, context=context).data
 
     def _effective_storage_backend(self, obj: ProxmoxEndpoint) -> str:
         """Resolve an endpoint override before the request-local global default."""
@@ -162,6 +206,20 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
         if key in states:
             return states[key]
 
+        if obj.ssh_credential_source == SSH_CRED_SOURCE_SERVICE:
+            credential = obj._service_ssh_credential()
+            ssh_password, ssh_private_key = self._service_ssh_secret_presence(
+                obj, credential
+            )
+            terminal_ready = self._ssh_terminal_ready(
+                obj,
+                endpoint_password=False,
+                ssh_password=ssh_password,
+                ssh_private_key=ssh_private_key,
+            )
+            states[key] = (ssh_password, ssh_private_key, terminal_ready)
+            return states[key]
+
         uses_openbao = (
             self._effective_storage_backend(obj)
             == CredentialStorageBackendChoices.OPENBAO
@@ -177,6 +235,22 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
         )
         states[key] = (ssh_password, ssh_private_key, terminal_ready)
         return states[key]
+
+    def _service_ssh_secret_presence(
+        self, obj: ProxmoxEndpoint, credential: object | None
+    ) -> tuple[bool, bool]:
+        """Return actor-authorized provider metadata or local ciphertext state."""
+        if credential is None:
+            return False, False
+        if getattr(credential, "storage_backend", "") != "openbao":
+            return bool(credential.password_enc), bool(credential.private_key_enc)
+        credential_types = self._openbao_credential_metadata(obj)
+        return (
+            credential_types.get(str(credential.openbao_password_credential_uuid))
+            == "ssh-password",
+            credential_types.get(str(credential.openbao_keypair_credential_uuid))
+            == "ssh-keypair",
+        )
 
     def _openbao_credential_metadata(self, current: ProxmoxEndpoint) -> dict[str, str]:
         """Return request-authorized credential types for this response."""
@@ -233,6 +307,21 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             instances = (instances,)
         references = set()
         for endpoint in instances:
+            if endpoint.ssh_credential_source == SSH_CRED_SOURCE_SERVICE:
+                service_credential = endpoint._service_ssh_credential()
+                if service_credential is not None and (
+                    service_credential.storage_backend
+                    == CredentialStorageBackendChoices.OPENBAO
+                ):
+                    references.update(
+                        str(reference)
+                        for reference in (
+                            service_credential.openbao_password_credential_uuid,
+                            service_credential.openbao_keypair_credential_uuid,
+                        )
+                        if reference
+                    )
+                continue
             if (
                 self._effective_storage_backend(endpoint)
                 != CredentialStorageBackendChoices.OPENBAO
@@ -286,11 +375,14 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
                 and endpoint_password
             )
         selected_secret = (
-            ssh_private_key if obj.ssh_auth_method == AUTH_METHOD_KEY else ssh_password
+            ssh_private_key
+            if getattr(obj, "effective_ssh_auth_method", obj.ssh_auth_method)
+            == AUTH_METHOD_KEY
+            else ssh_password
         )
         return bool(
             obj.ssh_host
-            and obj.ssh_username
+            and obj.effective_ssh_username
             and obj.ssh_known_host_fingerprint
             and selected_secret
         )
@@ -364,6 +456,41 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             raise serializers.ValidationError(exc.messages[0]) from exc
         return value
 
+    @staticmethod
+    def _ssh_service_chain_visible(user: object, service: object) -> bool:
+        """Require view access to the service and to any credential it holds."""
+        from netbox_proxbox.models import ServiceSSHCredential
+
+        if (
+            not ProxmoxEndpointService.objects.restrict(user, "view")
+            .filter(pk=service.pk)
+            .exists()
+        ):
+            return False
+        credentials = ServiceSSHCredential.objects.filter(service_id=service.pk)
+        if not credentials.exists():
+            return True
+        return credentials.restrict(user, "view").exists()
+
+    def _validate_ssh_service(self, attrs: dict[str, object]) -> None:
+        """Keep a writable nested SSH service on the same endpoint."""
+        service = attrs.get("ssh_service")
+        endpoint = self.instance
+        if service is not None:
+            # A new endpoint cannot own services yet, so any reference on create
+            # necessarily points at another endpoint's chain.
+            if endpoint is None or getattr(service, "endpoint_id", None) != getattr(
+                endpoint, "pk", None
+            ):
+                raise serializers.ValidationError(
+                    {"ssh_service": "The SSH service must belong to this endpoint."}
+                )
+            user = getattr(self.context.get("request"), "user", None)
+            if user is None or not self._ssh_service_chain_visible(user, service):
+                raise serializers.ValidationError(
+                    {"ssh_service": "The SSH service must belong to this endpoint."}
+                )
+
     class Meta:
         model = ProxmoxEndpoint
         fields = (
@@ -371,6 +498,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "url",
             "display",
             "name",
+            "netbox_cluster",
             "ip_address",
             "domain",
             "port",
@@ -391,6 +519,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "max_retries",
             "retry_backoff",
             "ssh_credential_source",
+            "ssh_service",
             "ssh_username",
             "ssh_port",
             "ssh_auth_method",
@@ -426,6 +555,8 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
             "custom_fields",
             "created",
             "last_updated",
+            "cloud_image_ssh_target_node",
+            "cloud_image_ssh_identity_file",
         )
         brief_fields = (
             "id",
@@ -456,6 +587,7 @@ class ProxmoxEndpointSerializer(NetBoxModelSerializer):
     def validate(self, attrs: dict[str, object]) -> dict[str, object]:
         """Require at least one of domain or IP address for reachability."""
         attrs = super().validate(attrs)
+        self._validate_ssh_service(attrs)
         domain = (
             attrs.get("domain", getattr(self.instance, "domain", "")) or ""
         ).strip()

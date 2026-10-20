@@ -32,6 +32,24 @@ _HARNESS_SESSION_CONNECTION: Any | None = None
 _HARNESS_LEASE_MANAGER: HarnessLeaseManager | None = None
 
 
+def create_legacy_proxmox_cluster(**values: Any) -> Any:
+    """Insert test-owned historical tracking evidence without claiming authority."""
+    from netbox_proxbox.models import ProxmoxCluster
+
+    row = ProxmoxCluster(**values)
+    ProxmoxCluster.objects.bulk_create([row])
+    return row
+
+
+def create_legacy_cluster_sync_state(**values: Any) -> Any:
+    """Insert test-owned historical sidecar ownership for compatibility fixtures."""
+    from netbox_proxbox.models import ProxboxClusterSyncState
+
+    row = ProxboxClusterSyncState(**values)
+    ProxboxClusterSyncState.objects.bulk_create([row])
+    return row
+
+
 def make_user(
     username: str,
     *,

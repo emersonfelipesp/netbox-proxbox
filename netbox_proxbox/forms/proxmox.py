@@ -4,7 +4,7 @@ from dataclasses import dataclass
 
 # Django Imports
 from django import forms
-from django.core.exceptions import ValidationError
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 
 # NetBox Imports
 from netbox.forms import NetBoxModelForm, NetBoxModelFilterSetForm
@@ -24,7 +24,7 @@ from django.utils.translation import gettext as _
 
 # Proxbox Imports
 from ..constants import OVERWRITE_FIELDS, RPC_FIELDS, SYNC_MODE_FIELDS
-from ..models import ProxmoxEndpoint
+from ..models import ProxmoxEndpoint, ProxmoxEndpointService
 from ..choices import (
     ProxmoxAccessMethodChoices,
     ProxmoxEndpointEnvironmentChoices,
@@ -42,6 +42,7 @@ from ..models.ssh_credential import (
     SSH_CRED_SOURCE_CHOICES,
     SSH_CRED_SOURCE_DEDICATED,
     SSH_CRED_SOURCE_REUSE,
+    SSH_CRED_SOURCE_SERVICE,
 )
 from ..validators import validate_endpoint_node_device_name_template
 
@@ -52,6 +53,17 @@ class _SSHSecretPresence:
 
     password: bool
     private_key: bool
+
+
+@dataclass(frozen=True)
+class _ServiceCredentialIntent:
+    """Validation-time identity and storage state for one service credential."""
+
+    service_id: int | None
+    owner_id: int | None
+    storage_backend: str | None
+    password_reference: object | None
+    private_key_reference: object | None
 
 
 def _credential_source(cleaned_data: dict[str, object], instance: object) -> str:
@@ -121,6 +133,9 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
     defer_ssh_credential_clean = False
     ssh_credential_field_names = (
         "ssh_credential_source",
+        "ssh_service",
+        "ssh_storage",
+        "openbao_credential",
         "ssh_username",
         "ssh_port",
         "ssh_auth_method",
@@ -138,11 +153,28 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
         required=True,
         label=_("SSH credential source"),
         help_text=_(
-            "Use a dedicated SSH credential, or reuse this endpoint's "
-            "Proxmox username/password for SSH. Reuse strips the realm "
+            "Use an application-service credential, a dedicated endpoint "
+            "credential, or the endpoint's Proxmox username/password. Reuse strips the realm "
             "(for example, root@pam becomes root); only @pam/PAM-backed "
             "users normally map to local SSH accounts."
         ),
+    )
+    ip_address = DynamicModelChoiceField(
+        queryset=IPAddress.objects.all(),
+        required=False,
+        quick_add=True,
+        label=_("IP address"),
+        help_text=_("Endpoint IP address bound to the SSH application service."),
+    )
+    ssh_service = DynamicModelChoiceField(
+        queryset=ProxmoxEndpointService.objects.all(),
+        required=False,
+        label=_("Application service"),
+        help_text=_("Select an SSH service or leave blank to reuse or create one."),
+    )
+    ssh_storage = forms.ChoiceField(
+        required=False,
+        label=_("SSH credential storage"),
     )
     ssh_password = forms.CharField(
         required=False,
@@ -182,9 +214,16 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
 
     def __init__(self, *args: object, **kwargs: object) -> None:
         """Hide clear controls when no corresponding encrypted value exists."""
-        self._request_user = kwargs.pop("request_user", None)
+        self._validated_service_intent = None
+        self._resolved_ssh_service = None
+        self._request_user = kwargs.pop("request_user", None) or self._current_actor()
         super().__init__(*args, **kwargs)
         instance = getattr(self, "instance", None)
+        self._configure_service_chain_fields(instance)
+        service_credential = self._service_credential(instance)
+        if service_credential is not None:
+            self.fields["ssh_username"].initial = service_credential.username
+            self.fields["ssh_auth_method"].initial = service_credential.auth_method
         if not (instance and getattr(instance, "pk", None)):
             self.fields.pop("clear_ssh_password", None)
             self.fields.pop("clear_ssh_private_key", None)
@@ -192,16 +231,143 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
         from netbox_proxbox.integrations.openbao import endpoint_uses_openbao_storage
 
         uses_openbao = endpoint_uses_openbao_storage(instance)
-        has_ssh_password = bool(getattr(instance, "ssh_password_enc", "")) or (
-            uses_openbao and bool(instance.openbao_ssh_password_credential_uuid)
-        )
-        has_ssh_private_key = bool(getattr(instance, "ssh_private_key_enc", "")) or (
-            uses_openbao and bool(instance.openbao_ssh_keypair_credential_uuid)
-        )
+        if instance.ssh_credential_source == SSH_CRED_SOURCE_SERVICE:
+            has_ssh_password = instance.has_ssh_password
+            has_ssh_private_key = instance.has_ssh_private_key
+        else:
+            has_ssh_password = bool(getattr(instance, "ssh_password_enc", "")) or (
+                uses_openbao and bool(instance.openbao_ssh_password_credential_uuid)
+            )
+            has_ssh_private_key = bool(
+                getattr(instance, "ssh_private_key_enc", "")
+            ) or (uses_openbao and bool(instance.openbao_ssh_keypair_credential_uuid))
         if not has_ssh_password:
             self.fields.pop("clear_ssh_password", None)
         if not has_ssh_private_key:
             self.fields.pop("clear_ssh_private_key", None)
+
+    @staticmethod
+    def _current_actor() -> object | None:
+        """Resolve NetBox's request-scoped actor across supported releases."""
+        try:
+            from netbox.context import current_request
+
+            request = current_request.get()
+        except (ImportError, LookupError):
+            return None
+        actor = getattr(request, "user", None)
+        if not getattr(actor, "is_authenticated", False):
+            return None
+        if not getattr(actor, "is_active", False):
+            return None
+        return actor
+
+    @staticmethod
+    def _is_authenticated_actor(actor: object | None) -> bool:
+        """Return whether an object can safely enter NetBox permission checks."""
+        return bool(
+            actor is not None
+            and getattr(actor, "is_authenticated", False)
+            and getattr(actor, "is_active", False)
+            and hasattr(actor, "has_perm")
+        )
+
+    def _configure_service_chain_fields(self, instance: object) -> None:
+        """Install only the storage choices available in this NetBox process."""
+        from netbox_proxbox.choices import CredentialStorageBackendChoices
+        from netbox_proxbox.integrations.openbao import (
+            effective_credential_storage_backend,
+            is_netbox_openbao_installed,
+        )
+
+        choices = [
+            (
+                CredentialStorageBackendChoices.LEGACY_ENCRYPTED,
+                _("Encrypted in netbox-proxbox"),
+            )
+        ]
+        from django.apps import apps
+
+        installed = is_netbox_openbao_installed() and apps.is_installed(
+            "netbox_openbao"
+        )
+        if installed:
+            choices[0:0] = [
+                ("openbao_new", _("OpenBao — create from values entered here")),
+                ("openbao_existing", _("OpenBao — select existing credential")),
+            ]
+            credential_model = apps.get_model("netbox_openbao", "Credential")
+            queryset = credential_model.objects.filter(
+                credential_type__in=("ssh-password", "ssh-keypair")
+            )
+            if self._is_authenticated_actor(self._request_user):
+                queryset = queryset.restrict(self._request_user, "reveal")
+            else:
+                queryset = queryset.none()
+            self.fields["openbao_credential"] = DynamicModelChoiceField(
+                queryset=queryset,
+                required=False,
+                query_params={"credential_type": ["ssh-password", "ssh-keypair"]},
+                label=_("Existing OpenBao credential"),
+            )
+        else:
+            self.fields.pop("openbao_credential", None)
+        self.fields["ssh_storage"].choices = choices
+        service_field = self.fields["ssh_service"]
+        if getattr(instance, "pk", None):
+            service_queryset = service_field.queryset.filter(endpoint=instance)
+            if self._is_authenticated_actor(self._request_user) and hasattr(
+                service_queryset, "restrict"
+            ):
+                service_queryset = service_queryset.restrict(self._request_user, "view")
+            elif not self._is_authenticated_actor(self._request_user):
+                service_queryset = service_queryset.none()
+            service_field.queryset = service_queryset
+            service_field.query_params = {"endpoint_id": instance.pk}
+        else:
+            service_field.queryset = service_field.queryset.none()
+        current = self._service_credential(instance)
+        if current is not None:
+            initial = (
+                "openbao_new"
+                if current.storage_backend == CredentialStorageBackendChoices.OPENBAO
+                else CredentialStorageBackendChoices.LEGACY_ENCRYPTED
+            )
+        elif effective_credential_storage_backend(instance) == "openbao":
+            initial = "openbao_new"
+        else:
+            initial = CredentialStorageBackendChoices.LEGACY_ENCRYPTED
+        self.fields["ssh_storage"].initial = initial
+        self.initial["ssh_storage"] = initial
+        if self._is_new_ssh_configuration(instance):
+            self.initial["ssh_credential_source"] = SSH_CRED_SOURCE_SERVICE
+
+    @staticmethod
+    def _is_new_ssh_configuration(instance: object) -> bool:
+        """Return whether the form should present the service source by default."""
+        if not getattr(instance, "pk", None):
+            return True
+        return not any(
+            (
+                getattr(instance, "ssh_service_id", None),
+                getattr(instance, "ssh_username", ""),
+                getattr(instance, "ssh_known_host_fingerprint", ""),
+                getattr(instance, "ssh_password_enc", ""),
+                getattr(instance, "ssh_private_key_enc", ""),
+                getattr(instance, "openbao_ssh_password_credential_uuid", None),
+                getattr(instance, "openbao_ssh_keypair_credential_uuid", None),
+            )
+        )
+
+    @staticmethod
+    def _service_credential(instance: object) -> object | None:
+        service = getattr(instance, "ssh_service", None)
+        if service is None:
+            return None
+        try:
+            return service.ssh_credential
+        except (AttributeError, ObjectDoesNotExist):
+            return None
 
     def clean(self) -> dict[str, object]:
         """Validate complete endpoint SSH credentials before encryption."""
@@ -225,11 +391,40 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
             self.instance._pending_password_for_validation = self.cleaned_data[
                 "password"
             ]
+        service_pending = (
+            _credential_source(self.cleaned_data, self.instance)
+            == SSH_CRED_SOURCE_SERVICE
+        )
+        dedicated_pending = (
+            _credential_source(self.cleaned_data, self.instance)
+            == SSH_CRED_SOURCE_DEDICATED
+        )
+        if service_pending:
+            self.instance._pending_service_chain_validation = True
+            self.instance._pending_service_credentials_ready = (
+                self._submitted_service_credentials_ready()
+            )
+        if dedicated_pending:
+            from netbox_proxbox.integrations.openbao import (
+                endpoint_uses_openbao_storage,
+            )
+
+            presence = _dedicated_ssh_secret_presence(
+                self.cleaned_data,
+                self.instance,
+                uses_openbao=endpoint_uses_openbao_storage(self.instance),
+            )
+            self.instance._pending_dedicated_ssh_secrets = presence
         try:
             super()._post_clean()
         finally:
             if password_supplied:
                 del self.instance._pending_password_for_validation
+            if service_pending:
+                del self.instance._pending_service_chain_validation
+                del self.instance._pending_service_credentials_ready
+            if dedicated_pending:
+                del self.instance._pending_dedicated_ssh_secrets
 
     def _clean_ssh_credentials(self) -> None:
         """Validate the selected endpoint SSH credential source."""
@@ -241,6 +436,9 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
         if credential_source == SSH_CRED_SOURCE_REUSE:
             # ``ProxmoxEndpoint.clean()`` owns reuse validation. ``_post_clean``
             # supplies the pending write-only password for create and rotation.
+            return
+        if credential_source == SSH_CRED_SOURCE_SERVICE:
+            self._clean_service_ssh_credentials()
             return
 
         from netbox_proxbox.integrations.openbao import endpoint_uses_openbao_storage
@@ -255,6 +453,171 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
             return
         self._validate_dedicated_ssh_auth(presence)
         self._validate_dedicated_ssh_storage(uses_openbao=uses_openbao)
+
+    def _clean_service_ssh_credentials(self) -> None:
+        """Validate service resolution, creation authority, storage, and material."""
+        from netbox_proxbox.services.ssh_service_chain import find_ssh_service
+
+        access_method = self.cleaned_data.get("access_methods") or getattr(
+            self.instance, "access_methods", None
+        )
+        if access_method != ProxmoxAccessMethodChoices.API_SSH:
+            return
+        if not self._is_authenticated_actor(self._request_user):
+            self.add_error(
+                "ssh_service",
+                _(
+                    "An authenticated request actor is required for SSH service changes."
+                ),
+            )
+            return
+
+        ip_address = self.cleaned_data.get("ip_address") or getattr(
+            self.instance, "ip_address", None
+        )
+        if ip_address is None:
+            self.add_error(
+                "ip_address", _("An IP address is required for the SSH service.")
+            )
+            return
+        port = int(self.cleaned_data.get("ssh_port") or 22)
+        service = self.cleaned_data.get("ssh_service")
+        visible = ProxmoxEndpointService.objects.all()
+        if self._request_user is not None and hasattr(visible, "restrict"):
+            visible = visible.restrict(self._request_user, "view")
+        try:
+            service = service or find_ssh_service(
+                self.instance, ip_address, port, visible
+            )
+        except ValidationError as exc:
+            self.add_error("ssh_service", exc.messages[0])
+            return
+        self._precheck_chain_write_access(service, ip_address)
+        if service is not None:
+            self._validate_selected_service(service, port)
+        else:
+            if not self._request_user.has_perm(
+                "netbox_proxbox.add_proxmoxendpointservice"
+            ):
+                self.add_error(
+                    "ssh_service",
+                    _("You do not have permission to create an application service."),
+                )
+            try:
+                from netbox_proxbox.services.ssh_service_chain import (
+                    automatic_ssh_service_name,
+                )
+
+                self._automatic_ssh_service_name = automatic_ssh_service_name(
+                    self.instance, port
+                )
+            except ValidationError as exc:
+                self.add_error(
+                    "ssh_service",
+                    exc.messages[0],
+                )
+        self._resolved_ssh_service = service
+        self._validated_service_intent = self._service_credential_intent(service)
+        self._validate_service_secret_selection(service)
+
+    def _validate_selected_service(self, service: object, port: int) -> None:
+        """Validate one selected service and synchronize its port."""
+        from netbox_proxbox.services.ssh_service_chain import service_ssh_port
+
+        if service.endpoint_id != getattr(self.instance, "pk", None):
+            self.add_error(
+                "ssh_service",
+                _("The selected service must belong to this endpoint."),
+            )
+        if service.protocol != "tcp":
+            self.add_error("ssh_service", _("The selected SSH service must use TCP."))
+        try:
+            self.cleaned_data["ssh_port"] = service_ssh_port(service, port)
+        except ValidationError as exc:
+            self.add_error("ssh_service", exc.messages[0])
+
+    def _validate_service_secret_selection(self, service: object | None) -> None:
+        """Validate service storage selection and final auth material presence."""
+        from netbox_proxbox.choices import CredentialStorageBackendChoices
+
+        storage = self.cleaned_data.get("ssh_storage")
+        if storage == "openbao_existing" and not self.cleaned_data.get(
+            "openbao_credential"
+        ):
+            self.add_error(
+                "openbao_credential", _("Select an existing OpenBao SSH credential.")
+            )
+        existing = self._credential_for_service(service)
+        target_backend = (
+            CredentialStorageBackendChoices.OPENBAO
+            if storage in ("openbao_existing", "openbao_new")
+            else CredentialStorageBackendChoices.LEGACY_ENCRYPTED
+        )
+        if (
+            existing is not None
+            and existing.storage_backend == CredentialStorageBackendChoices.OPENBAO
+            and target_backend == CredentialStorageBackendChoices.LEGACY_ENCRYPTED
+        ):
+            self.add_error(
+                "ssh_storage",
+                _(
+                    "Remove the OpenBao service credential before selecting local encrypted storage."
+                ),
+            )
+            return
+        if existing is not None and existing.storage_backend != target_backend:
+            existing = None
+        password, private_key = self._service_secret_presence(existing)
+        auth_method = self.cleaned_data.get("ssh_auth_method")
+        if not (self.cleaned_data.get("ssh_username") or "").strip():
+            self.add_error(
+                "ssh_username",
+                _("SSH username is required for the application service."),
+            )
+        if not (self.cleaned_data.get("ssh_known_host_fingerprint") or "").strip():
+            self.add_error(
+                "ssh_known_host_fingerprint",
+                _("Pinned host-key fingerprint is required for endpoint SSH."),
+            )
+        if auth_method == AUTH_METHOD_KEY and not private_key:
+            self.add_error(
+                "ssh_private_key", _("Key authentication requires a private key.")
+            )
+        if auth_method == AUTH_METHOD_PASSWORD and not password:
+            self.add_error(
+                "ssh_password", _("Password authentication requires a password.")
+            )
+        if storage == "legacy_encrypted" and (
+            self.cleaned_data.get("ssh_password")
+            or self.cleaned_data.get("ssh_private_key")
+        ):
+            if not ProxboxPluginSettings.get_solo().encryption_key:
+                self.add_error(
+                    "ssh_storage",
+                    _(
+                        "Configure ProxboxPluginSettings.encryption_key before storing SSH secrets."
+                    ),
+                )
+
+    def _service_secret_presence(self, existing: object | None) -> tuple[bool, bool]:
+        """Return final password and private-key availability for one service."""
+        password = bool(self.cleaned_data.get("ssh_password")) or bool(
+            existing
+            and existing.has_password
+            and not self.cleaned_data.get("clear_ssh_password")
+        )
+        private_key = bool(self.cleaned_data.get("ssh_private_key")) or bool(
+            existing
+            and existing.has_private_key
+            and not self.cleaned_data.get("clear_ssh_private_key")
+        )
+        selected = self.cleaned_data.get("openbao_credential")
+        if selected is not None:
+            return (
+                selected.credential_type == "ssh-password",
+                selected.credential_type == "ssh-keypair",
+            )
+        return password, private_key
 
     def _validate_dedicated_ssh_identity(
         self,
@@ -278,6 +641,62 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
                 _("Pinned host-key fingerprint is required for endpoint fallback SSH."),
             )
         return True
+
+    @staticmethod
+    def _credential_for_service(service: object | None) -> object | None:
+        if service is None:
+            return None
+        try:
+            return service.ssh_credential
+        except (AttributeError, ObjectDoesNotExist):
+            return None
+
+    @classmethod
+    def _service_credential_intent(
+        cls, service: object | None
+    ) -> _ServiceCredentialIntent:
+        """Capture the selected service credential state used by validation."""
+        credential = cls._credential_for_service(service)
+        return _ServiceCredentialIntent(
+            service_id=getattr(service, "pk", None),
+            owner_id=getattr(credential, "pk", None),
+            storage_backend=getattr(credential, "storage_backend", None),
+            password_reference=getattr(
+                credential, "openbao_password_credential_uuid", None
+            ),
+            private_key_reference=getattr(
+                credential, "openbao_keypair_credential_uuid", None
+            ),
+        )
+
+    def _submitted_service_credentials_ready(self) -> bool:
+        """Return whether final submitted service credentials are usable."""
+        service = self._resolved_ssh_service
+        existing = self._credential_for_service(service)
+        password = bool(self.cleaned_data.get("ssh_password")) or bool(
+            existing
+            and existing.has_password
+            and not self.cleaned_data.get("clear_ssh_password")
+        )
+        private_key = bool(self.cleaned_data.get("ssh_private_key")) or bool(
+            existing
+            and existing.has_private_key
+            and not self.cleaned_data.get("clear_ssh_private_key")
+        )
+        selected = self.cleaned_data.get("openbao_credential")
+        if selected is not None:
+            password = selected.credential_type == "ssh-password"
+            private_key = selected.credential_type == "ssh-keypair"
+        secret = (
+            private_key
+            if self.cleaned_data.get("ssh_auth_method") == AUTH_METHOD_KEY
+            else password
+        )
+        return bool(
+            self.cleaned_data.get("ssh_username")
+            and self.cleaned_data.get("ssh_known_host_fingerprint")
+            and secret
+        )
 
     def _validate_dedicated_ssh_auth(self, presence: _SSHSecretPresence) -> None:
         """Require the secret selected by the dedicated SSH auth method."""
@@ -319,10 +738,14 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
         self._attach_ssh_save_actor(instance)
         if commit and uses_openbao and not instance.pk:
             instance.save()
-        self._apply_primary_secret_inputs(instance)
+        credential_source = self.cleaned_data.get("ssh_credential_source")
+        if credential_source != SSH_CRED_SOURCE_SERVICE or not commit:
+            self._apply_primary_secret_inputs(instance)
 
-        if self.cleaned_data.get("ssh_credential_source") == SSH_CRED_SOURCE_REUSE:
+        if credential_source == SSH_CRED_SOURCE_REUSE:
             return self._commit_ssh_form(instance, commit=commit)
+        if credential_source == SSH_CRED_SOURCE_SERVICE:
+            return self._save_service_chain(instance, commit=commit)
 
         key = ProxboxPluginSettings.get_solo().encryption_key or ""
         self._clear_dedicated_ssh_secret(
@@ -341,6 +764,306 @@ class ProxmoxEndpointSSHCredentialFormMixin(forms.Form):
         )
         self._apply_dedicated_ssh_secret_inputs(instance, key=key)
         return self._commit_ssh_form(instance, commit=commit)
+
+    def _save_service_chain(
+        self, instance: ProxmoxEndpoint, *, commit: bool
+    ) -> ProxmoxEndpoint:
+        """Resolve the service chain and store credential metadata and material."""
+        if not commit:
+            return instance
+        from django.db import transaction
+
+        from netbox_proxbox.choices import CredentialStorageBackendChoices
+
+        ip_address = self.cleaned_data["ip_address"]
+        port = int(self.cleaned_data.get("ssh_port") or 22)
+        storage = self.cleaned_data.get("ssh_storage")
+        from netbox_proxbox.integrations.openbao_transaction import (
+            current_endpoint_material_context,
+            endpoint_material_transaction,
+        )
+
+        current_service_credential = self._service_credential(instance)
+        needs_provider = storage in ("openbao_existing", "openbao_new") or bool(
+            current_service_credential is not None
+            and current_service_credential.storage_backend
+            == CredentialStorageBackendChoices.OPENBAO
+        )
+        if needs_provider and current_endpoint_material_context() is None:
+            with endpoint_material_transaction([instance]):
+                return self._save_service_chain(instance, commit=commit)
+        with transaction.atomic():
+            if instance.pk is None:
+                instance.save()
+            else:
+                ProxmoxEndpoint.objects.select_for_update().get(pk=instance.pk)
+            service, credential, port = self._locked_service_chain_owner(
+                instance, ip_address, port
+            )
+            instance.ssh_service = service
+            instance.ssh_port = port
+            instance.ssh_username = ""
+            self._apply_primary_secret_inputs(instance)
+            self._store_service_credential(credential, service, storage)
+            service.ssh_credential = credential
+            instance.full_clean()
+            instance.save()
+            self.save_m2m()
+        return instance
+
+    def _visible_service_queryset(self) -> object:
+        """Return endpoint services visible to the authenticated request actor."""
+        visible = ProxmoxEndpointService.objects.all()
+        if self._request_user is not None and hasattr(visible, "restrict"):
+            return visible.restrict(self._request_user, "view")
+        return visible.none()
+
+    def _locked_service_chain_owner(
+        self, instance: object, ip_address: object, port: int
+    ) -> tuple[object, object, int]:
+        """Lock or create the validated service and its credential owner."""
+        from django.core.exceptions import PermissionDenied
+        from netbox_proxbox.models import ServiceSSHCredential
+        from netbox_proxbox.services.ssh_service_chain import (
+            automatic_ssh_service_name,
+            build_ssh_service,
+            find_ssh_service,
+            service_ssh_port,
+        )
+
+        service = self.cleaned_data.get("ssh_service") or find_ssh_service(
+            instance, ip_address, port, self._visible_service_queryset()
+        )
+        if service is None:
+            self._assert_validated_service_intent(None, None)
+            if not self._request_user.has_perm(
+                "netbox_proxbox.add_proxmoxendpointservice"
+            ):
+                raise PermissionDenied(
+                    "Creating an SSH application service requires add permission."
+                )
+            self._require_credential_write_access(None)
+            service = build_ssh_service(
+                instance,
+                ip_address,
+                port,
+                name=automatic_ssh_service_name(instance, port),
+            )
+            return service, ServiceSSHCredential(service=service), port
+        service = self._lock_selected_service(service, instance)
+        credential = (
+            ServiceSSHCredential.objects.select_for_update()
+            .filter(service=service)
+            .first()
+        )
+        self._assert_validated_service_intent(service, credential)
+        self._require_credential_write_access(credential)
+        port = service_ssh_port(service, port)
+        if not service.ipaddresses.filter(pk=ip_address.pk).exists():
+            self._require_service_change_access(service)
+            service.ipaddresses.add(ip_address)
+        return service, credential or ServiceSSHCredential(service=service), port
+
+    def _precheck_chain_write_access(
+        self, service: object | None, ip_address: object
+    ) -> None:
+        """Report missing credential or service write access as form errors."""
+        from netbox_proxbox.models import ServiceSSHCredential
+
+        if not self._is_authenticated_actor(self._request_user):
+            self.add_error(
+                "ssh_service",
+                _(
+                    "An authenticated request actor is required for SSH service changes."
+                ),
+            )
+            return
+        credential = None
+        if service is not None:
+            credential = ServiceSSHCredential.objects.filter(service=service).first()
+            needs_binding = not service.ipaddresses.filter(pk=ip_address.pk).exists()
+            if (
+                needs_binding
+                and not ProxmoxEndpointService.objects.restrict(
+                    self._request_user, "change"
+                )
+                .filter(pk=service.pk)
+                .exists()
+            ):
+                self.add_error(
+                    "ssh_service",
+                    _("You do not have permission to change this application service."),
+                )
+        if credential is None:
+            allowed = self._request_user.has_perm(
+                "netbox_proxbox.add_servicesshcredential"
+            )
+        else:
+            allowed = (
+                ServiceSSHCredential.objects.restrict(self._request_user, "change")
+                .filter(pk=credential.pk)
+                .exists()
+            )
+        if not allowed:
+            self.add_error(
+                "ssh_username",
+                _("You do not have permission to store this SSH credential."),
+            )
+
+    def _require_service_change_access(self, service: object) -> None:
+        """Binding a new address mutates the service, so require change access."""
+        from django.core.exceptions import PermissionDenied
+
+        allowed = ProxmoxEndpointService.objects.restrict(
+            self._request_user, "change"
+        ).filter(pk=service.pk)
+        if not allowed.exists():
+            raise PermissionDenied(
+                "Binding this IP address requires change permission on the SSH service."
+            )
+
+    def _require_credential_write_access(self, credential: object | None) -> None:
+        """Require add access for a new credential and change access for an existing one."""
+        from django.core.exceptions import PermissionDenied
+        from netbox_proxbox.models import ServiceSSHCredential
+
+        if credential is None:
+            allowed = self._request_user.has_perm(
+                "netbox_proxbox.add_servicesshcredential"
+            )
+        else:
+            allowed = (
+                ServiceSSHCredential.objects.restrict(self._request_user, "change")
+                .filter(pk=credential.pk)
+                .exists()
+            )
+        if not allowed:
+            raise PermissionDenied(
+                "Storing this SSH credential requires permission on SSH credentials."
+            )
+
+    @staticmethod
+    def _lock_selected_service(service: object, instance: object) -> object:
+        """Lock the selected service without disclosing an unavailable object."""
+        from django.core.exceptions import PermissionDenied
+
+        try:
+            return ProxmoxEndpointService.objects.select_for_update().get(
+                pk=service.pk,
+                endpoint=instance,
+            )
+        except ProxmoxEndpointService.DoesNotExist as exc:
+            raise PermissionDenied(
+                "The selected SSH application service is no longer available."
+            ) from exc
+
+    def _assert_validated_service_intent(
+        self, service: object | None, credential: object | None
+    ) -> None:
+        """Reject owner, backend, or provider-reference drift since validation."""
+        from utilities.exceptions import AbortRequest
+
+        observed = _ServiceCredentialIntent(
+            service_id=getattr(service, "pk", None),
+            owner_id=getattr(credential, "pk", None),
+            storage_backend=getattr(credential, "storage_backend", None),
+            password_reference=getattr(
+                credential, "openbao_password_credential_uuid", None
+            ),
+            private_key_reference=getattr(
+                credential, "openbao_keypair_credential_uuid", None
+            ),
+        )
+        if self._validated_service_intent != observed:
+            raise AbortRequest(
+                "The SSH service credential changed after validation. Review and submit the form again."
+            )
+
+    def _store_service_credential(
+        self, credential: object, service: object, storage: str
+    ) -> None:
+        """Persist one complete credential and any selected provider material."""
+        from netbox_proxbox.choices import CredentialStorageBackendChoices
+
+        credential.username = self.cleaned_data.get("ssh_username") or ""
+        credential.auth_method = self.cleaned_data.get("ssh_auth_method")
+        credential.storage_backend = (
+            CredentialStorageBackendChoices.OPENBAO
+            if storage in ("openbao_existing", "openbao_new")
+            else CredentialStorageBackendChoices.LEGACY_ENCRYPTED
+        )
+        if credential.storage_backend == CredentialStorageBackendChoices.OPENBAO:
+            from netbox_proxbox.integrations.openbao_service import (
+                validate_service_storage,
+            )
+
+            validate_service_storage(credential)
+        if storage == "openbao_existing":
+            self._assign_existing_service_credential(credential, service)
+        else:
+            self._apply_service_secret_inputs(credential)
+        credential.full_clean()
+        credential.save()
+        credential._openbao_expected_references = (
+            credential.openbao_password_credential_uuid,
+            credential.openbao_keypair_credential_uuid,
+        )
+        if storage == "openbao_new":
+            from netbox_proxbox.integrations.openbao_service import (
+                persist_service_material,
+            )
+
+            persist_service_material(credential, service, user=self._request_user)
+
+    def _assign_existing_service_credential(
+        self, credential: object, service: object
+    ) -> None:
+        """Clear prior slots and bind the selected authorized provider credential."""
+        from netbox_proxbox.integrations.openbao_service import (
+            assign_existing_service_credential,
+        )
+
+        credential.clear_password(user=self._request_user)
+        credential.clear_private_key(user=self._request_user)
+        assign_existing_service_credential(
+            credential,
+            service,
+            self.cleaned_data["openbao_credential"],
+            user=self._request_user,
+        )
+
+    def _apply_service_secret_inputs(self, credential: object) -> None:
+        """Apply write-only service secrets without cross-backend fallback."""
+        from netbox_proxbox.choices import CredentialStorageBackendChoices
+        from netbox_proxbox.integrations.openbao_service import clear_service_secret
+
+        password = self.cleaned_data.get("ssh_password") or ""
+        private_key = self.cleaned_data.get("ssh_private_key") or ""
+        if credential.storage_backend == CredentialStorageBackendChoices.OPENBAO:
+            credential.clear_password_ciphertext()
+            credential.clear_private_key_ciphertext()
+            if (
+                self.cleaned_data.get("clear_ssh_password") or password
+            ) and credential.openbao_password_credential_uuid:
+                clear_service_secret(credential, "password", user=self._request_user)
+            if (
+                self.cleaned_data.get("clear_ssh_private_key") or private_key
+            ) and credential.openbao_keypair_credential_uuid:
+                clear_service_secret(credential, "private_key", user=self._request_user)
+        else:
+            if credential.openbao_password_credential_uuid:
+                clear_service_secret(credential, "password", user=self._request_user)
+            if credential.openbao_keypair_credential_uuid:
+                clear_service_secret(credential, "private_key", user=self._request_user)
+            if self.cleaned_data.get("clear_ssh_password"):
+                credential.clear_password(user=self._request_user)
+            if self.cleaned_data.get("clear_ssh_private_key"):
+                credential.clear_private_key(user=self._request_user)
+        key = ProxboxPluginSettings.get_solo().encryption_key or ""
+        if password:
+            credential.set_password(password, key=key, user=self._request_user)
+        if private_key:
+            credential.set_private_key(private_key, key=key, user=self._request_user)
 
     def _attach_ssh_save_actor(self, instance: ProxmoxEndpoint) -> None:
         """Attach the request actor used by provider-owned credential writes."""
@@ -556,6 +1279,11 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
             name="SSH credential access (API + SSH only)",
         ),
         FieldSet(
+            "cloud_image_ssh_target_node",
+            "cloud_image_ssh_identity_file",
+            name="Cloud Image bake binding",
+        ),
+        FieldSet(
             "service_monitoring_enabled",
             "service_monitoring_interval_minutes",
             "service_monitoring_units",
@@ -645,11 +1373,14 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
             "tenant",
             "allowed_tenants",
             "ssh_credential_source",
+            "ssh_service",
             "ssh_username",
             "ssh_port",
             "ssh_auth_method",
             "ssh_known_host_fingerprint",
             "tags",
+            "cloud_image_ssh_target_node",
+            "cloud_image_ssh_identity_file",
         )
 
     def clean_node_device_name_template(self) -> str:
@@ -681,6 +1412,8 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
             self.add_error("domain", "Provide either a domain or an IP address.")
             self.add_error("ip_address", "Provide either a domain or an IP address.")
 
+        self._clean_cloud_image_ssh_target(instance, domain, ip_address)
+
         clear_password = bool(cleaned_data.get("clear_password"))
         clear_token = bool(cleaned_data.get("clear_token"))
 
@@ -703,6 +1436,41 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
         self._discard_ssh_input_when_api_only()
         return cleaned_data
 
+    def _clean_cloud_image_ssh_target(
+        self, instance: object, domain: str, ip_address: object
+    ) -> None:
+        """Require the selected bake node to resolve to the endpoint SSH host."""
+        gates_open = all(
+            (
+                bool(self.cleaned_data.get("enabled")),
+                self.cleaned_data.get("access_methods")
+                == ProxmoxAccessMethodChoices.API_SSH,
+                bool(self.cleaned_data.get("allow_writes")),
+                bool(self.cleaned_data.get("allow_packer_template_builds")),
+            )
+        )
+        if not gates_open:
+            return
+        target_node = str(
+            self.cleaned_data.get("cloud_image_ssh_target_node") or ""
+        ).strip()
+        if not target_node:
+            return
+        from netbox_proxbox.cloud_image_ssh import cloud_image_ssh_target_matches_host
+
+        candidate = ProxmoxEndpoint(
+            domain=domain,
+            ip_address=ip_address,
+            ssh_credential_source=_credential_source(self.cleaned_data, instance),
+        )
+        if not cloud_image_ssh_target_matches_host(
+            instance, target_node=target_node, ssh_host=candidate.ssh_host
+        ):
+            self.add_error(
+                "cloud_image_ssh_target_node",
+                "Select an inventory node whose address matches the endpoint SSH host.",
+            )
+
     def _ssh_input_ignored(self) -> bool:
         """Return whether the submitted access method makes SSH input irrelevant."""
         return self.cleaned_data.get("access_methods") == ProxmoxAccessMethodChoices.API
@@ -715,16 +1483,35 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
         copying submitted values onto the instance, so stored SSH settings
         stay untouched until the access method is switched to API + SSH. The two
         "clear stored SSH secret" requests are explicit operator intent rather
-        than SSH configuration, so they are still honored: a stored SSH secret
-        can be removed while switching an endpoint to API only.
+        than SSH configuration. Dedicated clears remain supported. A service
+        clear requires its separate credential settings and is rejected here
+        rather than silently clearing the wrong owner.
         """
         if not self._ssh_input_ignored():
             return
+        self._reject_api_only_service_secret_clears()
         for name in ProxmoxEndpointSSHCredentialFormMixin.ssh_credential_field_names:
             if name in ProxmoxEndpointSSHCredentialFormMixin.ssh_clear_field_names:
                 continue
             self._errors.pop(name, None)
             self.cleaned_data.pop(name, None)
+
+    def _reject_api_only_service_secret_clears(self) -> None:
+        """Refuse a clear whose stored service owner cannot use this save path."""
+        if (
+            getattr(self.instance, "ssh_credential_source", None)
+            != SSH_CRED_SOURCE_SERVICE
+        ):
+            return
+        for name in ProxmoxEndpointSSHCredentialFormMixin.ssh_clear_field_names:
+            if self.cleaned_data.get(name):
+                self.add_error(
+                    name,
+                    _(
+                        "API-only edits cannot clear the selected SSH service credential. "
+                        "Clear it through the SSH credential settings before changing the access method."
+                    ),
+                )
 
     def _preserve_primary_secrets(self) -> None:
         """Preserve masked secrets without requesting an absent unused method."""
@@ -852,6 +1639,10 @@ class ProxmoxEndpointForm(ProxmoxEndpointSSHCredentialFormMixin, NetBoxModelForm
 
         if credential_source == SSH_CRED_SOURCE_REUSE:
             return self._reused_monitoring_credentials_ready(host, fingerprint)
+        if credential_source == SSH_CRED_SOURCE_SERVICE:
+            return bool(
+                host and fingerprint and self._submitted_service_credentials_ready()
+            )
         return self._dedicated_monitoring_credentials_ready(host, fingerprint)
 
     def _reused_monitoring_credentials_ready(
@@ -1085,6 +1876,7 @@ class ProxmoxEndpointSSHSettingsForm(
 
     fieldsets = (
         FieldSet(
+            "ip_address",
             *ProxmoxEndpointSSHCredentialFormMixin.ssh_credential_field_names,
             name="SSH credential access",
         ),
@@ -1094,6 +1886,8 @@ class ProxmoxEndpointSSHSettingsForm(
         model = ProxmoxEndpoint
         fields = (
             "ssh_credential_source",
+            "ip_address",
+            "ssh_service",
             "ssh_username",
             "ssh_port",
             "ssh_auth_method",

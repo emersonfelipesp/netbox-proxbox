@@ -13,6 +13,7 @@ def attach_standard_model_fields(models_module: object, *, field_class: type) ->
         "ForeignKey",
         "JSONField",
         "ManyToManyField",
+        "OneToOneField",
         "PositiveIntegerField",
         "PositiveSmallIntegerField",
         "TextField",

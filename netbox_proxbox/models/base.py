@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from ipaddress import ip_interface
+
 from django.core.exceptions import ValidationError
 from django.core.validators import MaxValueValidator, MinValueValidator
 from django.db import models
@@ -24,7 +26,11 @@ class CommonProperties:
     @property
     def ip(self) -> str | None:
         """Dotted IPv4/IPv6 host string from the linked ``IPAddress``, if any."""
-        return str(self.ip_address.address.ip) if self.ip_address else None
+        if not self.ip_address:
+            return None
+        address = self.ip_address.address
+        parsed = getattr(address, "ip", None)
+        return str(parsed if parsed is not None else ip_interface(str(address)).ip)
 
     @property
     def url(self) -> str:

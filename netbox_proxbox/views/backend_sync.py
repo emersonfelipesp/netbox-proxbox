@@ -6,6 +6,7 @@ import hmac
 import hashlib
 import json
 import logging
+import posixpath
 import time
 from typing import TYPE_CHECKING
 
@@ -14,6 +15,7 @@ from django.db import DatabaseError
 from django.utils.crypto import salted_hmac
 
 from netbox_proxbox.models import ProxmoxEndpoint
+from netbox_proxbox.cloud_image_ssh import cloud_image_ssh_target_matches_host
 from netbox_proxbox.services.endpoint_enabled import disabled_endpoint_detail
 from netbox_proxbox.utils import get_ip_address_host
 from netbox_proxbox.views.error_utils import (
@@ -25,6 +27,11 @@ if TYPE_CHECKING:
     from netbox_proxbox.models import NetBoxEndpoint
 
 logger = logging.getLogger(__name__)
+
+
+class CloudImageBindingReceiptError(ValueError):
+    """The ownership receipt could not be committed before a binding write."""
+
 
 try:
     from django.core.cache import cache as _django_cache
@@ -247,11 +254,13 @@ def backend_holds_proxmox_endpoint(
     ``None`` (the listing call itself failed) is treated as *not held*: unknown
     must never be the reason an endpoint is skipped into a fatal error.
     """
+    if not existing_endpoints:
+        return False
     from netbox_proxbox.services.connection_authority import (
         approved_connection_allows_secrets,
     )
 
-    if not approved_connection_allows_secrets(endpoint) or not existing_endpoints:
+    if not approved_connection_allows_secrets(endpoint):
         return False
     row = _backend_row_for_endpoint(existing_endpoints, endpoint)
     return row is not None and _proxmox_row_is_current(endpoint, row)
@@ -310,6 +319,61 @@ def _packer_template_builds_effectively_allowed(endpoint: ProxmoxEndpoint) -> bo
     )
 
 
+def _stripped_endpoint_value(endpoint: ProxmoxEndpoint, field: str) -> str:
+    """Return one optional endpoint value as stripped text."""
+    return str(getattr(endpoint, field, "") or "").strip()
+
+
+_CLOUD_IMAGE_SSH_CLEAR = {
+    "ssh_target_node": None,
+    "ssh_host": None,
+    "ssh_username": None,
+    "ssh_identity_file": None,
+    "ssh_known_host_fingerprint": None,
+}
+
+
+def _cloud_image_ssh_binding(
+    endpoint: ProxmoxEndpoint,
+) -> tuple[dict[str, object], bool]:
+    """Return desired binding keys and whether failed verification revokes Packer."""
+    managed = bool(
+        _stripped_endpoint_value(endpoint, "cloud_image_ssh_binding_fingerprint")
+    )
+    clear = dict(_CLOUD_IMAGE_SSH_CLEAR) if managed else {}
+    gates_open = _stripped_endpoint_value(
+        endpoint, "access_methods"
+    ) == "api_ssh" and _packer_template_builds_effectively_allowed(endpoint)
+    if not gates_open:
+        return clear, False
+    target_node = _stripped_endpoint_value(endpoint, "cloud_image_ssh_target_node")
+    identity_file = _stripped_endpoint_value(endpoint, "cloud_image_ssh_identity_file")
+    if identity_file:
+        identity_file = posixpath.normpath(identity_file)
+    if not target_node and not identity_file:
+        return clear, False
+    binding: dict[str, object] = {
+        "ssh_target_node": target_node,
+        "ssh_host": _stripped_endpoint_value(endpoint, "ssh_host"),
+        "ssh_username": _stripped_endpoint_value(endpoint, "effective_ssh_username"),
+        "ssh_port": int(getattr(endpoint, "ssh_port", 0) or 0),
+        "ssh_identity_file": identity_file,
+        "ssh_known_host_fingerprint": _stripped_endpoint_value(
+            endpoint, "ssh_known_host_fingerprint"
+        ),
+    }
+    if not all(binding.values()):
+        return clear, True
+    if not cloud_image_ssh_target_matches_host(endpoint):
+        return clear, True
+    return binding, False
+
+
+def _packer_payload_allowed(endpoint: ProxmoxEndpoint, *, revoke_packer: bool) -> bool:
+    """Return the effective backend Packer grant after binding verification."""
+    return _packer_template_builds_effectively_allowed(endpoint) and not revoke_packer
+
+
 def _proxmox_backend_payload(endpoint: ProxmoxEndpoint) -> dict[str, object]:
     """JSON body for POST/PUT ``/proxmox/endpoints`` from a ``ProxmoxEndpoint`` row."""
     from netbox_proxbox.integrations.openbao import resolve_endpoint_api_credentials
@@ -319,6 +383,7 @@ def _proxmox_backend_payload(endpoint: ProxmoxEndpoint) -> dict[str, object]:
     require_approved_connection(endpoint)
     credentials = resolve_endpoint_api_credentials(endpoint)
     tuning = endpoint.effective_connection_tuning()
+    binding_keys, revoke_packer = _cloud_image_ssh_binding(endpoint)
     payload = {
         "name": proxmox_backend_name(endpoint),
         "node_device_name_template": (
@@ -343,7 +408,7 @@ def _proxmox_backend_payload(endpoint: ProxmoxEndpoint) -> dict[str, object]:
         # can independently require the same operator capability at its final
         # template-image write boundary without NetBox granting its broad gate.
         "allow_packer_template_builds": (
-            _packer_template_builds_effectively_allowed(endpoint)
+            _packer_payload_allowed(endpoint, revoke_packer=revoke_packer)
         ),
         # Push the transport access method so the proxbox-api backend can gate
         # its own SSH paths (cloud-image build / Azure VHD import). It permits a
@@ -352,6 +417,7 @@ def _proxmox_backend_payload(endpoint: ProxmoxEndpoint) -> dict[str, object]:
         or "api",
         **_related_object_metadata("site", getattr(endpoint, "site", None)),
         **_related_object_metadata("tenant", getattr(endpoint, "tenant", None)),
+        **binding_keys,
     }
     require_approved_connection(endpoint)
     return payload
@@ -403,6 +469,174 @@ def _revoke_duplicate_proxmox_rows(
     )
 
 
+def _managed_binding_revocation_payload() -> dict[str, object]:
+    """Return the credential-free policy and managed-binding revocation body."""
+    return {
+        "allow_packer_template_builds": False,
+        **_CLOUD_IMAGE_SSH_CLEAR,
+    }
+
+
+def _revoke_managed_cloud_image_binding(
+    endpoint: ProxmoxEndpoint,
+    *,
+    receipt: str,
+    list_url: str,
+    headers: dict[str, str],
+    backend_verify_ssl: bool,
+    timeout: float,
+    deadline: float | None,
+    existing_endpoints: list[dict[str, object]] | None,
+) -> tuple[bool, str | None, int | None]:
+    """Revoke one managed binding without credentials or connection approval."""
+    if not receipt:
+        return False, "Connection target approval is missing or stale.", None
+    try:
+        if existing_endpoints is None:
+            response = requests.get(  # nosec B113
+                list_url,
+                headers=headers,
+                verify=backend_verify_ssl,
+                timeout=_remaining_request_timeout(timeout, deadline),
+                allow_redirects=False,
+            )
+            response.raise_for_status()
+            endpoints, json_err = parse_requests_response_json(
+                response, log_label="proxmox/endpoints"
+            )
+            if json_err:
+                return False, f"Failed to revoke managed SSH binding: {json_err}", None
+        else:
+            endpoints = existing_endpoints
+        if not isinstance(endpoints, list):
+            return (
+                False,
+                "ProxBox backend returned invalid endpoint list payload.",
+                None,
+            )
+        matching_rows = _backend_rows_for_endpoint(endpoints, endpoint)
+        if len(matching_rows) > 1:
+            return _revoke_duplicate_proxmox_rows(
+                endpoint,
+                matching_rows,
+                list_url=list_url,
+                headers=headers,
+                backend_verify_ssl=backend_verify_ssl,
+                timeout=timeout,
+                deadline=deadline,
+            )
+        existing = matching_rows[0] if matching_rows else None
+        if not existing or existing.get("id") is None:
+            return False, "Connection target approval is missing or stale.", None
+        response = requests.put(  # nosec B113
+            f"{list_url}/{existing['id']}",
+            json=_managed_binding_revocation_payload(),
+            headers=headers,
+            verify=backend_verify_ssl,
+            timeout=_remaining_request_timeout(timeout, deadline),
+            allow_redirects=False,
+        )
+        response.raise_for_status()
+    except requests.exceptions.RequestException as exc:
+        detail, http_status = extract_backend_error_detail(exc)
+        return False, f"Failed to revoke managed SSH binding: {detail}", http_status
+    _erase_cloud_image_ssh_binding_fingerprint(endpoint, expected=receipt)
+    return (
+        False,
+        "The managed SSH binding was revoked; the full update requires connection approval.",
+        None,
+    )
+
+
+def _update_disabled_proxmox_policy(
+    endpoint: ProxmoxEndpoint,
+    *,
+    existing: dict[str, object] | None,
+    binding_receipt: str,
+    list_url: str,
+    headers: dict[str, str],
+    backend_verify_ssl: bool,
+    timeout: float,
+    deadline: float | None,
+) -> tuple[bool, str | None, int | None]:
+    """Disable an existing backend row and clear its managed SSH binding."""
+    if not existing or existing.get("id") is None:
+        _record_confirmed_packer_template_authorization(endpoint, False)
+        return True, None, None
+    policy_payload: dict[str, object] = {
+        "enabled": False,
+        "allow_packer_template_builds": False,
+    }
+    if binding_receipt:
+        policy_payload.update(_CLOUD_IMAGE_SSH_CLEAR)
+    response = requests.put(  # nosec B113
+        f"{list_url}/{existing['id']}",
+        json=policy_payload,
+        headers=headers,
+        verify=backend_verify_ssl,
+        timeout=_remaining_request_timeout(timeout, deadline),
+        allow_redirects=False,
+    )
+    response.raise_for_status()
+    if binding_receipt:
+        _erase_cloud_image_ssh_binding_fingerprint(endpoint, expected=binding_receipt)
+    _record_confirmed_packer_template_authorization(endpoint, False)
+    return True, None, None
+
+
+def _send_approved_proxmox_payload(
+    endpoint: ProxmoxEndpoint,
+    *,
+    payload: dict[str, object],
+    fingerprint: str,
+    existing: dict[str, object] | None,
+    binding_receipt: str,
+    list_url: str,
+    base_url: str,
+    headers: dict[str, str],
+    backend_verify_ssl: bool,
+    timeout: float,
+    deadline: float | None,
+) -> tuple[bool, str | None, int | None]:
+    """Record binding ownership, send the approved body, and persist success."""
+    desired_binding_fingerprint = _cloud_image_ssh_binding_fingerprint(payload)
+    if desired_binding_fingerprint:
+        try:
+            _record_cloud_image_ssh_binding_fingerprint(endpoint, payload)
+        except CloudImageBindingReceiptError as exc:
+            return False, str(exc), None
+    request_timeout = _remaining_request_timeout(timeout, deadline)
+    if existing and existing.get("id") is not None:
+        response = requests.put(  # nosec B113
+            f"{list_url}/{existing['id']}",
+            json=payload,
+            headers=headers,
+            verify=backend_verify_ssl,
+            timeout=request_timeout,
+            allow_redirects=False,
+        )
+    else:
+        response = requests.post(  # nosec B113
+            list_url,
+            json=payload,
+            headers=headers,
+            verify=backend_verify_ssl,
+            timeout=request_timeout,
+            allow_redirects=False,
+        )
+    response.raise_for_status()
+    if desired_binding_fingerprint == "" and binding_receipt:
+        _erase_cloud_image_ssh_binding_fingerprint(endpoint, expected=binding_receipt)
+    _cache_successful_proxmox_push(
+        endpoint, base_url, payload, fingerprint, existing, response
+    )
+    _record_confirmed_packer_template_authorization(
+        endpoint,
+        bool(payload["enabled"] and payload["allow_packer_template_builds"]),
+    )
+    return True, None, None
+
+
 def sync_proxmox_endpoint_to_backend(
     endpoint: ProxmoxEndpoint,
     *,
@@ -427,6 +661,9 @@ def sync_proxmox_endpoint_to_backend(
 
     list_url = f"{base_url}/proxmox/endpoints"
     headers = auth_headers or {}
+    binding_receipt = _stripped_endpoint_value(
+        endpoint, "cloud_image_ssh_binding_fingerprint"
+    )
     from netbox_proxbox.services.connection_authority import ConnectionAuthorityError
 
     try:
@@ -434,7 +671,16 @@ def sync_proxmox_endpoint_to_backend(
             endpoint, base_url, existing_endpoints, disabled_detail
         )
     except ConnectionAuthorityError:
-        return False, "Connection target approval is missing or stale.", None
+        return _revoke_managed_cloud_image_binding(
+            endpoint,
+            receipt=binding_receipt,
+            list_url=list_url,
+            headers=headers,
+            backend_verify_ssl=backend_verify_ssl,
+            timeout=timeout,
+            deadline=deadline,
+            existing_endpoints=existing_endpoints,
+        )
     if cached_id is not None:
         cached_row, cache_error = _confirmed_cached_proxmox_row(
             endpoint,
@@ -495,25 +741,16 @@ def sync_proxmox_endpoint_to_backend(
         existing = matching_rows[0] if matching_rows else None
 
         if disabled_detail:
-            if not existing or existing.get("id") is None:
-                # Disabling an endpoint may revoke an existing backend grant,
-                # but must never create a new backend row or push credentials.
-                _record_confirmed_packer_template_authorization(endpoint, False)
-                return True, None, None
-            response = requests.put(  # nosec B113
-                f"{list_url}/{existing['id']}",
-                json={
-                    "enabled": False,
-                    "allow_packer_template_builds": False,
-                },
+            return _update_disabled_proxmox_policy(
+                endpoint,
+                existing=existing,
+                binding_receipt=binding_receipt,
+                list_url=list_url,
                 headers=headers,
-                verify=backend_verify_ssl,
-                timeout=_remaining_request_timeout(timeout, deadline),
-                allow_redirects=False,
+                backend_verify_ssl=backend_verify_ssl,
+                timeout=timeout,
+                deadline=deadline,
             )
-            response.raise_for_status()
-            _record_confirmed_packer_template_authorization(endpoint, False)
-            return True, None, None
 
         assert payload is not None and fingerprint is not None
         from netbox_proxbox.services.connection_authority import (
@@ -521,38 +758,31 @@ def sync_proxmox_endpoint_to_backend(
         )
 
         require_approved_connection(endpoint)
-
-        if existing and existing.get("id") is not None:
-            response = requests.put(  # nosec B113
-                f"{list_url}/{existing['id']}",
-                json=payload,
-                headers=headers,
-                verify=backend_verify_ssl,
-                timeout=_remaining_request_timeout(timeout, deadline),
-                allow_redirects=False,
-            )
-        else:
-            response = requests.post(  # nosec B113
-                list_url,
-                json=payload,
-                headers=headers,
-                verify=backend_verify_ssl,
-                timeout=_remaining_request_timeout(timeout, deadline),
-                allow_redirects=False,
-            )
-
-        response.raise_for_status()
-        _cache_successful_proxmox_push(
-            endpoint, base_url, payload, fingerprint, existing, response
-        )
-        _record_confirmed_packer_template_authorization(
+        return _send_approved_proxmox_payload(
             endpoint,
-            bool(payload["enabled"] and payload["allow_packer_template_builds"]),
+            payload=payload,
+            fingerprint=fingerprint,
+            existing=existing,
+            binding_receipt=binding_receipt,
+            list_url=list_url,
+            base_url=base_url,
+            headers=headers,
+            backend_verify_ssl=backend_verify_ssl,
+            timeout=timeout,
+            deadline=deadline,
         )
-        return True, None, None
 
     except ConnectionAuthorityError:
-        return False, "Connection target approval is missing or stale.", None
+        return _revoke_managed_cloud_image_binding(
+            endpoint,
+            receipt=binding_receipt,
+            list_url=list_url,
+            headers=headers,
+            backend_verify_ssl=backend_verify_ssl,
+            timeout=timeout,
+            deadline=deadline,
+            existing_endpoints=existing_endpoints,
+        )
     except requests.exceptions.RequestException as exc:
         detail, http_status = extract_backend_error_detail(exc)
         return (
@@ -706,6 +936,30 @@ def _proxmox_targets_match(endpoint: ProxmoxEndpoint, row: dict[str, object]) ->
     return want is not None and want == _proxmox_row_target(row)
 
 
+def _emitted_cloud_image_binding_matches(
+    payload: dict[str, object], row: dict[str, object]
+) -> bool:
+    """Compare only Cloud Image SSH keys emitted by the desired payload."""
+    keys = (
+        "ssh_target_node",
+        "ssh_host",
+        "ssh_username",
+        "ssh_port",
+        "ssh_identity_file",
+        "ssh_known_host_fingerprint",
+    )
+    for key in keys:
+        if key not in payload:
+            continue
+        actual = row.get(key)
+        expected = payload[key]
+        if key == "ssh_identity_file" and actual is not None:
+            actual = posixpath.normpath(str(actual))
+        if actual != expected:
+            return False
+    return True
+
+
 def _proxmox_row_is_current(endpoint: ProxmoxEndpoint, row: dict[str, object]) -> bool:
     """Return ``True`` when a backend row already reflects what a push would send.
 
@@ -750,6 +1004,8 @@ def _proxmox_row_is_current(endpoint: ProxmoxEndpoint, row: dict[str, object]) -
     for key in ("timeout", "max_retries", "retry_backoff"):
         if row.get(key) != payload.get(key):
             return False
+    if not _emitted_cloud_image_binding_matches(payload, row):
+        return False
     return proxmox_push_credentials_unchanged(endpoint, payload)
 
 
@@ -1472,6 +1728,98 @@ def _record_pushed_proxmox_credential_fingerprint(
         )
         return
     endpoint.pushed_credential_fingerprint = fingerprint
+
+
+def _record_cloud_image_ssh_binding_fingerprint(
+    endpoint: ProxmoxEndpoint, payload: dict[str, object]
+) -> None:
+    """Record ownership before sending a complete managed binding."""
+    fingerprint = _cloud_image_ssh_binding_fingerprint(payload)
+    if not fingerprint:
+        return
+    pk = getattr(endpoint, "pk", None)
+    if pk is None:
+        raise CloudImageBindingReceiptError(
+            "Cloud Image SSH binding was not sent: its endpoint must be saved first."
+        )
+    from django.db import router, transaction
+
+    try:
+        using = router.db_for_write(type(endpoint), instance=endpoint)
+        connection = transaction.get_connection(using)
+        if connection.in_atomic_block or not connection.get_autocommit():
+            raise CloudImageBindingReceiptError(
+                "Cloud Image SSH binding was not sent: its ownership receipt requires "
+                "a committed transaction. Retry after the current transaction commits."
+            )
+        with transaction.atomic(using=using, durable=True):
+            updated = (
+                type(endpoint)
+                .objects.using(using)
+                .filter(pk=pk)
+                .update(cloud_image_ssh_binding_fingerprint=fingerprint)
+            )
+            if type(updated) is not int or updated != 1:
+                raise CloudImageBindingReceiptError(
+                    "Cloud Image SSH binding was not sent: its endpoint ownership "
+                    "receipt could not be recorded. Refresh the endpoint and retry."
+                )
+    except DatabaseError as exc:
+        raise CloudImageBindingReceiptError(
+            "Cloud Image SSH binding was not sent: its ownership receipt could "
+            "not be committed. Retry after database recovery."
+        ) from exc
+    endpoint.cloud_image_ssh_binding_fingerprint = fingerprint
+
+
+def _cloud_image_ssh_binding_fingerprint(
+    payload: dict[str, object],
+) -> str | None:
+    """Return a complete binding digest, an empty clear marker, or no marker."""
+    binding_keys = (
+        "ssh_target_node",
+        "ssh_host",
+        "ssh_username",
+        "ssh_port",
+        "ssh_identity_file",
+        "ssh_known_host_fingerprint",
+    )
+    emitted = {key: payload[key] for key in binding_keys if key in payload}
+    if not emitted:
+        return None
+    if len(emitted) == len(binding_keys) and all(
+        value is not None for value in emitted.values()
+    ):
+        canonical = json.dumps(
+            emitted, sort_keys=True, separators=(",", ":"), ensure_ascii=True
+        )
+        return hashlib.sha256(canonical.encode()).hexdigest()
+    return ""
+
+
+def _erase_cloud_image_ssh_binding_fingerprint(
+    endpoint: ProxmoxEndpoint, *, expected: str
+) -> None:
+    """Erase only the receipt whose clear request just succeeded."""
+    pk = getattr(endpoint, "pk", None)
+    if pk is None:
+        return
+    try:
+        updated = (
+            type(endpoint)
+            .objects.filter(pk=pk, cloud_image_ssh_binding_fingerprint=expected)
+            .update(cloud_image_ssh_binding_fingerprint="")
+        )
+    except DatabaseError as exc:
+        logger.warning(
+            "Could not record Cloud Image SSH binding fingerprint for Proxmox "
+            "endpoint %s: %s",
+            pk,
+            exc,
+        )
+        return
+    if updated:
+        endpoint.cloud_image_ssh_binding_fingerprint = ""
 
 
 def sync_netbox_endpoint_to_backend(

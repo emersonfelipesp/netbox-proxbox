@@ -1,0 +1,17 @@
+{% load helpers %}
+{% load i18n %}
+<div class="card">
+  <h5 class="card-header">{% trans "Proxbox application services" %}</h5>
+  <table class="table table-hover attr-table mb-0">
+    <thead><tr><th>{% trans "Service" %}</th><th>{% trans "Endpoint" %}</th><th>{% trans "Ports" %}</th></tr></thead>
+    <tbody>
+      {% for service in proxbox_application_services %}
+        <tr>
+          <td>{{ service|linkify }}</td>
+          <td>{{ service.endpoint|linkify }}</td>
+          <td>{{ service.get_protocol_display }}/{{ service.ports|join:", " }}</td>
+        </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>

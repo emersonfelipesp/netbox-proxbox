@@ -11,10 +11,10 @@ from django.views.decorators.debug import sensitive_variables
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import extend_schema
 from netbox.api.authentication import IsAuthenticatedOrLoginNotRequired
-from netbox.api.viewsets import NetBoxModelViewSet
+from netbox.api.viewsets import NetBoxModelViewSet, NetBoxReadOnlyModelViewSet
 from rest_framework import status as drf_status
 from rest_framework.decorators import action
-from rest_framework.exceptions import APIException
+from rest_framework.exceptions import APIException, PermissionDenied
 from rest_framework.pagination import LimitOffsetPagination
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.request import Request
@@ -76,6 +76,7 @@ from .serializers import (
     ProxmoxApplyJobSerializer,
     ProxmoxClusterSerializer,
     ProxmoxEndpointSerializer,
+    ProxmoxEndpointServiceSerializer,
     ProxmoxFirewallAliasSerializer,
     ProxmoxFirewallIPSetEntrySerializer,
     ProxmoxFirewallIPSetSerializer,
@@ -88,6 +89,7 @@ from .serializers import (
     ProxmoxNodeSerializer,
     ProxmoxServiceCollectionSerializer,
     ProxmoxServiceSampleSerializer,
+    ServiceSSHCredentialSerializer,
     ProxmoxServiceStatusSerializer,
     ProxmoxSdnBindingSerializer,
     ProxmoxSdnControllerSerializer,
@@ -127,6 +129,30 @@ from netbox_proxbox.api.mcp_bridge import (
 from netbox_proxbox.services.metrics_influx import MetricsProxyError, query_metrics
 from netbox_proxbox.services.operational_target import OperationalTarget
 from netbox_proxbox.api.connection_authority import ConnectionAuthorityViewSetMixin
+
+
+_BulkDestroyResult = tuple[list[dict], int, int | None]
+
+
+class _BulkDestroyIncomplete(Exception):
+    """Carry NetBox's handled bulk failure while forcing provider rollback."""
+
+    def __init__(self, result: _BulkDestroyResult) -> None:
+        self.result = result
+
+
+def _raise_if_bulk_incomplete(
+    result: _BulkDestroyResult | None,
+) -> _BulkDestroyResult | None:
+    """Force rollback when NetBox reports per-object bulk delete errors.
+
+    NetBox 4.7 returns ``(errors, total, error_status)`` and reports failures as
+    data. NetBox 4.5 and 4.6 return ``None`` and raise on failure, so their
+    exceptions already unwind the provider cleanup boundary.
+    """
+    if isinstance(result, tuple) and result[0]:
+        raise _BulkDestroyIncomplete(result)
+    return result
 
 
 class _SingleSecretOwnerViewSetMixin:
@@ -910,10 +936,95 @@ class ProxmoxEndpointViewSet(ConnectionAuthorityViewSetMixin, NetBoxModelViewSet
     """REST API for Proxmox VE API endpoint credentials and targets."""
 
     queryset = models.ProxmoxEndpoint.objects.select_related(
-        "ip_address", "site", "tenant"
+        "ip_address", "site", "tenant", "ssh_service__ssh_credential"
     ).prefetch_related("allowed_tenants")
     serializer_class = ProxmoxEndpointSerializer
     filterset_class = filtersets.ProxmoxEndpointFilterSet
+
+    @action(
+        detail=True,
+        methods=["post"],
+        url_path="sync-cluster",
+        permission_classes=[IsAuthenticated, TokenWriteScopePermission],
+    )
+    def sync_cluster(self, request: Request, pk: int | None = None) -> Response:
+        """Atomically bind native cluster inventory to this exact endpoint."""
+        from virtualization.api.serializers_.clusters import ClusterSerializer
+        from netbox_proxbox.api.cluster_binding import ClusterBindingRequestSerializer
+        from netbox_proxbox.services.cluster_binding import synchronize_cluster
+
+        endpoint = get_object_or_404(
+            models.ProxmoxEndpoint.objects.restrict(request.user, "view"), pk=pk
+        )
+        serializer = ClusterBindingRequestSerializer(
+            data=request.data, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+        core, tracking, created = synchronize_cluster(
+            endpoint.pk, request.user, serializer.validated_data
+        )
+        return Response(
+            {
+                "cluster": ClusterSerializer(core, context={"request": request}).data,
+                "proxmox_cluster": tracking.pk,
+                "created": created,
+                "changed": bool(getattr(core, "_proxbox_binding_changed", False)),
+            },
+            status=201 if created else 200,
+        )
+
+    @staticmethod
+    def _require_destroy_allowed(instance: models.ProxmoxEndpoint) -> None:
+        """Refuse cleanup while packer template-build authority remains."""
+        if (
+            instance.allow_packer_template_builds
+            or instance.packer_template_builds_backend_authorized
+        ):
+            raise _PackerTemplateBuildDeleteConflict(
+                "Revoke netbox-packer template builds and wait for confirmed "
+                "proxbox-api revocation before deleting this endpoint."
+            )
+
+    @sensitive_variables()
+    def destroy(self, request: Request, *args: object, **kwargs: object) -> Response:
+        """Clean service assignments before the endpoint cascade."""
+        from netbox_proxbox.integrations.openbao_service import (
+            cleanup_endpoint_services,
+            endpoint_service_cleanup_boundary,
+        )
+
+        endpoint = self.get_object()
+        self._require_destroy_allowed(endpoint)
+        with endpoint_service_cleanup_boundary(
+            [endpoint], actor=request.user, request=request
+        ):
+            cleanup_endpoint_services(endpoint, actor=request.user)
+            return super().destroy(request, *args, **kwargs)
+
+    @sensitive_variables()
+    def perform_bulk_destroy(
+        self, objects: object, changelog_messages: dict | None = None
+    ) -> _BulkDestroyResult | None:
+        """Roll back service cleanup when NetBox reports a bulk failure."""
+        endpoints = list(objects)
+        for endpoint in endpoints:
+            self._require_destroy_allowed(endpoint)
+        from netbox_proxbox.integrations.openbao_service import (
+            cleanup_endpoint_services,
+            endpoint_service_cleanup_boundary,
+        )
+
+        try:
+            with endpoint_service_cleanup_boundary(
+                endpoints, actor=self.request.user, request=self.request
+            ):
+                for endpoint in endpoints:
+                    cleanup_endpoint_services(endpoint, actor=self.request.user)
+                return _raise_if_bulk_incomplete(
+                    super().perform_bulk_destroy(endpoints, changelog_messages)
+                )
+        except _BulkDestroyIncomplete as exc:
+            return exc.result
 
     def _template_build_endpoint(
         self, request: Request, pk: int | None
@@ -949,14 +1060,7 @@ class ProxmoxEndpointViewSet(ConnectionAuthorityViewSetMixin, NetBoxModelViewSet
 
     def perform_destroy(self, instance: models.ProxmoxEndpoint) -> None:
         """Translate the model's revocation invariant to a stable REST conflict."""
-        if (
-            instance.allow_packer_template_builds
-            or instance.packer_template_builds_backend_authorized
-        ):
-            raise _PackerTemplateBuildDeleteConflict(
-                "Revoke netbox-packer template builds and wait for confirmed "
-                "proxbox-api revocation before deleting this endpoint."
-            )
+        self._require_destroy_allowed(instance)
         super().perform_destroy(instance)
 
     @extend_schema(
@@ -1360,6 +1464,83 @@ class NodeSSHCredentialViewSet(NetBoxModelViewSet):
             owners, [], actor=request.user, request=request
         ):
             return super().bulk_destroy(request, *args, **kwargs)
+
+
+class ProxmoxEndpointServiceViewSet(NetBoxModelViewSet):
+    """CRUD API for endpoint-owned application services."""
+
+    queryset = models.ProxmoxEndpointService.objects.select_related("endpoint")
+    serializer_class = ProxmoxEndpointServiceSerializer
+    filterset_class = filtersets.ProxmoxEndpointServiceFilterSet
+
+    def _require_endpoint_change(self, endpoint_id: int) -> None:
+        allowed = models.ProxmoxEndpoint.objects.restrict(
+            self.request.user, "change"
+        ).filter(pk=endpoint_id)
+        if not allowed.exists():
+            raise PermissionDenied(
+                "You do not have permission to change the owning Proxmox endpoint."
+            )
+
+    def destroy(self, request: Request, *args: object, **kwargs: object) -> Response:
+        """Own assignment cleanup before the REST deletion transaction."""
+        from netbox_proxbox.integrations.openbao_service import (
+            cleanup_service_state,
+            service_cleanup_boundary,
+        )
+
+        instance = self.get_object()
+        self._require_endpoint_change(instance.endpoint_id)
+        with service_cleanup_boundary([instance], actor=request.user, request=request):
+            cleanup_service_state(instance, actor=request.user)
+            return super().destroy(request, *args, **kwargs)
+
+    def perform_bulk_destroy(
+        self, objects: object, changelog_messages: dict | None = None
+    ) -> _BulkDestroyResult | None:
+        """Authorize parents and roll back cleanup on any bulk failure."""
+        services = list(objects)
+        endpoint_ids = {service.endpoint_id for service in services}
+        allowed_ids = set(
+            models.ProxmoxEndpoint.objects.restrict(self.request.user, "change")
+            .filter(pk__in=endpoint_ids)
+            .values_list("pk", flat=True)
+        )
+        if allowed_ids != endpoint_ids:
+            raise PermissionDenied(
+                "You do not have permission to change every owning Proxmox endpoint."
+            )
+        from netbox_proxbox.integrations.openbao_service import (
+            cleanup_service_state,
+            service_cleanup_boundary,
+        )
+
+        try:
+            with service_cleanup_boundary(
+                services, actor=self.request.user, request=self.request
+            ):
+                for service in services:
+                    cleanup_service_state(service, actor=self.request.user)
+                return _raise_if_bulk_incomplete(
+                    super().perform_bulk_destroy(services, changelog_messages)
+                )
+        except _BulkDestroyIncomplete as exc:
+            return exc.result
+
+    def perform_destroy(self, instance) -> None:
+        """Require change access to the owning endpoint before deleting its service."""
+        self._require_endpoint_change(instance.endpoint_id)
+        super().perform_destroy(instance)
+
+
+class ServiceSSHCredentialViewSet(NetBoxReadOnlyModelViewSet):
+    """Read-only API for service SSH credential metadata."""
+
+    queryset = models.ServiceSSHCredential.objects.select_related(
+        "service", "service__endpoint"
+    )
+    serializer_class = ServiceSSHCredentialSerializer
+    filterset_class = filtersets.ServiceSSHCredentialFilterSet
 
 
 class _ProxboxDashboardPermission(BasePermission):

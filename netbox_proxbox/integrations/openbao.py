@@ -168,6 +168,7 @@ def register_openbao_assignable_models() -> None:
         return
     register_assignable_models(
         "netbox_proxbox.proxmoxendpoint",
+        "netbox_proxbox.proxmoxendpointservice",
         "netbox_proxbox.fastapiendpoint",
         "netbox_proxbox.pbsendpoint",
         "netbox_proxbox.pdmendpoint",

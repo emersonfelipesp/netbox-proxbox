@@ -70,7 +70,11 @@ from netbox_proxbox.forms.proxmox import (  # noqa: E402
     ProxmoxEndpointForm,
     ProxmoxEndpointSSHSettingsForm,
 )
-from netbox_proxbox.models import ProxboxPluginSettings, ProxmoxEndpoint  # noqa: E402
+from netbox_proxbox.models import (  # noqa: E402
+    ProxboxPluginSettings,
+    ProxmoxEndpoint,
+    ProxmoxNode,
+)
 from netbox_proxbox.models.ssh_credential import (  # noqa: E402
     AUTH_METHOD_KEY,
     AUTH_METHOD_PASSWORD,
@@ -84,6 +88,8 @@ from netbox_proxbox.views.endpoints import proxmox as view_module  # noqa: E402
 FINGERPRINT = "SHA256:" + "A" * 43
 PASSWORD = "endpoint-password"
 PRIVATE_KEY = "endpoint-private-key"
+CLOUD_IMAGE_IP = ".".join(("192", "0", "2", "22"))
+CLOUD_IMAGE_OTHER_IP = ".".join(("192", "0", "2", "23"))
 
 
 def _main_form_data(**overrides: object) -> dict[str, object]:
@@ -143,6 +149,71 @@ class EndpointSSHFormBranchTest(TestCase):
         settings_obj.save(
             update_fields=("encryption_key", "credential_storage_backend")
         )
+
+    def _cloud_image_form(self, endpoint, target_node, **overrides):
+        data = _main_form_data(
+            name=endpoint.name,
+            domain=CLOUD_IMAGE_IP,
+            password="",
+            allow_writes="on",
+            allow_packer_template_builds="on",
+            ssh_credential_source=SSH_CRED_SOURCE_REUSE,
+            ssh_known_host_fingerprint=FINGERPRINT,
+            cloud_image_ssh_target_node=target_node,
+            cloud_image_ssh_identity_file="/srv/proxbox/ssh/image-builder",
+        )
+        data.update(overrides)
+        return ProxmoxEndpointForm(
+            instance=endpoint,
+            data=data,
+        )
+
+    def test_cloud_image_target_node_must_match_the_endpoint_ssh_host(self) -> None:
+        endpoint = ProxmoxEndpoint.objects.create(
+            name="cloud-image-form",
+            domain=CLOUD_IMAGE_IP,
+            username="root@pam",
+        )
+        endpoint.password = PASSWORD
+        endpoint.save()
+        ProxmoxNode.objects.create(
+            endpoint=endpoint, name="node-a", ip_address=CLOUD_IMAGE_IP
+        )
+        ProxmoxNode.objects.create(
+            endpoint=endpoint, name="node-b", ip_address=CLOUD_IMAGE_OTHER_IP
+        )
+
+        mismatch = self._cloud_image_form(endpoint, "node-b")
+        matching = self._cloud_image_form(endpoint, "node-a")
+
+        self.assertFalse(mismatch.is_valid())
+        self.assertIn("cloud_image_ssh_target_node", mismatch.errors)
+        self.assertTrue(matching.is_valid(), matching.errors.as_data())
+
+    def test_cloud_image_stale_target_does_not_block_closing_a_gate(self) -> None:
+        endpoint = ProxmoxEndpoint.objects.create(
+            name="cloud-image-disable-form",
+            domain=CLOUD_IMAGE_IP,
+            username="root@pam",
+        )
+        endpoint.password = PASSWORD
+        endpoint.save()
+
+        closed_states = (
+            {"enabled": ""},
+            {"access_methods": ProxmoxAccessMethodChoices.API},
+            {"allow_writes": ""},
+            {"allow_packer_template_builds": ""},
+        )
+        for overrides in closed_states:
+            with self.subTest(overrides=overrides):
+                form = self._cloud_image_form(endpoint, "missing-node", **overrides)
+                form.is_valid()
+                self.assertNotIn("cloud_image_ssh_target_node", form.errors)
+
+        open_form = self._cloud_image_form(endpoint, "missing-node")
+        self.assertFalse(open_form.is_valid())
+        self.assertIn("cloud_image_ssh_target_node", open_form.errors)
 
     def test_dedicated_clean_reports_each_missing_requirement(self) -> None:
         endpoint = SimpleNamespace(

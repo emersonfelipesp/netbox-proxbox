@@ -128,20 +128,34 @@ The complete semantic bridge contract is
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.99` (the whole 4.7 series is admitted by the numeric gate; CI verifies GA `4.7.0`). The current
-plugin version is `0.0.29.post6`.
+plugin version is `0.0.31rc1`.
 
-Current source pairing: netbox-proxbox 0.0.29.post6 <-> proxbox-api 0.0.27.post4 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source compatibility: netbox-proxbox 0.0.31rc1 requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The documented released runtime pairing for this release line is
 netbox-proxbox 0.0.29.post6 <-> proxbox-api 0.0.27.post4 <-> proxmox-sdk 0.0.15
 <-> netbox-sdk 0.0.13. Do not rewrite historical release notes when the source
 pairing advances.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29.post6 <-> proxbox-api 0.0.27.post4 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current release-candidate runtime requirement: deploy proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) before netbox-proxbox 0.0.31rc1. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
 ## Current implementation surfaces
 
-The current schema tip is migration `0106_device_sync_scope_and_netbox_token_approval`.
+The current schema tip is migration `0108_v0_0_31_schema_validation`, which
+validates the physical objects of the immutable `0107_v0_0_30_release`. The
+prior 0107 consolidates the
+three unpublished development migrations for native cluster binding,
+endpoint-owned SSH services, and Cloud Image SSH binding. Installations that
+applied the former development `0107_endpoint_native_cluster_binding` retain
+its ignored orphan migration-recorder row; the new migration safely adopts the
+existing schema and data.
+Endpoint SSH application-service chains use the plugin-owned
+`ProxmoxEndpointService`, parented directly by `ProxmoxEndpoint`, with a
+one-to-one `ServiceSSHCredential`. They do not use core `ipam.Service`.
+Service material reads require credential reveal scope and the exact enabled
+`console` assignment. Provider mutations use one settings-first transaction;
+supported deletion removes authorized assignments without deleting shared
+credentials, and raw deletion refuses provider-owned state.
 Sensitive endpoint exports and runtime-key disclosure require an active,
 authenticated superuser or the default-off per-user sensitive-data flag.
 Only active superusers may administer grants. Keep object and provider checks
@@ -160,6 +174,36 @@ Remote NetBox connection approval binds the effective token version and its
 non-secret v1 token reference or effective v2 key selected for transmission.
 Token changes require explicit
 reapproval, and token secrets never enter the fingerprint.
+Cloud Image bakes store the Proxmox target node and proxbox-api-host identity
+file path on `ProxmoxEndpoint`. Backend synchronization sends the complete
+six-field SSH binding only for API + SSH endpoints whose effective enabled,
+broad-write, and Packer gates are open, with every value populated and the selected
+inventory node verified at the endpoint SSH host. Verification compares the
+selected source's effective SSH host with node IP addresses. Service credentials
+use the endpoint IP even with a configured domain; other sources remain
+domain-first. Binding and approval use the effective SSH username and normalized actual SSH host. Configured bake bindings require explicit reapproval after this authority correction; endpoints without bake fields retain their approval formula.
+Every row at that address must have the same
+case-insensitive target name; conflicting names fail closed. Identity-file paths
+use POSIX normalization for payload and currency comparison. Value pushes store a
+SHA-256 management receipt in a durable transaction before transmission.
+Receipt failures, missing owners, and outer uncommitted transactions block
+value pushes. API-only explicit service-secret clears are rejected before
+save; use the separate credential settings. Commit-then-timeout remains
+managed. Gate closure or clearing both bake
+fields clears a managed binding; incomplete or failed verification also revokes
+Packer. Stale approval still permits credential-free managed-binding revocation.
+Successful clears erase only the prepared receipt, preserving a newer concurrent
+receipt. An empty receipt preserves an external binding. Form inventory validation
+is skipped when the submitted state closes a gate, allowing revocation while
+preserving draft values. Once a target node or identity
+file is configured, SSH binding authority changes require sensitive connection
+re-approval; endpoints with neither value keep their pre-existing approval
+fingerprint, so an upgrade does not invalidate their approvals. Backend currency compares emitted binding
+keys so a failed rotation remains retryable, while intentional omission ignores an
+existing backend binding. The consolidated release migration supplies database
+defaults during forward application. Its reverse removes the Cloud Image fields
+and SSH-service schema while retaining the native-cluster ownership column and
+values. Re-saving the endpoint triggers rollout through the post-save push.
 The plugin provides endpoint and synchronized inventory models, typed sync
 state, guest interfaces, SDN/firewall/Firecracker inventory, service
 monitoring, metrics, browser consoles, intent/apply audit records, deletion
@@ -393,3 +437,34 @@ unless the explicit `auto_configure` dictionary value overrides it. Do not add
 collector, service identity, or automatic setup environment defaults. SDK-disabled
 regressions construct enabled caller providers first and require positive caller
 exports after the actual application lifespan while SDK disablement stays set.
+
+## Native cluster ownership
+
+`ProxmoxEndpoint.netbox_cluster` is the read-only, one-to-one authority for
+native cluster identity. Use the local `sync-cluster` action to reconcile the
+native cluster, tracking row, and typed sidecar atomically. Never establish
+ownership from a name alone or silently reassign an established relation.
+Ordinary tracking CRUD cannot establish a claim. Sidecar ownership is server-owned;
+metadata updates may repeat the same relation. Use endpoint → native cluster →
+tracking → sidecar lock order, and refresh preflight endpoint identity under its
+lock. The action derives tracking/sidecar authority from exact endpoint/core
+grants. Its additive `changed` flag excludes timestamp-only updates.
+See [the operator contract](docs/features/proxmox-cluster-binding.md).
+
+
+## Post-candidate validation boundary
+
+Release 0.0.31rc1 adds only `0108_v0_0_31_schema_validation` after the applied,
+immutable `0107_v0_0_30_release`. Keep every numbered migration through 0107
+byte- and mode-identical. The unchanged private `_release_0107_schema.py`
+checks objects introduced by 0107; its marker identifies that invariant while
+the actual migration executing it is 0108. It must remain 0108's last operation.
+The source-bound full function audit and native qualification belong to this new
+migration boundary, not a relabeling of the earlier pre-candidate experiment.
+
+The 0107 and 0108 transactions commit separately. A failure in 0108 preserves
+an already committed 0107 and leaves 0108 unrecorded. Do not claim joint rollback,
+rewrite deployed history, or silently repair an unexpected schema. Reverse of
+0108 is a no-op for schema/data; reapply validates again. Preserve actual recorder
+and data evidence for explicit reviewed recovery. The original 0107 reverse
+controls remain historical and do not prove that 0108 removes those objects.

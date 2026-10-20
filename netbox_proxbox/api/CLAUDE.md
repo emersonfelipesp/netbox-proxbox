@@ -82,6 +82,12 @@ write-only. Cloud-init exposes the same secret-free readiness and VM `login`
 lookup shape. Their create, update, delete, and bulk mutations must begin the
 provider transaction before NetBox enters its framework-owned atomic block and
 must carry the authenticated request actor through that boundary.
+Endpoint and application-service bulk deletion must preserve NetBox's native
+request validation and background dispatch. Provider assignment cleanup is part
+of an outer transaction that is forced to roll back whenever
+`perform_bulk_destroy()` reports any object error (NetBox 4.7 returns an
+error tuple; 4.5 and 4.6 return `None` and raise instead). On NetBox 4.7,
+malformed, duplicate, and missing IDs never enter cleanup.
 
 Proxmox endpoint serializers resolve OpenBao SSH readiness from one response-
 local metadata query restricted by the authenticated request actor's `reveal`

@@ -258,6 +258,47 @@ class ProxboxClusterSyncState(ProxboxSyncStateBase):
                 }
             )
 
+    def save(self, *args, **kwargs) -> None:
+        """Serialize metadata with core ownership and preserve server-owned links."""
+        from django.db import transaction
+        from virtualization.models import Cluster
+        from netbox_proxbox.services.cluster_binding_authority import (
+            cluster_binding_write_allowed,
+        )
+
+        with transaction.atomic():
+            Cluster.objects.select_for_update().get(pk=self.cluster_id)
+            current = (
+                type(self).objects.select_for_update().filter(pk=self.pk).first()
+                if self.pk
+                else None
+            )
+            if not cluster_binding_write_allowed(self.cluster_id):
+                self._preserve_binding(current, kwargs.get("update_fields"))
+            super().save(*args, **kwargs)
+
+    def _preserve_binding(self, current, update_fields) -> None:
+        if current is not None and current.cluster_id != self.cluster_id:
+            raise ValidationError(
+                {"cluster": "The sync-state parent cannot be changed."}
+            )
+        if update_fields is not None:
+            if {"proxmox_cluster", "proxmox_cluster_id"}.intersection(update_fields):
+                if self.proxmox_cluster_id != getattr(
+                    current, "proxmox_cluster_id", None
+                ):
+                    raise ValidationError(
+                        {
+                            "proxmox_cluster": "Cluster ownership is synchronization-owned."
+                        }
+                    )
+            return
+        if current is None and self.proxmox_cluster_id is not None:
+            raise ValidationError(
+                {"proxmox_cluster": "Cluster ownership is synchronization-owned."}
+            )
+        self.proxmox_cluster_id = getattr(current, "proxmox_cluster_id", None)
+
 
 class ProxboxIPAddressSyncState(ProxboxSyncStateBase):
     """Typed Proxmox custom-field payload for a NetBox IP address."""

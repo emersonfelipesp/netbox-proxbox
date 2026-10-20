@@ -46,6 +46,14 @@ SENSITIVE_OBJECTCHANGE_FIELDS: dict[str, frozenset[str]] = {
             "openbao_keypair_credential_uuid",
         }
     ),
+    "servicesshcredential": frozenset(
+        {
+            "password_enc",
+            "private_key_enc",
+            "openbao_password_credential_uuid",
+            "openbao_keypair_credential_uuid",
+        }
+    ),
     "firecrackerhost": frozenset(
         {"agent_token", "agent_token_enc", "openbao_agent_token_credential_uuid"}
     ),

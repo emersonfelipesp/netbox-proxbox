@@ -220,6 +220,16 @@ router.register(
     basename="nodesshcredential",
 )
 router.register(
+    "endpoint-services",
+    views.ProxmoxEndpointServiceViewSet,
+    basename="proxmoxendpointservice",
+)
+router.register(
+    "service-ssh-credentials",
+    views.ServiceSSHCredentialViewSet,
+    basename="servicesshcredential",
+)
+router.register(
     "firewall/security-groups",
     views.ProxmoxFirewallSecurityGroupViewSet,
     basename="proxmoxfirewallsecuritygroup",

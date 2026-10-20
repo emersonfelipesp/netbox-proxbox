@@ -4,7 +4,7 @@ This section tracks the release line represented by this repository and keeps ol
 
 ## Current Release Line
 
-The plugin source in this repository is currently `0.0.29.post6` on the
+The plugin source in this repository is currently `0.0.31rc1` on the
 development line. The sibling plugins (`netbox-pbs`,
 `netbox-ceph`, and `netbox-pdm`) live in standalone repositories under
 [@emersonfelipesp](https://github.com/emersonfelipesp) and declare
@@ -82,6 +82,8 @@ part of the same plugin family.
 
 | Version | Summary |
 |---------|---------|
+| `0.0.31rc1` | New 0108 fail-closed physical schema validation after the immutable 0.0.30 candidate; preserves original 0107 bytes and data. Requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings). See [Version 0.0.31](version-0.0.31.md). |
+| `0.0.30rc1` | First candidate for 0.0.30: protected native cluster binding, endpoint-owned SSH application services, and verified Cloud Image SSH bindings with durable receipts. Migration `0107_v0_0_30_release`. Requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), deployed before the plugin. See [Version 0.0.30](version-0.0.30.md). |
 | `0.0.29.post6` | Maintenance release: deterministic guest interface address and synchronization job ordering prevents paginated `QuerySetNotOrdered` failures, and plain-form checkboxes render with NetBox-compatible Bootstrap markup. No new migration. Pairs with `proxbox-api 0.0.27.post4`. See [Version 0.0.29.post6](version-0.0.29.post6.md). |
 | `0.0.29.post5` | Maintenance release: endpoint-exact HA and operational actions, grantable endpoint action permissions, capture-only operation, run-correlated WebSocket completion, atomic device ownership, token-bound remote NetBox approval, and hardened release validation. Migration `0106_device_sync_scope_and_netbox_token_approval`. Pairs with `proxbox-api 0.0.27.post3`. See [Version 0.0.29.post5](version-0.0.29.post5.md). |
 | `0.0.29.post4` | Maintenance release: a Proxmox endpoint that uses API access only can be saved without SSH credentials, and the endpoint form shows write-enabled and SSH settings only when they apply. No new migration. See [Version 0.0.29.post4](version-0.0.29.post4.md). |
@@ -154,6 +156,6 @@ part of the same plugin family.
 - Older pages are intentionally brief because the repository does not preserve fuller release-note prose for those versions.
 
 
-> **Current source:** netbox-proxbox `0.0.29.post6` supports NetBox `4.5.8`-`4.7.99`, including official v4.7.0 GA and later 4.7 patch releases. Current source pairing: netbox-proxbox 0.0.29.post6 <-> proxbox-api 0.0.27.post4 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+> **Current source:** netbox-proxbox `0.0.30rc1` supports NetBox `4.5.8`-`4.7.99`, including official v4.7.0 GA and later 4.7 patch releases. It requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
-Current backend-runtime pairing: netbox-proxbox 0.0.29.post6 <-> proxbox-api 0.0.27.post4 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. This netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current release-candidate runtime requirement: deploy proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) before netbox-proxbox 0.0.30rc1. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.

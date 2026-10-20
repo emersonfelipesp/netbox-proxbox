@@ -106,6 +106,31 @@ authoritative and never downgrade when OpenBao becomes unavailable. That
 path secures *how NetBox talks to Proxmox*, not *how operators SSH into a synced
 guest*.
 
+Endpoint browser-terminal SSH can be modeled as an endpoint-owned application
+service. `ProxmoxEndpointService` is a netbox-proxbox model whose parent is the
+`ProxmoxEndpoint`; it is not a core `ipam.Service`. Its one-to-one
+`ServiceSSHCredential` stores either Fernet ciphertext or opaque OpenBao UUID
+references. With OpenBao selected, newly entered material is created through
+the provider write path and assigned to the application service with purpose
+`console` and `is_primary=True`. Selecting an existing `ssh-password` or
+`ssh-keypair` credential creates or reuses that same primary assignment and
+demotes another primary for the service and purpose. Provider-backed reads fail
+closed and never use local ciphertext as a fallback. A reveal also requires the
+request actor to hold object-level `reveal` access to the exact credential and
+the exact enabled `console` assignment to still target the application service.
+
+Service creation, reference changes, assignment changes, and material writes
+commit in one provider-owned transaction. A provider failure or stale reference
+rolls back the complete service chain. Supported service, credential, and parent
+endpoint deletions authorize and remove only their assignments; shared OpenBao
+credentials remain intact. Raw deletion is refused while provider-owned state
+remains.
+
+netbox-proxbox registers `netbox_proxbox.proxmoxendpointservice` as an OpenBao
+assignment target only when netbox-openbao is enabled. Imports remain lazy, so
+installing the Python package without adding it to NetBox `PLUGINS` does not
+query provider models or migrations.
+
 Migration `0105_reset_implicit_openbao_storage_default` resets a global stored
 `openbao` value created by the historical default to Automatic only when none
 of the supported credential owners contains an OpenBao UUID reference. It does
@@ -242,6 +267,16 @@ endpoint with assignment-only state: such state at `pre_delete` proves that a
 queryset, bulk, cascade, or other unsupported delete bypassed supported cleanup.
 The refusal leaves both the endpoint and assignments intact.
 
+REST bulk deletion retains NetBox's native request validation and background-job
+handling. Provider cleanup starts only for the validated queryset. If NetBox
+reports any protected or otherwise unsuccessful object deletion, the outer
+provider transaction rolls back every assignment cleanup and the entire batch
+remains intact. On NetBox 4.7, missing, malformed, and duplicate IDs are
+rejected before provider cleanup begins. NetBox 4.5 and 4.6 silently skip
+missing IDs and collapse duplicates, so cleanup covers only the objects that
+are actually selected for deletion. On every version, assignments are removed
+only when their owning endpoint or application service is successfully deleted.
+
 The node credential metadata response exposes
 `openbao_assignment_ready`, `openbao_assignment_detail`, and the secret-free
 `openbao_assignment_lookup` selectors (`assigned_object_type`,
@@ -284,7 +319,8 @@ require netbox-openbao 0.1.0 or newer and material transaction contract version
 
 | Credential | Stored by | Bound to |
 |---|---|---|
-| Proxmox API token / endpoint SSH | proxbox + openbao integration | `ProxmoxEndpoint` |
+| Proxmox API token / dedicated endpoint SSH | proxbox + openbao integration | `ProxmoxEndpoint` |
+| Endpoint application-service SSH | proxbox + openbao integration | `ProxmoxEndpointService` primary `console` assignment + `ServiceSSHCredential` UUID reference |
 | Proxmox node SSH login | proxbox + openbao integration | `NodeSSHCredential` + linked `dcim.Device` primary `login` assignment |
 | FastAPI/PBS/PDM API token | proxbox + openbao integration | owning endpoint primary `api` assignment |
 | Firecracker agent token | proxbox + openbao integration | `FirecrackerHost` primary `agent` assignment |

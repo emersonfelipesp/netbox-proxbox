@@ -150,6 +150,7 @@ nav:
     - Settings: 'api/settings.md'
     - Cluster HA: 'api/ha.md'
   - Features:
+    - Endpoint Cluster Ownership: 'features/proxmox-cluster-binding.md'
     - Screenshots: 'features/screenshots.md'
     - E2E Docker Testing: 'features/e2e-docker-testing.md'
     - Synchronized Data: 'features/synchronized-data.md'
@@ -178,6 +179,8 @@ nav:
     - Containers: 'models/containers.md'
     - Other Models: 'models/others.md'
   - Release Notes:
+    - Version 0.0.31: 'release-notes/version-0.0.31.md'
+    - Version 0.0.30: 'release-notes/version-0.0.30.md'
     - Version 0.0.29.post6: 'release-notes/version-0.0.29.post6.md'
     - Version 0.0.29.post5: 'release-notes/version-0.0.29.post5.md'
     - Version 0.0.29.post4: 'release-notes/version-0.0.29.post4.md'

@@ -48,6 +48,10 @@ from netbox_proxbox.api.serializers.proxmox_metrics import (
     ProxmoxMetricsInfluxDBSerializer,
     ProxmoxMetricsInfluxDBQuerySerializer,
 )
+from netbox_proxbox.api.serializers.proxmox_endpoint_service import (
+    ProxmoxEndpointServiceSerializer,
+    ServiceSSHCredentialSerializer,
+)
 from netbox_proxbox.api.serializers.endpoints import (
     FastAPIEndpointSerializer,
     NestedTokenSerializer,
@@ -184,10 +188,12 @@ __all__ = (
     "ProxmoxClusterSerializer",
     "ProxmoxDatacenterCpuModelSerializer",
     "ProxmoxEndpointSerializer",
+    "ProxmoxEndpointServiceSerializer",
     "ProxmoxMetricsInfluxDBSerializer",
     "ProxmoxNodeSerializer",
     "ProxmoxServiceCollectionSerializer",
     "ProxmoxServiceSampleSerializer",
+    "ServiceSSHCredentialSerializer",
     "ProxmoxServiceStatusSerializer",
     "NestedProxmoxVMTemplateSerializer",
     "ProxmoxSdnFabricSerializer",

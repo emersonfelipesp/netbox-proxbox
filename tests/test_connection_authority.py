@@ -23,6 +23,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 _DOC_CIDR_200 = ".".join(("192", "0", "2", "200")) + "/32"
 _DOC_CIDR_4 = ".".join(("192", "0", "2", "4")) + "/32"
+_DOC_SSH_HOST = ".".join(("192", "0", "2", "178"))
 
 
 @pytest.fixture
@@ -50,7 +51,9 @@ def authority(monkeypatch, policy) -> tuple[object, object]:  # noqa: F811 - sha
 def _endpoint(authority, kind="proxmoxendpoint") -> tuple[object, object, object]:
     module, _ = authority
     model = type(
-        "ProxmoxEndpoint" if kind == "proxmoxendpoint" else "NetBoxEndpoint", (), {}
+        "ProxmoxEndpoint" if kind == "proxmoxendpoint" else "NetBoxEndpoint",
+        (),
+        {"effective_ssh_username": property(lambda self: self.ssh_username)},
     )
     endpoint = model()
     endpoint._meta = SimpleNamespace(model_name=kind)
@@ -68,6 +71,12 @@ def _endpoint(authority, kind="proxmoxendpoint") -> tuple[object, object, object
     endpoint.token_id = None
     endpoint.token_key = "backend-token-key"
     endpoint.token_secret = "synthetic-secret"
+    endpoint.cloud_image_ssh_target_node = "pve-node-1"
+    endpoint.cloud_image_ssh_identity_file = "/srv/proxbox/ssh/image-builder"
+    endpoint.ssh_username = "image-builder"
+    endpoint.ssh_host = "pve.example.test"
+    endpoint.ssh_port = 22
+    endpoint.ssh_known_host_fingerprint = "SHA256:host-key"
     endpoint.approved_connection_target_fingerprint = (
         module.connection_target_fingerprint(endpoint)
     )
@@ -85,13 +94,87 @@ def _endpoint(authority, kind="proxmoxendpoint") -> tuple[object, object, object
 
 
 def test_proxmox_fingerprint_formula_is_byte_identical(authority) -> None:
+    """An endpoint without a Cloud Image bake binding keeps the original hash.
+
+    The constant predates the Cloud Image SSH authority fields. Upgrading must
+    not change it, otherwise every existing approval would go stale.
+    """
     module, _ = authority
     endpoint, _, _ = _endpoint(authority)
     endpoint.token_version = ""
+    endpoint.cloud_image_ssh_target_node = ""
+    endpoint.cloud_image_ssh_identity_file = ""
     assert module.connection_target_fingerprint(endpoint) == (
         "d1698f8ccd0ef0ebd26e18fa503c40878861880777421f76ab4059a28dd2a770"
     )
     assert "token_identity" not in module.connection_target_data(endpoint)
+    assert "cloud_image_ssh_target_node" not in module.connection_target_data(endpoint)
+
+
+def test_unconfigured_cloud_image_binding_leaves_ssh_fields_unbound(
+    authority,
+) -> None:
+    """SSH fields alone do not alter the approval target of an unbaked endpoint."""
+    module, _ = authority
+    endpoint, _, _ = _endpoint(authority)
+    endpoint.cloud_image_ssh_target_node = ""
+    endpoint.cloud_image_ssh_identity_file = ""
+    approved = module.connection_target_fingerprint(endpoint)
+    changed = copy(endpoint)
+    changed.ssh_username = "other-builder"
+    changed.ssh_host = _DOC_SSH_HOST
+    changed.ssh_known_host_fingerprint = "SHA256:rotated-host-key"
+    assert module.connection_target_fingerprint(changed) == approved
+
+
+def test_proxmox_cloud_image_authority_fields_are_fixed_and_fingerprinted(
+    authority,
+) -> None:
+    module, _ = authority
+    endpoint, _, _ = _endpoint(authority)
+    expected_fields = {
+        "kind",
+        "domain",
+        "ip_address",
+        "port",
+        "verify_ssl",
+        "username",
+        "token_name",
+        "token_version",
+        "cloud_image_ssh_target_node",
+        "cloud_image_ssh_identity_file",
+        "ssh_username",
+        "ssh_host",
+        "ssh_port",
+        "ssh_known_host_fingerprint",
+    }
+    assert set(module.connection_target_data(endpoint)) == expected_fields
+    approved = module.connection_target_fingerprint(endpoint)
+    mutations = {
+        "cloud_image_ssh_target_node": "pve-node-2",
+        "cloud_image_ssh_identity_file": "/srv/proxbox/ssh/rotated",
+        "ssh_username": "other-builder",
+        "ssh_host": _DOC_SSH_HOST,
+        "ssh_port": 2222,
+        "ssh_known_host_fingerprint": "SHA256:rotated-host-key",
+    }
+    for field, value in mutations.items():
+        changed = copy(endpoint)
+        setattr(changed, field, value)
+        assert module.connection_target_fingerprint(changed) != approved, field
+
+
+def test_cloud_image_authority_normalizes_actual_host(authority) -> None:
+    module, _ = authority
+    endpoint, _, _ = _endpoint(authority)
+    endpoint.ssh_host = "PVE.EXAMPLE.TEST."
+    approved = module.connection_target_fingerprint(endpoint)
+    endpoint.ssh_host = "pve.example.test"
+    assert module.connection_target_fingerprint(endpoint) == approved
+    endpoint.ssh_host = f"{_DOC_SSH_HOST}/32"
+    approved = module.connection_target_fingerprint(endpoint)
+    endpoint.ssh_host = _DOC_SSH_HOST
+    assert module.connection_target_fingerprint(endpoint) == approved
 
 
 def test_netbox_v1_token_reference_is_bound_to_approval(authority) -> None:
@@ -606,6 +689,50 @@ def test_full_save_cannot_restore_a_revoked_approval(authority) -> None:
     module.save_bound_endpoint(endpoint, persist)
     persist.assert_called_once_with()
     assert endpoint.approved_connection_target_fingerprint == ""
+
+
+def test_full_save_preserves_fresh_cluster_claim_and_native_deletion(authority) -> None:
+    module, _ = authority
+    endpoint, persisted, _ = _endpoint(authority)
+    endpoint.netbox_cluster_id = None
+    persisted.netbox_cluster_id = 41
+    module.save_bound_endpoint(endpoint, Mock())
+    assert endpoint.netbox_cluster_id == 41
+    persisted.netbox_cluster_id = None
+    module.save_bound_endpoint(endpoint, Mock())
+    assert endpoint.netbox_cluster_id is None
+
+
+@pytest.mark.parametrize("field", ["netbox_cluster", "netbox_cluster_id"])
+def test_ordinary_save_rejects_explicit_cluster_binding_write(authority, field) -> None:
+    module, _ = authority
+    endpoint, _, _ = _endpoint(authority)
+    persist = Mock()
+    with pytest.raises(sys.modules["django.core.exceptions"].ValidationError):
+        module.save_bound_endpoint(endpoint, persist, update_fields=[field])
+    persist.assert_not_called()
+
+
+def test_metadata_only_save_accepts_stale_loaded_cluster_binding(authority) -> None:
+    module, _ = authority
+    endpoint, persisted, _ = _endpoint(authority)
+    endpoint.netbox_cluster_id = None
+    persisted.netbox_cluster_id = 41
+    persist = Mock()
+    module.save_bound_endpoint(endpoint, persist, update_fields=["name"])
+    persist.assert_called_once_with(update_fields=["name"])
+    assert persisted.netbox_cluster_id == 41
+
+
+def test_new_endpoint_cannot_claim_cluster_through_ordinary_save(authority) -> None:
+    module, _ = authority
+    endpoint, _, _ = _endpoint(authority)
+    endpoint.pk = None
+    endpoint.netbox_cluster_id = 41
+    persist = Mock()
+    with pytest.raises(sys.modules["django.core.exceptions"].ValidationError):
+        module.save_bound_endpoint(endpoint, persist)
+    persist.assert_not_called()
 
 
 def test_full_save_cannot_forge_approval_for_a_draft_target(authority) -> None:

@@ -704,6 +704,20 @@ class ProxboxClusterSyncStateSerializer(
         allow_null=True,
     )
 
+    def validate(self, attrs: dict) -> dict:
+        """Accept repeated ownership evidence without granting reassignment authority."""
+        attrs = super().validate(attrs)
+        if "proxmox_cluster" in attrs:
+            proposed = getattr(attrs["proxmox_cluster"], "pk", None)
+            current = getattr(self.instance, "proxmox_cluster_id", None)
+            if proposed != current:
+                raise serializers.ValidationError(
+                    {
+                        "proxmox_cluster": "Cluster ownership requires the protected synchronization action."
+                    }
+                )
+        return attrs
+
     class Meta:
         model = ProxboxClusterSyncState
         fields = (

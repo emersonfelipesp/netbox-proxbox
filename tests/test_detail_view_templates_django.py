@@ -64,13 +64,17 @@ except Exception as exc:  # pragma: no cover - external test harness availabilit
     )
 
 from django.apps import apps  # noqa: E402
+from django.contrib.contenttypes.models import ContentType  # noqa: E402
 from django.core.exceptions import ImproperlyConfigured  # noqa: E402
+from django.http import HttpResponse  # noqa: E402
 from django.template.loader import get_template  # noqa: E402
 from django.test import Client, SimpleTestCase, TestCase  # noqa: E402
 from django.urls import reverse  # noqa: E402
 from django.utils.module_loading import import_string  # noqa: E402
 from netbox.registry import registry  # noqa: E402
 from netbox.views.generic import ObjectView  # noqa: E402
+from users.models import ObjectPermission  # noqa: E402
+from virtualization.models import Cluster, ClusterType  # noqa: E402
 
 from netbox_proxbox.choices import (  # noqa: E402
     FirewallRuleTypeChoices,
@@ -105,6 +109,7 @@ from netbox_proxbox.models.ssh_credential import (  # noqa: E402
     AUTH_METHOD_PASSWORD,
 )
 from netbox_proxbox.models.proxmox_metrics import MASKED_SECRET  # noqa: E402
+from netbox_proxbox.services.cluster_binding import synchronize_cluster  # noqa: E402
 from tests.django_support import make_user, raw_update_fields  # noqa: E402
 
 
@@ -130,6 +135,7 @@ _REQUIRED_OBJECT_VIEW_REGISTRY = {
     "netbox_proxbox.proxmoxendpoint:ssh_terminal": "netbox_proxbox.views.endpoints.proxmox.ProxmoxEndpointSSHTerminalView",
     "netbox_proxbox.proxmoxendpoint:sync_jobs": "netbox_proxbox.views.endpoints.proxmox.ProxmoxEndpointSyncJobsTabView",
     "netbox_proxbox.proxmoxendpoint:templates": "netbox_proxbox.views.proxmox_templates_tab.ProxmoxEndpointTemplatesTabView",
+    "netbox_proxbox.proxmoxendpointservice:proxmoxendpointservice": "netbox_proxbox.views.proxmox_endpoint_service.ProxmoxEndpointServiceView",
     "netbox_proxbox.proxmoxfirewallalias:proxmoxfirewallalias": "netbox_proxbox.views.firewall.ProxmoxFirewallAliasView",
     "netbox_proxbox.proxmoxfirewallipset:proxmoxfirewallipset": "netbox_proxbox.views.firewall.ProxmoxFirewallIPSetView",
     "netbox_proxbox.proxmoxfirewallipsetentry:proxmoxfirewallipsetentry": "netbox_proxbox.views.firewall.ProxmoxFirewallIPSetEntryView",
@@ -139,6 +145,7 @@ _REQUIRED_OBJECT_VIEW_REGISTRY = {
     "netbox_proxbox.proxmoxmetricsinfluxdb:data": "netbox_proxbox.views.proxmox_metrics.ProxmoxMetricsInfluxDBDataView",
     "netbox_proxbox.proxmoxmetricsinfluxdb:proxmoxmetricsinfluxdb": "netbox_proxbox.views.proxmox_metrics.ProxmoxMetricsInfluxDBView",
     "netbox_proxbox.proxmoxnode:proxmoxnode": "netbox_proxbox.views.proxmox_cluster_node.ProxmoxNodeView",
+    "netbox_proxbox.servicesshcredential:servicesshcredential": "netbox_proxbox.views.proxmox_endpoint_service.ServiceSSHCredentialView",
     "netbox_proxbox.proxmoxsdnbinding:proxmoxsdnbinding": "netbox_proxbox.views.sdn.ProxmoxSdnBindingView",
     "netbox_proxbox.proxmoxsdncontroller:proxmoxsdncontroller": "netbox_proxbox.views.sdn.ProxmoxSdnControllerView",
     "netbox_proxbox.proxmoxsdnfabric:proxmoxsdnfabric": "netbox_proxbox.views.sdn.ProxmoxSdnFabricView",
@@ -593,3 +600,97 @@ class MissingDetailTemplateRenderTest(TestCase):
         rendered_object = response.context["object"]
         self.assertEqual(rendered_object.influx_url_display, MASKED_SECRET)
         self.assertEqual(rendered_object.has_query_token, True)
+
+
+class ProxmoxEndpointNativeClusterDetailTest(TestCase):
+    """Render native-cluster links only within the caller's object scope."""
+
+    @classmethod
+    def setUpTestData(cls) -> None:
+        cluster_type = ClusterType.objects.create(
+            name="Endpoint detail cluster", slug="endpoint-detail-cluster"
+        )
+        cls.endpoint = ProxmoxEndpoint.objects.create(
+            name="endpoint-detail-bound",
+            enabled=True,
+            mode="cluster",
+        )
+        binding_actor = make_user("endpoint-detail-binding", is_superuser=True)
+        cls.native_cluster, _, _ = synchronize_cluster(
+            cls.endpoint.pk,
+            binding_actor,
+            {
+                "name": "endpoint-detail-native",
+                "mode": "cluster",
+                "cluster_type": cluster_type,
+                "site": None,
+                "tenant": None,
+            },
+        )
+        cls.endpoint.refresh_from_db()
+        cls.endpoint.enabled = False
+        cls.endpoint.save(update_fields=("enabled",))
+        cls.unbound_endpoint = ProxmoxEndpoint.objects.create(
+            name="endpoint-detail-unbound", enabled=False
+        )
+        cls.viewer = make_user("endpoint-cluster-visible")
+        cls.hidden_viewer = make_user("endpoint-cluster-hidden")
+        cls._grant_view(
+            cls.viewer,
+            ProxmoxEndpoint,
+            {"id__in": [cls.endpoint.pk, cls.unbound_endpoint.pk]},
+        )
+        cls._grant_view(cls.viewer, Cluster, {"id": cls.native_cluster.pk})
+        cls._grant_view(cls.hidden_viewer, ProxmoxEndpoint, {"id": cls.endpoint.pk})
+
+    @classmethod
+    def _grant_view(
+        cls, user: object, model: type, constraints: dict[str, object]
+    ) -> None:
+        permission = ObjectPermission.objects.create(
+            name=f"{model._meta.model_name}-{user.pk}-detail-view",
+            actions=["view"],
+            constraints=constraints,
+        )
+        permission.object_types.add(ContentType.objects.get_for_model(model))
+        permission.users.add(user)
+
+    def _get_endpoint(self, user: object, endpoint: ProxmoxEndpoint) -> HttpResponse:
+        self.client.force_login(user)
+        response = self.client.get(
+            reverse("plugins:netbox_proxbox:proxmoxendpoint", args=[endpoint.pk])
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        return response
+
+    def test_visible_native_cluster_renders_its_link(self) -> None:
+        self.endpoint.refresh_from_db()
+        self.assertEqual(self.endpoint.netbox_cluster_id, self.native_cluster.pk)
+        response = self._get_endpoint(self.viewer, self.endpoint)
+
+        self.assertEqual(
+            response.context["visible_netbox_cluster"], self.native_cluster
+        )
+        self.assertContains(
+            response, f'href="{self.native_cluster.get_absolute_url()}"'
+        )
+
+    def test_hidden_native_cluster_does_not_render_its_link(self) -> None:
+        self.endpoint.refresh_from_db()
+        self.assertEqual(self.endpoint.netbox_cluster_id, self.native_cluster.pk)
+        response = self._get_endpoint(self.hidden_viewer, self.endpoint)
+
+        self.assertIsNone(response.context.get("visible_netbox_cluster"))
+        self.assertNotContains(
+            response, f'href="{self.native_cluster.get_absolute_url()}"'
+        )
+
+    def test_unbound_endpoint_has_no_native_cluster_link(self) -> None:
+        self.unbound_endpoint.refresh_from_db()
+        self.assertIsNone(self.unbound_endpoint.netbox_cluster_id)
+        response = self._get_endpoint(self.viewer, self.unbound_endpoint)
+
+        self.assertIsNone(response.context.get("visible_netbox_cluster"))
+        self.assertNotContains(
+            response, f'href="{self.native_cluster.get_absolute_url()}"'
+        )
