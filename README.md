@@ -244,6 +244,16 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
+## What's New in v0.0.31
+
+This release adds protected native NetBox cluster binding for Proxmox endpoints,
+endpoint-owned SSH application services with local Fernet or optional
+netbox-openbao credential storage, and verified Cloud Image SSH bindings with
+durable management receipts. It also includes integration fixes and the
+`0107_v0_0_30_release` and `0108_v0_0_31_schema_validation` migrations. Deploy
+proxbox-api `0.0.29` before upgrading the plugin. See
+[Release Notes - v0.0.31](docs/release-notes/version-0.0.31.md).
+
 ## What's New in v0.0.31rc2
 
 This candidate activates the exact intended backend pairing and normal workflow
@@ -527,6 +537,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| 4.5.8-4.7.0 GA | v0.0.31 | v0.0.29 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.31rc2 | v0.0.29 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.31rc1 | proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.30rc1 | proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) | v0.0.13 | v0.0.15 |

@@ -340,4 +340,4 @@ sequenceDiagram
 - When changing sync contracts shared with the backend, run the mocked tests,
   the workflow contract tests, and a Docker E2E run before release.
 
-The exact intended pairing for this candidate is netbox-proxbox 0.0.31rc2 with proxbox-api 0.0.29. These source labels and defaults do not establish package or image availability. Publish and qualify the required backend first, then qualify this candidate through the normal release and deployment gates.
+The released runtime pairing is netbox-proxbox 0.0.31 with proxbox-api 0.0.29. Release validation deploys and qualifies that backend before the plugin.

@@ -8,7 +8,7 @@ from functools import wraps
 from typing import Any, Callable
 
 from django.core.exceptions import ValidationError
-from django.db import router, transaction
+from django.db import IntegrityError, router, transaction
 from django.db.models.signals import pre_delete
 
 from .openbao_single_pending import SPECS, spec_for
@@ -134,7 +134,7 @@ def _guard_all_settings_state(value: Any, *, using: str) -> None:
     _guard_settings_update({"credential_storage_backend": value}, using=using)
 
 
-def _lock_settings_singleton(using: str) -> None:
+def _lock_settings_singleton(using: str, *, required: bool = True) -> bool:
     """Lock the singleton before inspecting any provider-owned state.
 
     A provider material owner must already have been entered in autocommit;
@@ -143,12 +143,18 @@ def _lock_settings_singleton(using: str) -> None:
     Every owner, assignment, or credential lock follows this singleton lock,
     while downstream row order varies by transaction family. Keeping the
     downgrade path first prevents check-then-save races and deadlocks.
+
+    ``required=False`` is only for a settings save that carries an explicit
+    primary key: it returns ``False`` when no singleton exists yet, so the
+    caller can persist the first row as an insert-only write.
     """
     from netbox_proxbox.models import ProxboxPluginSettings
 
-    ProxboxPluginSettings.objects.using(using).select_for_update().get(
-        singleton_key="default"
-    )
+    singleton = ProxboxPluginSettings.objects.using(using).select_for_update()
+    if required:
+        singleton.get(singleton_key="default")
+        return True
+    return bool(list(singleton.filter(singleton_key="default")[:1]))
 
 
 def _locked_settings_write(using: str, values: list[Any], write: Callable) -> Any:
@@ -415,13 +421,38 @@ def _guard_settings_save(original: Callable) -> Callable:
                 using=using,
             )
             return original(instance, *args, **kwargs)
-        return _locked_settings_write(
-            using,
-            [instance.credential_storage_backend],
-            lambda: original(instance, *args, **kwargs),
-        )
+        return _save_keyed_settings(instance, original, args, kwargs, using)
 
     return guarded
+
+
+def _save_keyed_settings(
+    instance: Any, original: Callable, args: tuple, kwargs: dict, using: str
+) -> Any:
+    """Persist a settings instance that already carries a primary key.
+
+    An existing singleton is always locked before the final storage guards.
+    Without one, the first row is written insert-only so a concurrent first
+    save can never fall back to an unguarded UPDATE; losing that race retries
+    through the strict singleton lock, which reruns every guard.
+    """
+    values = [instance.credential_storage_backend]
+
+    def write() -> Any:
+        return original(instance, *args, **kwargs)
+
+    if args or kwargs.get("update_fields") is not None or kwargs.get("force_update"):
+        return _locked_settings_write(using, values, write)
+    with transaction.atomic(using=using):
+        if _lock_settings_singleton(using, required=False):
+            _guard_all_settings_state(values[0], using=using)
+            return write()
+    try:
+        with transaction.atomic(using=using):
+            _guard_all_settings_state(values[0], using=using)
+            return original(instance, **{**kwargs, "force_insert": True})
+    except IntegrityError:
+        return _locked_settings_write(using, values, write)
 
 
 def _guard_parent_delete(sender: type, instance: Any, **_kwargs: Any) -> None:

@@ -331,4 +331,4 @@ the first upload. Otherwise the workflow skips the Twine upload only when the
 remote set matches the fresh manifest exactly. Do not use resume mode to repair
 a changed build; use a new `rcN` or `.postN` version instead.
 
-The exact intended pairing for this candidate is netbox-proxbox 0.0.31rc2 with proxbox-api 0.0.29. These source labels and defaults do not establish package or image availability. Publish and qualify the required backend first, then qualify this candidate through the normal release and deployment gates.
+The released runtime pairing is netbox-proxbox 0.0.31 with proxbox-api 0.0.29. Publish and qualify the backend before publishing the plugin final.

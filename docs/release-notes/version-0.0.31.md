@@ -2,68 +2,84 @@
 
 ## Summary
 
-Version `0.0.31rc2` prepares the exact intended proxbox-api `0.0.29` pairing
-and aligns normal publisher, E2E, screenshot and page-coverage defaults. It
-changes no application behavior, dependency pin, migration or validator.
+Version `0.0.31` adds native NetBox cluster binding for Proxmox endpoints,
+endpoint-owned SSH application services, and verified Cloud Image SSH bindings.
+It also includes integration fixes and fail-closed validation of the release
+schema. Deploy proxbox-api `0.0.29` before upgrading the plugin.
 
-The exact intended pairing for this candidate is netbox-proxbox 0.0.31rc2 with proxbox-api 0.0.29. These source labels and defaults do not establish package or image availability. Publish and qualify the required backend first, then qualify this candidate through the normal release and deployment gates.
+## Native cluster binding
 
-The staged `0.0.31rc1` prepared the next release boundary after the applied
-`0.0.30rc1` candidate. It preserves every numbered migration through
-`0107_v0_0_30_release` and adds only
-`0108_v0_0_31_schema_validation`. The existing endpoint, SSH-service, and
-Cloud Image behavior and dependency versions remain unchanged.
+Each Proxmox endpoint can own one native NetBox Cluster. The protected
+`sync-cluster` action reconciles the endpoint, native cluster, tracking row, and
+typed synchronization state in one transaction. It requires the established
+endpoint and core permissions, does not claim a cluster by name alone, and does
+not silently reassign an existing owner.
 
-## Fail-closed physical schema validation
+## Endpoint-owned SSH application services
 
-The new migration validates the physical objects introduced by 0107 against
-historical model state. Nullable native-cluster ownership must have a correctly
-typed column, enforcing single-column NULL-distinct uniqueness, and a validated
-foreign key to the correct native Cluster primary key. Service, credential, and
-M2M fields and declared constraints must also match. A good expected object does
-not excuse conflicting additional checks, exclusions, or uniqueness. Whole-row
-expressions are included without rejecting unrelated scalar endpoint policies.
+SSH access now uses an endpoint-owned application-service chain:
 
-The validator acquires bounded deterministic table locks, drains any deferred
-DDL, and checks the final invariant in the same 0108 transaction. It refuses
-malformed schema; it does not silently repair it. The retained helper and marker
-name identify the 0107 objects being checked, not a rewrite or rerun of 0107.
-Retain the exact source, marker, successful 0108 migration result, and complete
-command status together; the marker alone does not prove commit.
+`SSH Credential` -> `Application Service (type SSH)` -> `IP Address` ->
+`Proxmox Endpoint`
 
-## Upgrade and recovery
+The endpoint form can add the endpoint IP quickly and automatically creates or
+reuses the matching SSH service. Credential material can use local
+Fernet-encrypted storage or the optional netbox-openbao integration. Secret
+reads remain permission-gated, and provider-backed writes and assignment
+changes remain transactional.
 
-A database already at the immutable 0.0.30rc1 migration applies only 0108.
-A database at 0106 or a fresh database first applies the unchanged 0107, then
-0108. These are separate migration transactions. If 0108 fails, 0107 can remain
-committed and recorded while 0108 remains unapplied. The entire two-migration
-upgrade is not an atomic rollback unit. Preserve the actual schema, data,
-recorder state, and failure evidence; obtain a reviewed explicit repair before
-retrying 0108. Never fake its recorder row or rewrite the applied 0107.
+## Verified Cloud Image SSH bindings
 
-Reversing 0108 is a no-op for the 0107 schema and existing ownership, SSH-service,
-credential, M2M, and Cloud Image data. Reapplication validates those objects again.
-Reversing the older 0107 has its original historical behavior and is a separate
-operation, not a database restore.
+Cloud Image builds can bind a selected Proxmox node and backend identity-file
+path to the endpoint. The plugin verifies that the selected node belongs at the
+effective SSH address before sending the complete binding. Managed value pushes
+write a durable SHA-256 receipt before transmission, making failed or timed-out
+updates retryable without treating unverified state as current. Closing a gate
+or clearing the configured binding revokes managed backend state without
+exposing credentials.
 
-Back up the applicable database and retain the prior application/configuration
-identities before migration. Database restore is separately approved and must
-not run automatically after a validation failure. Install this candidate only
-through the normal release and deployment gates. Run migration, static
-collection, and restart the deployment-owned NetBox application and worker
-cohort after a successful upgrade.
+## Integration fixes
+
+This release keeps optional companion imports lazy, improves endpoint and
+credential ownership checks, preserves response-local service-monitoring
+readiness, and includes fixes across synchronization, operational endpoint
+selection, OpenBao-backed credential handling, and NetBox 4.5 through 4.7
+compatibility.
+
+## Migrations and upgrade
+
+The release contains two migrations at this boundary:
+
+- `0107_v0_0_30_release` creates the native cluster ownership, endpoint-owned
+  SSH service, and Cloud Image SSH binding schema.
+- `0108_v0_0_31_schema_validation` validates the physical objects created by
+  0107 and does not repair unexpected schema automatically.
+
+The migrations run in separate transactions. If 0108 fails, 0107 can remain
+committed while 0108 remains unapplied. Preserve the database schema, data, and
+migration-recorder evidence, then obtain a reviewed repair before retrying.
+Reversing 0108 is a no-op for schema and data; reapplying it validates again.
+
+Back up the database and configuration before upgrading. Deploy proxbox-api
+`0.0.29` first, install netbox-proxbox `0.0.31`, run migrations and
+`collectstatic`, and restart all NetBox application and worker processes.
 
 ## Compatibility
 
-This candidate requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings),
-released and deployed before the plugin. The backend-first fail-closed rollout
-and permission/ownership requirements remain unchanged.
+The released runtime pairing is netbox-proxbox `0.0.31`, proxbox-api `0.0.29`,
+proxmox-sdk `0.0.15`, and netbox-sdk `0.0.13`. The netbox-sdk dependency belongs
+to proxbox-api's REST client and does not provide the semantic MCP bridge.
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |---|---|---|---|---|
-| 4.5.8-4.7.0 GA | v0.0.31rc2 | v0.0.29 | v0.0.13 | v0.0.15 |
-| 4.5.8-4.7.0 GA | v0.0.31rc1 | proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) | v0.0.13 | v0.0.15 |
+| 4.5.8-4.7.0 GA | v0.0.31 | v0.0.29 | v0.0.13 | v0.0.15 |
 
-The declared stable NetBox range remains `4.5.8` through `4.7.99`, with actual
-GA matrix evidence at `4.7.0`. This source preparation establishes no new
-certification or hosted CI result.
+The declared stable NetBox range is `4.5.8` through `4.7.99`, with dedicated
+GA matrix evidence at `4.7.0`.
+
+## Candidate history
+
+- `0.0.31rc1` added `0108_v0_0_31_schema_validation` after the immutable 0107
+  migration.
+- `0.0.31rc2` aligned the proxbox-api `0.0.29` pairing and release-validation
+  defaults without changing application behavior or migration bytes.

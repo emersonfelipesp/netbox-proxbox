@@ -4,8 +4,7 @@ This section tracks the release line represented by this repository and keeps ol
 
 ## Current Release Line
 
-The plugin source in this repository is currently `0.0.31rc2` on the
-development line. The sibling plugins (`netbox-pbs`,
+The current release is `0.0.31`. The sibling plugins (`netbox-pbs`,
 `netbox-ceph`, and `netbox-pdm`) live in standalone repositories under
 [@emersonfelipesp](https://github.com/emersonfelipesp) and declare
 `netbox-proxbox>=0.0.25.post2,<0.1.0` as an install-time dependency.
@@ -82,6 +81,7 @@ part of the same plugin family.
 
 | Version | Summary |
 |---------|---------|
+| `0.0.31` | Native NetBox cluster binding, endpoint-owned SSH application services, verified Cloud Image SSH bindings with durable receipts, integration fixes, and migrations `0107_v0_0_30_release` plus `0108_v0_0_31_schema_validation`. Requires proxbox-api `0.0.29`, deployed first. See [Version 0.0.31](version-0.0.31.md). |
 | `0.0.31rc2` | Prepares the exact intended proxbox-api `0.0.29` pairing and normal workflow defaults; preserves application and immutable 0107/0108 migration bytes. Backend publication and qualification remain required before candidate publication. See [Version 0.0.31](version-0.0.31.md). |
 | `0.0.31rc1` | New 0108 fail-closed physical schema validation after the immutable 0.0.30 candidate; preserves original 0107 bytes and data. Requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings). See [Version 0.0.31](version-0.0.31.md). |
 | `0.0.30rc1` | First candidate for 0.0.30: protected native cluster binding, endpoint-owned SSH application services, and verified Cloud Image SSH bindings with durable receipts. Migration `0107_v0_0_30_release`. Requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), deployed before the plugin. See [Version 0.0.30](version-0.0.30.md). |

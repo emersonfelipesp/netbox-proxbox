@@ -98,10 +98,12 @@ from netbox_proxbox.models import (  # noqa: E402
     PDMEndpoint,
     ProxmoxCluster,
     ProxmoxEndpoint,
+    ProxmoxEndpointService,
     ProxmoxMetricsInfluxDB,
     ProxmoxNode,
     ProxboxPluginSettings,
     ProxmoxVMCloudInit,
+    ServiceSSHCredential,
 )
 from netbox_proxbox.services.encryption_recovery import (  # noqa: E402
     BackendEncryptionDependencyError,
@@ -166,6 +168,8 @@ class EncryptionKeyRecoveryTest(TestCase):
             "pdm_token_secret_enc": "pdm-secret-recovery-test",
             "node_password_enc": "node-password-recovery-test",
             "node_private_key_enc": "node-private-key-recovery-test",
+            "service_password_enc": "service-password-recovery-test",
+            "service_private_key_enc": "service-private-key-recovery-test",
             "sshkeys_enc": "ssh-ed25519 recovery-test-public-key",
             "agent_token_enc": "firecracker-agent-recovery-test",
             "metrics_query_token_enc": "metrics-query-token-recovery-test",
@@ -188,6 +192,10 @@ class EncryptionKeyRecoveryTest(TestCase):
             "node_ssh": {
                 "password_enc": self.plaintexts["node_password_enc"],
                 "private_key_enc": self.plaintexts["node_private_key_enc"],
+            },
+            "service_ssh": {
+                "password_enc": self.plaintexts["service_password_enc"],
+                "private_key_enc": self.plaintexts["service_private_key_enc"],
             },
             "cloud_init_ssh_keys": {"sshkeys_enc": self.plaintexts["sshkeys_enc"]},
             "firecracker_agent": {
@@ -232,6 +240,20 @@ class EncryptionKeyRecoveryTest(TestCase):
             private_key_enc=secret(self.plaintexts["node_private_key_enc"]),
         )
         self.node_credential.refresh_from_db()
+        self.service = ProxmoxEndpointService.objects.create(
+            endpoint=self.proxmox, name="ssh", protocol="tcp", ports=[22]
+        )
+        self.service_credential = ServiceSSHCredential(
+            service=self.service, username="proxbox-service"
+        )
+        ServiceSSHCredential.objects.bulk_create([self.service_credential])
+        _raw_update_fields(
+            ServiceSSHCredential,
+            self.service_credential.pk,
+            password_enc=secret(self.plaintexts["service_password_enc"]),
+            private_key_enc=secret(self.plaintexts["service_private_key_enc"]),
+        )
+        self.service_credential.refresh_from_db()
 
         self.fastapi = FastAPIEndpoint(
             name="recovery-backend",
@@ -354,9 +376,9 @@ class EncryptionKeyRecoveryTest(TestCase):
         )
 
         expected_pbs_fallback_values = int(self.pbs_fallback is not None)
-        self.assertEqual(result.rows_rotated, 8 + expected_pbs_fallback_values)
+        self.assertEqual(result.rows_rotated, 9 + expected_pbs_fallback_values)
         self.assertEqual(
-            result.ciphertext_values_rotated, 12 + expected_pbs_fallback_values
+            result.ciphertext_values_rotated, 14 + expected_pbs_fallback_values
         )
         self.settings_obj.refresh_from_db()
         self.assertEqual(self.settings_obj.encryption_key, self.new_key)
@@ -608,7 +630,7 @@ class EncryptionKeyRecoveryTest(TestCase):
         )
 
         self.assertEqual(
-            result.ciphertext_values_rotated, 12 + int(self.pbs_fallback is not None)
+            result.ciphertext_values_rotated, 14 + int(self.pbs_fallback is not None)
         )
         self.settings_obj.refresh_from_db()
         self.assertEqual(self.settings_obj.encryption_key, self.new_key)

@@ -67,6 +67,7 @@ from django.contrib.auth import get_user_model  # noqa: E402
 from django.core.exceptions import ValidationError  # noqa: E402
 from django.test import TestCase  # noqa: E402
 
+from netbox_proxbox.integrations import openbao_single_guards  # noqa: E402
 from netbox_proxbox.api.serializers.settings import (  # noqa: E402
     ProxboxPluginSettingsSerializer,
 )
@@ -282,6 +283,49 @@ class ExplicitPrimaryKeySettingsTests(TestCase):
         ).save()
 
         self.assertTrue(ProxboxPluginSettings.objects.filter(pk=424243).exists())
+
+    def test_reconstructed_existing_row_save_locks_the_singleton(self) -> None:
+        existing = ProxboxPluginSettings.get_solo()
+        reconstructed = ProxboxPluginSettings(
+            pk=existing.pk,
+            singleton_key=existing.singleton_key,
+            credential_storage_backend=existing.credential_storage_backend,
+        )
+        self.assertTrue(reconstructed._state.adding)
+
+        with patch(
+            "netbox_proxbox.integrations.openbao_single_guards._lock_settings_singleton",
+            wraps=openbao_single_guards._lock_settings_singleton,
+        ) as lock:
+            reconstructed.save(update_fields=["credential_storage_backend"])
+
+        lock.assert_called_once()
+
+    def test_lost_first_insert_race_retries_through_the_strict_lock(self) -> None:
+        existing = ProxboxPluginSettings.get_solo()
+        competing = ProxboxPluginSettings(
+            pk=existing.pk,
+            singleton_key=existing.singleton_key,
+            credential_storage_backend=existing.credential_storage_backend,
+            encryption_key=Fernet.generate_key().decode("ascii"),
+        )
+        strict_lock = openbao_single_guards._lock_settings_singleton
+        calls: list[bool] = []
+
+        def lock_sees_no_singleton_first(using: str, *, required: bool = True) -> bool:
+            calls.append(required)
+            if not required:
+                return False
+            return strict_lock(using, required=required)
+
+        with patch(
+            "netbox_proxbox.integrations.openbao_single_guards._lock_settings_singleton",
+            side_effect=lock_sees_no_singleton_first,
+        ):
+            competing.save()
+
+        self.assertEqual(calls, [False, True])
+        self.assertEqual(ProxboxPluginSettings.objects.count(), 1)
 
 
 class CsvImportSecureDefaultTests(TestCase):
