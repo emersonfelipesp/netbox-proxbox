@@ -140,9 +140,9 @@ topology.
 
 ### Version
 
-- Plugin version: `0.0.31rc1`
+- Plugin version: `0.0.31rc2`
 - NetBox compatibility: `4.5.8` through `4.7.99`
-- Current source compatibility: `netbox-proxbox 0.0.31rc1` requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), with `proxmox-sdk 0.0.15` and `netbox-sdk 0.0.13`.
+- Current source compatibility: `netbox-proxbox 0.0.31rc2` requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), with `proxmox-sdk 0.0.15` and `netbox-sdk 0.0.13`.
 - Documented released runtime pairing: `netbox-proxbox 0.0.29.post6`,
   `proxbox-api 0.0.27.post4`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`
 
@@ -1676,3 +1676,7 @@ Version 0.0.31rc1 adds 0108_v0_0_31_schema_validation after the immutable
 objects. Failure in 0108 leaves committed 0107 recorded; reversing 0108 preserves
 those objects and values. Preserve database backup, source and recorder evidence,
 and use reviewed explicit recovery rather than rewriting applied history.
+
+## Candidate backend selection
+
+The exact intended pairing for this candidate is netbox-proxbox 0.0.31rc2 with proxbox-api 0.0.29. These source labels and defaults do not establish package or image availability. Publish and qualify the required backend first, then qualify this candidate through the normal release and deployment gates.

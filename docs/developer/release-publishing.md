@@ -19,7 +19,7 @@ flowchart TD
     Control[Locked release control verifies\nand publishes exact sealed bytes]
     RCUpload[Upload vX.Y.ZrcN to TestPyPI\nwithout --skip-existing]
     RCValidate[Install rcN from TestPyPI\nrun package checks]
-    RCE2E[E2E Docker\nnetbox-proxbox rcN from TestPyPI\nproxbox-api 0.0.27.post4 from PyPI]
+    RCE2E[E2E Docker\nnetbox-proxbox rcN from TestPyPI\nproxbox-api 0.0.29 from PyPI]
     RCFailed{Any TestPyPI\nvalidation failed?}
     NextRC[Bump to vX.Y.ZrcN+1]
     FinalPrivate[Publish final package to Gitea\nvX.Y.Z]
@@ -254,8 +254,9 @@ sequenceDiagram
   `PROXBOX_API_PYPI_VERSION`, then `PROXBOX_API_RELEASE_VERSION`, then the
   checked-in stable default. The implicit result must equal that checked-in
   default or preparation fails closed. TestPyPI plugin candidates deliberately
-  use stable proxbox-api from PyPI because the paired backend is not published
-  on TestPyPI.
+  select their paired stable proxbox-api from PyPI. Verify backend availability
+  and qualification before publication; do not infer an index result from these
+  source defaults or label PyPI backend evidence as TestPyPI evidence.
 
 ## Channel sync rule
 
@@ -291,9 +292,11 @@ registry, so its validation step receives `GITEA_PACKAGE_TOKEN` from the same
    request SHA-256. After it succeeds, dispatch the separate irreversible
    `publish.yml` with those same three inputs. For RCs, the control publishes
    the Gitea package and promotes only that exact RC tag to GitHub.
-4. Verify the stable `proxbox-api==0.0.27.post4` backend package on PyPI.
+4. Verify the intended stable `proxbox-api==0.0.29` backend package on PyPI,
+   its required published image/runtime variants, and the exact qualification
+   evidence. Stop if any required backend artifact or gate is unavailable.
 5. Publish and validate `netbox-proxbox` on TestPyPI against that stable PyPI
-   backend. The paired backend is not published on TestPyPI.
+   backend. This is PyPI backend evidence, not TestPyPI backend evidence.
 6. Publish each final package in Gitea and verify its repository link, source
    commit, manifest, filenames, sizes, and hashes. Versions published before the
    manifest producer landed have no manifest; do not back-fill provenance for an
@@ -327,3 +330,5 @@ package remains authoritatively absent after the retry budget, resume performs
 the first upload. Otherwise the workflow skips the Twine upload only when the
 remote set matches the fresh manifest exactly. Do not use resume mode to repair
 a changed build; use a new `rcN` or `.postN` version instead.
+
+The exact intended pairing for this candidate is netbox-proxbox 0.0.31rc2 with proxbox-api 0.0.29. These source labels and defaults do not establish package or image availability. Publish and qualify the required backend first, then qualify this candidate through the normal release and deployment gates.

@@ -244,6 +244,14 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
+## What's New in v0.0.31rc2
+
+This candidate activates the exact intended backend pairing and normal workflow
+defaults without changing application behavior, migration 0108 or its validator.
+Current source compatibility: netbox-proxbox 0.0.31rc2 requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings).
+
+The exact intended pairing for this candidate is netbox-proxbox 0.0.31rc2 with proxbox-api 0.0.29. These source labels and defaults do not establish package or image availability. Publish and qualify the required backend first, then qualify this candidate through the normal release and deployment gates.
+
 ## What's New in v0.0.31rc1
 
 This candidate adds fail-closed physical schema validation in a new 0108
@@ -519,6 +527,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| 4.5.8-4.7.0 GA | v0.0.31rc2 | v0.0.29 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.31rc1 | proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.30rc1 | proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.29.post6 | v0.0.27.post4 | v0.0.13 | v0.0.15 |

@@ -1,6 +1,6 @@
 # netbox-proxbox Repository Guide
 
-Current release-candidate source: netbox-proxbox 0.0.31rc1 requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings). The backend must be released and deployed before the plugin. The netbox-sdk dependency remains proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current release-candidate source: netbox-proxbox 0.0.31rc2 requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings). The backend must be released and deployed before the plugin. The netbox-sdk dependency remains proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 > **LLM Agent Safety:** Before any destruction-adjacent operation, read
 > `AGENTS.md` § "LLM Agent Safety Guardrails". Automated agents may inspect and
@@ -80,27 +80,27 @@ operator contract is in the Docker installation guide.
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.99` (the whole 4.7 series is admitted by the numeric gate; CI verifies GA `4.7.0`). The current
-plugin version is `0.0.31rc1`.
+plugin version is `0.0.31rc2`.
 
-Current source compatibility: netbox-proxbox 0.0.31rc1 requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source compatibility: netbox-proxbox 0.0.31rc2 requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The documented released runtime pairing for this release line is
 netbox-proxbox 0.0.29.post6 <-> proxbox-api 0.0.27.post4 <-> proxmox-sdk 0.0.15
 <-> netbox-sdk 0.0.13. Preserve release-note and compatibility rows as
 historical records unless a release workflow changes them.
 
-Current release-candidate runtime requirement: deploy proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) before netbox-proxbox 0.0.31rc1. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+Current release-candidate runtime requirement: deploy proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) before netbox-proxbox 0.0.31rc2. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
 CI pairing: the E2E Docker, page-coverage, documentation-screenshot, and
-release-validation workflow defaults consume proxbox-api `0.0.27.post4`. E2E uses the
-exact published image by default; GitHub source-head builds require explicit
-`dependency_mode: dev`. Repository variables are equality-checked configuration:
-release preparation fails closed when an implicit value does not equal the
-checked-in current default, and a coordinated candidate requires an explicit
-workflow input. TestPyPI plugin candidates use stable proxbox-api `0.0.27.post4` from
-PyPI because that backend version is not published on TestPyPI. The E2E harness
-uses typed sync-state sidecars and must not call the removed proxbox-api custom-
-field creation route.
+release-validation defaults select proxbox-api `0.0.29`. These are intended
+source selections, not evidence that the backend package or image is public.
+Verify backend publication and qualification before candidate publication or
+ordinary E2E execution. E2E uses the exact published image by default; source-head
+builds require explicit `dependency_mode: dev`. Repository variables remain
+equality-checked against the checked-in current default, and a different
+coordinated candidate pairing requires the existing explicit manual input.
+TestPyPI plugin candidates consume their paired backend from PyPI, preserving
+the selected-index distinction and all current matrices.
 
 ## Current source map
 

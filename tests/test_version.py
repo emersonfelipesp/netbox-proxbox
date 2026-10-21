@@ -104,11 +104,11 @@ CERTIFICATION_PATH = REPO_ROOT / "CERTIFICATION.md"
 DOCS_CERTIFICATION_PATH = REPO_ROOT / "docs" / "certification.md"
 APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
-CURRENT_PLUGIN_VERSION = "0.0.31rc1"
-CURRENT_RELEASE_VERSION = "0.0.31rc1"
-CURRENT_PACKAGE_VERSION = "0.0.31rc1"
+CURRENT_PLUGIN_VERSION = "0.0.31rc2"
+CURRENT_RELEASE_VERSION = "0.0.31rc2"
+CURRENT_PACKAGE_VERSION = "0.0.31rc2"
 CURRENT_BACKEND_REQUIREMENT = "proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings)"
-PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.27.post4"
+PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.29"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
 # Ceiling of the backward-compatible stable tier: the whole NetBox 4.7 series.
 CURRENT_NETBOX_STABLE_MAX_VERSION = "4.7.99"
@@ -1222,8 +1222,8 @@ def _assert_release_workflow_e2e_counts(publish_workflow: str) -> None:
 def test_release_workflow_uses_matching_package_indexes_for_e2e() -> None:
     # The release workflow pairs each E2E gate with the same package index the
     # plugin is being validated against: the TestPyPI plugin candidate uses the
-    # stable proxbox-api from PyPI because proxbox-api 0.0.27.post4 is not published
-    # on TestPyPI. PyPI candidate and final gates use that same PyPI source.
+    # paired stable proxbox-api from PyPI rather than claiming TestPyPI backend
+    # evidence. PyPI candidate and final gates use that same PyPI source.
     # `dependency_mode: dev` clones
     # proxbox-api main HEAD and must not appear here — main may sit on a
     # different release line than the rc/tag being validated.

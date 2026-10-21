@@ -128,16 +128,16 @@ The complete semantic bridge contract is
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.99` (the whole 4.7 series is admitted by the numeric gate; CI verifies GA `4.7.0`). The current
-plugin version is `0.0.31rc1`.
+plugin version is `0.0.31rc2`.
 
-Current source compatibility: netbox-proxbox 0.0.31rc1 requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source compatibility: netbox-proxbox 0.0.31rc2 requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. This describes the current sibling source revisions, not a historical published-release promise. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The documented released runtime pairing for this release line is
 netbox-proxbox 0.0.29.post6 <-> proxbox-api 0.0.27.post4 <-> proxmox-sdk 0.0.15
 <-> netbox-sdk 0.0.13. Do not rewrite historical release notes when the source
 pairing advances.
 
-Current release-candidate runtime requirement: deploy proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) before netbox-proxbox 0.0.31rc1. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+Current release-candidate runtime requirement: deploy proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) before netbox-proxbox 0.0.31rc2. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
 ## Current implementation surfaces
 

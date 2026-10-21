@@ -10,28 +10,30 @@ the staged TestPyPI/PyPI release pipeline.
 |---|---|---|
 | `.github/workflows/ci.yml` | Push and pull request | Runs lint, type checks, compile checks, and the mocked pytest suite. NetBox-dependent Django tests skip here. |
 | `.github/workflows/django-tests.yml` | Push, tag, and pull request | Provisions real NetBox 4.5.x, 4.6.x, and 4.7.x source trees plus PostgreSQL and Redis, then runs the NetBox-backed Django suite. Five ordinary rows cover the supported releases; a sixth NetBox 4.6.6 row installs pinned `netbox-pdm` source so the optional registry override is exercised. It hard-fails a missing harness and independently enforces at least 85% branch coverage for `services.endpoint_autoconfiguration` and `api.serializers.resource_views`; aggregate coverage cannot let either module mask the other. |
-| `.github/workflows/e2e-docker.yml` | Manual, scheduled, reusable workflow call | Builds a real NetBox stack with the plugin, rqworker, proxbox-api `0.0.27.post4`, PostgreSQL, Redis, and a mocked Proxmox API. The harness relies on typed sync-state sidecars and does not call the removed backend custom-field creation route. |
+| `.github/workflows/e2e-docker.yml` | Manual, scheduled, reusable workflow call | Builds a real NetBox stack with the plugin, rqworker, proxbox-api `0.0.29`, PostgreSQL, Redis, and a mocked Proxmox API. The harness relies on typed sync-state sidecars and does not call the removed backend custom-field creation route. |
 | `.github/workflows/publish-testpypi.yml` | `v*rc*` tag push or RC-only manual dispatch (TestPyPI); GitHub Release published (PyPI) | Promotes the exact linked Gitea artifacts. Each isolated upload job checks out the exact source SHA before its locked publisher sync. Official PyPI releases require the already-pushed, package-verified final tag and `gh release create --verify-tag`; plain non-RC tag pushes do not trigger publishing. |
 | `.github/workflows/docs.yml` | Docs changes on main / PR | Builds and publishes the MkDocs site. |
 | `.github/workflows/docs-screenshots.yml` | Manual dispatch | Refreshes committed UI screenshots used by the docs site. |
 | `.github/workflows/nightly-contracts.yml` | Schedule / manual dispatch | Checks cross-repo contracts that must stay aligned with `proxbox-api`. |
 
 The E2E Docker, page-coverage, documentation-screenshot, and release-validation
-defaults are aligned on proxbox-api `0.0.27.post4`. E2E uses the exact published image
+defaults are aligned on proxbox-api `0.0.29`. E2E uses the exact published image
 by default for workflow calls, pull requests, schedules, and manual dispatches;
 building GitHub `main` is an explicit `dependency_mode: dev` opt-in. Page
 coverage keeps the immutable NetBox 4.7.0 GA image, so its page and sync checks
 exercise the current supported pair instead of combining NetBox 4.7.0 with a
 backend certified only through NetBox 4.6.6.
 
-The TestPyPI netbox-proxbox candidate is validated against stable proxbox-api
-`0.0.27.post4` from PyPI; proxbox-api `0.0.27.post4` is not published on TestPyPI, so the
-workflow does not label a PyPI fallback as TestPyPI backend evidence. Repository
+The TestPyPI netbox-proxbox candidate selects the intended stable proxbox-api
+`0.0.29` from PyPI. Verify its actual availability and qualification before
+running publication; source defaults establish no registry result. This remains
+PyPI backend evidence, not TestPyPI backend evidence. Repository
 variables are equality-checked configuration: when no explicit
 `proxbox_api_version` input is supplied, release preparation fails closed unless
-the resolved value equals the checked-in `0.0.27.post4` default. This prevents a stale
-variable from silently validating a release against an older backend. An
-intentional coordinated candidate requires the explicit workflow input.
+the resolved value equals the checked-in `0.0.29` default. This prevents a stale
+variable from silently validating a release against an older backend. A
+different coordinated candidate pairing requires the existing explicit manual
+workflow input.
 
 ## Authenticated Exact-Commit Matrix Bootstrap
 
@@ -329,7 +331,7 @@ sequenceDiagram
 
 - Keep package version metadata synchronized across `pyproject.toml`,
   `netbox_proxbox/__init__.py`, `uv.lock`, and the Git tag.
-- Use stable PyPI `proxbox-api==0.0.27.post4` for TestPyPI `netbox-proxbox` E2E.
+- Use stable PyPI `proxbox-api==0.0.29` for TestPyPI `netbox-proxbox` E2E.
 - Use PyPI `proxbox-api` for PyPI release-candidate and final E2E.
 - Keep `proxbox_api_runtime: both` in release workflow callers so PyPI
   publication is blocked when Rust-backed sync fails.
@@ -337,3 +339,5 @@ sequenceDiagram
   be fixed forward.
 - When changing sync contracts shared with the backend, run the mocked tests,
   the workflow contract tests, and a Docker E2E run before release.
+
+The exact intended pairing for this candidate is netbox-proxbox 0.0.31rc2 with proxbox-api 0.0.29. These source labels and defaults do not establish package or image availability. Publish and qualify the required backend first, then qualify this candidate through the normal release and deployment gates.

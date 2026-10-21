@@ -106,15 +106,18 @@ commit, final `release.yaml` metadata, and upstream requirements checksum before
 installing a reviewed Python 3.12/Linux lock with artifact hashes and an
 explicit PyPI first-index policy.
 
-Current source compatibility: netbox-proxbox 0.0.31rc1 requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. This is the current sibling-source development stack. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source compatibility: netbox-proxbox 0.0.31rc2 requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. This is the current sibling-source development stack. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
-Current release-candidate runtime requirement: proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) must be released and deployed before netbox-proxbox 0.0.31rc1.
+Current release-candidate runtime requirement: proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) must be released and deployed before netbox-proxbox 0.0.31rc2.
 
-The next row records current source compatibility. The following row preserves
-the preceding maintenance release pairing.
+The first row declares the exact intended pairing for the current candidate.
+The following rows preserve staged candidates and preceding releases.
+
+The exact intended pairing for this candidate is netbox-proxbox 0.0.31rc2 with proxbox-api 0.0.29. These source labels and defaults do not establish package or image availability. Publish and qualify the required backend first, then qualify this candidate through the normal release and deployment gates.
 
 | netbox-proxbox | NetBox | Python | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |---|---|---|---|---|---|
+| v0.0.31rc2 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.29 | v0.0.13 | v0.0.15 |
 | v0.0.31rc1 | 4.5.8-4.7.0 GA | >=3.12 | proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) | v0.0.13 | v0.0.15 |
 | v0.0.30rc1 | 4.5.8-4.7.0 GA | >=3.12 | proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) | v0.0.13 | v0.0.15 |
 | v0.0.29.post6 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.27.post4 | v0.0.13 | v0.0.15 |

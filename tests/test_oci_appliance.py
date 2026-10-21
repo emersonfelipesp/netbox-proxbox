@@ -741,10 +741,9 @@ def test_committed_compatibility_table_pairs_the_current_package_version() -> No
         tomllib.loads(_read("pyproject.toml"))["project"]["version"]
     )
 
-    with pytest.raises(RuntimeError, match=r"malformed proxbox-api version"):
-        resolve_oci_versions.paired_backend_version(
-            source_version, ROOT / "COMPATIBILITY.md"
-        )
+    assert resolve_oci_versions.paired_backend_version(
+        source_version, ROOT / "COMPATIBILITY.md"
+    ) == Version("0.0.29")
 
 
 def test_deleting_current_pairing_row_is_rejected(

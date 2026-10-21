@@ -2,7 +2,13 @@
 
 ## Summary
 
-Version `0.0.31rc1` prepares the next release boundary after the applied
+Version `0.0.31rc2` prepares the exact intended proxbox-api `0.0.29` pairing
+and aligns normal publisher, E2E, screenshot and page-coverage defaults. It
+changes no application behavior, dependency pin, migration or validator.
+
+The exact intended pairing for this candidate is netbox-proxbox 0.0.31rc2 with proxbox-api 0.0.29. These source labels and defaults do not establish package or image availability. Publish and qualify the required backend first, then qualify this candidate through the normal release and deployment gates.
+
+The staged `0.0.31rc1` prepared the next release boundary after the applied
 `0.0.30rc1` candidate. It preserves every numbered migration through
 `0107_v0_0_30_release` and adds only
 `0108_v0_0_31_schema_validation`. The existing endpoint, SSH-service, and
@@ -55,6 +61,7 @@ and permission/ownership requirements remain unchanged.
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |---|---|---|---|---|
+| 4.5.8-4.7.0 GA | v0.0.31rc2 | v0.0.29 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.31rc1 | proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) | v0.0.13 | v0.0.15 |
 
 The declared stable NetBox range remains `4.5.8` through `4.7.99`, with actual
