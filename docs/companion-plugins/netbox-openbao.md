@@ -277,6 +277,15 @@ missing IDs and collapse duplicates, so cleanup covers only the objects that
 are actually selected for deletion. On every version, assignments are removed
 only when their owning endpoint or application service is successfully deleted.
 
+Confirmed UI deletes of endpoints, application services, and service SSH
+credentials follow the same rule. A protected, restricted, or aborted delete
+rolls back the provider cleanup and leaves the object and its assignments in
+place. On NetBox 4.5 and 4.6, the framework's single-object delete runs inside
+its own savepoint, so the refusal is reported normally instead of failing with
+HTTP 500. A refused delete also discards the request's queued change events, so
+webhooks, scripts, and event rules never see a deletion that did not commit.
+NetBox 4.7 behaves this way natively.
+
 The node credential metadata response exposes
 `openbao_assignment_ready`, `openbao_assignment_detail`, and the secret-free
 `openbao_assignment_lookup` selectors (`assigned_object_type`,

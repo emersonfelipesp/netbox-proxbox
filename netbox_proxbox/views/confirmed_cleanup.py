@@ -4,6 +4,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from core.signals import clear_events
+from django.db import router, transaction
 from utilities.forms import BulkDeleteForm, DeleteForm
 from utilities.jobs import is_background_request
 
@@ -15,8 +17,46 @@ class _DeleteIncomplete(Exception):
         self.response = response
 
 
+def _discard_rolled_back_events(sender: Any) -> None:
+    """Drop change events queued by a delete whose transaction rolled back.
+
+    NetBox 4.7 clears the request's event queue after a refused delete, but 4.5
+    and 4.6 do not. The cleanup boundary has rolled back every change in the
+    request, so no queued event may reach webhooks, scripts or event rules.
+    """
+    clear_events.send(sender=sender)
+
+
+def _delete_in_savepoint(instance: Any) -> None:
+    """Give the framework's single-object delete its own savepoint.
+
+    NetBox 4.7 deletes inside ``transaction.atomic()``, while 4.5 and 4.6 call
+    ``obj.delete()`` directly. Django's deletion collector runs in an atomic
+    block without a savepoint, so a protected or restricted refusal would mark
+    the surrounding cleanup transaction for rollback. The framework's refusal
+    handler would then fail on its next query with TransactionManagementError
+    and answer HTTP 500 instead of refusing the delete.
+    """
+    delete = instance.delete
+    using = router.db_for_write(type(instance), instance=instance)
+
+    def delete_in_savepoint(*args: Any, **kwargs: Any) -> Any:
+        with transaction.atomic(using=using):
+            return delete(*args, **kwargs)
+
+    instance.delete = delete_in_savepoint
+
+
 class ConfirmedCleanupDeleteMixin:
     """Run cleanup only for a valid single-object confirmation."""
+
+    _savepoint_framework_delete = False
+
+    def get_object(self, **kwargs: object) -> Any:
+        instance = super().get_object(**kwargs)
+        if self._savepoint_framework_delete:
+            _delete_in_savepoint(instance)
+        return instance
 
     def cleanup_boundary(self, request: Any, objects: list[Any]):
         raise NotImplementedError
@@ -38,6 +78,7 @@ class ConfirmedCleanupDeleteMixin:
         kwargs: dict[str, object],
     ) -> Any:
         primary_key = instance.pk
+        self._savepoint_framework_delete = True
         try:
             with self.cleanup_boundary(request, [instance]):
                 self.cleanup_objects(request, [instance])
@@ -46,6 +87,7 @@ class ConfirmedCleanupDeleteMixin:
                     raise _DeleteIncomplete(response)
                 return response
         except _DeleteIncomplete as exc:
+            _discard_rolled_back_events(self)
             return exc.response
 
 
@@ -111,4 +153,5 @@ class ConfirmedCleanupBulkDeleteMixin:
                     raise _DeleteIncomplete(response)
                 return response
         except _DeleteIncomplete as exc:
+            _discard_rolled_back_events(self)
             return exc.response

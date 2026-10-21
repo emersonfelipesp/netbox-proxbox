@@ -795,6 +795,103 @@ class SSHServiceChainTest(TestCase):
                         ServiceSSHCredential.objects.filter(pk=owner.pk).exists()
                     )
 
+    def test_refused_delete_discards_queued_events(self) -> None:
+        from unittest import mock
+
+        from django.db.models import ProtectedError, RestrictedError
+        from django.db.models.signals import pre_delete
+        from utilities.exceptions import AbortRequest
+
+        refusals = {
+            "protected": lambda instance: ProtectedError("test refusal", {instance}),
+            "restricted": lambda instance: RestrictedError("test refusal", {instance}),
+            "aborted": lambda instance: AbortRequest("test refusal"),
+        }
+        self.client.force_login(self.actor)
+        for refusal, build_refusal in refusals.items():
+            for target_kind in ("endpoint", "service", "credential"):
+                for bulk in (False, True):
+                    with self.subTest(
+                        refusal=refusal, target_kind=target_kind, bulk=bulk
+                    ):
+                        endpoint, service, owner = self._local_delete_graph(
+                            f"events-{refusal}-{target_kind}-{bulk}"
+                        )
+                        target = {
+                            "endpoint": endpoint,
+                            "service": service,
+                            "credential": owner,
+                        }[target_kind]
+                        dispatch_uid = (
+                            f"test_chain_events_{refusal}_{target_kind}_{bulk}"
+                        )
+                        refused: list[int] = []
+
+                        def refuse_delete(sender, instance, **kwargs):
+                            del sender, kwargs
+                            if instance.pk == target.pk:
+                                refused.append(instance.pk)
+                                raise build_refusal(instance)
+
+                        pre_delete.connect(
+                            refuse_delete,
+                            sender=target.__class__,
+                            weak=False,
+                            dispatch_uid=dispatch_uid,
+                        )
+                        data = {"confirm": "on"}
+                        if bulk:
+                            data.update({"_confirm": "on", "pk": [target.pk]})
+                        try:
+                            with mock.patch(
+                                "netbox.context_managers.flush_events"
+                            ) as flush:
+                                response = self.client.post(
+                                    self._delete_url(target, bulk=bulk), data
+                                )
+                        finally:
+                            pre_delete.disconnect(
+                                sender=target.__class__, dispatch_uid=dispatch_uid
+                            )
+                        self.assertEqual(refused, [target.pk])
+                        self.assertEqual(response.status_code, 302)
+                        self.assertTrue(
+                            type(target).objects.filter(pk=target.pk).exists()
+                        )
+                        flush.assert_not_called()
+
+    def test_confirmed_delete_still_flushes_its_deletion_event(self) -> None:
+        from unittest import mock
+
+        self.client.force_login(self.actor)
+        for bulk in (False, True):
+            with self.subTest(bulk=bulk):
+                endpoint, _service, _owner = self._local_delete_graph(
+                    f"events-success-{bulk}"
+                )
+                data = {"confirm": "on"}
+                if bulk:
+                    data.update({"_confirm": "on", "pk": [endpoint.pk]})
+                with mock.patch("netbox.context_managers.flush_events") as flush:
+                    response = self.client.post(
+                        self._delete_url(endpoint, bulk=bulk), data
+                    )
+                self.assertLess(response.status_code, 400)
+                self.assertFalse(
+                    ProxmoxEndpoint.objects.filter(pk=endpoint.pk).exists()
+                )
+                events = [
+                    event for call in flush.call_args_list for event in call.args[0]
+                ]
+                self.assertTrue(
+                    any(
+                        event["event_type"] == "object_deleted"
+                        and event["object_id"] == endpoint.pk
+                        for event in events
+                    ),
+                    events,
+                )
+
     def test_protected_delete_rolls_back_each_confirmed_path(self) -> None:
         from django.db.models import ProtectedError
         from django.db.models.signals import pre_delete

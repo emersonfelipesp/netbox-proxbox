@@ -80,6 +80,126 @@ def _response(payload: object, status_code: int = 200) -> SimpleNamespace:
     return SimpleNamespace(status_code=status_code, json=lambda: payload)
 
 
+def test_capability_probe_uses_remaining_deadline_for_each_request(
+    websocket_module, monkeypatch
+) -> None:
+    credentials = websocket_module._load_websocket_credentials(1)
+    assert credentials is not None
+    clock = iter((100.0, 100.25, 101.75, 103.0))
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    def get(url: str, **kwargs: object) -> SimpleNamespace:
+        calls.append((url, kwargs))
+        return _response({"status": "ready"})
+
+    monkeypatch.setattr(websocket_module.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(websocket_module.requests, "get", get)
+
+    assert websocket_module._probe_backend_ws_run_id(1, credentials.identity) is False
+    assert calls == [
+        (
+            "https://backend.example.test:8800",
+            {"headers": {}, "verify": True, "timeout": 2.75, "allow_redirects": False},
+        ),
+        (
+            "https://backend.example.test:8800/health",
+            {
+                "headers": credentials.auth_headers,
+                "verify": True,
+                "timeout": 1.25,
+                "allow_redirects": False,
+            },
+        ),
+    ]
+
+
+def test_capability_probe_preserves_minimum_positive_timeout(
+    websocket_module, monkeypatch
+) -> None:
+    credentials = websocket_module._load_websocket_credentials(1)
+    assert credentials is not None
+    clock = iter((100.0, 102.9995))
+    calls: list[dict[str, object]] = []
+
+    def get(_url: str, **kwargs: object) -> SimpleNamespace:
+        calls.append(kwargs)
+        return _response({"capabilities": {"ws_run_id": 1}})
+
+    monkeypatch.setattr(websocket_module.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(websocket_module.requests, "get", get)
+
+    assert websocket_module._probe_backend_ws_run_id(1, credentials.identity) is True
+    assert calls == [
+        {"headers": {}, "verify": True, "timeout": 0.001, "allow_redirects": False}
+    ]
+
+
+@pytest.mark.parametrize("request_time", [103.0, 103.5])
+def test_capability_probe_stops_when_deadline_is_exhausted(
+    websocket_module, monkeypatch, request_time: float
+) -> None:
+    credentials = websocket_module._load_websocket_credentials(1)
+    assert credentials is not None
+    clock = iter((100.0, request_time))
+    calls: list[str] = []
+
+    def get(url: str, **_kwargs: object) -> SimpleNamespace:
+        calls.append(url)
+        return _response({"capabilities": {"ws_run_id": 1}})
+
+    monkeypatch.setattr(websocket_module.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(websocket_module.requests, "get", get)
+
+    assert websocket_module._probe_backend_ws_run_id(1, credentials.identity) is False
+    assert calls == []
+
+
+@pytest.mark.parametrize(
+    ("fallback_time", "expected_timeouts", "supported"),
+    [(101.5, [2.75, 1.5], True), (103.5, [2.75], False)],
+)
+def test_capability_probe_timeout_error_retains_remaining_budget(
+    websocket_module,
+    monkeypatch,
+    fallback_time: float,
+    expected_timeouts: list[float],
+    supported: bool,
+) -> None:
+    credentials = websocket_module._load_websocket_credentials(1)
+    assert credentials is not None
+    clock = iter((100.0, 100.25, fallback_time))
+    calls: list[tuple[str, dict[str, object]]] = []
+    timeout_error = websocket_module.requests.Timeout("Synthetic capability timeout")
+
+    def get(url: str, **kwargs: object) -> SimpleNamespace:
+        calls.append((url, kwargs))
+        if len(calls) == 1:
+            raise timeout_error
+        return _response({"capabilities": {"ws_run_id": 1}})
+
+    monkeypatch.setattr(websocket_module.time, "monotonic", lambda: next(clock))
+    monkeypatch.setattr(websocket_module.requests, "get", get)
+
+    assert (
+        websocket_module._probe_backend_ws_run_id(1, credentials.identity) is supported
+    )
+    assert [kwargs["timeout"] for _url, kwargs in calls] == expected_timeouts
+    assert calls[0] == (
+        "https://backend.example.test:8800",
+        {"headers": {}, "verify": True, "timeout": 2.75, "allow_redirects": False},
+    )
+    if supported:
+        assert calls[1] == (
+            "https://backend.example.test:8800/health",
+            {
+                "headers": credentials.auth_headers,
+                "verify": True,
+                "timeout": 1.5,
+                "allow_redirects": False,
+            },
+        )
+
+
 @pytest.mark.parametrize(
     ("payload", "expected"),
     [

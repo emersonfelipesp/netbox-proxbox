@@ -247,11 +247,12 @@ def _probe_backend_ws_run_id(endpoint_id: int, expected_identity: str) -> bool:
         if remaining <= 0:
             break
         try:
+            request_timeout = max(0.001, remaining)
             response = requests.get(
                 url,
                 headers=headers,
                 verify=credentials.verify_ssl,
-                timeout=max(0.001, remaining),
+                timeout=request_timeout,
                 allow_redirects=False,
             )
             if not 200 <= response.status_code < 300:

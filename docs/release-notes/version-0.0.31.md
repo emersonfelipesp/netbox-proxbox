@@ -46,6 +46,13 @@ readiness, and includes fixes across synchronization, operational endpoint
 selection, OpenBao-backed credential handling, and NetBox 4.5 through 4.7
 compatibility.
 
+On NetBox 4.5 and 4.6, a protected or otherwise refused delete of an endpoint,
+application service, or service SSH credential from its object page is now
+refused cleanly instead of returning HTTP 500. Every refused delete discards
+the change events it queued. Plugin settings saved with an explicit primary key
+are inserted correctly, and the backend capability probe keeps its request
+timeout bounded in a form security linting can verify.
+
 ## Migrations and upgrade
 
 The release contains two migrations at this boundary:
