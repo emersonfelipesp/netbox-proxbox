@@ -83,19 +83,29 @@ class SecurityFloor:
         self.declared_in = declared_in
 
 
-# Transcribed from the published advisories through 2026-09-14. Do not regenerate any
+# Transcribed from the published advisories through 2026-10-21. Do not regenerate any
 # of this from the manifests -- that would make the tests assert only that the
 # code agrees with itself.
 SECURITY_FLOORS: dict[str, SecurityFloor] = {
     "aiohttp": SecurityFloor(
         name="aiohttp",
-        floor="3.14.3",
-        # GHSA-cq5v-8q36-5273 covers <= 3.14.2; the other two cover <= 3.14.1.
-        affected=("3.12.15", "3.13.5", "3.14.0", "3.14.1", "3.14.2"),
+        floor="3.14.4",
+        # GHSA-9xw5-w5jj-pvcg covers >= 2.0.0, < 3.14.4 and the other 3.14.4
+        # advisories cover <= 3.14.3; GHSA-cq5v-8q36-5273 covers <= 3.14.2 and
+        # the remaining two cover <= 3.14.1.
+        affected=("3.12.15", "3.13.5", "3.14.0", "3.14.1", "3.14.2", "3.14.3"),
         advisories=(
             "GHSA-cq5v-8q36-5273",  # OOB heap read, C HTTP response parser
             "GHSA-mfx4-hv73-q22v",  # request smuggling via WebSocket upgrade
             "GHSA-mq44-7p77-q5h7",  # unnegotiated permessage-deflate
+            "GHSA-9xw5-w5jj-pvcg",  # multipart file descriptor exhaustion
+            "GHSA-2g87-pp6c-29x5",  # unbounded memory/CPU use
+            "GHSA-5wr8-gcqf-gqf3",  # no initial request/header timeout
+            "GHSA-pqxq-w44r-73xw",  # pure-Python parser request smuggling
+            "GHSA-f9xw-jh8m-3mwq",  # absolute-form target spoofs scheme
+            "GHSA-6cjc-53gc-5rqm",  # connector pool exhaustion, Max-Age overflow
+            "GHSA-gx76-c99x-2c96",  # subdomain cookie removes host-only scope
+            "GHSA-494j-54xm-rwp3",  # Secure attribute not enforced, shared cookie
         ),
         # Reached by proxbox_cli/client.py in the shipped extra, and installed
         # by the documentation workflows.
@@ -136,17 +146,61 @@ SECURITY_FLOORS: dict[str, SecurityFloor] = {
     ),
     "virtualenv": SecurityFloor(
         name="virtualenv",
-        floor="21.7.13",
-        # The activation-script issue covers <= 21.7.12; the seed-wheel and
+        floor="21.14.9",
+        # Known unpatched: GHSA-4f8h-vr72-p32c (>= 21.14.8, symlink seeding with
+        # temporary app-data) has no fixed release, so no floor can clear it.
+        # Raise this floor when one is published.
+        # GHSA-c978-59m8-c77v (POSIX launcher destination paths) covers exactly
+        # 21.14.8. GHSA-vxj4-q4g9-crj7 (bash activate) covers <= 21.14.6,
+        # GHSA-5vjq-rrrf-7h2q (zsh activate) covers <= 21.14.3, and
+        # GHSA-c947-3pg5-gm8q (fish activate) plus GHSA-8rjx-v5ww-45pp
+        # (placeholder in the path) cover <= 21.14.1. The earlier
+        # activation-script issue covers <= 21.7.12; the seed-wheel and
         # prompt-injection advisories cover earlier subsets of the same range.
-        affected=("20.36.1", "21.7.10", "21.7.11", "21.7.12"),
+        affected=(
+            "20.36.1",
+            "21.7.10",
+            "21.7.11",
+            "21.7.12",
+            "21.7.13",
+            "21.14.1",
+            "21.14.3",
+            "21.14.6",
+            "21.14.8",
+        ),
         advisories=(
             "GHSA-94p9-xgh2-xp45",
             "GHSA-9h9j-4vrj-gf7g",
             "GHSA-p58f-9548-mpm2",
             "GHSA-x78j-v8h9-3j2q",
+            "GHSA-5vjq-rrrf-7h2q",
+            "GHSA-vxj4-q4g9-crj7",
+            "GHSA-c947-3pg5-gm8q",
+            "GHSA-8rjx-v5ww-45pp",
+            "GHSA-c978-59m8-c77v",
         ),
         declared_in=(DEV_GROUP, DEV_EXTRA),
+    ),
+    "certifi": SecurityFloor(
+        name="certifi",
+        floor="2026.10.19",
+        # GHSA-6q48-6c7w-9gw2 covers >= 2019.03.09, < 2026.10.19.
+        affected=("2019.3.9", "2025.8.3", "2026.7.22"),
+        advisories=("GHSA-6q48-6c7w-9gw2",),
+        # Transitive through requests in the shipped runtime and through
+        # requests/httpx in the documentation install, whose ranges admit every
+        # affected bundle. Neither pip install consults uv.lock.
+        declared_in=(RUNTIME_DEPENDENCIES, DOCS_REQUIREMENTS),
+    ),
+    "multidict": SecurityFloor(
+        name="multidict",
+        floor="6.9.1",
+        # GHSA-54p9-h82j-f925 covers >= 6.7.0, <= 6.9.0.
+        affected=("6.7.0", "6.8.0", "6.9.0"),
+        advisories=("GHSA-54p9-h82j-f925",),
+        # Transitive through aiohttp/yarl in the shipped cli extra and the
+        # documentation install, which both admit the affected releases.
+        declared_in=(CLI_EXTRA, DOCS_REQUIREMENTS),
     ),
     "urllib3": SecurityFloor(
         name="urllib3",
@@ -170,9 +224,11 @@ _COMMON_NETBOX_MATRIX_FLOORS = {
     "djangorestframework": "3.17.2",
     "mkdocs-material": "9.7.7",
     "oauthlib": "4.0.0",
-    "pillow": "12.3.0",
+    # Known unpatched: GHSA-654x-cwwv-5j9c (11.2.1 through 13.0.0, Arrow export
+    # with PILLOW_ALIGNMENT > 1) has no fixed release yet.
+    "pillow": "13.0.0",
     "pyjwt": "2.15.0",
-    "strawberry-graphql": "0.315.7",
+    "strawberry-graphql": "0.327.2",
     "tablib": "3.10.0",
     "urllib3": "2.8.0",
 }
@@ -284,6 +340,15 @@ NETBOX_MATRIX_SECURITY_ADVISORIES = {
         "GHSA-phj9-mv4w-65pm",
         "GHSA-vjc4-5qp5-m44j",
         "GHSA-xj96-63gp-2gmr",
+        "GHSA-8g5g-8vmr-9782",
+        "GHSA-c6hw-5grf-ff96",
+        "GHSA-p4wg-p73j-c528",
+        "GHSA-pchr-8j38-3x4p",
+        "GHSA-q45j-58j2-45rg",
+        "GHSA-65qm-jvmh-6pqg",
+        "GHSA-58r4-6rv3-gfh8",
+        "GHSA-462x-pgg6-55fp",
+        "GHSA-vx6w-vv9f-6gvg",
     ),
     "pyjwt": (
         "GHSA-2gx3-rcp4-g85q",
@@ -304,12 +369,59 @@ NETBOX_MATRIX_SECURITY_ADVISORIES = {
         "GHSA-fr49-mhgj-crfc",
         "GHSA-qfwv-87qj-98xq",
         "GHSA-x97m-qp5c-w9xj",
+        "GHSA-pfvf-fwfp-25mp",
+        "GHSA-m952-2w3f-6r8h",
     ),
     "tablib": ("GHSA-gqgw-jghv-mxwx",),
     "urllib3": (
         "GHSA-8988-9cw3-xx77",
         "GHSA-gh4c-6fx4-qh6g",
         "GHSA-vxq7-64xx-v4gw",
+    ),
+}
+
+
+# Packages that no NetBox matrix input (``v*.in``) declares, so the input-floor
+# checks above cannot see them. Each generated lock that names one must pin it
+# at or above the floor, and the locks listed in ``required_in`` must name it at
+# all: a lock that silently drops a package it still installs would otherwise
+# pass. Transcribed from the published advisories through 2026-10-21.
+_ALL_MATRIX_LOCKS = (
+    "v4.5.8-py312-linux-x86_64.txt",
+    "v4.5.10-py312-linux-x86_64.txt",
+    "v4.6.0-py312-linux-x86_64.txt",
+    "v4.6.6-py312-linux-x86_64.txt",
+    "v4.6.6-pdm-3408441672bf-py312-linux-x86_64.txt",
+    "v4.7.0-beta2-py312-linux-x86_64.txt",
+    "v4.7.0-py312-linux-x86_64.txt",
+    "v4.7.0-all-companions-py312-linux-x86_64.txt",
+    "v4.7.0-openbao-58677ef-py312-linux-x86_64.txt",
+)
+UV_LOCK = "uv.lock"
+TRANSITIVE_LOCK_FLOORS: dict[str, tuple[str, tuple[str, ...], tuple[str, ...]]] = {
+    # package: (floor, advisories, locks that must pin it)
+    "certifi": (
+        "2026.10.19",
+        ("GHSA-6q48-6c7w-9gw2",),  # emSign roots with compromised intermediates
+        (*_ALL_MATRIX_LOCKS, UV_LOCK),
+    ),
+    "aiohttp": (
+        "3.14.4",
+        SECURITY_FLOORS["aiohttp"].advisories,
+        (
+            "v4.6.6-pdm-3408441672bf-py312-linux-x86_64.txt",
+            "v4.7.0-all-companions-py312-linux-x86_64.txt",
+            UV_LOCK,
+        ),
+    ),
+    "multidict": (
+        "6.9.1",
+        ("GHSA-54p9-h82j-f925",),  # items-view union/subtraction reference leak
+        (
+            "v4.6.6-pdm-3408441672bf-py312-linux-x86_64.txt",
+            "v4.7.0-all-companions-py312-linux-x86_64.txt",
+            UV_LOCK,
+        ),
     ),
 }
 
@@ -621,7 +733,23 @@ def test_locked_versions_satisfy_the_declared_floors() -> None:
     Catches the inverse mistake: raising a declared floor while leaving the lock
     pinned below it, which makes ``uv sync --locked`` inconsistent.
     """
-    lock_path = ROOT / "uv.lock"
+    locked = _uv_lock_versions()
+
+    for package, floor in sorted(SECURITY_FLOORS.items()):
+        key = _canonical(package)
+        if key not in locked:
+            pytest.fail(
+                f"uv.lock does not pin {package!r}, so its floor is unverifiable"
+            )
+        assert locked[key] >= Version(floor.floor), (
+            f"uv.lock pins {package} {locked[key]}, below the required security "
+            f"floor {floor.floor} ({', '.join(floor.advisories)})."
+        )
+
+
+def _uv_lock_versions() -> dict[str, Version]:
+    """Read every ``[[package]]`` pin from ``uv.lock``, failing loudly."""
+    lock_path = ROOT / UV_LOCK
     if not lock_path.is_file():
         pytest.fail(f"uv.lock is missing at {lock_path}")
     try:
@@ -633,22 +761,136 @@ def test_locked_versions_satisfy_the_declared_floors() -> None:
     if not isinstance(packages, list) or not packages:
         pytest.fail("uv.lock has no [[package]] entries")
 
-    locked = {
-        _canonical(entry["name"]): entry["version"]
-        for entry in packages
-        if isinstance(entry, dict) and "name" in entry and "version" in entry
-    }
+    return _lowest_locked_versions(packages)
 
-    for package, floor in sorted(SECURITY_FLOORS.items()):
-        key = _canonical(package)
-        if key not in locked:
+
+def _lowest_locked_versions(packages: list[object]) -> dict[str, Version]:
+    """Map each ``uv.lock`` package to the lowest version it pins.
+
+    A universal lock may hold several entries for one name, one per resolved
+    environment. A floor holds only when every entry clears it, so the lowest
+    version is the one to check; keeping any other entry would let a vulnerable
+    split hide behind a safe one.
+    """
+    lowest: dict[str, Version] = {}
+    for index, entry in enumerate(packages):
+        if not isinstance(entry, dict):
+            pytest.fail(f"uv.lock [[package]] entry {index} is not a table")
+        name = entry.get("name")
+        raw_version = entry.get("version")
+        if not isinstance(name, str) or not isinstance(raw_version, str):
             pytest.fail(
-                f"uv.lock does not pin {package!r}, so its floor is unverifiable"
+                f"uv.lock [[package]] entry {index} has no string name and version"
             )
-        assert Version(locked[key]) >= Version(floor.floor), (
-            f"uv.lock pins {package} {locked[key]}, below the required security "
-            f"floor {floor.floor} ({', '.join(floor.advisories)})."
+        try:
+            version = Version(raw_version)
+        except InvalidVersion:
+            pytest.fail(f"uv.lock pins {name} to invalid version {raw_version!r}")
+        key = _canonical(name)
+        if key not in lowest or version < lowest[key]:
+            lowest[key] = version
+    return lowest
+
+
+def _transitive_lock_versions(lock_name: str) -> dict[str, Version]:
+    """Read the pins of ``uv.lock`` or of one generated matrix lock."""
+    if lock_name == UV_LOCK:
+        return _uv_lock_versions()
+    return _matrix_lock_versions(NETBOX_REQUIREMENTS_DIR / lock_name)
+
+
+def _assert_transitive_lock_floors(
+    lock_name: str, lock_versions: dict[str, Version]
+) -> None:
+    """Require one lock to clear every transitive floor that applies to it."""
+    for package, (floor_raw, advisories, required_in) in sorted(
+        TRANSITIVE_LOCK_FLOORS.items()
+    ):
+        locked = lock_versions.get(_canonical(package))
+        if locked is None:
+            assert lock_name not in required_in, (
+                f"{lock_name} does not pin {package}, so its "
+                f"{floor_raw} security floor is unverifiable"
+            )
+            continue
+        assert locked >= Version(floor_raw), (
+            f"{lock_name} pins {package} {locked}, below the {floor_raw} "
+            f"security floor required by {', '.join(advisories)}"
         )
+
+
+def test_transitive_floor_table_covers_every_generated_matrix_lock() -> None:
+    """A new generated lock must be added to the transitive-floor table."""
+    on_disk = {path.name for path in NETBOX_REQUIREMENTS_DIR.glob("*.txt")}
+    assert on_disk, f"no generated matrix locks found in {NETBOX_REQUIREMENTS_DIR}"
+    assert on_disk == set(_ALL_MATRIX_LOCKS)
+
+
+@pytest.mark.parametrize("lock_name", [*_ALL_MATRIX_LOCKS, UV_LOCK])
+def test_locks_clear_transitive_security_floors(lock_name: str) -> None:
+    """Every lock pins transitive advisory packages at or above their floor."""
+    _assert_transitive_lock_floors(lock_name, _transitive_lock_versions(lock_name))
+
+
+@pytest.mark.parametrize(
+    ("package", "vulnerable"),
+    [
+        ("certifi", "2026.7.22"),
+        ("aiohttp", "3.14.3"),
+        ("multidict", "6.9.0"),
+    ],
+)
+@pytest.mark.parametrize("lock_name", [*_ALL_MATRIX_LOCKS, UV_LOCK])
+def test_transitive_lock_downgrade_is_rejected(
+    lock_name: str, package: str, vulnerable: str
+) -> None:
+    """A lock moved back into an advisory range fails the transitive guard."""
+    required_in = TRANSITIVE_LOCK_FLOORS[package][2]
+    lock_versions = dict(_transitive_lock_versions(lock_name))
+    if _canonical(package) not in lock_versions and lock_name not in required_in:
+        pytest.skip(f"{lock_name} legitimately does not install {package}")
+    lock_versions[_canonical(package)] = Version(vulnerable)
+    with pytest.raises(AssertionError, match=f"(?i){package}"):
+        _assert_transitive_lock_floors(lock_name, lock_versions)
+
+
+@pytest.mark.parametrize("vulnerable_first", [True, False])
+def test_uv_lock_duplicate_entries_are_judged_by_the_lowest_version(
+    vulnerable_first: bool,
+) -> None:
+    """A vulnerable split entry cannot hide behind a safe one in either order."""
+    packages = tomllib.loads((ROOT / UV_LOCK).read_text(encoding="utf-8"))["package"]
+    vulnerable = {"name": "certifi", "version": "2026.7.22"}
+    entries = [vulnerable, *packages] if vulnerable_first else [*packages, vulnerable]
+    lowest = _lowest_locked_versions(entries)
+    assert lowest["certifi"] == Version("2026.7.22")
+    with pytest.raises(AssertionError, match="(?i)certifi"):
+        _assert_transitive_lock_floors(UV_LOCK, lowest)
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        "not-a-table",
+        {"name": "certifi"},
+        {"version": "2026.10.19"},
+        {"name": "certifi", "version": "not a version"},
+    ],
+)
+def test_uv_lock_malformed_entries_fail_closed(entry: object) -> None:
+    """An entry the guard cannot read is a failure, never silently skipped."""
+    with pytest.raises(pytest.fail.Exception):
+        _lowest_locked_versions([entry])
+
+
+@pytest.mark.parametrize("package", sorted(TRANSITIVE_LOCK_FLOORS))
+def test_transitive_lock_missing_required_pin_is_rejected(package: str) -> None:
+    """Dropping a required transitive pin is a failure, not a pass."""
+    lock_name = TRANSITIVE_LOCK_FLOORS[package][2][0]
+    lock_versions = dict(_transitive_lock_versions(lock_name))
+    assert lock_versions.pop(_canonical(package), None) is not None
+    with pytest.raises(AssertionError, match=f"(?i)does not pin {package}"):
+        _assert_transitive_lock_floors(lock_name, lock_versions)
 
 
 def _matrix_input_specs(path: Path) -> list[str]:

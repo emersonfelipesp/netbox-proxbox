@@ -41,6 +41,11 @@ dependencies = [
     # otherwise transitive through requests, whose range admits 2.7.0.
     # tests/test_dependency_security_floors.py enforces this.
     "urllib3>=2.8.0",
+    # Security floor: 2026.10.19 removes the emSign root CAs whose intermediate
+    # CA keys were compromised (GHSA-6q48-6c7w-9gw2). The package is otherwise
+    # transitive through requests, whose range admits every affected bundle.
+    # tests/test_dependency_security_floors.py enforces this.
+    "certifi>=2026.10.19",
     "websockets>=16.0",
 ]
 
@@ -55,12 +60,20 @@ Issues = "https://github.com/emersonfelipesp/netbox-proxbox/issues"
 
 [project.optional-dependencies]
 cli = [
-    # Security floor: 3.14.3 is the first release fixing the out-of-bounds heap
+    # Security floor: 3.14.4 is the first release fixing the multipart file
+    # descriptor exhaustion, unbounded memory/CPU use, pure-Python parser request
+    # smuggling, and cookie-scope advisories (GHSA-9xw5-w5jj-pvcg and others
+    # through <= 3.14.3). It also keeps the 3.14.3 fix for the out-of-bounds heap
     # read in the C HTTP response parser (GHSA-cq5v-8q36-5273), which
     # ProxboxApiClient reaches when parsing a malformed chunked response from an
     # operator-configured backend. Do not lower without raising it elsewhere;
     # tests/test_dependency_security_floors.py enforces this.
-    "aiohttp>=3.14.3",
+    "aiohttp>=3.14.4",
+    # Security floor: 6.9.1 fixes the reference leak in multidict items-view
+    # union and subtraction (GHSA-54p9-h82j-f925). aiohttp and yarl require
+    # multidict but admit the affected 6.7.0 through 6.9.0 releases.
+    # tests/test_dependency_security_floors.py enforces this.
+    "multidict>=6.9.1",
     "click>=8.3.0",
     "PyYAML>=6.0.3",
     "rich>=14.1.0",
@@ -72,9 +85,12 @@ dev = [
     "invoke>=2.2.1",
     "pre-commit>=4.0.0",
     # Security floor: pre-commit admits virtualenv>=20.10.0, which includes
-    # releases with activation-script command injection; 21.7.13 fixes it.
+    # releases with activation-script command injection; 21.14.9 fixes the
+    # latest bash and zsh environment-name variants (GHSA-vxj4-q4g9-crj7,
+    # GHSA-5vjq-rrrf-7h2q) and the 21.14.8 POSIX launcher destination-path
+    # command execution (GHSA-c978-59m8-c77v).
     # tests/test_dependency_security_floors.py enforces this.
-    "virtualenv>=21.7.13",
+    "virtualenv>=21.14.9",
     "pylint>=4.0.5",
     "pylint-django>=2.7.0",
     "pydocstyle>=6.3.0",
@@ -190,15 +206,17 @@ dev = [
     # for >=10.2, which admits both ranges.
     # tests/test_dependency_security_floors.py enforces this.
     "pymdown-extensions>=11.0.1",
-    # Security floor: 21.7.13 fixes activation-script command injection and
-    # also includes the seed-wheel integrity and prompt-sanitization fixes.
+    # Security floor: 21.14.9 fixes the bash and zsh activation-script command
+    # injection through the environment name and the 21.14.8 POSIX launcher
+    # destination-path command execution, and also includes the earlier
+    # seed-wheel integrity and prompt-sanitization fixes.
     # tests/test_dependency_security_floors.py enforces this.
-    "virtualenv>=21.7.13",
+    "virtualenv>=21.14.9",
 ]
 publish = [
     "build==1.5.0",
     "hatchling==1.31.0",
-    "packaging==26.0",
+    "packaging==26.3",
     "setuptools==83.0.0",
     "twine==6.2.0",
     "wheel==0.46.2",

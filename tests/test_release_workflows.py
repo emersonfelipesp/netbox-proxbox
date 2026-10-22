@@ -817,7 +817,7 @@ def test_public_publish_workflow_uses_immutable_locked_tooling() -> None:
     assert project["dependency-groups"]["publish"] == [
         "build==1.5.0",
         "hatchling==1.31.0",
-        "packaging==26.0",
+        "packaging==26.3",
         "setuptools==83.0.0",
         "twine==6.2.0",
         "wheel==0.46.2",

@@ -36,11 +36,33 @@ in every affected matrix input and lock:
 | djangorestframework | `3.17.2` |
 | mkdocs-material | `9.7.7` |
 | oauthlib | `4.0.0` |
-| Pillow | `12.3.0` |
+| Pillow | `13.0.0` |
 | PyJWT | `2.15.0` |
-| strawberry-graphql | `0.315.7` |
+| strawberry-graphql | `0.327.2` |
 | tablib | `3.10.0` |
 | urllib3 | `2.8.0` |
+
+Some advisory-covered packages are not declared by any NetBox matrix input
+(`v*.in`), so the input floors above cannot govern them. certifi is declared
+only as a floor in the shared `netbox-proxbox-test-py312.in`, which the
+input-floor check does not read. The regression test also
+requires every generated lock that pins one of these packages to pin it at or
+above its floor, and requires the listed locks to pin it at all:
+
+| Package | Minimum safe version | Locks that must pin it |
+| --- | --- | --- |
+| certifi | `2026.10.19` | every matrix lock and `uv.lock` |
+| aiohttp | `3.14.4` | PDM, all-companions, and `uv.lock` |
+| multidict | `6.9.1` | PDM, all-companions, and `uv.lock` |
+
+Pillow GHSA-654x-cwwv-5j9c (11.2.1 through 13.0.0, Arrow export with
+`PILLOW_ALIGNMENT` greater than 1) has no patched release yet, so no floor can
+clear it. The matrix does not use Arrow export or set `PILLOW_ALIGNMENT`. Raise
+the Pillow floor when a fixed release is published.
+
+When a security floor moves, regenerate each lock with
+`--upgrade-package <package>` for the affected packages only. The existing lock
+is the resolver preference, so unrelated pins do not move.
 
 The PyJWT floor also requires a coherent authentication dependency chain in
 the affected inputs: `oauthlib==4.0.0`, `social-auth-core==5.1.0`,
