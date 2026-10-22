@@ -4,8 +4,8 @@
 
 Version `0.0.31` adds native NetBox cluster binding for Proxmox endpoints,
 endpoint-owned SSH application services, and verified Cloud Image SSH bindings.
-It also includes integration fixes and fail-closed validation of the release
-schema. Deploy proxbox-api `0.0.29` before upgrading the plugin.
+It also includes integration fixes, raised dependency security floors, and
+fail-closed validation of the release schema. Deploy proxbox-api `0.0.29` before upgrading the plugin.
 
 ## Native cluster binding
 
@@ -52,6 +52,36 @@ refused cleanly instead of returning HTTP 500. Every refused delete discards
 the change events it queued. Plugin settings saved with an explicit primary key
 are inserted correctly, and the backend capability probe keeps its request
 timeout bounded in a form security linting can verify.
+
+## Dependency security
+
+Dependency floors now clear every published advisory that has a patched
+release:
+
+- The `cli` extra and the documentation requirements declare
+  `aiohttp>=3.14.4` and `multidict>=6.9.1`. The development extra and
+  dependency group declare `virtualenv>=21.14.9`, and the documentation
+  requirements declare `certifi>=2026.10.19`.
+- certifi is deliberately not a runtime dependency of the plugin, because it
+  belongs to the NetBox environment that the plugin is installed into. Upgrade
+  certifi in that environment to `2026.10.19` or later (GHSA-6q48-6c7w-9gw2)
+  through the normal NetBox upgrade path.
+- The development lock moves to aiohttp 3.14.5, certifi 2026.10.19, multidict
+  7.1.0, and virtualenv 21.14.12. The pinned publish toolchain moves to
+  packaging 26.3, which that virtualenv requires.
+- Every NetBox compatibility-matrix input pins Pillow 13.0.0 and
+  strawberry-graphql 0.327.2. Every hash lock pins certifi 2026.10.19, plus
+  aiohttp 3.14.5 and multidict 7.1.0 where a companion installs them. The floor
+  regression test also checks these transitive lock pins.
+
+Two upstream advisories have no patched release yet and remain open residual
+risk: Pillow GHSA-654x-cwwv-5j9c (11.2.1 through 13.0.0; Arrow export can
+expose stale heap memory when `PILLOW_ALIGNMENT` is greater than 1) and
+virtualenv GHSA-4f8h-vr72-p32c (21.14.8 and later; temporary app-data can leave
+dangling seed package links when symlink seeding is configured). This project
+uses neither feature. Until fixes are published, do not enable
+`PILLOW_ALIGNMENT` with Arrow export, and use the default copy seeding or a
+private persistent app-data directory for virtualenv.
 
 ## Migrations and upgrade
 

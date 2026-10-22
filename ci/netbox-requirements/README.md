@@ -43,9 +43,7 @@ in every affected matrix input and lock:
 | urllib3 | `2.8.0` |
 
 Some advisory-covered packages are not declared by any NetBox matrix input
-(`v*.in`), so the input floors above cannot govern them. certifi is declared
-only as a floor in the shared `netbox-proxbox-test-py312.in`, which the
-input-floor check does not read. The regression test also
+(`v*.in`), so the input floors above cannot govern them. The regression test also
 requires every generated lock that pins one of these packages to pin it at or
 above its floor, and requires the listed locks to pin it at all:
 

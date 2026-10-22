@@ -41,11 +41,6 @@ dependencies = [
     # otherwise transitive through requests, whose range admits 2.7.0.
     # tests/test_dependency_security_floors.py enforces this.
     "urllib3>=2.8.0",
-    # Security floor: 2026.10.19 removes the emSign root CAs whose intermediate
-    # CA keys were compromised (GHSA-6q48-6c7w-9gw2). The package is otherwise
-    # transitive through requests, whose range admits every affected bundle.
-    # tests/test_dependency_security_floors.py enforces this.
-    "certifi>=2026.10.19",
     "websockets>=16.0",
 ]
 

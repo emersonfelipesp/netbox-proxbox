@@ -187,10 +187,15 @@ SECURITY_FLOORS: dict[str, SecurityFloor] = {
         # GHSA-6q48-6c7w-9gw2 covers >= 2019.03.09, < 2026.10.19.
         affected=("2019.3.9", "2025.8.3", "2026.7.22"),
         advisories=("GHSA-6q48-6c7w-9gw2",),
-        # Transitive through requests in the shipped runtime and through
-        # requests/httpx in the documentation install, whose ranges admit every
-        # affected bundle. Neither pip install consults uv.lock.
-        declared_in=(RUNTIME_DEPENDENCIES, DOCS_REQUIREMENTS),
+        # Transitive through requests/httpx in the documentation install, which
+        # admits every affected bundle and does not consult uv.lock. Deliberately
+        # NOT a shipped runtime floor: the plugin installs into an existing
+        # NetBox environment whose certifi belongs to NetBox, and a package
+        # deploy that verifies Requires-Dist against that environment would
+        # refuse the plugin until NetBox itself is upgraded. Every lock pins a
+        # fixed bundle (TRANSITIVE_LOCK_FLOORS), and the NetBox environment
+        # should take certifi>=2026.10.19 through its own upgrade path.
+        declared_in=(DOCS_REQUIREMENTS,),
     ),
     "multidict": SecurityFloor(
         name="multidict",
@@ -852,6 +857,18 @@ def test_transitive_lock_downgrade_is_rejected(
     lock_versions[_canonical(package)] = Version(vulnerable)
     with pytest.raises(AssertionError, match=f"(?i){package}"):
         _assert_transitive_lock_floors(lock_name, lock_versions)
+
+
+def test_certifi_is_not_a_shipped_runtime_dependency() -> None:
+    """certifi stays out of the wheel's Requires-Dist on purpose.
+
+    The plugin installs into an existing NetBox environment that owns certifi.
+    A runtime floor would make a package deploy that verifies every
+    Requires-Dist against that environment refuse the plugin until NetBox is
+    upgraded. The floor lives in the documentation install and the locks.
+    """
+    names = {_canonical(Requirement(spec).name) for spec in _runtime_dependency_specs()}
+    assert "certifi" not in names
 
 
 @pytest.mark.parametrize("vulnerable_first", [True, False])
