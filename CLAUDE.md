@@ -60,6 +60,11 @@ operator contract is in the Docker installation guide.
 - `netbox_proxbox/jobs.py` and `netbox_proxbox/sync/` own asynchronous sync
   orchestration. NetBox remains the local system of record; Proxmox remains the
   source of truth for reflected infrastructure state.
+- `netbox-pbs` owns direct PBS REST synchronization, desired PBS configuration,
+  token secrets, and audited actions. A linked `PBSEndpoint` in this plugin is
+  inventory only; it never receives the server token. PBS deployment, Proxmox
+  storage registration, and VM backup requests use proxbox-api for their
+  Proxmox operations. See `docs/companion-plugins/netbox-pbs.md`.
 - `ProxboxPluginSettings.sync_job_timeout` is the UI-backed RQ wall-clock limit
   for newly enqueued synchronization jobs. It defaults to 7200 seconds, accepts
   3600–604800 seconds, and never changes an already-running job's captured timeout.

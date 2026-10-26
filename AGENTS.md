@@ -31,6 +31,11 @@ facts that an agent must have even when `@CLAUDE.md` expansion is unavailable:
   server-side and out of browser-readable output.
 - Keep companion-plugin imports optional and lazy; enabled-but-broken
   companions fail at startup rather than degrading silently.
+- `netbox-pbs` owns PBS REST sync, managed PBS configuration, token secrets,
+  and audited actions. A linked `PBSEndpoint` is inventory only and never
+  receives its token. PBS deployment, Proxmox storage registration, and VM
+  backups use proxbox-api for the Proxmox operations; see
+  `docs/companion-plugins/netbox-pbs.md`.
 - netbox-openbao is optional. Automatic credential storage selects OpenBao only
   when the companion is enabled and otherwise selects local Fernet storage;
   explicit selections never fall back.

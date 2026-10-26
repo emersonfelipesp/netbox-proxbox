@@ -1,243 +1,121 @@
 # netbox-pbs — Proxmox Backup Server
 
-`netbox-pbs` is a standalone NetBox plugin that inventories **Proxmox Backup Server (PBS)** infrastructure by syncing data from the `proxbox-api` backend. It gives operators a unified view of backup servers, datastores, snapshots, and job history alongside the VMs and nodes tracked by `netbox-proxbox`.
+`netbox-pbs` is a standalone NetBox plugin for Proxmox Backup Server (PBS). It
+reads PBS inventory and configuration through the PBS REST API, manages selected
+PBS configuration under explicit write permissions, and records tasks and audit
+events. It reuses NetBox and `netbox-proxbox` objects for virtual machines,
+addresses, templates, nodes, storage, networks, and the optional PBS endpoint
+link. It does not copy those objects into another inventory.
 
-## Architecture
+For the full contract, use the [netbox-pbs documentation](https://github.com/emersonfelipesp/netbox-pbs/tree/main/docs),
+especially its [models](https://github.com/emersonfelipesp/netbox-pbs/blob/main/docs/models.md),
+[API](https://github.com/emersonfelipesp/netbox-pbs/blob/main/docs/api.md),
+[sync](https://github.com/emersonfelipesp/netbox-pbs/blob/main/docs/sync.md),
+[deployment](https://github.com/emersonfelipesp/netbox-pbs/blob/main/docs/deployment.md), and
+[backup](https://github.com/emersonfelipesp/netbox-pbs/blob/main/docs/backup.md) guides.
+
+## Integration boundaries
 
 ```mermaid
-graph LR
+flowchart LR
     PBS["Proxmox Backup Server"]
-    API["proxbox-api\n/pbs/*"]
-    NB["NetBox\nnetbox-pbs"]
+    NBPBS["NetBox: netbox-pbs"]
+    NBPX["NetBox: netbox-proxbox"]
+    API["proxbox-api"]
+    PVE["Proxmox VE"]
 
-    PBS -- "PBS REST API\n(:8007)" --> API
-    API -- "JSON sync" --> NB
-
-    NB --> S1["PBSServer"]
-    NB --> S2["PBSDatastore"]
-    NB --> S3["PBSSnapshot"]
-    NB --> S4["PBSJob"]
+    NBPBS <-->|"PBS REST: inventory and managed configuration"| PBS
+    NBPBS <-->|"VM, storage, and optional PBSEndpoint links"| NBPX
+    NBPBS -->|"typed, audited Proxmox operations"| API
+    API <-->|"clone, storage registration, vzdump"| PVE
 ```
 
-## Data Models
+`PBSServer` owns the PBS address, TLS policy, token identity, and write policy.
+Its token secret stays in the `netbox-pbs` secret store. The optional
+`netbox-proxbox` `PBSEndpoint` is an inventory link: **Register in netbox-proxbox**
+matches or creates an endpoint for the same host and port but does not copy a
+PBS token or secret to Proxbox or proxbox-api. A deployed PBS may also link to
+its existing NetBox `VirtualMachine` and `IPAddress`.
 
-### `PBSServer`
+`netbox-pbs` uses proxbox-api for the Proxmox side of a PBS deployment, for
+registering a PBS datastore as Proxmox storage, and for running a Proxmox VM
+backup. PBS itself has no snapshot-creation API; Proxmox VE writes the backup.
+The resulting PBS snapshot appears when `netbox-pbs` next syncs that server.
 
-Represents one Proxmox Backup Server instance registered in NetBox.
+## Inventory and synchronization
 
-| Field | Type | Description |
-|---|---|---|
-| `name` | string (unique) | Human-readable label |
-| `host` | string | Hostname or IP address |
-| `port` | int | API port (default `8007`) |
-| `token_id` | string | PBS API token identifier |
-| `fingerprint` | string | TLS fingerprint for certificate pinning |
-| `verify_ssl` | bool | Whether to verify TLS certificates |
-| `status` | choice | `unknown` / `reachable` / `unreachable` |
-| `version` | string | PBS version string reported by the API |
-| `last_seen_at` | datetime | Most recent successful API contact |
+`PBSSyncJob` reads each configured server directly. An operator can run **Sync
+now** or `POST /api/plugins/pbs/servers/<id>/sync/`; an optional schedule can
+enqueue a full sync. The stages run in order: `node`, `datastores`, `namespaces`,
+`groups`, `snapshots`, `jobs`, `objects`, and `tasks`. A failed read leaves that
+stage's rows untouched. Managed configuration keeps desired and observed state;
+new or changed PBS values may report drift, while pending writes remain protected.
+Reflected snapshots, groups, and tasks are refreshed from PBS.
 
-### `PBSDatastore`
+| Model | Role |
+| --- | --- |
+| `PBSServer` | Connection, TLS, write policy, health, and optional VM, IP, and Proxbox endpoint links |
+| `PBSDatastore`, `PBSNamespace` | Managed datastore configuration and namespace inventory |
+| `PBSJob`, `PBSManagedObject` | Managed jobs and typed PBS configuration, including users, tokens, and ACLs |
+| `PBSBackupGroup`, `PBSSnapshot` | Reflected backups; snapshot identity includes the namespace |
+| `PBSTask`, `PBSActionLog` | Task status and audited actions |
+| `PBSDeployment` | Staged deployment and adoption of a PBS virtual machine |
+| `PBSPluginSettings` | Sync, branching, secret backend, and scheduling settings |
 
-One backup datastore on a PBS server.
+Backup groups link to a NetBox virtual machine only when the backup evidence
+identifies one guest. Snapshots link to the exact group by server, datastore,
+namespace, backup type, and backup ID. Matching Proxbox storages and `VMBackup`
+rows are computed relationships subject to the viewer's permissions; they are
+not copied into `netbox-pbs`. An ambiguous VM match leaves the link empty.
 
-| Field | Type | Description |
-|---|---|---|
-| `server` | FK → `PBSServer` | Owning PBS server |
-| `name` | string | Datastore name as reported by PBS |
-| `path` | string | Filesystem path on the PBS host |
-| `used_bytes` | int | Used capacity (bytes) |
-| `total_bytes` | int | Total capacity (bytes) |
-| `avail_bytes` | int | Available capacity (bytes) |
-| `gc_status` | choice | `ok` / `running` / `error` / `pending` / `unknown` |
-| `comment` | string | Optional annotation |
-| `last_seen_at` | datetime | Most recent sync timestamp |
+Optional `netbox-branching` runs a sync in a branch. The setting
+`branch_on_conflict` is `fail` or `acknowledge`; a failed stage or unavailable
+branching runtime does not silently write to the main schema. See the
+[netbox-pbs configuration guide](https://github.com/emersonfelipesp/netbox-pbs/blob/main/docs/configuration.md)
+for the current settings and defaults.
 
-Uniqueness constraint: `(server, name)`.
+## Managed writes and secrets
 
-### `PBSSnapshot`
+PBS writes require the server's **Allow writes** setting and the applicable
+NetBox object and action permissions. A managed create or update enters
+`pending` state and queues an apply job. A managed delete requires the exact
+object identity as confirmation. A PBS ACL entry is identified by its path,
+principal, and role; changing one creates a different entry. Secrets are
+write-only in normal forms and REST responses. Selected once-returned managed
+object secrets have a separate permission-gated, audited reveal action; the
+server connection token cannot be revealed there.
 
-One backup snapshot stored in a datastore.
+The old `proxbox_api_url` and `proxbox_api_key` settings are deprecated and
+unused by synchronization. They remain temporarily for migration reversal.
+Legacy `proxbox_api_key_enc` ciphertext, when present, is covered by
+`netbox-proxbox` encryption-key rotation and recovery safeguards. Migrate the
+companion before rotating or resetting that shared legacy key. New secrets are
+stored through the `netbox-pbs` secret store.
 
-| Field | Type | Description |
-|---|---|---|
-| `server` | FK → `PBSServer` | Owning PBS server |
-| `datastore_name` | string | Datastore name (denormalized) |
-| `backup_type` | choice | `vm` / `ct` / `host` / `unknown` |
-| `backup_id` | string | Proxmox VMID or hostname |
-| `backup_time` | datetime | Snapshot creation timestamp |
-| `size_bytes` | int | Snapshot size (bytes) |
-| `owner` | string | PBS ownership token or user |
-| `protected` | bool | Protected from garbage collection |
-| `comment` | string | Optional annotation |
-| `verification_state` | string | Integrity verification result |
-| `last_seen_at` | datetime | Most recent sync timestamp |
+## Navigation and REST API
 
-Uniqueness constraint: `(server, datastore_name, backup_type, backup_id, backup_time)`.
+The **PBS** menu includes servers, deployments, datastores, snapshots, jobs,
+typed configuration, tasks, audit log, and plugin settings. Permissions control
+which entries and objects an operator can see.
 
-### `PBSJob`
-
-A PBS scheduled job (verify / prune / garbage-collect / sync / tape).
-
-| Field | Type | Description |
-|---|---|---|
-| `server` | FK → `PBSServer` | Owning server |
-| `job_type` | choice | `verify` / `prune` / `gc` / `sync` / `tape` / `unknown` |
-| `job_id` | string | PBS job identifier |
-| `store` | string | Target datastore name |
-| `schedule` | string | Cron/calendar schedule expression |
-| `comment` | string | Job comment |
-| `disable` | bool | Whether the job is disabled |
-| `last_run_state` | choice | `ok` / `error` / `warning` / `running` / `unknown` |
-| `last_run_endtime` | datetime | Last execution end timestamp |
-| `next_run` | datetime | Next scheduled execution |
-| `last_seen_at` | datetime | Most recent sync timestamp |
-
-Uniqueness constraint: `(server, job_type, job_id)`.
-
-### `PBSPluginSettings`
-
-Singleton settings row editable from **PBS → Plugin Settings**.
-
-| Field | Default | Description |
-|---|---|---|
-| `proxbox_api_url` | `""` | Fallback URL used when `FastAPIEndpoint` resolution is unavailable |
-| `proxbox_api_key` | `""` | Write-only optional bearer token for the standalone URL; stored in `proxbox_api_key_enc` under the shared netbox-proxbox Fernet key |
-| `branching_enabled` | `false` | Create a `netbox-branching` branch per sync run |
-| `branch_name_prefix` | `"pbs-sync"` | Prefix for auto-created branch names |
-| `branch_on_conflict` | `abort` | `abort` (leave branch open) or `overwrite` (merge despite conflicts) |
-
-Because the fallback API key shares
-`ProxboxPluginSettings.encryption_key`, netbox-proxbox includes
-`PBSPluginSettings.proxbox_api_key_enc` in its verified rotation and selective
-destructive-reset registry whenever netbox-pbs is installed. A missing
-netbox-pbs app is safely omitted only when its database table is also absent.
-If the app is unloaded but its known settings table survives, netbox-proxbox
-locks and inspects the table and blocks key mutation while any fallback-key
-ciphertext remains. Re-enable and migrate netbox-pbs before rotating or resetting
-that family. An installed app whose expected model or database table cannot be
-resolved likewise blocks recovery. netbox-proxbox installs the same settings-row
-writer guard on both companion default/base-manager queryset classes at app
-startup; a fallback ciphertext
-prepared under the old key is rejected if rotation wins the lock. Recovery also
-takes the companion PostgreSQL table lock. Direct queryset/bulk writes to
-`proxbox_api_key_enc` are rejected before SQL; only the private one-call
-rotation/reset update may write it after taking the shared settings lock and
-validating a non-empty outgoing value under the current key. Bulk writes have no
-bypass. A destructive fallback-key reset leaves the setting
-explicitly unconfigured; re-enter the key before relying on the standalone
-fallback URL again.
-
-## Sync Flow
-
-```mermaid
-flowchart TD
-    A([Operator triggers sync]) --> B{Branching enabled?}
-    B -- No --> C[PBSSyncJob runs on RQ default queue]
-    B -- Yes --> D[Create netbox-branching branch\nprefix: pbs-sync-*]
-    D --> C
-    C --> E["POST /pbs/sync/servers"]
-    C --> F["POST /pbs/sync/datastores"]
-    C --> G["POST /pbs/sync/snapshots"]
-    C --> H["POST /pbs/sync/jobs"]
-    E & F & G & H --> I{Branching enabled?}
-    I -- No --> J([Done])
-    I -- Yes --> K{Conflicts?}
-    K -- abort --> L([Branch left open for review])
-    K -- overwrite --> M[Merge branch into main]
-    M --> J
-```
-
-## Navigation
-
-The plugin registers a **PBS** top-level menu with an **Inventory** group:
-
-- **Servers** — list / detail / add
-- **Datastores** — list / detail
-- **Snapshots** — list / detail
-- **Jobs** — list / detail
-- **Plugin Settings** — singleton edit
-
-## REST API
-
-The plugin exposes a read-write REST API under `/api/plugins/pbs/`:
-
-| Endpoint | Methods |
-|---|---|
-| `/api/plugins/pbs/servers/` | GET, POST |
-| `/api/plugins/pbs/datastores/` | GET, POST |
-| `/api/plugins/pbs/snapshots/` | GET, POST |
-| `/api/plugins/pbs/jobs/` | GET, POST |
-| `/api/plugins/pbs/settings/` | GET, PUT, PATCH |
+The REST prefix is `/api/plugins/pbs/`. The principal collections are
+`/servers/`, `/deployments/`, `/datastores/`, `/namespaces/`, `/jobs/`,
+`/objects/`, `/groups/`, `/snapshots/`, `/tasks/`, `/audit-log/`, and
+`/settings/`. Groups, snapshots, tasks, and audit rows are read-only. The
+server, deployment, and datastore action routes and their permissions are
+listed in the [netbox-pbs API guide](https://github.com/emersonfelipesp/netbox-pbs/blob/main/docs/api.md).
 
 ## Installation
 
-### pip
+Install `netbox-proxbox` first, then install and enable `netbox-pbs`. Put
+`netbox_proxbox` before `netbox_pbs` in NetBox's `PLUGINS` list. Run the
+`netbox_pbs` migrations and restart the application and workers. No
+`PLUGINS_CONFIG` entry is required; edit the singleton at **PBS → Plugin
+settings**. If `netbox-pdm` is installed too, enable `netbox_pbs` before
+`netbox_pdm` because PDM links to PBS server records.
 
-```bash
-source /opt/netbox/venv/bin/activate
-pip install netbox-pbs
-```
-
-### git (development build)
-
-```bash
-source /opt/netbox/venv/bin/activate
-pip install git+https://github.com/emersonfelipesp/netbox-pbs.git
-```
-
-### Enable in NetBox
-
-Add to `configuration.py` **after** `netbox_proxbox`:
-
-```python
-PLUGINS = [
-    "netbox_proxbox",
-    "netbox_pbs",
-    # other companion plugins …
-]
-```
-
-Run migrations and restart:
-
-```bash
-cd /opt/netbox/netbox
-python3 manage.py migrate netbox_pbs
-python3 manage.py collectstatic --no-input
-sudo systemctl restart netbox netbox-rq
-```
-
-### Docker
-
-Add to `plugin_requirements.txt`:
-
-```
-netbox-pbs
-```
-
-Add to `configuration/plugins.py`:
-
-```python
-PLUGINS = [
-    "netbox_proxbox",
-    "netbox_pbs",
-]
-```
-
-## Configuration
-
-No `PLUGINS_CONFIG` entries are required. All runtime options are stored in the `PBSPluginSettings` singleton and are editable from the NetBox UI at **PBS → Plugin Settings**.
-
-## NetBox Compatibility
-
-| netbox-pbs | NetBox |
-|---|---|
-| `0.0.1.post1+` | 4.5.8 – 4.6.x |
-
-`netbox-proxbox` must be installed at the same NetBox compatibility level.
-Upgrade and migrate netbox-pbs to `0.0.1.post1` or newer before enabling
-netbox-proxbox encryption recovery. An older enabled companion is allowed to
-start so `manage.py migrate netbox_pbs` remains available, but recovery/key
-mutation fails closed until `PBSPluginSettings.proxbox_api_key_enc` and its
-database column exist. Upgrade netbox-pbs first, run its migrations, then
-upgrade netbox-proxbox.
+The older companion schema must be upgraded to `netbox-pbs` `0.0.1.post1` or
+later before `netbox-proxbox` encryption-key recovery. See the
+[netbox-pbs installation guide](https://github.com/emersonfelipesp/netbox-pbs/blob/main/docs/installation.md)
+and the [compatibility matrix](https://github.com/emersonfelipesp/netbox-pbs/blob/main/COMPATIBILITY.md)
+for the current supported NetBox versions and dependency pairing.

@@ -11,6 +11,12 @@ timers drain without polling, while explicit user jobs and audit records remain.
 
 netbox-proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data into NetBox. It keeps DCIM data up-to-date with real Proxmox clusters, nodes, virtual machines, containers (LXC), backups, and snapshots.
 
+The `netbox-pbs` companion reads and manages PBS through the PBS REST API. Its
+`PBSEndpoint` link in netbox-proxbox is inventory only and holds no PBS token.
+PBS deployment, Proxmox storage registration, and VM backups use proxbox-api
+for the Proxmox operations. See `docs/companion-plugins/netbox-pbs.md` for the
+current ownership and synchronization contract.
+
 ### What It Does
 
 SSH secret APIs require the same fresh sensitive-data grant in addition to

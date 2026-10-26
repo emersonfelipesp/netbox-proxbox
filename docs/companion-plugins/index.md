@@ -12,7 +12,7 @@ It distinguishes existing behavior from the implementation required for cutover.
 
 | Plugin | PyPI package | What it inventories |
 |---|---|---|
-| [netbox-pbs](./netbox-pbs.md) | `netbox-pbs` | Proxmox Backup Server — servers, datastores, snapshots, jobs |
+| [netbox-pbs](./netbox-pbs.md) | `netbox-pbs` | Proxmox Backup Server — direct PBS inventory, managed configuration, deployments, and backup correlation |
 | [netbox-pdm](./netbox-pdm.md) | `netbox-pdm` | Proxmox Datacenter Manager — PDM endpoints and their remotes (PVE + PBS) |
 | [netbox-ceph](./netbox-ceph.md) | `netbox-ceph` | Ceph clusters — nodes, OSDs, pools, filesystems, CRUSH rules, flags, health checks |
 | [netbox-packer](./netbox-packer.md) | `netbox-packer` | HashiCorp Packer — image definitions and build execution records |
@@ -35,7 +35,7 @@ graph TB
     end
 
     subgraph backend["proxbox-api (FastAPI backend)"]
-        PROXBOX_API["/proxmox  /pbs  /pdm  /ceph  /packer"]
+        PROXBOX_API["Proxmox operations and other companion backends"]
     end
 
     subgraph netbox["NetBox"]
@@ -47,13 +47,13 @@ graph TB
     end
 
     PVE -- "Proxmox API" --> PROXBOX_API
-    PBS -- "PBS REST API" --> PROXBOX_API
+    PBS -- "PBS REST API: inventory and configuration" --> NB_PBS
     PDM -- "PDM API" --> PROXBOX_API
     CEPH -- "Ceph REST / MGR" --> PROXBOX_API
     PACKER_SRC -- "webhooks / polling" --> PROXBOX_API
 
     PROXBOX_API -- "SSE stream" --> NB_PROXBOX
-    PROXBOX_API -- "REST sync" --> NB_PBS
+    NB_PBS -- "typed Proxmox deployment, storage, and backup operations" --> PROXBOX_API
     PROXBOX_API -- "REST sync" --> NB_PDM
     PROXBOX_API -- "REST sync" --> NB_CEPH
     PROXBOX_API -- "REST" --> NB_PACKER
@@ -67,32 +67,31 @@ graph TB
 
 ## How Sync Works
 
-The inventory companion plugins follow the same pattern. OpenBao credential
-management and RPC execution use separate workflows:
+Companion plugins use different transports. The PBS sync worker reads PBS
+directly, as shown below. Its Proxmox deployment and backup operations use
+proxbox-api. The other companions retain their documented transport paths.
+OpenBao credential management and RPC execution use separate workflows:
 
 ```mermaid
 sequenceDiagram
     participant U as Operator / Scheduler
-    participant NB as NetBox (plugin)
+    participant NB as NetBox (netbox-pbs)
     participant RQ as RQ Worker
-    participant API as proxbox-api
-    participant INFRA as Infrastructure
+    participant PBS as Proxmox Backup Server
 
     U->>NB: Trigger sync (UI or scheduler)
     NB->>RQ: Enqueue SyncJob (default queue)
-    RQ->>API: POST /pbs/sync or /pdm/sync …
-    API->>INFRA: Poll infrastructure API
-    INFRA-->>API: JSON payload
-    API-->>RQ: JSON response
-    RQ->>NB: createOrUpdate inventory rows
+    RQ->>PBS: Read PBS REST API by sync stage
+    PBS-->>RQ: Configuration, backup, and task data
+    RQ->>NB: Reconcile inventory and desired-state observations
     NB-->>U: Job completed / errored
 ```
 
-Key points shared by all companion plugins:
+Operational guidance for companion jobs:
 
-- Sync jobs run on NetBox's **`default`** RQ queue. A stock `manage.py rqworker` (no extra arguments) picks them up.
-- Each plugin defaults to a **7200 s** job timeout so slow syncs are not killed by RQ's default 300 s wall-clock limit. Netbox Proxbox exposes its bounded timeout under **Proxbox > Settings**.
-- **Branch-aware sync** (optional, requires `netbox-branching`) creates an isolated NetBox branch, runs the sync against it, and merges on success. The conflict policy is configurable per plugin from its **Plugin Settings** singleton — see each plugin's page for the specific choices.
+- PBS sync jobs run on NetBox's **`default`** RQ queue. A stock `manage.py rqworker` (no extra arguments) picks them up.
+- Check each companion's job timeout and scheduler settings in its own guide. Netbox Proxbox exposes its bounded sync timeout under **Proxbox > Settings**.
+- **Branch-aware sync** (optional, requires `netbox-branching`) creates an isolated NetBox branch and runs the sync against it. Conflict handling is plugin-specific; see each plugin's settings and guide.
 
 ## Plugin Dependency Map
 

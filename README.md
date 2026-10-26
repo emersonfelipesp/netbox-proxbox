@@ -66,7 +66,7 @@ upgraded.
 | Package | NetBox plugin | What it adds |
 |---------|---------------|--------------|
 | [`netbox-pdm`](https://github.com/emersonfelipesp/netbox-pdm) | `netbox_pdm` | Inventories Proxmox Datacenter Manager endpoints and the PVE/PBS remotes managed by PDM. It links PDM remotes back to Proxbox Proxmox endpoints and, when installed, `netbox-pbs` backup servers. |
-| [`netbox-pbs`](https://github.com/emersonfelipesp/netbox-pbs) | `netbox_pbs` | Inventories Proxmox Backup Server infrastructure, including PBS servers, datastores, backup snapshots, and scheduled job history. |
+| [`netbox-pbs`](https://github.com/emersonfelipesp/netbox-pbs) | `netbox_pbs` | Synchronizes PBS directly, manages selected PBS configuration, and links backups to NetBox and Proxbox inventory; proxbox-api handles its Proxmox deployment and backup operations. |
 | [`netbox-ceph`](https://github.com/emersonfelipesp/netbox-ceph) | `netbox_ceph` | Adds read-only Ceph cluster inventory for Proxmox-managed Ceph: clusters, daemons, OSDs, pools, filesystems, CRUSH rules, flags, and health checks. |
 | [`netbox-packer`](https://github.com/emersonfelipesp/netbox-packer) | `netbox_packer` | Tracks HashiCorp Packer image definitions and build execution records for Proxmox VM templates and image-factory workflows. |
 | [`netbox-rpc`](https://github.com/emersonfelipesp/netbox-rpc) | `netbox_rpc` | Audited SSH/RPC procedure engine. netbox-proxbox optionally uses it to install SSH keys on Proxmox hosts and to collect Proxmox endpoint systemd service status via `netbox_proxbox.integrations.rpc`. |
