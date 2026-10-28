@@ -30,4 +30,4 @@ idna>=3.15
 
 # Transitive via requests/httpx, which admit the certifi bundles covered by
 # GHSA-6q48-6c7w-9gw2 (< 2026.10.19). Declared here for the same reason.
-certifi>=2026.10.19
+certifi>=2026.10.23
