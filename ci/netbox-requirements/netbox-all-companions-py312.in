@@ -13,5 +13,5 @@ PyYAML>=6.0
 pydantic>=2.13.3,<2.14.0
 requests>=2.33.0
 proxmox-sdk>=0.0.12
-setuptools>=77.0.3
+setuptools>=84.1.0
 wheel
