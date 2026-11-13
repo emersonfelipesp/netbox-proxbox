@@ -140,15 +140,7 @@ def _try_register_key_fallback() -> tuple[bool, str]:
             continue
 
         success, message = _try_register_key(
-            BackendRequestContext(
-                detail=context,
-                endpoint_id=context.get("endpoint_id"),
-                target_fingerprint=str(context.get("target_fingerprint", "")),
-                http_url=context.get("http_url"),
-                ip_address_url=context.get("ip_address_url"),
-                verify_ssl=context.get("verify_ssl", True),
-                headers=context.get("headers", {}),
-            ),
+            BackendRequestContext.from_fastapi_context(context),
             token,
         )
         if success:

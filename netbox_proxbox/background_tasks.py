@@ -14,6 +14,13 @@ def validate_automatic_background_tasks(value: object) -> bool:
     return value
 
 
+def validate_sync_node_interfaces(value: object) -> bool:
+    """Reject non-boolean values instead of silently enabling topology sync."""
+    if type(value) is not bool:
+        raise ValueError("sync_node_interfaces must be a boolean.")
+    return value
+
+
 def automatic_background_tasks_enabled() -> bool:
     """Read the plugin option lazily, after NetBox settings initialization."""
     from django.conf import settings

@@ -188,6 +188,11 @@ class BackendRequestContext(ProxboxBaseModel):
     """Resolved connection parameters for ProxBox FastAPI backend HTTP calls.
 
     Replaces the ``BackendRequestContext`` TypedDict in ``type_defs.py``.
+
+    ``websocket_url`` is the browser-facing WebSocket base and
+    ``server_websocket_url`` is the server-side one. Both are derived together
+    with ``http_url`` and carry no credential. Read these typed fields instead
+    of looking the values up in ``detail``.
     """
 
     detail: dict[str, object] = Field(default_factory=dict)
@@ -195,8 +200,32 @@ class BackendRequestContext(ProxboxBaseModel):
     target_fingerprint: str = ""
     http_url: str | None = None
     ip_address_url: str | None = None
+    websocket_url: str = ""
+    server_websocket_url: str = ""
     verify_ssl: bool = True
     headers: dict[str, str] = Field(default_factory=dict)
+
+    @classmethod
+    def from_fastapi_context(
+        cls, context: dict[str, object]
+    ) -> "BackendRequestContext":
+        """Build the typed context from a ``utils.get_fastapi_context()`` dict.
+
+        This is the single place that maps the context dict to typed fields.
+        Every caller that wraps the dict must use it, so that a key added to
+        the dict cannot be dropped by one hand-written copy of the mapping.
+        """
+        return cls(
+            detail=context,
+            endpoint_id=context.get("endpoint_id"),
+            target_fingerprint=str(context.get("target_fingerprint", "")),
+            http_url=context.get("http_url"),
+            ip_address_url=context.get("ip_address_url"),
+            websocket_url=str(context.get("websocket_url") or ""),
+            server_websocket_url=str(context.get("server_websocket_url") or ""),
+            verify_ssl=context.get("verify_ssl", True),
+            headers=context.get("headers", {}),
+        )
 
 
 class SseFrame(ProxboxLenientModel):

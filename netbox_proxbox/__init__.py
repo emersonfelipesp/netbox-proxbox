@@ -198,17 +198,24 @@ class ProxboxConfig(PluginConfig):
     base_url = "proxbox"
     required_settings = []
     queues = []
-    default_settings = {"automatic_background_tasks": True}
+    default_settings = {
+        "automatic_background_tasks": True,
+        "sync_node_interfaces": False,
+    }
 
     @classmethod
     def validate(cls, user_config: dict[str, object], netbox_version: str) -> None:
         """Apply the stock backward-compatible NetBox version bounds."""
         super().validate(user_config, netbox_version)
-        from .background_tasks import validate_automatic_background_tasks
+        from .background_tasks import (
+            validate_automatic_background_tasks,
+            validate_sync_node_interfaces,
+        )
 
         validate_automatic_background_tasks(
             user_config.get("automatic_background_tasks", True)
         )
+        validate_sync_node_interfaces(user_config.get("sync_node_interfaces", False))
 
     def ready(self) -> None:
         """Register models, then import job modules so runners and core Job views hook in."""

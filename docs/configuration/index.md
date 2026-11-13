@@ -28,6 +28,20 @@ Every `overwrite_*` toggle (device fields, VM fields, tags, primary IP, status) 
 
 See [Sync Overwrite Flags](./sync-overwrite-flags.md) for the full flag matrix and merge-vs-replace semantics.
 
+## Node Network Topology
+
+`PLUGINS_CONFIG["netbox_proxbox"]["sync_node_interfaces"]` is a strict Python
+boolean that defaults to `False`. Set it to `True` to make the Network
+Interfaces stage and full update request complete Proxmox node network topology
+reconciliation. This includes physical interfaces, Linux and Open vSwitch
+bridges and bonds, Open vSwitch internal ports, VLAN interfaces, and their
+NetBox Bridge, LAG, and Parent relationships. Linux bond membership additionally
+depends on the backend network parser recognizing the source configuration.
+
+The option requires proxbox-api `0.0.20` or later. Non-boolean values are
+invalid and fail closed. Restart all NetBox application and worker processes
+after changing it.
+
 ## Next Steps
 
 - Review [Required Parameters](./required-parameters.md) before creating endpoint records.

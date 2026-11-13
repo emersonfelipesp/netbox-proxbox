@@ -413,8 +413,10 @@ def _backfill_claims(
         if backend_id in skipped:
             continue
         plugin_pk = next(iter(plugin_pks))
-        rows = _candidate_rows(backend_id, lock=apply)
+        rows = _candidate_rows(backend_id, lock=False)
         cluster_endpoints, node_endpoints = _locked_relation_endpoints(rows, lock=apply)
+        if apply:
+            rows = _candidate_rows(backend_id, lock=True)
         corroborated_pks, unverified_by_reason = _corroborated_row_pks(
             rows,
             plugin_pk,

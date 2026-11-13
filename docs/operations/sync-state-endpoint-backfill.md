@@ -7,6 +7,26 @@ but that integer is not sufficient historical ownership evidence by itself. A
 restored or reseeded backend, or a deleted and recreated backend endpoint row,
 can reuse an integer that previously belonged to another endpoint.
 
+Routine `ProxboxSyncJob` runs use stronger current-run evidence before this
+historical repair is relevant. A successful VM write stamps the sidecar's
+`last_run_id`. The job reuses the plugin-pk/backend-id map resolved for that
+same run and considers only sidecars carrying the exact run ID, but neither
+value proves that proxbox-api refreshed the identity payload. The VM's native
+cluster must equal the mapped endpoint's authoritative
+`ProxmoxEndpoint.netbox_cluster`, and no different endpoint or tracking row may
+claim it. Run the endpoint's protected cluster synchronization first when this
+ownership is absent. The resolver binds `proxmox_cluster` from the unique
+tracking row linked to that native cluster; `proxmox_cluster_name` is only a
+same-endpoint fallback or consistency check. When the VM has a native device,
+the resolver selects exactly one node in the corroborated endpoint linked to
+that device, checks its tracking cluster, and treats `proxmox_node_name` only as
+a consistency check. If the VM has no native device, a unique exact name may
+fill a null node relation inside that endpoint, but it cannot replace an
+existing relation. This fallback cannot cross endpoints. Zero, multiple, or
+contradictory matches remain unchanged and are reported. Same-endpoint drift is
+repaired only when the VM device, device-linked node, recorded name, and cluster
+agree.
+
 The command reads every enabled `ProxmoxEndpoint`, resolves its plugin primary
 key to the proxbox-api database ID through the selected `FastAPIEndpoint`. It
 updates a row automatically only when:
@@ -141,7 +161,22 @@ The command evaluates the same fail-closed branch-isolation setting as
 
 For routine synchronization, use the [`proxbox_sync` management
 command](headless-sync.md). Normal `ProxboxSyncJob` runs now perform the same
-locked-relation-only binding after their backend stages, using the endpoint map
-already resolved for that run. Their persisted summary and log line state that
-automatic corroboration uses locked relations only, how many unverified rows
-were left unbound, and the refusal reason.
+current-run relation resolution and then the existing locked-relation endpoint
+backfill after their backend stages. Both run under the active synchronization
+branch. The relation resolver summary is stored as
+`sync_state_relation_resolution` beside `sync_state_endpoint_backfill` in the
+job data and records bounded counts, primary-key samples, and refusal reasons.
+`native_cluster_missing` means the VM must first be assigned to the correct
+native cluster. `native_cluster_not_owned_by_endpoint` and
+`native_cluster_ownership_ambiguous` require the protected cluster
+synchronization and operator review of competing endpoint or tracking claims.
+An unexpected resolver error does not fail the synchronization job. The summary
+then reports `failed` and `skipped` with the exception class, the resolver
+transaction is rolled back, and the next successful run retries the repair. A
+job deadline or worker timeout still cancels the job.
+Cluster-name/link and node cluster/device contradictions require inventory
+correction followed by another full sync; the resolver never guesses.
+Selected-VM batch jobs share their job run ID with proxbox-api and use the same
+resolver. Direct per-object Sync Now requests do not expose both a caller-known
+run stamp and a complete plugin-pk/backend-id map, so they do not invent that
+authority; a later staged or selected-VM batch sync performs the repair.

@@ -51,6 +51,12 @@ facts that an agent must have even when `@CLAUDE.md` expansion is unavailable:
   user jobs, integrity handlers, models, migrations, and audit records. Drain only
   the stock unowned, unscoped one-minute monitor; restart all application and
   worker processes for configuration changes.
+- Keep `sync_node_interfaces` a strict `PLUGINS_CONFIG` boolean that defaults to
+  `False`. Forward its explicit `"true"` or `"false"` value to every staged sync
+  request so the Network Interfaces stage and full update share one behavior.
+  Restart all application and worker processes after changing it. Full topology
+  synchronization requires proxbox-api `0.0.20` or later, and Linux bond
+  membership additionally depends on the backend network parser.
 - Keep `ProxboxPluginSettings.sync_job_timeout` UI-backed and bounded to
   3600–604800 seconds. Resolve it when enqueueing a sync job, preserve explicit
   per-enqueue overrides, and never mutate the timeout of an already-running job.
@@ -80,6 +86,21 @@ facts that an agent must have even when `@CLAUDE.md` expansion is unavailable:
   permission, verifies its synchronized VM ID matches the path `vmid`, and
   queries only that one enabled, visible endpoint. Invalid, unresolved, or
   hidden identity must fail before backend I/O.
+- Keep automatic VM sync-state relation resolution current-run scoped. Require
+  the exact run's plugin-pk/backend-id map and matching sidecar `last_run_id`,
+  but never treat either as sufficient identity proof. The VM's native cluster
+  must be authoritatively owned by the mapped endpoint through
+  `ProxmoxEndpoint.netbox_cluster`, without a foreign endpoint or tracking
+  claim. Bind the cluster from that native cluster's unique tracking row; use a
+  recorded cluster name only as a same-endpoint fallback or consistency check.
+  When the VM has a native device, resolve the node uniquely from that device
+  link inside the endpoint, require its tracking cluster to agree, and use the
+  recorded node name only as a consistency check. Without a native device,
+  allow a unique same-endpoint name only to fill a null node relation; never
+  replace an existing node relation from an uncorroborated name. Lock endpoints,
+  VMs, native clusters, tracking rows, nodes, then sidecars; use guarded exact-PK
+  updates and preserve bounded job evidence. Historical name-only rows remain
+  outside this exception.
 - Update MkDocs sources, this wrapper, `CLAUDE.md`, and generated `llms.txt`
   together when architecture or operator behavior changes.
 - Run focused tests, `mkdocs build --strict`, the public-boundary scanner, and

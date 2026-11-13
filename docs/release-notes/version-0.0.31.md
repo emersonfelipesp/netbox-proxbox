@@ -4,8 +4,10 @@
 
 Version `0.0.31` adds native NetBox cluster binding for Proxmox endpoints,
 endpoint-owned SSH application services, and verified Cloud Image SSH bindings.
-It also includes integration fixes, raised dependency security floors, and
-fail-closed validation of the release schema. Deploy proxbox-api `0.0.29` before upgrading the plugin.
+It also makes the browser console work after an ordinary synchronization, adds
+an option for full node network topology synchronization, and includes
+integration fixes, raised dependency security floors, and fail-closed
+validation of the release schema. Deploy proxbox-api `0.0.29` before upgrading the plugin.
 
 ## Native cluster binding
 
@@ -45,6 +47,38 @@ credential ownership checks, preserves response-local service-monitoring
 readiness, and includes fixes across synchronization, operational endpoint
 selection, OpenBao-backed credential handling, and NetBox 4.5 through 4.7
 compatibility.
+
+## Browser console and synchronization
+
+- The browser console now finds its backend. The backend request context
+  dropped the WebSocket base that the endpoint configuration computes, so the
+  console reported "No trusted proxbox-api endpoint matches this synchronized
+  guest" for every guest and every endpoint configuration. The context now
+  carries the browser and server WebSocket bases as typed fields. The console
+  requires **Use WebSocket** to be enabled on the FastAPI endpoint, because the
+  stored backend target covers the WebSocket host and port only in that state;
+  a changed WebSocket host or port is treated as target drift.
+- A new strict boolean
+  `PLUGINS_CONFIG["netbox_proxbox"]["sync_node_interfaces"]` option, defaulting
+  to `False`, forwards full node network topology synchronization to both the
+  Network Interfaces stage and full update. It requires proxbox-api `0.0.20` or
+  later. When enabled, bridges, bonds, Open vSwitch bridges, bonds, and internal
+  ports, VLAN interfaces, and their Bridge, LAG, and Parent relationships are
+  reconciled. Linux bond membership additionally depends on the backend network
+  parser. Restart every NetBox application and worker process after changing
+  the option.
+- Successful full and selected-VM batch synchronization now resolves VM
+  sync-state endpoint, node, and cluster relations from the exact current-run
+  endpoint map and run stamp only after corroborating the VM's protected native
+  cluster ownership. The cluster relation comes from the native-linked tracking
+  row. When the VM has a native device, node selection comes from its unique
+  same-endpoint device link and the recorded name must select the same node. A
+  VM without a native device may fill only a null node relation from a unique
+  same-endpoint name; the resolver never replaces an existing node from that
+  fallback. Resolution repairs fully corroborated drift after relocation and
+  leaves missing, ambiguous, stale, or contradictory identity unchanged with
+  bounded job evidence. Browser consoles no longer require manual relation
+  repair after an ordinary successful, corroborated sync.
 
 On NetBox 4.5 and 4.6, a protected or otherwise refused delete of an endpoint,
 application service, or service SSH credential from its object page is now

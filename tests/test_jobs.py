@@ -687,6 +687,42 @@ def proxbox_sync_job_module(monkeypatch):
         sync_state_backfill_mod,
     )
 
+    sync_state_relation_mod = types.ModuleType(
+        "netbox_proxbox.services.sync_state_relation_resolver"
+    )
+
+    class _RelationSummary:
+        def as_dict(self):
+            return {
+                "rows_examined": 0,
+                "rows_changed": 0,
+                "endpoints_bound": 0,
+                "nodes_bound": 0,
+                "nodes_rebound": 0,
+                "clusters_bound": 0,
+                "clusters_rebound": 0,
+                "skipped_backend_ids": {},
+                "unresolved": {},
+                "rows_with_unresolved_relations": 0,
+            }
+
+        def one_line(self):
+            return (
+                "Current-run VM sync-state relation resolution: "
+                "rows_examined=0 rows_changed=0 endpoints_bound=0 "
+                "nodes_bound=0 nodes_rebound=0 clusters_bound=0 "
+                "clusters_rebound=0 skipped_backend_ids={} unresolved={}"
+            )
+
+    sync_state_relation_mod.resolve_current_run_vm_sync_state_relations = (
+        lambda mapping, *, run_id: _RelationSummary()
+    )
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.sync_state_relation_resolver",
+        sync_state_relation_mod,
+    )
+
     sys.modules.pop("netbox_proxbox.jobs", None)
     path = root / "netbox_proxbox" / "jobs.py"
     spec = importlib.util.spec_from_file_location("netbox_proxbox.jobs", path)
@@ -1028,6 +1064,11 @@ def test_job_reuses_stage_endpoint_map_and_records_backfill_summary(
     """The post-stage repair must reuse the map resolved by the stage runner."""
     module = proxbox_sync_job_module
     order: list[str] = []
+    monkeypatch.setattr(
+        module.uuid,
+        "uuid4",
+        lambda: uuid.UUID("11111111-1111-4111-8111-111111111111"),
+    )
 
     @contextmanager
     def capture_wire_endpoint_ids():
@@ -1072,6 +1113,32 @@ def test_job_reuses_stage_endpoint_map_and_records_backfill_summary(
     backfill = MagicMock(
         side_effect=lambda mapping: order.append("backfill") or summary
     )
+    relation_summary_data = {
+        "rows_examined": 199,
+        "rows_changed": 197,
+        "endpoints_bound": 197,
+        "nodes_bound": 197,
+        "nodes_rebound": 0,
+        "clusters_bound": 197,
+        "clusters_rebound": 0,
+        "skipped_backend_ids": {},
+        "unresolved": {},
+        "rows_with_unresolved_relations": 0,
+    }
+    relation_summary = SimpleNamespace(
+        as_dict=lambda: relation_summary_data,
+        one_line=lambda: (
+            "Current-run VM sync-state relation resolution: "
+            "rows_examined=199 rows_changed=197 endpoints_bound=197"
+        ),
+    )
+
+    def resolve_relations(mapping, *, run_id):
+        assert mapping == {"5": "14"}
+        assert run_id == "11111111-1111-4111-8111-111111111111"
+        order.append("relations")
+        return relation_summary
+
     monkeypatch.setattr(
         module.sync_stages,
         "capture_wire_endpoint_ids",
@@ -1082,6 +1149,11 @@ def test_job_reuses_stage_endpoint_map_and_records_backfill_summary(
         sys.modules["netbox_proxbox.services.sync_state_endpoint_backfill"],
         "backfill_sync_state_endpoints",
         backfill,
+    )
+    monkeypatch.setattr(
+        sys.modules["netbox_proxbox.services.sync_state_relation_resolver"],
+        "resolve_current_run_vm_sync_state_relations",
+        resolve_relations,
     )
     monkeypatch.setattr(module, "_sync_cluster_phase", lambda *args, **kwargs: [])
     monkeypatch.setattr(module, "sync_firewall", lambda *args, **kwargs: [])
@@ -1097,10 +1169,13 @@ def test_job_reuses_stage_endpoint_map_and_records_backfill_summary(
         proxmox_endpoint_ids=["5"],
     )
 
-    assert order == ["stages", "backfill"]
+    assert order == ["stages", "relations", "backfill"]
     backfill.assert_called_once_with({"5": "14"})
     assert job.job.data["proxbox_sync"]["sync_state_endpoint_backfill"] == (
         summary_data
+    )
+    assert job.job.data["proxbox_sync"]["sync_state_relation_resolution"] == (
+        relation_summary_data
     )
     job.logger.info.assert_any_call(
         "Sync-state endpoint backfill: "
@@ -1108,6 +1183,176 @@ def test_job_reuses_stage_endpoint_map_and_records_backfill_summary(
         "unverified_rows_left_unbound=2 reason=row evidence did not "
         "corroborate endpoint 5"
     )
+
+
+def _relation_resolution_context(run_id: str = "run-1") -> SimpleNamespace:
+    return SimpleNamespace(
+        branch=None,
+        params={"run_id": run_id},
+        job=SimpleNamespace(logger=MagicMock()),
+        sync_state_relation_resolution=None,
+    )
+
+
+def _fail_relation_resolution_with(monkeypatch, exc: BaseException) -> None:
+    def fail(mapping, *, run_id):
+        del mapping, run_id
+        raise exc
+
+    monkeypatch.setattr(
+        sys.modules["netbox_proxbox.services.sync_state_relation_resolver"],
+        "resolve_current_run_vm_sync_state_relations",
+        fail,
+    )
+
+
+def test_relation_resolution_propagates_the_job_deadline(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """A job deadline is a cancellation, never a recorded resolver failure."""
+    module = proxbox_sync_job_module
+    _fail_relation_resolution_with(
+        monkeypatch, module.SyncJobDeadlineReached("Job deadline reached.")
+    )
+    context = _relation_resolution_context()
+
+    with pytest.raises(module.SyncJobDeadlineReached):
+        module._resolve_sync_state_relations(context, {"5": "14"})
+
+    assert context.sync_state_relation_resolution is None
+    context.job.logger.error.assert_not_called()
+
+
+def test_relation_resolution_propagates_the_worker_timeout(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """The worker timeout derives from Exception and must still cancel the job."""
+    module = proxbox_sync_job_module
+
+    class BaseTimeoutException(Exception):
+        pass
+
+    class JobTimeoutException(BaseTimeoutException):
+        pass
+
+    rq_module = types.ModuleType("rq")
+    rq_timeouts = types.ModuleType("rq.timeouts")
+    rq_timeouts.BaseTimeoutException = BaseTimeoutException
+    rq_module.timeouts = rq_timeouts
+    monkeypatch.setitem(sys.modules, "rq", rq_module)
+    monkeypatch.setitem(sys.modules, "rq.timeouts", rq_timeouts)
+    _fail_relation_resolution_with(monkeypatch, JobTimeoutException("timeout"))
+    context = _relation_resolution_context()
+
+    with pytest.raises(JobTimeoutException):
+        module._resolve_sync_state_relations(context, {"5": "14"})
+
+    assert context.sync_state_relation_resolution is None
+    context.job.logger.error.assert_not_called()
+
+
+def test_relation_resolution_records_an_ordinary_failure_without_rq(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """Without an importable worker library, an ordinary error is still recorded."""
+    module = proxbox_sync_job_module
+    monkeypatch.setitem(sys.modules, "rq", None)
+    monkeypatch.setitem(sys.modules, "rq.timeouts", None)
+    _fail_relation_resolution_with(monkeypatch, RuntimeError("database detail"))
+    context = _relation_resolution_context()
+
+    module._resolve_sync_state_relations(context, {"5": "14"})
+
+    assert context.sync_state_relation_resolution == {
+        "failed": True,
+        "skipped": True,
+        "reason": "unexpected resolver exception",
+        "exception_class": "RuntimeError",
+    }
+    context.job.logger.error.assert_called_once_with(
+        "Sync-state relation resolution failed: RuntimeError"
+    )
+
+
+def test_job_records_relation_resolver_exception_and_persists_final_result(
+    monkeypatch,
+    proxbox_sync_job_module,
+):
+    """An unexpected resolver failure must not change the sync job outcome."""
+    module = proxbox_sync_job_module
+
+    class ResolverDatabaseError(Exception):
+        pass
+
+    @contextmanager
+    def capture_wire_endpoint_ids():
+        yield {"5": "14"}
+
+    def run_stages(*args, **kwargs):
+        del args, kwargs
+        return [
+            {
+                "sync_type": "devices",
+                "endpoint_id": "5",
+                "stream_path": "dcim/devices/create/stream",
+                "runtime_seconds": 0.1,
+                "result_summary": {"ok": True},
+            }
+        ]
+
+    def fail_relation_resolution(mapping, *, run_id):
+        del mapping, run_id
+        raise ResolverDatabaseError("sensitive database detail")
+
+    monkeypatch.setattr(
+        module.sync_stages,
+        "capture_wire_endpoint_ids",
+        capture_wire_endpoint_ids,
+    )
+    monkeypatch.setattr(module, "_run_all_stages_sync", run_stages)
+    monkeypatch.setattr(
+        sys.modules["netbox_proxbox.services.sync_state_relation_resolver"],
+        "resolve_current_run_vm_sync_state_relations",
+        fail_relation_resolution,
+    )
+    monkeypatch.setattr(module, "_sync_cluster_phase", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "sync_firewall", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "sync_datacenter", lambda *args, **kwargs: [])
+    monkeypatch.setattr(module, "sync_vm_templates", lambda *args, **kwargs: [])
+    job = module.ProxboxSyncJob()
+    job.logger = MagicMock()
+    job.job = MagicMock(pk=480, user=None, data=None)
+
+    module.ProxboxSyncJob.run(
+        job,
+        sync_type=module.SyncTypeChoices.DEVICES,
+        proxmox_endpoint_ids=["5"],
+    )
+
+    sync_data = job.job.data["proxbox_sync"]
+    assert sync_data["sync_state_relation_resolution"] == {
+        "failed": True,
+        "skipped": True,
+        "reason": "unexpected resolver exception",
+        "exception_class": "ResolverDatabaseError",
+    }
+    assert sync_data["sync_state_endpoint_backfill"]["total_rows_bound"] == 0
+    assert sync_data["response"]["stages"] == [
+        {
+            "sync_type": "devices",
+            "endpoint_id": "5",
+            "stream_path": "dcim/devices/create/stream",
+            "runtime_seconds": 0.1,
+            "result_summary": {"ok": True},
+        }
+    ]
+    job.logger.error.assert_any_call(
+        "Sync-state relation resolution failed: ResolverDatabaseError"
+    )
+    assert "sensitive database detail" not in str(job.logger.mock_calls)
 
 
 def test_job_skips_backfill_when_stage_scope_resolution_failed(
@@ -1153,6 +1398,10 @@ def test_job_skips_backfill_when_stage_scope_resolution_failed(
 
     backfill.assert_not_called()
     assert job.job.data["proxbox_sync"]["sync_state_endpoint_backfill"] == {
+        "skipped": True,
+        "reason": "the run resolved no usable plugin-to-backend endpoint map",
+    }
+    assert job.job.data["proxbox_sync"]["sync_state_relation_resolution"] == {
         "skipped": True,
         "reason": "the run resolved no usable plugin-to-backend endpoint map",
     }
@@ -1211,6 +1460,11 @@ def test_job_backfill_runs_inside_the_sync_branch(
     module = proxbox_sync_job_module
     branch = SimpleNamespace(pk=479, name="isolated-479", schema_id="schema-479")
     active: list[object] = []
+    monkeypatch.setattr(
+        module.uuid,
+        "uuid4",
+        lambda: uuid.UUID("22222222-2222-4222-8222-222222222222"),
+    )
 
     @contextmanager
     def activate(candidate):
@@ -1258,6 +1512,15 @@ def test_job_backfill_runs_inside_the_sync_branch(
         assert active == [branch], "endpoint backfill would have written on main"
         return summary
 
+    def resolve_relations(mapping, *, run_id):
+        assert mapping == {"5": "14"}
+        assert run_id == "22222222-2222-4222-8222-222222222222"
+        assert active == [branch], "relation resolution would have written on main"
+        return SimpleNamespace(
+            as_dict=lambda: {"rows_examined": 0, "rows_changed": 0},
+            one_line=lambda: "Current-run VM sync-state relation resolution",
+        )
+
     monkeypatch.setattr(
         module.sync_stages,
         "capture_wire_endpoint_ids",
@@ -1268,6 +1531,11 @@ def test_job_backfill_runs_inside_the_sync_branch(
         sys.modules["netbox_proxbox.services.sync_state_endpoint_backfill"],
         "backfill_sync_state_endpoints",
         backfill,
+    )
+    monkeypatch.setattr(
+        sys.modules["netbox_proxbox.services.sync_state_relation_resolver"],
+        "resolve_current_run_vm_sync_state_relations",
+        resolve_relations,
     )
     monkeypatch.setattr(module, "_sync_cluster_phase", lambda *args, **kwargs: [])
     monkeypatch.setattr(module, "sync_firewall", lambda *args, **kwargs: [])
@@ -3289,6 +3557,11 @@ def test_proxbox_sync_job_run_batch_selected_virtual_machines(
     monkeypatch, proxbox_sync_job_module
 ):
     batch_calls: list[dict[str, object]] = []
+    monkeypatch.setattr(
+        proxbox_sync_job_module.uuid,
+        "uuid4",
+        lambda: uuid.UUID("33333333-3333-4333-8333-333333333333"),
+    )
 
     async def _fake_batch(*args, **kwargs):
         batch_calls.append(kwargs)
@@ -3342,8 +3615,14 @@ def test_proxbox_sync_job_run_batch_selected_virtual_machines(
             # object be pinned to its *own* endpoint, because a cluster/node/
             # VMID is unique per endpoint and not across the estate.
             "proxmox_wire_endpoint_by_pk": {"1": "1"},
+            # Successful VM sidecar writes stamp this exact run identifier,
+            # which is a necessary resolver filter before native corroboration.
+            "run_id": "33333333-3333-4333-8333-333333333333",
         }
     ]
+    assert job.job.data["proxbox_sync"]["params"]["run_id"] == (
+        "33333333-3333-4333-8333-333333333333"
+    )
     assert job.job.data["proxbox_sync"]["response"]["batch"]["total"] == 2
     # Same key and shape as the stage path, so the UI renders both identically.
     assert "endpoint_runtimes" in job.job.data["proxbox_sync"]["response"]
@@ -3550,6 +3829,13 @@ def _arrange_blocked_batch(monkeypatch, module, name):
     services_mod = types.ModuleType("netbox_proxbox.services")
     services_mod.run_sync_stream = lambda *args, **kwargs: ({"ok": True}, 200)
     monkeypatch.setitem(sys.modules, "netbox_proxbox.services", services_mod)
+    authority_mod = types.ModuleType("netbox_proxbox.services.connection_authority")
+    authority_mod.approved_connection_allows_secrets = lambda endpoint: True
+    monkeypatch.setitem(
+        sys.modules,
+        "netbox_proxbox.services.connection_authority",
+        authority_mod,
+    )
 
     # Stale rows the backend still holds are exactly what makes an unscoped
     # request dangerous, so leave them present: the run must stop anyway.
@@ -3719,6 +4005,94 @@ def _arrange_batch_storage_sync(monkeypatch, module):
     monkeypatch.setattr(module, "_proxbox_fetch_max_concurrency_setting", lambda: 2)
     monkeypatch.setattr(module.asyncio, "to_thread", _inline_to_thread)
     return calls
+
+
+def test_batch_vm_sync_forwards_the_job_run_id_to_the_backend(
+    monkeypatch, proxbox_sync_job_module
+):
+    """The relation resolver and backend VM writer must share one run stamp."""
+    ss = proxbox_sync_job_module.sync_stages
+    vm = SimpleNamespace(pk=5, cluster_id=41, refresh_from_db=lambda: None)
+
+    def _manager(rows):
+        queryset = SimpleNamespace(filter=lambda **kwargs: rows)
+        return SimpleNamespace(select_related=lambda *args, **kwargs: queryset)
+
+    virtualization_mod = types.ModuleType("virtualization")
+    virtualization_models_mod = types.ModuleType("virtualization.models")
+    virtualization_models_mod.VirtualMachine = SimpleNamespace(objects=_manager([vm]))
+    virtualization_mod.models = virtualization_models_mod
+    monkeypatch.setitem(sys.modules, "virtualization", virtualization_mod)
+    monkeypatch.setitem(sys.modules, "virtualization.models", virtualization_models_mod)
+
+    models_mod = types.ModuleType("netbox_proxbox.models")
+    models_mod.ProxmoxStorage = SimpleNamespace(objects=_manager([]))
+    models_mod.VMBackup = SimpleNamespace(objects=_manager([]))
+    models_mod.VMSnapshot = SimpleNamespace(objects=_manager([]))
+    models_mod.VMTaskHistory = SimpleNamespace(objects=_manager([]))
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.models", models_mod)
+
+    calls: list[dict[str, object]] = []
+
+    def _fake_sync(path, query_params=None, **kwargs):
+        calls.append({"path": path, "query_params": dict(query_params or {}), **kwargs})
+        return {"object_type": "vm", "action": "updated"}, 200, []
+
+    individual_sync_mod = types.ModuleType("netbox_proxbox.services.individual_sync")
+    individual_sync_mod.sync_individual_with_dependencies = _fake_sync
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.services.individual_sync", individual_sync_mod
+    )
+    tenant_mod = types.ModuleType("netbox_proxbox.services.tenant_assignment")
+    tenant_mod.maybe_assign_tenant_from_regex = lambda *args, **kwargs: None
+    tenant_mod.maybe_assign_tenant_from_tags = lambda *args, **kwargs: None
+    tenant_mod.maybe_assign_tenant_from_cluster = lambda *args, **kwargs: None
+    monkeypatch.setitem(
+        sys.modules, "netbox_proxbox.services.tenant_assignment", tenant_mod
+    )
+    monkeypatch.setattr(
+        ss,
+        "_resolve_vm_batch_params",
+        lambda obj: {
+            "path": "sync/individual/vm",
+            "query_params": {
+                "cluster_name": "cluster-a",
+                "node": "pve-a",
+                "type": "qemu",
+                "vmid": 280,
+            },
+        },
+    )
+    monkeypatch.setattr(ss, "_proxbox_fetch_max_concurrency_setting", lambda: 1)
+    monkeypatch.setattr(ss.asyncio, "to_thread", _inline_to_thread)
+
+    result = asyncio.run(
+        ss._run_batch_selected_sync(
+            None,
+            batch_object_type="virtual-machine",
+            batch_object_ids=["5"],
+            proxmox_wire_endpoint_ids="14",
+            run_id="run-current-batch",
+        )
+    )
+
+    assert result["succeeded"] == 1
+    assert calls == [
+        {
+            "path": "sync/individual/vm",
+            "query_params": {
+                "cluster_name": "cluster-a",
+                "node": "pve-a",
+                "type": "qemu",
+                "vmid": 280,
+                "run_id": "run-current-batch",
+                "proxmox_endpoint_ids": "14",
+            },
+            "netbox_branch_schema_id": None,
+            "fastapi_endpoint_id": None,
+            "proxmox_endpoint_ids": "14",
+        }
+    ]
 
 
 def _proxmox_cluster_objects(cluster_owners):

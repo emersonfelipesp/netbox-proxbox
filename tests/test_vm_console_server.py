@@ -207,13 +207,13 @@ def test_console_backend_requires_one_matching_trusted_backend(monkeypatch) -> N
             http_url="https://api-a.example.test",
             headers={"X-Proxbox-API-Key": "secret"},
             verify_ssl=True,
-            detail={"websocket_url": "wss://relay-a.example.test/ws"},
+            websocket_url="wss://relay-a.example.test/ws",
         ),
         4: SimpleNamespace(
             http_url="https://api-b.example.test",
             headers={"X-Proxbox-API-Key": "secret"},
             verify_ssl=True,
-            detail={"websocket_url": "wss://relay-b.example.test/ws"},
+            websocket_url="wss://relay-b.example.test/ws",
         ),
     }
     module.get_fastapi_request_context = lambda endpoint_id=None: contexts[endpoint_id]
@@ -227,6 +227,47 @@ def test_console_backend_requires_one_matching_trusted_backend(monkeypatch) -> N
     assert selected.websocket_base == "wss://relay-b.example.test/ws"
 
 
+@pytest.mark.parametrize(
+    "context_fields",
+    [
+        {"websocket_url": ""},
+        {"websocket_url": "   "},
+        # The typed field is the contract. A value that exists only in the
+        # untyped ``detail`` dict must not make a backend browser-capable.
+        {
+            "websocket_url": "",
+            "detail": {"websocket_url": "wss://relay.example.test/ws"},
+        },
+    ],
+)
+def test_console_backend_skips_a_context_without_a_typed_websocket_base(
+    monkeypatch, context_fields: dict[str, object]
+) -> None:
+    module, endpoint_type, _context, _sync = _load_service(
+        monkeypatch, fastapi_rows=[SimpleNamespace(pk=3)]
+    )
+    identity = module.resolve_console_identity(_vm(endpoint_type()))
+    module.get_fastapi_request_context = lambda endpoint_id=None: SimpleNamespace(
+        http_url="https://api.example.test",
+        headers={},
+        verify_ssl=True,
+        **context_fields,
+    )
+    affinity_calls: list[object] = []
+
+    def resolve_affinity(*args: object, **_kwargs: object) -> tuple[int, None]:
+        affinity_calls.append(args)
+        return 31, None
+
+    module.resolve_backend_endpoint_id = resolve_affinity
+
+    with pytest.raises(
+        module.ConsoleResolutionError, match="No trusted proxbox-api endpoint"
+    ):
+        module.resolve_console_backend(identity)
+    assert affinity_calls == []
+
+
 def test_console_backend_rejects_ambiguous_matches(monkeypatch) -> None:
     module, endpoint_type, backend_context, backend_sync = _load_service(
         monkeypatch, fastapi_rows=[SimpleNamespace(pk=3), SimpleNamespace(pk=4)]
@@ -238,7 +279,7 @@ def test_console_backend_rejects_ambiguous_matches(monkeypatch) -> None:
         http_url=f"https://api-{endpoint_id}.example.test",
         headers={},
         verify_ssl=True,
-        detail={"websocket_url": f"wss://relay-{endpoint_id}.example.test/ws"},
+        websocket_url=f"wss://relay-{endpoint_id}.example.test/ws",
     )
     module.resolve_backend_endpoint_id = lambda *_args, **_kwargs: (31, None)
 

@@ -805,7 +805,7 @@ class TerminalSessionPostBranchTest(SimpleTestCase):
             ip_address_url=None,
             verify_ssl=True,
             headers={"Authorization": "Bearer test"},
-            detail={"websocket_url": "wss://api.example.test"},
+            websocket_url="wss://api.example.test",
         )
         response = backend_response or SimpleNamespace(
             status_code=200,

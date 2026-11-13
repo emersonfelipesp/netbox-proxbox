@@ -54,10 +54,36 @@ def get_backend_auth_headers(endpoint: FastAPIAuthSource | None) -> dict[str, st
     return {"X-Proxbox-API-Key": token}
 
 
+def _bound_websocket_bases(
+    endpoint: FastAPIUrlSource, url_dict: dict[str, object]
+) -> tuple[str, str]:
+    """Return the browser and server WebSocket bases that the context may emit.
+
+    ``backend_key_target_fingerprint()`` binds the WebSocket host and port only
+    while ``use_websocket`` is enabled. With the flag disabled,
+    ``get_fastapi_url()`` still derives a display URL, but that authority is
+    outside the fingerprint, so a change to it would not invalidate the
+    context. The request context therefore reports no WebSocket base for such
+    an endpoint, and consumers treat the backend as not browser-capable.
+    """
+    if not bool(getattr(endpoint, "use_websocket", False)):
+        return "", ""
+    return (
+        str(url_dict.get("websocket_url", "")),
+        str(url_dict.get("server_websocket_url", "")),
+    )
+
+
 def get_fastapi_context(endpoint: FastAPIUrlSource) -> dict[str, object] | None:
     """Build auth headers and URLs for a FastAPI endpoint.
 
-    Returns a dict with http_url, ip_address_url, verify_ssl, and headers.
+    Returns a dict with http_url, ip_address_url, websocket_url,
+    server_websocket_url, verify_ssl, and headers. The WebSocket bases come from
+    the same ``get_fastapi_url()`` result as ``http_url``, so every consumer of
+    the request context sees the browser and server WebSocket targets that
+    belong to the fingerprint-checked endpoint. They carry no credential, and
+    both are empty unless ``use_websocket`` is enabled, because only then is
+    the WebSocket authority part of the target fingerprint.
     Returns None if endpoint is None or no FastAPI endpoint is configured.
     """
     if endpoint is None:
@@ -88,11 +114,14 @@ def get_fastapi_context(endpoint: FastAPIUrlSource) -> dict[str, object] | None:
         if confirmed_fingerprint != target_fingerprint:
             return None
 
+    websocket_url, server_websocket_url = _bound_websocket_bases(endpoint, url_dict)
     return {
         "endpoint_id": getattr(endpoint, "pk", None),
         "target_fingerprint": target_fingerprint,
         "http_url": url_dict.get("http_url"),
         "ip_address_url": url_dict.get("ip_address_url"),
+        "websocket_url": websocket_url,
+        "server_websocket_url": server_websocket_url,
         "verify_ssl": bool(url_dict.get("verify_ssl", True)),
         "headers": headers,
     }

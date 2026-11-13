@@ -52,6 +52,13 @@ and worker processes after a configuration change. Keep explicit synchronization
 models, migrations, job APIs, and integrity signal handlers available. The
 operator contract is in the Docker installation guide.
 
+`PLUGINS_CONFIG["netbox_proxbox"]["sync_node_interfaces"]` is a strict boolean,
+default `False`. When enabled, the plugin forwards full Proxmox node network
+topology synchronization to the Network Interfaces stage and full update.
+Changing it requires restarting all application and worker processes. The
+option requires proxbox-api `0.0.20` or later; Linux bond membership also
+depends on the backend network parser.
+
 - `netbox_proxbox/models/` owns persisted plugin state and validation.
 - `netbox_proxbox/api/` owns REST serializers, viewsets, and operational API
   actions. Secret-returning actions require explicit permissions and secure
@@ -233,6 +240,20 @@ the selected-index distinction and all current matrices.
   parsing. Staged work uses one monotonic RQ-timeout deadline with a 120-second
   persistence reserve; deadline exhaustion records the current and remaining
   endpoint failures before finalization.
+  After successful VM writes, the job reuses its exact plugin-pk/backend-id map
+  and `last_run_id` stamp as necessary but insufficient inputs to typed VM
+  relation repair. The mapped endpoint must authoritatively own the VM's native
+  cluster through `ProxmoxEndpoint.netbox_cluster`, and no foreign endpoint or
+  tracking row may claim it. The cluster FK comes from that native cluster's
+  unique tracking link; names are same-endpoint fallback or consistency data.
+  When the VM has a native device, the candidate node comes uniquely from that
+  device link inside the endpoint; its tracking cluster must agree, and the
+  recorded node name is only a consistency check. Without a native device, a
+  unique same-endpoint name may fill only a null node relation and cannot replace
+  an existing relation. Same-endpoint drift may rebind after device and name
+  agree. The resolver locks endpoints, VMs, native clusters,
+  tracking rows, nodes, then sidecars, uses guarded exact-PK updates, and
+  persists a bounded summary beside the historical endpoint backfill summary.
 - The server-side WebSocket bridge binds positive `ws_run_id: 1` capability
   state to one authenticated connection, invalidates it on connection changes,
   and rechecks it when dispatching every correlated command. A rejection wins

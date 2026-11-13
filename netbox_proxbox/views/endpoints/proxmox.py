@@ -983,7 +983,7 @@ class ProxmoxEndpointSSHTerminalSessionView(View):
                 {"error": "proxbox-api returned a non-JSON terminal response."},
                 status=502,
             )
-        websocket_base = context.detail.get("websocket_url") or getattr(
+        websocket_base = getattr(context, "websocket_url", "") or getattr(
             fastapi_endpoint, "websocket_url", ""
         )
         if not websocket_base:

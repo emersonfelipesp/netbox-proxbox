@@ -139,6 +139,19 @@ def _parse_description_metadata_setting() -> bool:
         return False
 
 
+def _sync_node_interfaces_setting() -> bool:
+    """Return the strict plugin option for full node topology sync."""
+    try:
+        from django.conf import settings
+
+        from netbox_proxbox.background_tasks import validate_sync_node_interfaces
+
+        config = getattr(settings, "PLUGINS_CONFIG", {}).get("netbox_proxbox", {})
+        return validate_sync_node_interfaces(config.get("sync_node_interfaces", False))
+    except Exception:
+        return False
+
+
 def _overwrite_device_role_setting() -> bool:
     """Return plugin setting for whether sync should overwrite the device role."""
     try:

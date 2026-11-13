@@ -37,14 +37,26 @@ its own endpoint database ID into typed sync state as
 key or sufficient historical ownership evidence because a restored/reseeded
 backend or recreated endpoint row can reuse it. After backend stages finish,
 `ProxboxSyncJob` reuses the plugin-PK to backend-ID map already resolved for the
-run and binds a null `endpoint` foreign key only when the row's related cluster
-or node includes at least one present relation and every present relation
-belongs to the mapped endpoint. A recorded cluster name without either relation
-is reported as `no_relation_evidence`, not used for automatic binding. The local
-update runs under the same active branch as reconciliation. Existing foreign
-keys, unrelated raw IDs, ambiguous backend IDs, and uncorroborated rows are never
-changed. The job reports uncorroborated rows but never supplies an operator
-confirmation. The one-off
+run. It first selects only VM sidecars whose `last_run_id` matches that exact
+run. These two values are necessary filters, not proof that proxbox-api rewrote
+the identity fields during that run. Before any update, the VM must have a
+native NetBox cluster that the mapped endpoint authoritatively owns through
+`ProxmoxEndpoint.netbox_cluster`. A foreign endpoint or tracking claim, a
+missing native cluster, or disagreement between endpoint and tracking ownership
+refuses the row. The cluster FK comes from the unique tracking row linked to the
+VM's native cluster. The recorded cluster name is only a same-endpoint fallback
+when no linked row exists or a consistency check when one does. When the VM has
+a native device, exactly one node in the corroborated endpoint must link to that
+device, its tracking cluster must agree, and the recorded node name is only a
+consistency check. A VM without a native device may use a unique exact node-name
+match inside the corroborated endpoint only to fill a null node relation. This
+fallback cannot cross endpoints and cannot replace an existing node relation.
+The local update runs
+under the same active branch as reconciliation.
+The existing locked-relation endpoint backfill then handles rows already
+corroborated by typed relations. Historical name-only rows, unrelated raw IDs,
+and uncorroborated rows remain unchanged. The job reports both bounded summaries
+but never supplies an operator confirmation. The one-off
 [`proxbox_backfill_sync_state_endpoints`](../operations/sync-state-endpoint-backfill.md)
 command applies the same rule to historical rows and provides a dry-run-first,
 explicit confirmation path for independently verified restored-backend cases.

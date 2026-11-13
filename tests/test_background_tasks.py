@@ -140,7 +140,11 @@ def test_startup_roles_obey_option(plugin_module, monkeypatch, argv, enabled):
 def test_plugin_validation_and_default(plugin_module):
     module, _settings = plugin_module
     assert module.ProxboxConfig.default_settings["automatic_background_tasks"] is True
+    assert module.ProxboxConfig.default_settings["sync_node_interfaces"] is False
     module.ProxboxConfig.validate({}, "4.7.0")
     module.ProxboxConfig.validate({"automatic_background_tasks": False}, "4.7.0")
+    module.ProxboxConfig.validate({"sync_node_interfaces": True}, "4.7.0")
     with pytest.raises(ValueError):
         module.ProxboxConfig.validate({"automatic_background_tasks": "false"}, "4.7.0")
+    with pytest.raises(ValueError, match="sync_node_interfaces must be a boolean"):
+        module.ProxboxConfig.validate({"sync_node_interfaces": "true"}, "4.7.0")

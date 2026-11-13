@@ -57,6 +57,30 @@ This option does not cancel an operation already executing in an old process,
 disable explicit user-requested synchronization, or suppress event-driven
 inventory/credential integrity handlers.
 
+### Enable full node network topology synchronization
+
+The plugin preserves the legacy node-interface behavior by default. Enable full
+Proxmox node network topology synchronization with a strict Python boolean:
+
+```python
+PLUGINS_CONFIG = {
+    "netbox_proxbox": {"sync_node_interfaces": True},
+}
+```
+
+The option defaults to `False`. Strings such as `"true"` and integers are
+invalid configuration and never enable the behavior. Restart every NetBox
+application and RQ worker process after changing the option so every sync uses
+the same value.
+
+This requires proxbox-api `0.0.20` or later. When enabled, the Network
+Interfaces stage and full update reconcile physical interfaces, Linux and Open
+vSwitch bridges and bonds, Open vSwitch internal ports, and VLAN interfaces,
+including their NetBox Bridge, LAG, and Parent relationships. Linux bond
+membership additionally depends on the proxbox-api network parser recognizing
+the source configuration. Older proxbox-api releases ignore the extra query
+parameter and retain the legacy behavior.
+
 Rebuild and start:
 
 ```bash

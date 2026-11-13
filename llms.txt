@@ -1644,6 +1644,26 @@ only its own endpoint to proxbox-api. Invalid, unresolved, disabled, or hidden
 identity fails before backend I/O, so duplicate VM IDs on independent clusters
 cannot cross endpoint boundaries.
 
+## Current-run VM sync-state relation resolution
+
+After successful VM synchronization, `ProxboxSyncJob` reuses the exact
+plugin-pk/backend-id map resolved for that run and selects only sidecars whose
+`last_run_id` equals the job's run ID. These values are necessary filters but
+not identity proof. Every update also requires the VM's native cluster to equal
+the mapped endpoint's authoritative `netbox_cluster`, without a foreign endpoint
+or tracking claim. The cluster relation comes from the unique tracking row
+linked to that native cluster; its recorded name is only a same-endpoint fallback
+or consistency check. When the VM has a native device, the node comes from the
+unique tracking row in the corroborated endpoint linked to that device; its
+tracking cluster must agree, and the recorded node name is only a consistency
+check. Without a native device, a unique exact same-endpoint name may fill only
+a null node relation and cannot replace an existing relation or cross endpoints.
+The resolver pre-reads candidate sidecars, then locks endpoints, VMs,
+native clusters, tracking rows, nodes, and finally sidecars. It applies guarded
+exact-PK updates without signals and stores bounded reasons beside the historical
+endpoint-backfill summary. Selected-VM batch jobs share the run stamp and map;
+direct per-object Sync Now requests do not invent missing authority.
+
 ## Local E2E mock telemetry
 
 The local Proxmox mock uses optional FastAPI[standard]>=0.143.0 native telemetry.

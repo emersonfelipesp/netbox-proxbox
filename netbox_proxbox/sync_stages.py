@@ -5,9 +5,10 @@ from __future__ import annotations
 import asyncio
 import json
 import time
-from collections.abc import Sequence, Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from contextvars import ContextVar
+from functools import partial
 from typing import TYPE_CHECKING
 
 try:
@@ -73,6 +74,7 @@ from netbox_proxbox.sync_params import (
     _ignore_ipv6_link_local_addresses_setting,
     _primary_ip_preference_setting,
     _serialize_sync_params,
+    _sync_node_interfaces_setting,
     effective_overwrites_for_endpoint,
     effective_sync_modes_for_endpoint,
 )
@@ -348,6 +350,277 @@ def _stage_skip_reason(sync_type: str) -> str | None:
     return None
 
 
+def _batch_scope_refusal(
+    *,
+    batch_object_type: str,
+    object_id: str,
+    owner_pks: set[str],
+    job_scope_wire_ids: Sequence[str],
+    proxmox_wire_endpoint_by_pk: Mapping[str, str],
+) -> tuple[str | None, dict[str, object] | None]:
+    """Resolve one object's endpoint scope or return a fail-closed result."""
+    if len(owner_pks) > 1:
+        claimants = ", ".join(sorted(owner_pks))
+        return None, {
+            "batch_object_type": batch_object_type,
+            "object_id": object_id,
+            "status": 424,
+            "error": (
+                "This object's Proxmox cluster is claimed by more than one "
+                f"Proxmox endpoint (ids {claimants}), so the endpoint that owns "
+                "it cannot be determined and it was not synced. Syncing it "
+                "against every claimant could match another cluster/node/VMID "
+                "with the same name. Remove the duplicate reflected cluster, "
+                "then retry."
+            ),
+        }
+    if len(owner_pks) == 1:
+        owner_pk = next(iter(owner_pks))
+        pinned = proxmox_wire_endpoint_by_pk.get(owner_pk)
+        if pinned:
+            return pinned, None
+        return None, {
+            "batch_object_type": batch_object_type,
+            "object_id": object_id,
+            "status": 424,
+            "error": (
+                "The Proxmox endpoint this object belongs to "
+                f"(id {owner_pk}) is not in this run's endpoint scope, so it "
+                "was not synced. Syncing it against the remaining endpoints "
+                "could match another cluster/node/VMID with the same name."
+            ),
+        }
+    if len(job_scope_wire_ids) <= 1:
+        return None, None
+    return None, {
+        "batch_object_type": batch_object_type,
+        "object_id": object_id,
+        "status": 424,
+        "error": (
+            "The Proxmox endpoint this object belongs to could not be determined "
+            "— no reflected cluster names an owner — and this run spans "
+            f"{len(job_scope_wire_ids)} Proxmox endpoints, so it was not synced. "
+            "Syncing it against all of them could match another "
+            "cluster/node/VMID with the same name. Run a staged sync first so "
+            "the cluster is reflected, or retry with a single endpoint selected."
+        ),
+    }
+
+
+def _batch_sync_params(obj: object, batch_object_type: str) -> dict[str, object]:
+    """Build one selected object's individual-sync parameters."""
+    resolvers = {
+        "virtual-machine": _resolve_vm_batch_params,
+        "vm-backup": _resolve_vm_backup_batch_params,
+        "vm-snapshot": _resolve_vm_snapshot_batch_params,
+        "proxmox-storage": _resolve_storage_batch_params,
+        "vm-task-history": _resolve_task_history_batch_params,
+    }
+    resolver = resolvers.get(batch_object_type)
+    if resolver is None:
+        return {
+            "error": f"Unsupported batch object type: {batch_object_type}",
+            "status": 422,
+        }
+    return resolver(obj)  # type: ignore[arg-type]
+
+
+def _post_sync_vm_tenant_assignment(obj: object) -> None:
+    """Refresh one synchronized VM and apply the three tenant policies."""
+    from netbox_proxbox.services.tenant_assignment import (
+        maybe_assign_tenant_from_cluster,
+        maybe_assign_tenant_from_regex,
+        maybe_assign_tenant_from_tags,
+    )
+
+    obj.refresh_from_db()
+    maybe_assign_tenant_from_regex(obj)
+    maybe_assign_tenant_from_tags(obj)
+    maybe_assign_tenant_from_cluster(obj)
+
+
+def _batch_query_context(
+    params: Mapping[str, object],
+    *,
+    batch_object_type: str,
+    netbox_branch_schema_id: str | None,
+    object_wire_scope: str | None,
+    run_id: str | None,
+) -> tuple[str, dict[str, object], str | None]:
+    """Build the exact query and branch context for one selected object."""
+    path = str(params["path"])
+    query_params = dict(params.get("query_params") or {})
+    branch_schema_id = str(netbox_branch_schema_id) if netbox_branch_schema_id else None
+    if branch_schema_id:
+        query_params["netbox_branch_schema_id"] = branch_schema_id
+    if object_wire_scope:
+        query_params["proxmox_endpoint_ids"] = object_wire_scope
+    if batch_object_type == "virtual-machine" and run_id:
+        query_params["run_id"] = run_id
+    return path, query_params, branch_schema_id
+
+
+async def _dispatch_batch_selected_sync(
+    obj: object,
+    *,
+    object_id: str,
+    batch_object_type: str,
+    params: Mapping[str, object],
+    object_wire_scope: str | None,
+    netbox_branch_schema_id: str | None,
+    fastapi_endpoint_id: int | None,
+    run_id: str | None,
+    sync_individual_with_dependencies: Callable[..., tuple[dict, int, list[dict]]],
+) -> dict[str, object]:
+    """Dispatch one prepared selected-object sync and normalize its result."""
+    path, query_params, branch_schema_id = _batch_query_context(
+        params,
+        batch_object_type=batch_object_type,
+        netbox_branch_schema_id=netbox_branch_schema_id,
+        object_wire_scope=object_wire_scope,
+        run_id=run_id,
+    )
+
+    def _call_sync() -> tuple[dict, int, list[dict]]:
+        return sync_individual_with_dependencies(
+            path,
+            query_params,
+            netbox_branch_schema_id=branch_schema_id,
+            fastapi_endpoint_id=fastapi_endpoint_id,
+            proxmox_endpoint_ids=object_wire_scope,
+        )
+
+    response, status, dependencies = await asyncio.to_thread(_call_sync)
+    if batch_object_type == "virtual-machine" and 200 <= int(status) < 300:
+        await asyncio.to_thread(_post_sync_vm_tenant_assignment, obj)
+    return {
+        "batch_object_type": batch_object_type,
+        "object_id": object_id,
+        "status": status,
+        "response": response,
+        "dependencies": dependencies,
+        "error": response.get("error") if isinstance(response, dict) else None,
+    }
+
+
+async def _run_one_batch_selected_sync(
+    *,
+    object_id: str,
+    batch_object_type: str,
+    object_by_id: Mapping[str, object],
+    owner_pks_by_object_id: Mapping[str, set[str]],
+    job_scope_wire_ids: Sequence[str],
+    proxmox_wire_endpoint_ids: str | None,
+    proxmox_wire_endpoint_by_pk: Mapping[str, str],
+    netbox_branch_schema_id: str | None,
+    fastapi_endpoint_id: int | None,
+    run_id: str | None,
+    semaphore: asyncio.Semaphore,
+    sync_individual_with_dependencies: Callable[..., tuple[dict, int, list[dict]]],
+) -> dict[str, object]:
+    """Run one endpoint-scoped selected-object sync."""
+    async with semaphore:
+        obj = object_by_id.get(object_id)
+        if obj is None:
+            return {
+                "batch_object_type": batch_object_type,
+                "object_id": object_id,
+                "status": 404,
+                "error": "Selected object was not found.",
+            }
+        owner_pks = owner_pks_by_object_id.get(object_id) or set()
+        pinned_scope, refusal = _batch_scope_refusal(
+            batch_object_type=batch_object_type,
+            object_id=object_id,
+            owner_pks=owner_pks,
+            job_scope_wire_ids=job_scope_wire_ids,
+            proxmox_wire_endpoint_by_pk=proxmox_wire_endpoint_by_pk,
+        )
+        if refusal is not None:
+            return refusal
+        object_wire_scope = pinned_scope or proxmox_wire_endpoint_ids
+        params = _batch_sync_params(obj, batch_object_type)
+        if params.get("error"):
+            return {
+                "batch_object_type": batch_object_type,
+                "object_id": object_id,
+                "status": int(params.get("status") or 422),
+                "error": str(params.get("error")),
+            }
+        return await _dispatch_batch_selected_sync(
+            obj,
+            object_id=object_id,
+            batch_object_type=batch_object_type,
+            params=params,
+            object_wire_scope=object_wire_scope,
+            netbox_branch_schema_id=netbox_branch_schema_id,
+            fastapi_endpoint_id=fastapi_endpoint_id,
+            run_id=run_id,
+            sync_individual_with_dependencies=sync_individual_with_dependencies,
+        )
+
+
+def _selected_object_queryset(batch_object_type: str) -> object:
+    """Return the selected-object queryset for one supported batch type."""
+    from virtualization.models import VirtualMachine
+
+    from netbox_proxbox.models import (
+        ProxmoxStorage,
+        VMBackup,
+        VMSnapshot,
+        VMTaskHistory,
+    )
+
+    model_map = {
+        "virtual-machine": VirtualMachine.objects.select_related(
+            "cluster", "device", "site", "role", "tenant", "platform"
+        ),
+        "vm-backup": VMBackup.objects.select_related(
+            "virtual_machine", "proxmox_storage", "proxmox_storage__cluster"
+        ),
+        "vm-snapshot": VMSnapshot.objects.select_related(
+            "virtual_machine", "proxmox_storage", "proxmox_storage__cluster"
+        ),
+        "proxmox-storage": ProxmoxStorage.objects.select_related("cluster"),
+        "vm-task-history": VMTaskHistory.objects.select_related("virtual_machine"),
+    }
+    queryset = model_map.get(batch_object_type)
+    if queryset is None:
+        raise ValueError(f"Unsupported batch object type: {batch_object_type!r}")
+    return queryset
+
+
+def _batch_owner_pks(
+    object_by_id: Mapping[str, object],
+    batch_object_type: str,
+    proxmox_wire_endpoint_by_pk: Mapping[str, str],
+) -> dict[str, set[str]]:
+    """Resolve selected objects' native clusters to endpoint claimants."""
+    if not proxmox_wire_endpoint_by_pk:
+        return {}
+    cluster_id_by_object_id = {
+        object_id: _batch_object_core_cluster_id(obj, batch_object_type)
+        for object_id, obj in object_by_id.items()
+    }
+    owner_by_cluster = _owner_endpoint_pks_by_cluster_id(
+        [cluster_id for cluster_id in cluster_id_by_object_id.values() if cluster_id]
+    )
+    return {
+        object_id: owner_by_cluster[cluster_id]
+        for object_id, cluster_id in cluster_id_by_object_id.items()
+        if cluster_id and cluster_id in owner_by_cluster
+    }
+
+
+def _batch_wire_ids(proxmox_wire_endpoint_ids: str | None) -> list[str]:
+    """Split one job-wide backend endpoint scope once per batch."""
+    return [
+        wire_id.strip()
+        for wire_id in (proxmox_wire_endpoint_ids or "").split(",")
+        if wire_id.strip()
+    ]
+
+
 async def _run_batch_selected_sync(
     self: "ProxboxSyncJob",
     *,
@@ -357,6 +630,7 @@ async def _run_batch_selected_sync(
     fastapi_endpoint_id: int | None = None,
     proxmox_wire_endpoint_ids: str | None = None,
     proxmox_wire_endpoint_by_pk: dict[str, str] | None = None,
+    run_id: str | None = None,
 ) -> dict[str, object]:
     """Run selected object syncs concurrently with asyncio.gather.
 
@@ -393,37 +667,17 @@ async def _run_batch_selected_sync(
     syncs working on the installs the fallback was written for — one endpoint,
     nothing reflected yet — without letting "unknown" widen in the very estate
     where a duplicated identifier is possible.
-    """
-    from virtualization.models import VirtualMachine
 
-    from netbox_proxbox.models import (
-        ProxmoxStorage,
-        VMBackup,
-        VMSnapshot,
-        VMTaskHistory,
-    )
+    ``run_id`` is forwarded only to virtual-machine writes. It gives the
+    plugin-side relation resolver a necessary current-run filter. The resolver
+    still requires independent native-cluster ownership because proxbox-api may
+    stamp a sidecar even when its optional identity payload was not rewritten.
+    """
     from netbox_proxbox.services.individual_sync import (
         sync_individual_with_dependencies,
     )
 
-    model_map = {
-        "virtual-machine": VirtualMachine.objects.select_related(
-            "cluster", "device", "site", "role", "tenant", "platform"
-        ),
-        "vm-backup": VMBackup.objects.select_related(
-            "virtual_machine", "proxmox_storage", "proxmox_storage__cluster"
-        ),
-        "vm-snapshot": VMSnapshot.objects.select_related(
-            "virtual_machine", "proxmox_storage", "proxmox_storage__cluster"
-        ),
-        "proxmox-storage": ProxmoxStorage.objects.select_related("cluster"),
-        "vm-task-history": VMTaskHistory.objects.select_related("virtual_machine"),
-    }
-
-    queryset = model_map.get(batch_object_type)
-    if queryset is None:
-        raise ValueError(f"Unsupported batch object type: {batch_object_type!r}")
-
+    queryset = _selected_object_queryset(batch_object_type)
     object_ids = _normalize_batch_object_ids(batch_object_ids)
     objects = list(queryset.filter(pk__in=object_ids))
     object_by_id = {str(getattr(obj, "pk", "")): obj for obj in objects}
@@ -436,203 +690,36 @@ async def _run_batch_selected_sync(
     # tri-state (see `_owner_endpoint_pks_by_cluster_id()`): one claimant pins,
     # two or more refuses the object, and none widens to the job-wide scope —
     # but only while that scope names a single endpoint.
-    owner_pks_by_object_id: dict[str, set[str]] = {}
-    if proxmox_wire_endpoint_by_pk:
-        cluster_id_by_object_id = {
-            object_id: _batch_object_core_cluster_id(obj, batch_object_type)
-            for object_id, obj in object_by_id.items()
-        }
-        owner_by_cluster = _owner_endpoint_pks_by_cluster_id(
-            [cid for cid in cluster_id_by_object_id.values() if cid]
-        )
-        owner_pks_by_object_id = {
-            object_id: owner_by_cluster[cluster_id]
-            for object_id, cluster_id in cluster_id_by_object_id.items()
-            if cluster_id and cluster_id in owner_by_cluster
-        }
+    owner_pks_by_object_id = _batch_owner_pks(
+        object_by_id,
+        batch_object_type,
+        proxmox_wire_endpoint_by_pk or {},
+    )
 
     # The unknown-owner fallback in `run_one()` widens an object back to the
     # whole run's scope. That is only safe while the run names **one** endpoint,
     # where "the job-wide scope" and "one specific endpoint" are the same
     # request. Count the ids once here rather than re-splitting per object.
-    job_scope_wire_ids = [
-        wire_id.strip()
-        for wire_id in (proxmox_wire_endpoint_ids or "").split(",")
-        if wire_id.strip()
-    ]
+    job_scope_wire_ids = _batch_wire_ids(proxmox_wire_endpoint_ids)
 
     semaphore = asyncio.Semaphore(_proxbox_fetch_max_concurrency_setting())
-
-    async def run_one(object_id: str) -> dict[str, object]:
-        async with semaphore:
-            obj = object_by_id.get(str(object_id))
-            if obj is None:
-                return {
-                    "batch_object_type": batch_object_type,
-                    "object_id": str(object_id),
-                    "status": 404,
-                    "error": "Selected object was not found.",
-                }
-
-            # Pin to this object's own endpoint when we can name it. Two of the
-            # three outcomes refuse rather than widen, because a cluster/node/
-            # VMID is unique only *per endpoint*: asking a set of endpoints for
-            # an identifier another estate also uses is how the wrong estate's
-            # data ends up written into this row.
-            owner_pks = owner_pks_by_object_id.get(str(object_id)) or set()
-            object_wire_scope = proxmox_wire_endpoint_ids
-            if len(owner_pks) > 1:
-                # Ambiguous: two endpoints have both reflected this cluster, so
-                # the estate provably *has* the duplicated namespace. Falling
-                # back to the job-wide scope here would ask both of them and
-                # write whichever answered first — the exact defect per-object
-                # pinning exists to close. Unknown ownership may widen;
-                # ambiguous ownership may not.
-                claimants = ", ".join(sorted(owner_pks))
-                return {
-                    "batch_object_type": batch_object_type,
-                    "object_id": str(object_id),
-                    "status": 424,
-                    "error": (
-                        "This object's Proxmox cluster is claimed by more than "
-                        f"one Proxmox endpoint (ids {claimants}), so the "
-                        "endpoint that owns it cannot be determined and it was "
-                        "not synced. Syncing it against every claimant could "
-                        "match another cluster/node/VMID with the same name. "
-                        "Remove the duplicate reflected cluster, then retry."
-                    ),
-                }
-            if len(owner_pks) == 1:
-                owner_pk = next(iter(owner_pks))
-                pinned = (proxmox_wire_endpoint_by_pk or {}).get(owner_pk)
-                if not pinned:
-                    # Resolved, but its endpoint drifted and was dropped from
-                    # the scope. Same refusal, same reason.
-                    return {
-                        "batch_object_type": batch_object_type,
-                        "object_id": str(object_id),
-                        "status": 424,
-                        "error": (
-                            "The Proxmox endpoint this object belongs to "
-                            f"(id {owner_pk}) is not in this run's endpoint "
-                            "scope, so it was not synced. Syncing it against "
-                            "the remaining endpoints could match another "
-                            "cluster/node/VMID with the same name."
-                        ),
-                    }
-                object_wire_scope = pinned
-            elif not owner_pks and len(job_scope_wire_ids) > 1:
-                # Unknown owner: nothing has reflected this object's cluster
-                # yet. Widening to the job-wide scope is what makes a
-                # first-ever sync possible at all, and it costs nothing while
-                # the run names a single endpoint — that request is already
-                # pinned. With two or more in scope it is a guess, and the
-                # identifiers being guessed with (cluster/node/VMID) are unique
-                # only per endpoint, so the wrong estate can answer and its
-                # data lands in this row with no error raised.
-                #
-                # Refusing the object is recoverable: a staged sync reflects
-                # the clusters, ownership becomes resolvable, and the retry
-                # pins. Widening is not — the wrong data is already written.
-                return {
-                    "batch_object_type": batch_object_type,
-                    "object_id": str(object_id),
-                    "status": 424,
-                    "error": (
-                        "The Proxmox endpoint this object belongs to could not "
-                        "be determined — no reflected cluster names an owner — "
-                        f"and this run spans {len(job_scope_wire_ids)} Proxmox "
-                        "endpoints, so it was not synced. Syncing it against "
-                        "all of them could match another cluster/node/VMID "
-                        "with the same name. Run a staged sync first so the "
-                        "cluster is reflected, or retry with a single endpoint "
-                        "selected."
-                    ),
-                }
-
-            if batch_object_type == "virtual-machine":
-                params = _resolve_vm_batch_params(obj)
-            elif batch_object_type == "vm-backup":
-                params = _resolve_vm_backup_batch_params(obj)
-            elif batch_object_type == "vm-snapshot":
-                params = _resolve_vm_snapshot_batch_params(obj)
-            elif batch_object_type == "proxmox-storage":
-                params = _resolve_storage_batch_params(obj)
-            elif batch_object_type == "vm-task-history":
-                params = _resolve_task_history_batch_params(obj)
-            else:
-                return {
-                    "batch_object_type": batch_object_type,
-                    "object_id": str(object_id),
-                    "status": 422,
-                    "error": f"Unsupported batch object type: {batch_object_type}",
-                }
-
-            if params.get("error"):
-                return {
-                    "batch_object_type": batch_object_type,
-                    "object_id": str(object_id),
-                    "status": int(params.get("status") or 422),
-                    "error": str(params.get("error")),
-                }
-
-            path = str(params["path"])
-            query_params = dict(params.get("query_params") or {})
-            # WHY: the branch schema id has to travel as an argument, not only as
-            # a query param on this first call. `_sync_dependency()` builds its
-            # params dict from scratch out of `_CONTEXT_KEYS`, which does not
-            # include `netbox_branch_schema_id` — so a dependency resolved off
-            # this object would be written to the *main* schema while the object
-            # itself went to the branch.
-            branch_schema_id = (
-                str(netbox_branch_schema_id) if netbox_branch_schema_id else None
-            )
-            if branch_schema_id:
-                query_params["netbox_branch_schema_id"] = branch_schema_id
-            # Same argument-not-just-query-param rule as the branch schema, and
-            # for the same reason: an unscoped individual sync is a *wider*
-            # request than a scoped one, so a scope that got dropped somewhere
-            # in the dependency recursion silently re-widens to every endpoint
-            # the backend holds instead of failing.
-            if object_wire_scope:
-                query_params["proxmox_endpoint_ids"] = object_wire_scope
-
-            def _call_sync() -> tuple[dict, int, list[dict]]:
-                return sync_individual_with_dependencies(
-                    path,
-                    query_params,
-                    netbox_branch_schema_id=branch_schema_id,
-                    fastapi_endpoint_id=fastapi_endpoint_id,
-                    proxmox_endpoint_ids=object_wire_scope,
-                )
-
-            response, status, dependencies = await asyncio.to_thread(_call_sync)
-
-            if batch_object_type == "virtual-machine" and 200 <= int(status) < 300:
-                from netbox_proxbox.services.tenant_assignment import (
-                    maybe_assign_tenant_from_cluster,
-                    maybe_assign_tenant_from_regex,
-                    maybe_assign_tenant_from_tags,
-                )
-
-                def _post_sync_assign() -> None:
-                    obj.refresh_from_db()
-                    maybe_assign_tenant_from_regex(obj)
-                    maybe_assign_tenant_from_tags(obj)
-                    maybe_assign_tenant_from_cluster(obj)
-
-                await asyncio.to_thread(_post_sync_assign)
-
-            return {
-                "batch_object_type": batch_object_type,
-                "object_id": str(object_id),
-                "status": status,
-                "response": response,
-                "dependencies": dependencies,
-                "error": response.get("error") if isinstance(response, dict) else None,
-            }
-
-    results = await asyncio.gather(*(run_one(object_id) for object_id in object_ids))
+    run_one = partial(
+        _run_one_batch_selected_sync,
+        batch_object_type=batch_object_type,
+        object_by_id=object_by_id,
+        owner_pks_by_object_id=owner_pks_by_object_id,
+        job_scope_wire_ids=job_scope_wire_ids,
+        proxmox_wire_endpoint_ids=proxmox_wire_endpoint_ids,
+        proxmox_wire_endpoint_by_pk=proxmox_wire_endpoint_by_pk or {},
+        netbox_branch_schema_id=netbox_branch_schema_id,
+        fastapi_endpoint_id=fastapi_endpoint_id,
+        run_id=run_id,
+        semaphore=semaphore,
+        sync_individual_with_dependencies=sync_individual_with_dependencies,
+    )
+    results = await asyncio.gather(
+        *(run_one(object_id=str(object_id)) for object_id in object_ids)
+    )
     succeeded = sum(1 for item in results if int(item.get("status", 500)) < 400)
     failed = len(results) - succeeded
     return {
@@ -678,6 +765,9 @@ def _build_base_query_params(
     base_query["primary_ip_preference"] = _primary_ip_preference_setting()
     base_query["parse_description_metadata"] = (
         "true" if _parse_description_metadata_setting() else "false"
+    )
+    base_query["sync_node_interfaces"] = (
+        "true" if _sync_node_interfaces_setting() else "false"
     )
 
     single_endpoint_id = (

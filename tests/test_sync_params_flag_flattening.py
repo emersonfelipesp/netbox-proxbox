@@ -43,6 +43,10 @@ def sync_stages_module(monkeypatch):
     pkg.__path__ = [str(REPO_ROOT / "netbox_proxbox")]
     monkeypatch.setitem(sys.modules, "netbox_proxbox", pkg)
 
+    django_conf = types.ModuleType("django.conf")
+    django_conf.settings = SimpleNamespace(PLUGINS_CONFIG={})
+    monkeypatch.setitem(sys.modules, "django.conf", django_conf)
+
     constants_mod = types.ModuleType("netbox_proxbox.constants")
     constants_mod.OVERWRITE_FIELDS = fields
     constants_mod.OVERWRITE_DEFAULTS = {
@@ -144,6 +148,7 @@ def sync_stages_module(monkeypatch):
     sys.modules["netbox_proxbox.sync_stages"] = module
     spec.loader.exec_module(module)
     module._stubs = state  # type: ignore[attr-defined]
+    module._plugin_settings = django_conf.settings  # type: ignore[attr-defined]
     return module
 
 
@@ -206,3 +211,63 @@ def test_build_base_query_params_includes_other_runtime_settings(sync_stages_mod
     assert base_query["fetch_max_concurrency"].isdigit()
     assert base_query["primary_ip_preference"] in {"ipv4", "ipv6"}
     assert base_query["parse_description_metadata"] in {"true", "false"}
+    assert base_query["sync_node_interfaces"] == "false"
+
+
+@pytest.mark.parametrize(
+    ("configured", "expected"),
+    [
+        ({}, False),
+        ({"sync_node_interfaces": True}, True),
+        ({"sync_node_interfaces": False}, False),
+        ({"sync_node_interfaces": None}, False),
+        ({"sync_node_interfaces": 0}, False),
+        ({"sync_node_interfaces": 1}, False),
+        ({"sync_node_interfaces": "true"}, False),
+        ({"sync_node_interfaces": []}, False),
+        ({"sync_node_interfaces": {}}, False),
+    ],
+)
+def test_sync_node_interfaces_setting_is_strict_and_fail_closed(
+    sync_stages_module, configured, expected
+):
+    sync_stages_module._plugin_settings.PLUGINS_CONFIG = {"netbox_proxbox": configured}
+
+    assert sync_stages_module._sync_node_interfaces_setting() is expected
+
+
+def test_sync_node_interfaces_setting_returns_false_on_read_error(sync_stages_module):
+    class BrokenSettings:
+        @property
+        def PLUGINS_CONFIG(self):
+            raise RuntimeError("unavailable")
+
+    sys.modules["django.conf"].settings = BrokenSettings()
+
+    assert sync_stages_module._sync_node_interfaces_setting() is False
+
+
+@pytest.mark.parametrize(
+    ("enabled", "expected"),
+    [(True, "true"), (False, "false")],
+)
+def test_build_base_query_params_forwards_sync_node_interfaces(
+    sync_stages_module, enabled, expected
+):
+    sync_stages_module._plugin_settings.PLUGINS_CONFIG = {
+        "netbox_proxbox": {"sync_node_interfaces": enabled}
+    }
+
+    base_query = sync_stages_module._build_base_query_params(None, None)
+
+    assert base_query["sync_node_interfaces"] == expected
+
+
+def test_network_interfaces_stage_retains_sync_node_interfaces(sync_stages_module):
+    query = sync_stages_module._build_stage_query_params(
+        base_query={"sync_node_interfaces": "true"},
+        sync_type="network-interfaces",
+        target_vm_ids=[],
+    )
+
+    assert query["sync_node_interfaces"] == "true"

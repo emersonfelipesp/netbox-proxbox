@@ -68,6 +68,18 @@ sudo systemctl enable --now netbox-rq
     dependency order: devices → storage → virtual machines → task history → VM
     disks → VM backups → VM snapshots → network interfaces → VM interfaces → IP
     addresses → SDN → replications → backup routines.
+
+    By default, the **Network Interfaces** stage retains the legacy behavior:
+    interfaces and addresses are synchronized without full topology relations.
+    Set the strict boolean
+    `PLUGINS_CONFIG["netbox_proxbox"]["sync_node_interfaces"] = True` to
+    reconcile physical interfaces, Linux and Open vSwitch bridges and bonds,
+    Open vSwitch internal ports, and VLAN interfaces, including their NetBox
+    Bridge, LAG, and Parent relationships. The option requires proxbox-api
+    `0.0.20` or later and is also forwarded during a full update. Linux bond
+    membership additionally depends on the backend network parser recognizing
+    the source configuration. Restart every NetBox application and RQ worker
+    process after changing the option.
 3. Optionally set a **Schedule at** time. Leave blank to run immediately.
 4. Optionally set a **Recurs every** interval in minutes. Common values:
     - `1` — every minute

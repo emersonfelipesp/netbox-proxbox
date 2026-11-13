@@ -166,8 +166,9 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
   **`proxmox_endpoint_ids` travels the same way, and dropping it is worse.** `sync_individual()` merges an optional `proxmox_endpoint_ids: str | None` into its outgoing `query_params`, and `sync_individual_with_dependencies()` / `_sync_dependency()` forward it recursively — again because `_CONTEXT_KEYS` omits it. The failure mode is not a *narrower* dependency sync, it is a **wider** one: proxbox-api resolves every `sync/individual/*` route's Proxmox sessions through `ProxmoxSessionsDep`, which reads a missing `proxmox_endpoint_ids` as "use every endpoint I hold" — including endpoints disabled in this NetBox. So a scope that reached the selected object but not its dependencies would resolve those dependencies against the *whole* backend estate. `sync_stages.py::_run_batch_selected_sync()` takes the resolved scope as keyword-only `proxmox_wire_endpoint_ids=` and sets both the query param and the argument; `jobs.py` resolves it with `sync_stages._batch_wire_endpoint_scope()` and refuses the run when nothing resolves. Pinned by `test_run_batch_selected_sync_passes_the_proxmox_scope_to_dependency_syncs`.
 - [`openapi_schema.py`](./openapi_schema.py): OpenAPI schema caching and retrieval from the backend.
 - [`service_status.py`](./service_status.py): `ServiceStatus` class and helpers for keepalive/health checks against FastAPI, NetBox, and Proxmox endpoints. Lightweight backend reachability and `/version` probes use `request_timeout`; Proxmox keepalive synchronization, backend endpoint resolution, and version reads use the `backend_status_timeout` aggregate deadline because proxbox-api may initialize an upstream Proxmox session before returning. Each backend request receives only the remaining deadline, including retry sleeps. Do not reduce those backend-operation calls to the five-second lightweight budget or remove their aggregate bound.
-- [`sync_state_endpoint_backfill.py`](./sync_state_endpoint_backfill.py): pure
-  ORM repair that binds a null sync-state `endpoint` foreign key from the
+- [`sync_state_endpoint_backfill.py`](./sync_state_endpoint_backfill.py):
+  historical/management-command ORM repair that binds a null sync-state
+  `endpoint` foreign key from the
   proxbox-api ID stored in `proxmox_endpoint_raw_id` only when the VM row's own
   cluster and node relations include at least one present relation and all
   present relations belong to that endpoint. Two present relations never vote
@@ -178,16 +179,46 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
   backend integer is not
   historical ownership evidence because restores and endpoint recreation can
   reuse it. Uncorroborated rows remain null and are reported by count, bounded
-  primary-key sample, and reason. Apply locks candidate sync-state rows and the
-  cluster/node evidence they reference, recomputes corroboration in the same
-  transaction, and updates only the still-corroborated PKs with null-endpoint,
-  raw-ID, and exact-PK guards. Only the management command can pass an explicit
+  primary-key sample, and reason. Apply pre-reads candidate identities, locks
+  their cluster and node evidence before locking and re-reading the candidate
+  sidecars, recomputes corroboration in the same transaction, and updates only
+  the still-corroborated PKs with null-endpoint, raw-ID, and exact-PK guards.
+  Only the management command can pass an explicit
   operator-confirmed backend-ID/plugin-pk pair; the sync job never does. A
   confirmed preview lists every affected unverified row and emits a deterministic
   review token bound to that complete PK set and the full endpoint mapping. The
   token is only a checksummed receipt for the reviewed set, not a secret or an
   authentication proof. Apply requires the token and refuses a changed set with
   exact added/removed PK diagnostics. The preview never calls `update()`.
+- [`sync_state_relation_resolver.py`](./sync_state_relation_resolver.py):
+  post-sync VM relation repair bounded to the exact plugin-pk/backend-id map
+  resolved by the current job and to sidecars whose `last_run_id` exactly
+  matches that job. Those inputs are necessary but not ownership proof: every
+  update additionally requires the VM's native cluster to equal the mapped
+  endpoint's authoritative `netbox_cluster`, with no foreign endpoint or
+  tracking claim and no conflicting same-endpoint tracking link. The cluster
+  relation uses the unique tracking row linked to that native cluster. A
+  recorded cluster name is only a same-endpoint fallback when that link is
+  absent or a consistency check when it exists. When the VM has a native device,
+  the node comes from exactly one tracking row in the endpoint linked to that
+  device; its tracking cluster must agree, and the recorded node name is only a
+  consistency check. A VM without a native device may use a unique exact name
+  inside the corroborated endpoint only to fill a null node relation. That
+  fallback cannot cross endpoints and never replaces an existing node relation.
+  Within one transaction, the resolver pre-reads sidecars only to
+  discover candidates, then locks endpoints, VMs, native clusters, tracking
+  rows, nodes, and finally sidecars in primary-key order. It applies guarded
+  exact-PK `QuerySet.update()` calls without signals. Historical rows and names
+  without this proof stay outside the resolver. The selected-VM batch path
+  forwards the job's run ID and reuses its fresh endpoint map; direct per-object
+  Sync Now views do not expose both inputs and therefore do not invoke it.
+  The job treats the resolver as best effort: an unexpected exception rolls
+  back the resolver transaction, is recorded under
+  `sync_state_relation_resolution` as a failed, skipped summary that carries
+  only the exception class, and does not change the job outcome. A job
+  cancellation is never recorded that way: `jobs._is_job_cancellation()`
+  re-raises the job deadline and the worker timeout, which both derive from
+  `Exception`, so a cancelled job stops instead of continuing to the backfill.
 - [`sync_cluster.py`](./sync_cluster.py): sync coordination for cluster and node inventory.
 
 ## Dependencies
@@ -328,6 +359,21 @@ previous address or persist its fingerprint against a newly selected one. The
 emitted context carries `endpoint_id` and `target_fingerprint` so downstream
 retries can enforce the binding. Guarded end to end by
 `tests/test_backend_proxy_credential_binding.py`.
+
+The same dict carries `websocket_url` and `server_websocket_url`, taken from the
+one `get_fastapi_url()` result that supplies `http_url`. They are credential-free
+and are not part of the retry binding. Both are empty unless `use_websocket` is
+enabled: `backend_key_target_fingerprint()` binds the WebSocket host and port
+only while that flag is set, so the context never emits an authority that the
+fingerprint does not cover (`utils._bound_websocket_bases()`). With the flag
+enabled, a changed WebSocket host or port is target drift and yields no context. `BackendRequestContext.from_fastapi_context()`
+is the only mapping from that dict to the typed context;
+`get_fastapi_request_context()` and `backend_auth` both call it, so a key cannot
+be dropped by a second hand-written copy. Consumers read the typed
+`context.websocket_url` field — `vm_console.resolve_console_backend()` treats a
+backend with an empty value as not browser-capable, and the SSH terminal
+session view uses it before the model-property fallback. Never read WebSocket
+bases from `context.detail`.
 
 ## Backend error text is redacted at the producer, not at each reader
 

@@ -484,6 +484,259 @@ def test_stale_related_ip_fingerprint_drift_returns_no_context(
     assert utils.get_fastapi_context(endpoint) is None
 
 
+class _EndpointQuery:
+    """Minimal ``FastAPIEndpoint.objects`` double that honours ``pk``/``enabled``."""
+
+    def __init__(self, rows: list[object]) -> None:
+        self.rows = rows
+
+    def filter(self, **criteria: object) -> "_EndpointQuery":
+        return _EndpointQuery(
+            [
+                row
+                for row in self.rows
+                if all(getattr(row, name) == value for name, value in criteria.items())
+            ]
+        )
+
+    def order_by(self, *_fields: str) -> "_EndpointQuery":
+        return self
+
+    def count(self) -> int:
+        return len(self.rows)
+
+    def first(self) -> object | None:
+        return self.rows[0] if self.rows else None
+
+    def __iter__(self):
+        return iter(self.rows)
+
+
+def _websocket_endpoint(adoption, **overrides: object) -> SimpleNamespace:
+    """A TLS-fronted, WebSocket-enabled endpoint with a valid target binding."""
+    fields: dict[str, object] = {
+        "pk": 41,
+        "enabled": True,
+        "domain": "netbox.example.test",
+        "ip_address": None,
+        "port": 8443,
+        "use_https": True,
+        "verify_ssl": True,
+        "use_websocket": True,
+        "websocket_domain": "netbox.example.test",
+        "websocket_port": None,
+        "server_side_websocket": False,
+        "token": "key-a",
+    }
+    fields.update(overrides)
+    endpoint = SimpleNamespace(**fields)
+    endpoint.backend_key_target_fingerprint = adoption.backend_key_target_fingerprint(
+        endpoint
+    )
+    return endpoint
+
+
+def test_fastapi_context_carries_the_websocket_bases(backend_proxy_module):
+    """The context dict must not drop the URLs that ``get_fastapi_url`` computes."""
+    import netbox_proxbox.services.backend_key_adoption as adoption
+    import netbox_proxbox.utils as utils
+
+    endpoint = _websocket_endpoint(adoption, server_side_websocket=True)
+
+    context = utils.get_fastapi_context(endpoint)
+
+    assert context is not None
+    assert context["http_url"] == "https://netbox.example.test:8443"
+    assert context["websocket_url"] == "wss://netbox.example.test:8443/ws"
+    assert context["server_websocket_url"] == "wss://netbox.example.test:8443/ws"
+    assert context["headers"] == {"X-Proxbox-API-Key": "key-a"}
+
+
+def test_fastapi_context_reports_a_distinct_websocket_authority(
+    backend_proxy_module,
+):
+    import netbox_proxbox.services.backend_key_adoption as adoption
+    import netbox_proxbox.utils as utils
+
+    endpoint = _websocket_endpoint(
+        adoption, websocket_domain="relay.example.test", websocket_port=9443
+    )
+
+    context = utils.get_fastapi_context(endpoint)
+
+    assert context is not None
+    assert context["websocket_url"] == "wss://relay.example.test:9443/ws"
+    assert context["server_websocket_url"] == ""
+
+
+def test_fastapi_context_emits_no_websocket_base_when_websocket_is_disabled(
+    backend_proxy_module,
+):
+    """A WebSocket authority outside the target fingerprint is never emitted."""
+    import netbox_proxbox.services.backend_key_adoption as adoption
+    import netbox_proxbox.utils as utils
+
+    endpoint = _websocket_endpoint(
+        adoption, use_websocket=False, websocket_domain="relay-a.example.test"
+    )
+    assert (
+        utils.get_fastapi_url(endpoint)["websocket_url"]
+        == "wss://relay-a.example.test:8443/ws"
+    )
+
+    context = utils.get_fastapi_context(endpoint)
+    endpoint.websocket_domain = "relay-b.example.test"
+    drifted = utils.get_fastapi_context(endpoint)
+
+    for candidate in (context, drifted):
+        assert candidate is not None
+        assert candidate["http_url"] == "https://netbox.example.test:8443"
+        assert candidate["websocket_url"] == ""
+        assert candidate["server_websocket_url"] == ""
+
+
+@pytest.mark.parametrize(
+    "drift",
+    [
+        {"websocket_domain": "relay-b.example.test"},
+        {"websocket_port": 9444},
+    ],
+)
+def test_enabled_websocket_authority_drift_returns_no_context(
+    backend_proxy_module, drift: dict[str, object]
+):
+    """An emitted WebSocket authority is bound by the stored fingerprint."""
+    import netbox_proxbox.services.backend_key_adoption as adoption
+    import netbox_proxbox.utils as utils
+
+    endpoint = _websocket_endpoint(
+        adoption, websocket_domain="relay-a.example.test", websocket_port=9443
+    )
+    context = utils.get_fastapi_context(endpoint)
+    assert context is not None
+    assert context["websocket_url"] == "wss://relay-a.example.test:9443/ws"
+
+    for name, value in drift.items():
+        setattr(endpoint, name, value)
+
+    assert utils.get_fastapi_context(endpoint) is None
+
+
+def test_console_backend_refuses_an_endpoint_with_websocket_disabled(
+    backend_proxy_module,
+    monkeypatch,
+):
+    """The real resolver sends no affinity request for a WebSocket-disabled row."""
+    import netbox_proxbox.services.backend_key_adoption as adoption
+
+    endpoint = _websocket_endpoint(adoption, use_websocket=False)
+    vm_console, affinity_calls = _load_real_console(monkeypatch, endpoint)
+
+    with pytest.raises(
+        vm_console.ConsoleResolutionError, match="No trusted proxbox-api endpoint"
+    ):
+        vm_console.resolve_console_backend(_console_identity(vm_console))
+    assert affinity_calls == []
+
+
+def _load_real_console(
+    monkeypatch, endpoint: object
+) -> tuple[types.ModuleType, list[dict[str, object]]]:
+    """Import the real console service over one endpoint row."""
+    models = sys.modules["netbox_proxbox.models"]
+    monkeypatch.setattr(
+        models.FastAPIEndpoint, "objects", _EndpointQuery([endpoint]), raising=False
+    )
+    monkeypatch.setattr(
+        models, "ProxmoxEndpoint", type("ProxmoxEndpoint", (), {}), raising=False
+    )
+    django_http = types.ModuleType("django.http")
+    django_http.HttpRequest = object
+    monkeypatch.setitem(sys.modules, "django.http", django_http)
+    affinity_calls: list[dict[str, object]] = []
+
+    def resolve_backend_endpoint_id(_endpoint: object, **kwargs: object):
+        affinity_calls.append(kwargs)
+        return 31, None
+
+    backend_sync = types.ModuleType("netbox_proxbox.views.backend_sync")
+    backend_sync.resolve_backend_endpoint_id = resolve_backend_endpoint_id
+    monkeypatch.setitem(sys.modules, "netbox_proxbox.views.backend_sync", backend_sync)
+    monkeypatch.delitem(
+        sys.modules, "netbox_proxbox.services.vm_console", raising=False
+    )
+    return importlib.import_module("netbox_proxbox.services.vm_console"), affinity_calls
+
+
+def _console_identity(vm_console: types.ModuleType) -> object:
+    return vm_console.ConsoleIdentity(
+        virtual_machine_id=11,
+        endpoint=object(),
+        vmid=101,
+        node="pve-01",
+        vm_type="qemu",
+        backend_raw_id=31,
+    )
+
+
+def test_request_context_exposes_the_typed_websocket_base(
+    backend_proxy_module,
+    monkeypatch,
+):
+    """Regression: the console resolver found no backend for any endpoint.
+
+    The request context is derived from the endpoint row through the real
+    ``get_fastapi_context_by_id()`` and ``get_fastapi_request_context()`` path.
+    A hand-built context cannot detect a key that the path drops.
+    """
+    import netbox_proxbox.services.backend_key_adoption as adoption
+
+    backend_context = importlib.import_module("netbox_proxbox.services.backend_context")
+    models = sys.modules["netbox_proxbox.models"]
+    endpoint = _websocket_endpoint(adoption)
+    monkeypatch.setattr(
+        models.FastAPIEndpoint, "objects", _EndpointQuery([endpoint]), raising=False
+    )
+
+    context = backend_context.get_fastapi_request_context(endpoint_id=41)
+
+    assert isinstance(context, backend_proxy_module.BackendRequestContext)
+    assert context.endpoint_id == 41
+    assert context.http_url == "https://netbox.example.test:8443"
+    assert context.websocket_url == "wss://netbox.example.test:8443/ws"
+    assert context.server_websocket_url == ""
+    assert context.detail["websocket_url"] == "wss://netbox.example.test:8443/ws"
+    assert backend_context.get_fastapi_request_context(endpoint_id=42) is None
+
+
+def test_console_backend_resolves_from_a_real_endpoint_context(
+    backend_proxy_module,
+    monkeypatch,
+):
+    """The real console resolver accepts a WebSocket-enabled endpoint row."""
+    import netbox_proxbox.services.backend_key_adoption as adoption
+
+    endpoint = _websocket_endpoint(adoption)
+    vm_console, affinity_calls = _load_real_console(monkeypatch, endpoint)
+    identity = _console_identity(vm_console)
+
+    selected = vm_console.resolve_console_backend(identity)
+
+    assert selected.backend_endpoint_id == 31
+    assert selected.websocket_base == "wss://netbox.example.test:8443/ws"
+    assert [call["base_url"] for call in affinity_calls] == [
+        "https://netbox.example.test:8443"
+    ]
+    assert (
+        vm_console.browser_websocket_url(
+            selected.websocket_base,
+            "/proxmox/console/browser-stream",
+            stream_token="abcdefghijklmnopqrstuvwxyz_12345",
+        )
+        == "wss://netbox.example.test:8443/proxmox/console/browser-stream"
+    )
+
+
 def test_concurrent_binding_change_during_auth_retry_fails_closed(
     backend_proxy_module,
     monkeypatch,

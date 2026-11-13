@@ -188,7 +188,7 @@ def resolve_console_backend(identity: ConsoleIdentity) -> ConsoleBackend:
         context = get_fastapi_request_context(endpoint_id=fastapi_endpoint.pk)
         if context is None or not context.http_url:
             continue
-        websocket_base = str(context.detail.get("websocket_url") or "").strip()
+        websocket_base = str(getattr(context, "websocket_url", "") or "").strip()
         if not websocket_base:
             continue
         backend_id, _error = resolve_backend_endpoint_id(

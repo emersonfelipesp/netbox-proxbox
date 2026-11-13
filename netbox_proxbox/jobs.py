@@ -1471,6 +1471,7 @@ class _SyncRunContext:
         "run_started",
         "stages",
         "sync_state_endpoint_backfill",
+        "sync_state_relation_resolution",
         "types",
     )
 
@@ -1503,6 +1504,7 @@ class _SyncRunContext:
         self.stages = expanded_sync_stages(types)
         self.branch: object | None = None
         self.sync_state_endpoint_backfill: dict[str, object] | None = None
+        self.sync_state_relation_resolution: dict[str, object] | None = None
         self.params = _build_sync_run_params(self)
 
 
@@ -1769,6 +1771,10 @@ def _sync_data_with_branch(context: _SyncRunContext) -> dict[str, object]:
         sync_data["branch"] = identity
     if context.sync_state_endpoint_backfill is not None:
         sync_data["sync_state_endpoint_backfill"] = context.sync_state_endpoint_backfill
+    if getattr(context, "sync_state_relation_resolution", None) is not None:
+        sync_data["sync_state_relation_resolution"] = (
+            context.sync_state_relation_resolution
+        )
     return sync_data
 
 
@@ -1861,6 +1867,7 @@ def _execute_batch_sync(
             fastapi_endpoint_id=context.fastapi_endpoint_id,
             proxmox_wire_endpoint_ids=wire_scope,
             proxmox_wire_endpoint_by_pk=wire_by_pk,
+            run_id=str(context.params["run_id"]),
         )
     )
 
@@ -1923,6 +1930,7 @@ def _run_batch_phase(context: _SyncRunContext) -> bool:
     preflight = _bootstrap_backend_endpoints(context)
     wire_scope, wire_by_pk = _resolve_batch_endpoint_scope(context)
     batch_result = _execute_batch_sync(context, wire_scope, wire_by_pk)
+    _resolve_sync_state_relations(context, wire_by_pk)
     _backfill_sync_state_endpoints(context, wire_by_pk)
     _persist_batch_result(context, batch_result, preflight)
     summary = _batch_result_summary(batch_result)
@@ -2693,6 +2701,64 @@ def _backfill_sync_state_endpoints(
     context.job.logger.info(summary.one_line())
 
 
+def _is_job_cancellation(exc: BaseException) -> bool:
+    """Return whether an exception cancels the job and must propagate.
+
+    The worker timeout and the job deadline both derive from ``Exception``. A
+    best-effort step that swallowed either one would let the job continue
+    after it was cancelled, and the worker's one-shot timeout would not fire
+    again.
+    """
+    if isinstance(exc, SyncJobDeadlineReached):
+        return True
+    try:
+        from rq.timeouts import BaseTimeoutException  # noqa: PLC0415
+    except ImportError:
+        return False
+    return isinstance(exc, BaseTimeoutException)
+
+
+def _resolve_sync_state_relations(
+    context: _SyncRunContext,
+    backend_id_by_plugin_pk: dict[str, str] | None,
+) -> None:
+    """Resolve current-run VM relations inside the run's branch context."""
+    if not backend_id_by_plugin_pk:
+        reason = "the run resolved no usable plugin-to-backend endpoint map"
+        context.sync_state_relation_resolution = {"skipped": True, "reason": reason}
+        context.job.logger.warning(f"Sync-state relation resolution skipped: {reason}")
+        return
+    from netbox_proxbox.services.branch_lifecycle import (  # noqa: PLC0415
+        activate_sync_branch,
+    )
+    from netbox_proxbox.services.sync_state_relation_resolver import (  # noqa: PLC0415
+        resolve_current_run_vm_sync_state_relations,
+    )
+
+    try:
+        with activate_sync_branch(context.branch):
+            summary = resolve_current_run_vm_sync_state_relations(
+                backend_id_by_plugin_pk,
+                run_id=str(context.params["run_id"]),
+            )
+    except Exception as exc:
+        if _is_job_cancellation(exc):
+            raise
+        exception_class = type(exc).__name__
+        context.sync_state_relation_resolution = {
+            "failed": True,
+            "skipped": True,
+            "reason": "unexpected resolver exception",
+            "exception_class": exception_class,
+        }
+        context.job.logger.error(
+            f"Sync-state relation resolution failed: {exception_class}"
+        )
+        return
+    context.sync_state_relation_resolution = summary.as_dict()
+    context.job.logger.info(summary.one_line())
+
+
 def _finish_staged_sync(
     context: _SyncRunContext,
     state: _StagedSyncState,
@@ -2705,6 +2771,7 @@ def _finish_staged_sync(
         else _run_sse_stages(context, state)
     )
     if not deadline_reached:
+        _resolve_sync_state_relations(context, state.backend_id_by_plugin_pk)
         _backfill_sync_state_endpoints(context, state.backend_id_by_plugin_pk)
     state.phases.extend(_phases_from_stage_results(stages))
     _warn_for_missing_stage_runtimes(context.job, stages)
