@@ -23,6 +23,8 @@ _TRACKED_REFERENCE = _REPO_ROOT / "docs" / "reference" / "proxbox-cli"
 _VOLATILE_KEYS = {"elapsed_seconds", "meta"}
 _ANSI_ESCAPE = re.compile(r"\x1b\[[0-?]*[ -/]*[@-~]")
 GeneratedDocs = tuple[Path, Path, Path]
+_BOOLEAN_PLACEHOLDER = "<bool>"
+_CELL_BORDER = "\u2502"
 
 
 def _semantic_json(value: Any) -> Any:
@@ -36,7 +38,7 @@ def _semantic_json(value: Any) -> Any:
     if isinstance(value, list):
         return [_semantic_json(item) for item in value]
     if isinstance(value, str):
-        return _ANSI_ESCAPE.sub("", value)
+        return _without_help_layout(_ANSI_ESCAPE.sub("", value))
     return value
 
 
@@ -55,9 +57,24 @@ def _load_semantic_markdown(path: Path) -> str:
         "    Last updated:",
     )
     text = _ANSI_ESCAPE.sub("", path.read_text(encoding="utf-8"))
-    return "\n".join(
-        line for line in text.splitlines() if not line.startswith(volatile)
+    return _without_help_layout(
+        "\n".join(line for line in text.splitlines() if not line.startswith(volatile))
     )
+
+
+def _without_help_layout(text: str) -> str:
+    """Reduce rendered help to its words, independent of the Typer release.
+
+    Newer Typer releases print a ``<bool>`` value placeholder beside boolean
+    flags. The extra column narrows the description column, so the same
+    description wraps at a different word. Option names, command names, and
+    descriptions are unchanged. The comparison therefore drops the placeholder
+    and the table cell borders, and joins the remaining words with single
+    spaces, so that it fails only when the documented content changes.
+    """
+    for layout_only in (_BOOLEAN_PLACEHOLDER, _CELL_BORDER):
+        text = text.replace(layout_only, " ")
+    return " ".join(text.split())
 
 
 def _capture_root_help(
@@ -114,6 +131,23 @@ def _assert_markdown_directories_equal(generated: Path, tracked: Path) -> None:
         assert _load_semantic_markdown(generated / name) == _load_semantic_markdown(
             tracked / name
         )
+
+
+def test_help_layout_normalization_keeps_every_documented_word() -> None:
+    """Placeholder, borders, and wrapping are ignored; a changed word is not."""
+    locked = (
+        "\u2502 --insecure          Skip TLS checks when changing the backend \u2502\n"
+        "\u2502                     origin.                                    \u2502"
+    )
+    newer = (
+        "\u2502 --insecure  <bool>  Skip TLS checks when changing the \u2502\n"
+        "\u2502                     backend origin.                   \u2502"
+    )
+    expected = "--insecure Skip TLS checks when changing the backend origin."
+
+    assert _without_help_layout(locked) == expected
+    assert _without_help_layout(newer) == expected
+    assert _without_help_layout(newer.replace("backend", "frontend")) != expected
 
 
 def test_cli_docs_are_semantically_current(generated_docs: GeneratedDocs) -> None:
