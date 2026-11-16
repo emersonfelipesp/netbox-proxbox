@@ -10,11 +10,55 @@ the staged TestPyPI/PyPI release pipeline.
 |---|---|---|
 | `.github/workflows/ci.yml` | Push and pull request | Runs lint, type checks, compile checks, and the mocked pytest suite. NetBox-dependent Django tests skip here. |
 | `.github/workflows/django-tests.yml` | Push, tag, and pull request | Provisions real NetBox 4.5.x, 4.6.x, and 4.7.x source trees plus PostgreSQL and Redis, then runs the NetBox-backed Django suite. Five ordinary rows cover the supported releases; a sixth NetBox 4.6.6 row installs pinned `netbox-pdm` source so the optional registry override is exercised. It hard-fails a missing harness and independently enforces at least 85% branch coverage for `services.endpoint_autoconfiguration` and `api.serializers.resource_views`; aggregate coverage cannot let either module mask the other. |
-| `.github/workflows/e2e-docker.yml` | Manual, scheduled, reusable workflow call | Builds a real NetBox stack with the plugin, rqworker, proxbox-api `0.0.29`, PostgreSQL, Redis, and a mocked Proxmox API. The harness relies on typed sync-state sidecars and does not call the removed backend custom-field creation route. |
+| `.github/workflows/e2e-docker.yml` | Pull request, manual, scheduled, reusable workflow call | Builds a real NetBox stack with the plugin, rqworker, proxbox-api `0.0.29`, PostgreSQL, Redis, and a mocked Proxmox API. The harness relies on typed sync-state sidecars and does not call the removed backend custom-field creation route. |
 | `.github/workflows/publish-testpypi.yml` | `v*rc*` tag push or RC-only manual dispatch (TestPyPI); GitHub Release published (PyPI) | Promotes the exact linked Gitea artifacts. Each isolated upload job checks out the exact source SHA before its locked publisher sync. Official PyPI releases require the already-pushed, package-verified final tag and `gh release create --verify-tag`; plain non-RC tag pushes do not trigger publishing. |
 | `.github/workflows/docs.yml` | Docs changes on main / PR | Builds and publishes the MkDocs site. |
 | `.github/workflows/docs-screenshots.yml` | Manual dispatch | Refreshes committed UI screenshots used by the docs site. |
 | `.github/workflows/nightly-contracts.yml` | Schedule / manual dispatch | Checks cross-repo contracts that must stay aligned with `proxbox-api`. |
+
+## E2E prerequisite admission and readiness
+
+The Docker E2E workflow admits shared inputs before it expands the matrix.
+The full schedule retains 198 rows: 3 installation sources, 11 NetBox images,
+2 backend runtimes, and 3 Proxmox services. Pull requests retain 33 rows with
+the Python backend and PVE mock. Explicit supported input selections retain
+their selected axes; invalid selections fail instead of selecting another mode.
+
+The prerequisite job checks only installation sources used by the event.
+Local-only plugin tests do not require a published plugin release. PyPI and
+TestPyPI plugin modes require the exact source version at the selected index.
+The container compatibility mode keeps its published-package behavior and
+resolves the latest PyPI version once. Each published plugin selection becomes
+a direct artifact URL with its published SHA-256 digest. Backend package modes
+use the same selected-index rule and require the Rust extra when selected.
+Metadata transport refusals identify the package, selected version or latest
+selection, and index on stderr. Successful stdout remains JSON, and failed
+admission publishes no matrix or input output fields.
+A missing package or image blocks matrix execution. Package installation never
+falls back to a different backend image or package index.
+
+Shared image admission resolves Linux amd64 manifests for the selected NetBox,
+backend, mock, PostgreSQL, Redis, and package-build images. Matrix jobs consume
+the admitted digests. Single-manifest platform checks use that captured digest,
+not a second lookup of a moving tag. Explicit development mode uses one admitted backend
+source SHA. This admission verifies direct inputs; it does not certify every
+transitive dependency or replace the integration tests. A later registry or
+network failure remains a failure and never selects substitute bytes.
+
+Readiness checks inspect every required container before HTTP probes. An
+exited, dead, paused, unknown, missing, or unhealthy container fails immediately
+with state and container logs. Created, running, and restarting containers keep
+their startup opportunity under a monotonic deadline: 60 seconds for database
+health, 1200 seconds for NetBox, and 180 seconds for each remaining HTTP service.
+Every inspection, HTTP request, and sleep consumes that deadline. A successful
+probe is accepted only if it completes before the shared deadline. HTTP probes
+ignore ambient proxies and do not follow redirects. Only the disposable PVE
+mock probe permits its self-signed certificate.
+
+The helpers are `scripts/e2e_prerequisites.py` and
+`scripts/e2e_readiness.py`. Their focused tests use fake registry, Docker,
+HTTP, and clock boundaries. The public E2E result remains non-security evidence.
+No Gitea consumer or trusted Django workflow pin changes with this admission.
 
 The E2E Docker, page-coverage, documentation-screenshot, and release-validation
 defaults are aligned on proxbox-api `0.0.29`. E2E uses the exact published image

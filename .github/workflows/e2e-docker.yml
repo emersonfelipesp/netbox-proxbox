@@ -39,6 +39,8 @@ on:
       - "tests/e2e/**"
       - "tests/test_backend_key_adoption*.py"
       - ".github/workflows/e2e-docker.yml"
+      - "scripts/e2e_*.py"
+      - "tests/test_e2e_*.py"
   workflow_dispatch:
     inputs:
       install_source:
@@ -94,6 +96,9 @@ on:
   schedule:
     - cron: "31 2 * * *"
 
+permissions:
+  contents: read
+
 env:
   PROXBOX_API_RELEASE_VERSION: 0.0.29
   PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api
@@ -102,27 +107,55 @@ env:
   PROXBOX_ENCRYPTION_KEY: proxbox-ci-only-encryption-key-not-a-secret
 
 jobs:
+  prerequisites:
+    name: Admit selected E2E prerequisites
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      matrix: ${{ steps.admit.outputs.matrix }}
+      images: ${{ steps.admit.outputs.images }}
+      plugin_versions: ${{ steps.admit.outputs.plugin_versions }}
+      backend_sha: ${{ steps.admit.outputs.backend_sha }}
+      plugin_specs: ${{ steps.admit.outputs.plugin_specs }}
+      backend_specs: ${{ steps.admit.outputs.backend_specs }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Install admission dependency
+        run: python -m pip install 'packaging==26.0'
+      - name: Admit exact selected package and image inputs
+        id: admit
+        env:
+          E2E_INPUTS: ${{ toJSON(inputs) }}
+        run: python -m scripts.e2e_prerequisites
+
   e2e-docker-stack:
+    needs: prerequisites
     name: E2E Docker / ${{ matrix.install_source }} / ${{ matrix.netbox_image }} / api=${{ matrix.proxbox_api_runtime }} / proxmox=${{ matrix.proxmox_service }} [${{ matrix.network_stack }}]
     runs-on: ubuntu-latest
     timeout-minutes: 45
     continue-on-error: ${{ matrix.proxbox_api_runtime == 'pyo3-rust' }}
     env:
       NETBOX_IMAGE: ${{ matrix.netbox_image }}
+      POSTGRES_IMAGE: ${{ fromJSON(needs.prerequisites.outputs.images).postgres }}
+      REDIS_IMAGE: ${{ fromJSON(needs.prerequisites.outputs.images).redis }}
+      PROXMOX_MOCK_IMAGE_REF: ${{ fromJSON(needs.prerequisites.outputs.images)[format('mock_{0}', matrix.proxmox_service)] }}
+      PROXBOX_API_IMAGE_REF: ${{ fromJSON(needs.prerequisites.outputs.images)[format('api_{0}', matrix.proxbox_api_runtime)] }}
+      PROXBOX_PACKAGE_PYTHON_IMAGE: ${{ fromJSON(needs.prerequisites.outputs.images).package_python }}
+      ADMITTED_PLUGIN_SPEC: ${{ fromJSON(needs.prerequisites.outputs.plugin_specs)[matrix.install_source] }}
+      ADMITTED_BACKEND_SPEC: ${{ fromJSON(needs.prerequisites.outputs.backend_specs)[matrix.proxbox_api_runtime] }}
+      PROXBOX_API_SOURCE_SHA: ${{ fromJSON(needs.prerequisites.outputs.backend_sha) }}
       PROXBOX_API_DEPENDENCY_MODE_INPUT: ${{ inputs.dependency_mode }}
       PROXBOX_API_VERSION_INPUT: ${{ inputs.proxbox_api_version }}
     strategy:
       fail-fast: false
-      matrix:
-        # Scheduled events have no inputs. Treat empty, "both", and unknown values
-        # as the full certification matrix instead of an empty install source.
-        install_source: ${{ fromJSON((inputs.install_source == 'local' || inputs.install_source == 'pypi' || inputs.install_source == 'container' || inputs.install_source == 'testpypi') && format('["{0}"]', inputs.install_source) || '["local","pypi","container"]') }}
-        # Certified NetBox support set: v4.5.8 through v4.5.10, v4.6.0 through
-        # v4.6.6, and official v4.7.0 GA.
-        netbox_image: ${{ fromJSON(inputs.netbox_image != '' && format('["{0}"]', inputs.netbox_image) || '["netboxcommunity/netbox:v4.5.8","netboxcommunity/netbox:v4.5.9","netboxcommunity/netbox:v4.5.10","netboxcommunity/netbox:v4.6.0","netboxcommunity/netbox:v4.6.1","netboxcommunity/netbox:v4.6.2","netboxcommunity/netbox:v4.6.3","netboxcommunity/netbox:v4.6.4","netboxcommunity/netbox:v4.6.5","netboxcommunity/netbox:v4.6.6","netboxcommunity/netbox:v4.7.0-5.1.0@sha256:73a54ff279461170032b59a57a1930929965e3ba15c195af59f4b5f6d39a84a9"]') }}
-        network_stack: [ipv4]
-        proxbox_api_runtime: ${{ fromJSON(github.event_name == 'pull_request' && '["python"]' || ((inputs.proxbox_api_runtime == 'python' || inputs.proxbox_api_runtime == 'pyo3-rust') && format('["{0}"]', inputs.proxbox_api_runtime) || '["python","pyo3-rust"]')) }}
-        proxmox_service: ${{ fromJSON(github.event_name == 'pull_request' && '["pve"]' || ((inputs.proxmox_service == 'pve' || inputs.proxmox_service == 'pbs' || inputs.proxmox_service == 'pdm') && format('["{0}"]', inputs.proxmox_service) || '["pve","pbs","pdm"]')) }}
+      matrix: ${{ fromJSON(needs.prerequisites.outputs.matrix) }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -141,58 +174,49 @@ jobs:
       - name: Resolve plugin install source
         run: |
           set -eux
-          # NETBOX_PLUGIN_INSTALL_INDEX is only set for testpypi; otherwise empty so
-          # the in-container `uv pip install` line does not pass any --index-url flag.
-          echo "NETBOX_PLUGIN_INSTALL_INDEX=" >> "$GITHUB_ENV"
-          if [ "${{ matrix.install_source }}" = "local" ]; then
-            echo "NETBOX_PLUGIN_INSTALL_SPEC=/tmp/netbox-proxbox" >> "$GITHUB_ENV"
-            echo "NETBOX_PLUGIN_MOUNT=-v $PWD:/tmp/netbox-proxbox:ro" >> "$GITHUB_ENV"
-          elif [ "${{ matrix.install_source }}" = "pypi" ]; then
-            VERSION=$(python -c "import pathlib, tomllib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))['project']['version'])")
-            echo "NETBOX_PLUGIN_INSTALL_SPEC=netbox-proxbox==${VERSION}" >> "$GITHUB_ENV"
-            echo "NETBOX_PLUGIN_MOUNT=" >> "$GITHUB_ENV"
-          elif [ "${{ matrix.install_source }}" = "testpypi" ]; then
-            VERSION=$(python -c "import pathlib, tomllib; print(tomllib.loads(pathlib.Path('pyproject.toml').read_text(encoding='utf-8'))['project']['version'])")
-            echo "NETBOX_PLUGIN_INSTALL_SPEC=netbox-proxbox==${VERSION}" >> "$GITHUB_ENV"
-            # uv refuses to mix indexes for the same package by default
-            # ("dependency confusion attack" protection). netbox-proxbox lives on
-            # both PyPI (older stable) and TestPyPI (current rcN); we need uv to
-            # consider both, hence --index-strategy unsafe-best-match.
-            echo "NETBOX_PLUGIN_INSTALL_INDEX=--index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/ --index-strategy unsafe-best-match" >> "$GITHUB_ENV"
-            echo "NETBOX_PLUGIN_MOUNT=" >> "$GITHUB_ENV"
-          else
-            # Keep 'container' mode for workflow compatibility, but use package install.
-            echo "NETBOX_PLUGIN_INSTALL_SPEC=netbox-proxbox" >> "$GITHUB_ENV"
-            echo "NETBOX_PLUGIN_MOUNT=" >> "$GITHUB_ENV"
-          fi
+          {
+            echo "NETBOX_PLUGIN_INSTALL_INDEX="
+            if [ "${{ matrix.install_source }}" = "local" ]; then
+              echo "NETBOX_PLUGIN_INSTALL_SPEC=/tmp/netbox-proxbox"
+              echo "NETBOX_PLUGIN_MOUNT=-v $PWD:/tmp/netbox-proxbox:ro"
+            else
+              # Every published source uses its selected-index artifact URL and
+              # hash. Container mode retains the one admitted latest PyPI version.
+              echo "NETBOX_PLUGIN_INSTALL_SPEC=${ADMITTED_PLUGIN_SPEC}"
+              echo "NETBOX_PLUGIN_MOUNT="
+              if [ "${{ matrix.install_source }}" = "testpypi" ]; then
+                # Only dependencies may resolve from PyPI; the direct plugin URL
+                # cannot silently fall back from TestPyPI to the public release.
+                echo "NETBOX_PLUGIN_INSTALL_INDEX=--index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/"
+              fi
+            fi
+          } >> "$GITHUB_ENV"
 
       - name: Resolve proxbox-api runtime source
         run: |
           set -eux
           PROXBOX_API_DEPENDENCY_MODE="$(python scripts/e2e_backend_selection.py dependency-mode "${PROXBOX_API_DEPENDENCY_MODE_INPUT}")"
-          echo "PROXBOX_API_DEPENDENCY_MODE=${PROXBOX_API_DEPENDENCY_MODE}" >> "$GITHUB_ENV"
           PROXBOX_API_VERSION="${PROXBOX_API_VERSION_INPUT:-${PROXBOX_API_RELEASE_VERSION}}"
           PROXBOX_API_VERSION="$(python scripts/e2e_backend_selection.py version "${PROXBOX_API_VERSION}")"
-          echo "PROXBOX_API_VERSION=${PROXBOX_API_VERSION}" >> "$GITHUB_ENV"
-          echo "PROXBOX_API_RUNTIME=${{ matrix.proxbox_api_runtime }}" >> "$GITHUB_ENV"
-          echo "PROXBOX_API_PACKAGE_INDEX=" >> "$GITHUB_ENV"
+          PROXBOX_API_PACKAGE_INDEX=""
           if [ "${PROXBOX_API_DEPENDENCY_MODE}" = "testpypi-package" ]; then
-            echo "PROXBOX_API_PACKAGE_INDEX=--index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/" >> "$GITHUB_ENV"
+            PROXBOX_API_PACKAGE_INDEX="--index-url https://test.pypi.org/simple/ --extra-index-url https://pypi.org/simple/"
           elif [ "${PROXBOX_API_DEPENDENCY_MODE}" = "pypi-package" ]; then
-            echo "PROXBOX_API_PACKAGE_INDEX=--index-url https://pypi.org/simple/" >> "$GITHUB_ENV"
+            PROXBOX_API_PACKAGE_INDEX="--index-url https://pypi.org/simple/"
           fi
           if [ "${{ matrix.proxbox_api_runtime }}" = "pyo3-rust" ]; then
-            echo "PROXBOX_API_BUILD_TARGET=raw-pyo3-rust" >> "$GITHUB_ENV"
-            echo "PROXBOX_API_DOCKER_TAG=${PROXBOX_API_VERSION}-pyo3-rust" >> "$GITHUB_ENV"
-            echo "PROXBOX_API_PACKAGE_SPEC=proxbox-api[pyo3-rust]==${PROXBOX_API_VERSION}" >> "$GITHUB_ENV"
-          elif [ "${{ matrix.proxbox_api_runtime }}" = "python" ]; then
-            echo "PROXBOX_API_BUILD_TARGET=raw" >> "$GITHUB_ENV"
-            echo "PROXBOX_API_DOCKER_TAG=${PROXBOX_API_VERSION}" >> "$GITHUB_ENV"
-            echo "PROXBOX_API_PACKAGE_SPEC=proxbox-api==${PROXBOX_API_VERSION}" >> "$GITHUB_ENV"
+            PROXBOX_API_BUILD_TARGET=raw-pyo3-rust
           else
-            echo "Unsupported proxbox-api runtime: ${{ matrix.proxbox_api_runtime }}" >&2
-            exit 1
+            PROXBOX_API_BUILD_TARGET=raw
           fi
+          {
+            echo "PROXBOX_API_DEPENDENCY_MODE=${PROXBOX_API_DEPENDENCY_MODE}"
+            echo "PROXBOX_API_VERSION=${PROXBOX_API_VERSION}"
+            echo "PROXBOX_API_RUNTIME=${{ matrix.proxbox_api_runtime }}"
+            echo "PROXBOX_API_PACKAGE_INDEX=${PROXBOX_API_PACKAGE_INDEX}"
+            echo "PROXBOX_API_BUILD_TARGET=${PROXBOX_API_BUILD_TARGET}"
+            echo "PROXBOX_API_PACKAGE_SPEC=${ADMITTED_BACKEND_SPEC}"
+          } >> "$GITHUB_ENV"
 
       - name: Start E2E stack
         run: |
@@ -222,36 +246,15 @@ jobs:
             --health-interval=2s \
             --health-timeout=2s \
             --health-retries=30 \
-            postgres:16-alpine
+            "${POSTGRES_IMAGE}"
 
           docker run -d --name netbox-e2e-redis --network proxbox-e2e \
-            redis:7-alpine
+            "${REDIS_IMAGE}"
 
-          echo "Waiting for postgres to be healthy..."
-          for i in $(seq 1 60); do
-            health="$(docker inspect --format '{{.State.Health.Status}}' netbox-e2e-postgres 2>/dev/null || echo unknown)"
-            if [ "$health" = "healthy" ]; then
-              echo "postgres healthy after ${i} iterations"
-              break
-            fi
-            sleep 1
-            if [ "$i" -eq 60 ]; then
-              echo "postgres did not become healthy in 60s"
-              docker logs netbox-e2e-postgres || true
-              exit 1
-            fi
-          done
+          python -m scripts.e2e_readiness \
+            --required netbox-e2e-postgres netbox-e2e-redis \
+            --healthy netbox-e2e-postgres --timeout 60
 
-          # PVE needs HTTPS because the plugin's ProxmoxEndpoint always connects via TLS;
-          # the published latest-pve image (pypi-raw target) is HTTP-only.  Pull
-          # latest-nginx for PVE (mkcert-fronted TLS on port 8000) and override
-          # PROXMOX_MOCK_SERVICE at runtime.  PDM/PBS keep the HTTP per-service tag.
-          if [ "${{ matrix.proxmox_service }}" = "pve" ]; then
-            PROXMOX_MOCK_IMAGE_REF="${PROXMOX_SDK_IMAGE}:${PROXMOX_SDK_TAG_PREFIX}-nginx"
-          else
-            PROXMOX_MOCK_IMAGE_REF="${PROXMOX_SDK_IMAGE}:${PROXMOX_SDK_TAG_PREFIX}-${{ matrix.proxmox_service }}"
-          fi
-          echo "PROXMOX_MOCK_IMAGE_REF=${PROXMOX_MOCK_IMAGE_REF}" >> "$GITHUB_ENV"
           docker pull "${PROXMOX_MOCK_IMAGE_REF}"
           docker pull "${NETBOX_IMAGE}"
 
@@ -266,14 +269,14 @@ jobs:
           # Per-service mock URLs.  PVE serves HTTPS via the nginx image with a
           # self-signed mkcert cert; PDM/PBS serve plain HTTP from pypi-raw.
           if [ "${{ matrix.proxmox_service }}" = "pve" ]; then
-            echo "PROXMOX_MOCK_PROBE_URL=https://${TEST_HOST}:18006/health" >> "$GITHUB_ENV"
-            echo "PROXMOX_MOCK_PROBE_FLAGS=-sk" >> "$GITHUB_ENV"
-            echo "PROXMOX_MOCK_BASE_URL=https://${TEST_HOST}:18006" >> "$GITHUB_ENV"
+            PROXMOX_MOCK_BASE_URL="https://${TEST_HOST}:18006"
           else
-            echo "PROXMOX_MOCK_PROBE_URL=http://${TEST_HOST}:18006/health" >> "$GITHUB_ENV"
-            echo "PROXMOX_MOCK_PROBE_FLAGS=-s" >> "$GITHUB_ENV"
-            echo "PROXMOX_MOCK_BASE_URL=http://${TEST_HOST}:18006" >> "$GITHUB_ENV"
+            PROXMOX_MOCK_BASE_URL="http://${TEST_HOST}:18006"
           fi
+          {
+            echo "PROXMOX_MOCK_PROBE_URL=${PROXMOX_MOCK_BASE_URL}/health"
+            echo "PROXMOX_MOCK_BASE_URL=${PROXMOX_MOCK_BASE_URL}"
+          } >> "$GITHUB_ENV"
 
           if [ "${{ matrix.network_stack }}" = "ipv6" ]; then
             PROXBOX_BIND_HOST_VALUE="::"
@@ -297,33 +300,32 @@ jobs:
           }
 
           if [ "${PROXBOX_API_DEPENDENCY_MODE}" = "published" ]; then
-            docker pull "${PROXBOX_API_IMAGE}:${PROXBOX_API_DOCKER_TAG}"
-            start_proxbox_api_container "${PROXBOX_API_IMAGE}:${PROXBOX_API_DOCKER_TAG}"
+            docker pull "${PROXBOX_API_IMAGE_REF}"
+            start_proxbox_api_container "${PROXBOX_API_IMAGE_REF}"
           elif [ "${PROXBOX_API_DEPENDENCY_MODE}" = "testpypi-package" ] || [ "${PROXBOX_API_DEPENDENCY_MODE}" = "pypi-package" ]; then
             cat > /tmp/proxbox-api-package.Dockerfile <<'EOF'
-          FROM python:3.13-slim
+          ARG PROXBOX_PACKAGE_PYTHON_IMAGE
+          FROM ${PROXBOX_PACKAGE_PYTHON_IMAGE}
           RUN python -m pip install --upgrade pip
           ARG PROXBOX_API_PACKAGE_INDEX
           ARG PROXBOX_API_PACKAGE_SPEC
           RUN python -m pip install --no-cache-dir ${PROXBOX_API_PACKAGE_INDEX} "${PROXBOX_API_PACKAGE_SPEC}"
           CMD ["python", "-m", "uvicorn", "proxbox_api.main:app", "--host", "0.0.0.0", "--port", "8000"]
           EOF
-            if docker build \
+            docker build \
+              --build-arg "PROXBOX_PACKAGE_PYTHON_IMAGE=${PROXBOX_PACKAGE_PYTHON_IMAGE}" \
               --build-arg "PROXBOX_API_PACKAGE_INDEX=${PROXBOX_API_PACKAGE_INDEX}" \
               --build-arg "PROXBOX_API_PACKAGE_SPEC=${PROXBOX_API_PACKAGE_SPEC}" \
               -t proxbox-api-e2e:package \
               -f /tmp/proxbox-api-package.Dockerfile \
-              /tmp; then
-              start_proxbox_api_container proxbox-api-e2e:package
-            elif [ "${PROXBOX_API_RUNTIME}" = "pyo3-rust" ]; then
-              echo "::warning title=proxbox-api pyo3-rust package extra unavailable::Falling back to ${PROXBOX_API_IMAGE}:${PROXBOX_API_DOCKER_TAG}"
-              docker pull "${PROXBOX_API_IMAGE}:${PROXBOX_API_DOCKER_TAG}"
-              start_proxbox_api_container "${PROXBOX_API_IMAGE}:${PROXBOX_API_DOCKER_TAG}"
-            else
-              exit 1
-            fi
+              /tmp
+            start_proxbox_api_container proxbox-api-e2e:package
           elif [ "${PROXBOX_API_DEPENDENCY_MODE}" = "dev" ]; then
-            git clone --depth 1 https://github.com/emersonfelipesp/proxbox-api.git /tmp/proxbox-api-src
+            git init /tmp/proxbox-api-src
+            git -C /tmp/proxbox-api-src remote add origin https://github.com/emersonfelipesp/proxbox-api.git
+            git -C /tmp/proxbox-api-src fetch --depth 1 origin "${PROXBOX_API_SOURCE_SHA}"
+            git -C /tmp/proxbox-api-src checkout --detach FETCH_HEAD
+            test "$(git -C /tmp/proxbox-api-src rev-parse HEAD)" = "${PROXBOX_API_SOURCE_SHA}"
             docker build --target "${PROXBOX_API_BUILD_TARGET}" -t proxbox-api-e2e:dev /tmp/proxbox-api-src
             start_proxbox_api_container proxbox-api-e2e:dev
           else
@@ -424,44 +426,20 @@ jobs:
       - name: Wait for stack readiness and create NetBox API token
         run: |
           set -eux
-          for i in $(seq 1 600); do
-            http_code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' "http://${TEST_HOST}:18080/api/" 2>/dev/null || true)"
-            if [ "$http_code" -ge 100 ] 2>/dev/null && [ "$http_code" -lt 500 ]; then
-              break
-            fi
-            sleep 2
-            if [ "$i" -eq 600 ]; then
-              echo "NetBox did not become ready"
-              docker logs netbox-e2e || true
-              exit 1
-            fi
-          done
-
-          for i in $(seq 1 90); do
-            # shellcheck disable=SC2086
-            if curl ${PROXMOX_MOCK_PROBE_FLAGS} --max-time 5 "${PROXMOX_MOCK_PROBE_URL}" >/dev/null 2>&1; then
-              break
-            fi
-            sleep 2
-            if [ "$i" -eq 90 ]; then
-              echo "proxmox mock did not become ready"
-              docker logs proxmox-e2e-mock || true
-              exit 1
-            fi
-          done
-
-          for i in $(seq 1 90); do
-            http_code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' "http://${TEST_HOST}:18800/" 2>/dev/null || true)"
-            if [ "$http_code" -ge 100 ] 2>/dev/null && [ "$http_code" -lt 500 ]; then
-              break
-            fi
-            sleep 2
-            if [ "$i" -eq 90 ]; then
-              echo "proxbox-api did not become ready"
-              docker logs proxbox-e2e-api || true
-              exit 1
-            fi
-          done
+          required=(netbox-e2e-postgres netbox-e2e-redis netbox-e2e proxbox-e2e-api proxmox-e2e-mock)
+          python -m scripts.e2e_readiness \
+            --required "${required[@]}" --timeout 1200 \
+            --url "http://${TEST_HOST}:18080/api/"
+          mock_tls=()
+          if [ "${{ matrix.proxmox_service }}" = "pve" ]; then
+            mock_tls=(--insecure)
+          fi
+          python -m scripts.e2e_readiness \
+            --required "${required[@]}" --timeout 180 \
+            --url "${PROXMOX_MOCK_PROBE_URL}" "${mock_tls[@]}"
+          python -m scripts.e2e_readiness \
+            --required "${required[@]}" --timeout 180 \
+            --url "http://${TEST_HOST}:18800/"
 
           TOKEN_OUTPUT=$(docker exec netbox-e2e /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py shell -c "from users.models import Token, User; u=User.objects.get(username='admin'); t=Token.objects.create(user=u, version=1, token='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'); print(f'{t.id}:{t.plaintext}')")
           TOKEN_ID=$(printf '%s' "$TOKEN_OUTPUT" | tail -n 1 | cut -d: -f1)

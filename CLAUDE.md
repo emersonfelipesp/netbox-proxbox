@@ -114,6 +114,14 @@ coordinated candidate pairing requires the existing explicit manual input.
 TestPyPI plugin candidates consume their paired backend from PyPI, preserving
 the selected-index distinction and all current matrices.
 
+Docker E2E certification admits selected direct package and image inputs once
+before expanding its unchanged compatibility matrix. Keep hash-bound package
+URLs, admitted image digests, explicit development source identity, and exact
+selected-index behavior. Readiness must reject terminal or unhealthy required
+containers immediately while preserving explicit monotonic startup deadlines.
+Keep the public result non-security evidence and leave trusted Django workflow
+pins unchanged. See `docs/developer/ci-e2e-workflows.md` for the contract.
+
 ## Current source map
 
 - Models include endpoint configuration, synchronized cluster/node/storage/VM

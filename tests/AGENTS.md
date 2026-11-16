@@ -1,4 +1,13 @@
 # `tests`
+
+`test_e2e_prerequisites.py` preserves the complete scheduled and PR matrix
+products and tests selected-source admission, exact package and image identity,
+missing prerequisites, selected-index refusal, and output publication only after
+all checks pass. `test_e2e_readiness.py` tests immediate terminal-container
+refusal, independent required services, slow valid startup, shared deadlines,
+HTTP classification, and complete failure diagnostics. These tests use fake I/O;
+they do not establish a live published artifact or a full Docker E2E result.
+
 `test_operational_permissions_django.py` is the real-NetBox contract for the
 grantable `run_proxmox_action` action. It uses constrained ObjectPermissions to
 prove exact endpoint scope across operational verbs, firewall actions, tags,

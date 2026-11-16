@@ -103,6 +103,12 @@ facts that an agent must have even when `@CLAUDE.md` expansion is unavailable:
   outside this exception.
 - Update MkDocs sources, this wrapper, `CLAUDE.md`, and generated `llms.txt`
   together when architecture or operator behavior changes.
+- Keep Docker E2E prerequisite admission ahead of the unchanged matrix. Check
+  only selected package/index/image inputs, retain admitted hashes and digests,
+  and never fall back to another package, runtime, or image after refusal.
+  Reject terminal or unhealthy required containers before readiness probes while
+  retaining monotonic startup deadlines. Public results remain non-security
+  evidence; leave trusted Django pins unchanged.
 - Run focused tests, `mkdocs build --strict`, the public-boundary scanner, and
   a per-function complexity audit when executable source changes.
 

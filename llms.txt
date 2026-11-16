@@ -7,6 +7,20 @@ timers drain without polling, while explicit user jobs and audit records remain.
 
 > This file provides comprehensive context for LLMs working with the netbox-proxbox codebase.
 
+## Docker E2E admission
+
+Docker E2E certification admits selected direct package and image inputs once
+before expanding its unchanged compatibility matrix. Keep hash-bound package
+URLs, admitted image digests, explicit development source identity, and exact
+selected-index behavior. Readiness must reject terminal or unhealthy required
+containers immediately while preserving explicit monotonic startup deadlines.
+Keep the public result non-security evidence and leave trusted Django workflow
+pins unchanged. See `docs/developer/ci-e2e-workflows.md` for the contract.
+
+The full scheduled matrix retains 198 rows and the PR matrix retains 33 rows.
+Only selected direct inputs are admitted. See the CI guide for the 60/1200/180-
+second readiness deadlines and failure diagnostics.
+
 ## Project Overview
 
 netbox-proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data into NetBox. It keeps DCIM data up-to-date with real Proxmox clusters, nodes, virtual machines, containers (LXC), backups, and snapshots.

@@ -17,6 +17,9 @@ from pathlib import Path
 import tomllib
 
 import yaml
+import pytest
+
+from scripts import e2e_prerequisites
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 INIT_PATH = REPO_ROOT / "netbox_proxbox" / "__init__.py"
@@ -392,27 +395,27 @@ def _assert_markdown_table_row(text: str, expected_cells: tuple[str, ...]) -> No
     assert expected in normalized_rows
 
 
-def _workflow_matrix_expression(workflow: str, matrix_key: str) -> str:
-    prefix = f"        {matrix_key}: "
-    matches = [
-        line.removeprefix(prefix)
-        for line in workflow.splitlines()
-        if line.startswith(prefix)
-    ]
-    assert len(matches) == 1, (
-        f"expected exactly one {matrix_key!r} matrix expression, got {len(matches)}"
+def _e2e_plan(event: str = "schedule", **inputs: str) -> dict:
+    workflow = yaml.load(
+        E2E_WORKFLOW_PATH.read_text(encoding="utf-8"), Loader=yaml.BaseLoader
     )
-    return matches[0]
-
-
-def _workflow_matrix_json_fallback(workflow: str, matrix_key: str) -> tuple[str, ...]:
-    expression = _workflow_matrix_expression(workflow, matrix_key)
-    match = re.search(r"\|\| '(?P<values>\[[^']*\])'\)\s*}}$", expression)
-    assert match is not None, f"{matrix_key!r} matrix has no JSON fallback"
-    values = json.loads(match.group("values"))
-    assert isinstance(values, list)
-    assert all(isinstance(value, str) for value in values)
-    return tuple(values)
+    job = workflow["jobs"]["e2e-docker-stack"]
+    assert job["needs"] == "prerequisites"
+    assert (
+        job["strategy"]["matrix"]
+        == "${{ fromJSON(needs.prerequisites.outputs.matrix) }}"
+    )
+    defaults = workflow["env"]
+    return e2e_prerequisites.build_plan(
+        event,
+        inputs,
+        {
+            "backend_version": defaults["PROXBOX_API_RELEASE_VERSION"],
+            "backend_image": defaults["PROXBOX_API_IMAGE"],
+            "mock_image": defaults["PROXMOX_SDK_IMAGE"],
+            "mock_tag_prefix": defaults["PROXMOX_SDK_TAG_PREFIX"],
+        },
+    )
 
 
 def test_current_release_version_identity_is_exact():
@@ -593,45 +596,40 @@ def test_the_beta_example_keeps_the_prerelease_caveat():
 
 
 def test_certified_netbox_versions_are_in_e2e_matrix():
-    workflow = E2E_WORKFLOW_PATH.read_text(encoding="utf-8")
-    assert (
-        _workflow_matrix_json_fallback(workflow, "netbox_image")
-        == SUPPORTED_NETBOX_IMAGE_TAGS
-    )
+    assert tuple(_e2e_plan()["matrix"]["netbox_image"]) == SUPPORTED_NETBOX_IMAGE_TAGS
 
 
 def test_e2e_scheduled_runs_expand_the_full_install_source_matrix():
-    workflow = E2E_WORKFLOW_PATH.read_text(encoding="utf-8")
-    expression = _workflow_matrix_expression(workflow, "install_source")
-    recognized_sources = tuple(
-        re.findall(r"inputs\.install_source == '([^']+)'", expression)
+    workflow = yaml.load(
+        E2E_WORKFLOW_PATH.read_text(encoding="utf-8"), Loader=yaml.BaseLoader
     )
-    fallback_sources = _workflow_matrix_json_fallback(workflow, "install_source")
-
-    assert recognized_sources == E2E_EXPLICIT_INSTALL_SOURCES
-    assert fallback_sources == E2E_DEFAULT_INSTALL_SOURCES
-
-    def expanded_sources(input_value: str) -> tuple[str, ...]:
-        if input_value in recognized_sources:
-            return (input_value,)
-        return fallback_sources
-
-    assert expanded_sources("") == E2E_DEFAULT_INSTALL_SOURCES
-    assert expanded_sources("both") == E2E_DEFAULT_INSTALL_SOURCES
-    assert expanded_sources("unrecognized") == E2E_DEFAULT_INSTALL_SOURCES
+    options = workflow["on"]["workflow_dispatch"]["inputs"]["install_source"]["options"]
+    assert (
+        tuple(source for source in options if source != "both")
+        == E2E_EXPLICIT_INSTALL_SOURCES
+    )
+    for source in E2E_EXPLICIT_INSTALL_SOURCES:
+        assert _e2e_plan(install_source=source)["matrix"]["install_source"] == [source]
+    assert (
+        tuple(_e2e_plan(install_source="")["matrix"]["install_source"])
+        == E2E_DEFAULT_INSTALL_SOURCES
+    )
+    assert (
+        tuple(_e2e_plan(install_source="both")["matrix"]["install_source"])
+        == E2E_DEFAULT_INSTALL_SOURCES
+    )
+    with pytest.raises(ValueError, match="Unsupported E2E selection"):
+        _e2e_plan(install_source="unrecognized")
 
 
 def test_e2e_stable_python_cells_are_gating_for_pve():
-    workflow = E2E_WORKFLOW_PATH.read_text(encoding="utf-8")
-    job_header = workflow.split("    steps:", maxsplit=1)[0]
-    continue_on_error_lines = [
-        line.strip()
-        for line in job_header.splitlines()
-        if line.strip().startswith("continue-on-error:")
-    ]
-    assert continue_on_error_lines == [
-        "continue-on-error: ${{ matrix.proxbox_api_runtime == 'pyo3-rust' }}"
-    ]
+    workflow = yaml.load(
+        E2E_WORKFLOW_PATH.read_text(encoding="utf-8"), Loader=yaml.BaseLoader
+    )
+    job = workflow["jobs"]["e2e-docker-stack"]
+    assert (
+        job["continue-on-error"] == "${{ matrix.proxbox_api_runtime == 'pyo3-rust' }}"
+    )
 
 
 def test_docs_screenshots_pins_latest_certified_netbox():
@@ -1282,7 +1280,7 @@ def test_e2e_defaults_to_exact_published_backend() -> None:
     assert 'if [ "${PROXBOX_API_DEPENDENCY_MODE}" = "published" ]; then' in workflow
     assert 'elif [ "${PROXBOX_API_DEPENDENCY_MODE}" = "dev" ]; then' in workflow
     assert (
-        "git clone --depth 1 https://github.com/emersonfelipesp/proxbox-api.git"
+        'git -C /tmp/proxbox-api-src fetch --depth 1 origin "${PROXBOX_API_SOURCE_SHA}"'
         in workflow
     )
 
@@ -1301,7 +1299,7 @@ def test_e2e_installs_backend_selection_dependency_before_use() -> None:
     )
 
 
-def test_e2e_workflow_supports_proxbox_api_package_index_runtime_modes():
+def test_e2e_workflow_supports_proxbox_api_package_index_runtime_modes(monkeypatch):
     e2e_workflow = E2E_WORKFLOW_PATH.read_text(encoding="utf-8")
 
     assert "- testpypi" in e2e_workflow
@@ -1310,14 +1308,24 @@ def test_e2e_workflow_supports_proxbox_api_package_index_runtime_modes():
     assert "--index-url https://test.pypi.org/simple/" in e2e_workflow
     assert "--extra-index-url https://pypi.org/simple/" in e2e_workflow
     assert "--index-url https://pypi.org/simple/" in e2e_workflow
-    assert (
-        "PROXBOX_API_PACKAGE_SPEC=proxbox-api==${PROXBOX_API_VERSION}" in e2e_workflow
-    )
-    assert (
-        "PROXBOX_API_PACKAGE_SPEC=proxbox-api[pyo3-rust]==${PROXBOX_API_VERSION}"
-        in e2e_workflow
-    )
+    assert "PROXBOX_API_PACKAGE_SPEC=${ADMITTED_BACKEND_SPEC}" in e2e_workflow
     assert '"${PROXBOX_API_PACKAGE_SPEC}"' in e2e_workflow
+    artifact = "https://test-files.pythonhosted.org/proxbox_api.whl#sha256=" + "a" * 64
+    monkeypatch.setattr(
+        e2e_prerequisites,
+        "admit_package",
+        lambda *args, **kwargs: {
+            "version": PROXBOX_API_WORKFLOW_DEFAULT_VERSION,
+            "spec": artifact,
+        },
+    )
+    specs = e2e_prerequisites.admit_backend_package(
+        _e2e_plan(dependency_mode="testpypi-package")
+    )
+    assert specs == {
+        "python": f"proxbox-api @ {artifact}",
+        "pyo3-rust": f"proxbox-api[pyo3-rust] @ {artifact}",
+    }
 
 
 def test_current_source_pairing_is_documented_in_primary_docs():
