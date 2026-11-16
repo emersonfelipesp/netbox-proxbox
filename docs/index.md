@@ -23,6 +23,7 @@ NetBox warns, omits the plugin, and continues startup.
 
 | NetBox   | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk    |
 |----------|----------------|-------------|----------------|----------------|
+| 4.5.8-4.7.0 GA | v0.0.32rc1 | v0.0.31 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.31 | v0.0.29 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.31rc2 | v0.0.29 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.31rc1 | proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) | v0.0.13 | v0.0.15 |
@@ -72,7 +73,7 @@ and WebSocket.
 The current repository code declares support for:
 
 - NetBox `4.5.8` through `4.7.99`, including official `v4.7.0` GA
-- Plugin version `0.0.31` in source
+- Plugin version `0.0.32rc1` in source
 
 That support comes directly from the plugin config in this repository:
 
@@ -96,7 +97,7 @@ proxbox-api relays short-lived, origin-bound, one-use QEMU noVNC/terminal and
 LXC terminal sessions. The path does not navigate to or depend on another management UI. See
 [Standalone Browser Console](features/browser-console.md).
 
-Current source compatibility: netbox-proxbox 0.0.31 requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source compatibility: netbox-proxbox 0.0.32rc1 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 Current released runtime pairing: netbox-proxbox 0.0.31 <-> proxbox-api 0.0.29 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. Deploy proxbox-api 0.0.29 before netbox-proxbox 0.0.31. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
@@ -104,9 +105,9 @@ The `0.0.27rc4` release adds actionable VM console identity diagnostics and a pe
 
 ## Important Packaging Note
 
-Install netbox-proxbox `0.0.31` with proxbox-api `0.0.29`. Deploy the backend
-first, then install the plugin from PyPI or the corresponding immutable source
-tag.
+Install proxbox-api `0.0.31` first, then install netbox-proxbox `0.0.32rc1`
+through the release-validation channel. The latest releases of the two projects
+are released as a pair.
 
 ## What The Plugin Contains
 

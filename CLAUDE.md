@@ -1,6 +1,6 @@
 # netbox-proxbox Repository Guide
 
-Current release: netbox-proxbox 0.0.31 requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), deployed before the plugin. The netbox-sdk dependency remains proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source: netbox-proxbox 0.0.32rc1 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), deployed before the plugin. The netbox-sdk dependency remains proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 > **LLM Agent Safety:** Before any destruction-adjacent operation, read
 > `AGENTS.md` § "LLM Agent Safety Guardrails". Automated agents may inspect and
@@ -92,9 +92,9 @@ depends on the backend network parser.
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.99` (the whole 4.7 series is admitted by the numeric gate; CI verifies GA `4.7.0`). The current
-plugin version is `0.0.31`.
+plugin version is `0.0.32rc1`.
 
-Current source compatibility: netbox-proxbox 0.0.31 requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source compatibility: netbox-proxbox 0.0.32rc1 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The documented released runtime pairing for this release line is
 netbox-proxbox 0.0.31 <-> proxbox-api 0.0.29 <-> proxmox-sdk 0.0.15
@@ -104,7 +104,7 @@ historical records unless a release workflow changes them.
 Current released runtime requirement: deploy proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) before netbox-proxbox 0.0.31. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
 CI pairing: the E2E Docker, page-coverage, documentation-screenshot, and
-release-validation defaults select proxbox-api `0.0.29`. These are intended
+release-validation defaults select proxbox-api `0.0.31`. These are intended
 source selections, not evidence that the backend package or image is public.
 Verify backend publication and qualification before candidate publication or
 ordinary E2E execution. E2E uses the exact published image by default; source-head
@@ -113,6 +113,10 @@ equality-checked against the checked-in current default, and a different
 coordinated candidate pairing requires the existing explicit manual input.
 TestPyPI plugin candidates consume their paired backend from PyPI, preserving
 the selected-index distinction and all current matrices.
+
+The latest netbox-proxbox release is always paired with the latest proxbox-api
+release. A release of either project updates the pairing defaults, tests, and
+documentation in the same change.
 
 Docker E2E certification admits selected direct package and image inputs once
 before expanding its unchanged compatibility matrix. Keep hash-bound package

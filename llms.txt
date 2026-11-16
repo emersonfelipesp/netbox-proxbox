@@ -160,9 +160,9 @@ topology.
 
 ### Version
 
-- Plugin version: `0.0.31`
+- Plugin version: `0.0.32rc1`
 - NetBox compatibility: `4.5.8` through `4.7.99`
-- Current source compatibility: `netbox-proxbox 0.0.31` requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings), with `proxmox-sdk 0.0.15` and `netbox-sdk 0.0.13`.
+- Current source compatibility: `netbox-proxbox 0.0.32rc1` requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with `proxmox-sdk 0.0.15` and `netbox-sdk 0.0.13`.
 - Documented released runtime pairing: `netbox-proxbox 0.0.31`,
   `proxbox-api 0.0.29`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`
 
@@ -1720,3 +1720,15 @@ and use reviewed explicit recovery rather than rewriting applied history.
 ## Released backend pairing
 
 The released runtime pairing is netbox-proxbox 0.0.31 with proxbox-api 0.0.29, proxmox-sdk 0.0.15, and netbox-sdk 0.0.13. Deploy and qualify the backend before the plugin.
+
+## Version 0.0.32
+
+Version 0.0.32rc1 is a maintenance release candidate for public end-to-end
+validation. It resolves selected package, source, and immutable image
+prerequisites once before matrix expansion, refuses unavailable inputs instead
+of substituting another backend runtime, and stops on terminal or unhealthy
+required services while preserving existing deadlines for slow valid startups.
+Plugin runtime behavior, models, migrations, and dependencies are unchanged
+from 0.0.31. The supported pairing moves to proxbox-api 0.0.31. Deploy the
+backend first and then the plugin; the two projects release as a pair. There is
+no migration; upgrade directly from 0.0.31.

@@ -21,7 +21,7 @@ This checklist tracks readiness for the NetBox Plugin Certification Program.
 - PyPI: <https://pypi.org/project/netbox-proxbox/>
 - Support: <https://github.com/emersonfelipesp/netbox-proxbox/issues>
 - Certification target artifact: `0.0.29` (local source)
-- Current sibling source and released runtime stack: `proxbox-api 0.0.27.post4`,
+- Current sibling source and released runtime stack: `proxbox-api 0.0.29`,
   `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`.
 - Verified stable NetBox targets: `v4.5.8`, `v4.5.9`, `v4.5.10`, `v4.6.0`, `v4.6.1`, `v4.6.2`, `v4.6.3`, `v4.6.4`, `v4.6.5`, and `v4.6.6`
 - Verified GA target: `v4.7.0` at `5f06007e4c9bacc93ce17c1e645fc1143d60df3d`
@@ -30,6 +30,6 @@ This checklist tracks readiness for the NetBox Plugin Certification Program.
 
 ## Maintenance source
 
-The current released source is `0.0.31`.
+The current candidate source is `0.0.32rc1`.
 The artifact and certification evidence described above remain the preceding
 `0.0.29` baseline; this release identity does not establish new certification.

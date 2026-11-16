@@ -244,6 +244,20 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
+## What's New in v0.0.32rc1
+
+This maintenance candidate makes public end-to-end validation admit the
+selected package, source, and immutable image prerequisites once before the
+matrix expands. It refuses unavailable inputs instead of substituting another
+backend runtime, and it stops on terminal or unhealthy services while keeping
+slow valid startups inside the existing deadlines. Plugin runtime behavior,
+models, migrations, and dependencies are unchanged from `0.0.31`. The supported
+backend pairing moves to proxbox-api `0.0.31`.
+
+Current source compatibility: netbox-proxbox 0.0.32rc1 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired).
+
+[Release Notes - v0.0.32](docs/release-notes/version-0.0.32.md).
+
 ## What's New in v0.0.31
 
 This release adds protected native NetBox cluster binding for Proxmox endpoints,
@@ -537,6 +551,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| 4.5.8-4.7.0 GA | v0.0.32rc1 | v0.0.31 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.31 | v0.0.29 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.31rc2 | v0.0.29 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.31rc1 | proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings) | v0.0.13 | v0.0.15 |
