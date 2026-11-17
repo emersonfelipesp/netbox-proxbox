@@ -244,6 +244,18 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
+## What's New in v0.0.32rc2
+
+This candidate makes release validation match the artifacts that proxbox-api
+actually publishes. Package-index validation runs the Python runtime from the
+selected package and refuses explicit PyO3/Rust requests instead of silently
+running Python. A narrow advisory published-image row still exercises the paired
+backend's PyO3/Rust image; its result does not gate publication. The supported pairing remains proxbox-api `0.0.31`.
+
+Current source compatibility: netbox-proxbox 0.0.32rc2 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired).
+
+[Release Notes - v0.0.32](docs/release-notes/version-0.0.32.md).
+
 ## What's New in v0.0.32rc1
 
 This maintenance candidate makes public end-to-end validation admit the
@@ -254,7 +266,7 @@ slow valid startups inside the existing deadlines. Plugin runtime behavior,
 models, migrations, and dependencies are unchanged from `0.0.31`. The supported
 backend pairing moves to proxbox-api `0.0.31`.
 
-Current source compatibility: netbox-proxbox 0.0.32rc1 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired).
+The staged candidate pairs netbox-proxbox 0.0.32rc1 with proxbox-api 0.0.31.
 
 [Release Notes - v0.0.32](docs/release-notes/version-0.0.32.md).
 
@@ -551,6 +563,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
+| 4.5.8-4.7.0 GA | v0.0.32rc2 | v0.0.31 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.32rc1 | v0.0.31 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.31 | v0.0.29 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.31rc2 | v0.0.29 | v0.0.13 | v0.0.15 |

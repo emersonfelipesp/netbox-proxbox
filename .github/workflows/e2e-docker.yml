@@ -9,7 +9,7 @@ on:
         type: string
         default: both
       dependency_mode:
-        description: "published = exact Docker Hub release; dev = explicit GitHub source opt-in; testpypi-package/pypi-package = install from that index"
+        description: "published = exact Docker Hub release; dev = explicit GitHub source opt-in; testpypi-package/pypi-package = Python runtime from that index"
         required: false
         type: string
         default: published
@@ -19,7 +19,7 @@ on:
         type: string
         default: ""
       proxbox_api_runtime:
-        description: "proxbox-api runtime selection: both, python, or pyo3-rust"
+        description: "proxbox-api runtime selection: both, python, or pyo3-rust; package dependency modes support only python"
         required: false
         type: string
         default: both
@@ -55,7 +55,7 @@ on:
           - testpypi
         default: both
       dependency_mode:
-        description: "proxbox-api source"
+        description: "proxbox-api source; package modes support only the Python runtime"
         required: false
         type: choice
         options:

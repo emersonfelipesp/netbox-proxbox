@@ -107,9 +107,9 @@ CERTIFICATION_PATH = REPO_ROOT / "CERTIFICATION.md"
 DOCS_CERTIFICATION_PATH = REPO_ROOT / "docs" / "certification.md"
 APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
-CURRENT_PLUGIN_VERSION = "0.0.32rc1"
-CURRENT_RELEASE_VERSION = "0.0.32rc1"
-CURRENT_PACKAGE_VERSION = "0.0.32rc1"
+CURRENT_PLUGIN_VERSION = "0.0.32rc2"
+CURRENT_RELEASE_VERSION = "0.0.32rc2"
+CURRENT_PACKAGE_VERSION = "0.0.32rc2"
 CURRENT_BACKEND_REQUIREMENT = "proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired)"
 PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.31"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
@@ -1209,12 +1209,15 @@ def test_workflows_pin_proxbox_api_runtime_release_without_installing_package():
 def _assert_release_workflow_e2e_counts(publish_workflow: str) -> None:
     assert "dependency_mode: testpypi-package" not in publish_workflow
     assert publish_workflow.count("dependency_mode: pypi-package") == 3
+    assert publish_workflow.count("proxbox_api_runtime: python") == 3
     assert (
         publish_workflow.count(
             "proxbox_api_version: ${{ needs.prepare-release.outputs.proxbox_api_version }}"
         )
-        == 3
+        == 4
     )
+    assert publish_workflow.count("dependency_mode: published") == 1
+    assert publish_workflow.count("proxbox_api_runtime: pyo3-rust") == 1
 
 
 def test_release_workflow_uses_matching_package_indexes_for_e2e() -> None:
@@ -1299,7 +1302,7 @@ def test_e2e_installs_backend_selection_dependency_before_use() -> None:
     )
 
 
-def test_e2e_workflow_supports_proxbox_api_package_index_runtime_modes(monkeypatch):
+def test_e2e_workflow_supports_python_package_index_runtime(monkeypatch):
     e2e_workflow = E2E_WORKFLOW_PATH.read_text(encoding="utf-8")
 
     assert "- testpypi" in e2e_workflow
@@ -1322,10 +1325,13 @@ def test_e2e_workflow_supports_proxbox_api_package_index_runtime_modes(monkeypat
     specs = e2e_prerequisites.admit_backend_package(
         _e2e_plan(dependency_mode="testpypi-package")
     )
-    assert specs == {
-        "python": f"proxbox-api @ {artifact}",
-        "pyo3-rust": f"proxbox-api[pyo3-rust] @ {artifact}",
-    }
+    assert specs == {"python": f"proxbox-api @ {artifact}"}
+
+    with pytest.raises(ValueError, match="packages ship only the Python runtime"):
+        _e2e_plan(
+            dependency_mode="testpypi-package",
+            proxbox_api_runtime="pyo3-rust",
+        )
 
 
 def test_current_source_pairing_is_documented_in_primary_docs():

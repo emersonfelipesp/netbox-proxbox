@@ -438,7 +438,24 @@ jobs:
       install_source: testpypi
       dependency_mode: pypi-package
       proxbox_api_version: ${{ needs.prepare-release.outputs.proxbox_api_version }}
-      proxbox_api_runtime: both
+      proxbox_api_runtime: python
+
+  # Advisory evidence only. The reusable workflow sets continue-on-error for
+  # every pyo3-rust cell, so a PyO3/Rust runtime failure does not fail this job
+  # and never gates publication. Release qualification is the Python package
+  # validation above.
+  e2e-docker-testpypi-pyo3:
+    name: E2E Docker / TestPyPI plugin / published PyO3-Rust backend (advisory)
+    if: needs.prepare-release.outputs.publish_target == 'testpypi'
+    needs: [prepare-release, validate-testpypi]
+    uses: ./.github/workflows/e2e-docker.yml
+    with:
+      install_source: testpypi
+      dependency_mode: published
+      proxbox_api_version: ${{ needs.prepare-release.outputs.proxbox_api_version }}
+      proxbox_api_runtime: pyo3-rust
+      netbox_image: netboxcommunity/netbox:v4.7.0-5.1.0@sha256:73a54ff279461170032b59a57a1930929965e3ba15c195af59f4b5f6d39a84a9
+      proxmox_service: pve
 
   validate-pypi-candidate:
     name: validate PyPI candidate / py${{ matrix.python-version }}
@@ -488,7 +505,7 @@ jobs:
       install_source: local
       dependency_mode: pypi-package
       proxbox_api_version: ${{ needs.prepare-release.outputs.proxbox_api_version }}
-      proxbox_api_runtime: both
+      proxbox_api_runtime: python
 
   publish-pypi:
     name: publish to PyPI
@@ -599,4 +616,4 @@ jobs:
       install_source: pypi
       dependency_mode: pypi-package
       proxbox_api_version: ${{ needs.prepare-release.outputs.proxbox_api_version }}
-      proxbox_api_runtime: both
+      proxbox_api_runtime: python

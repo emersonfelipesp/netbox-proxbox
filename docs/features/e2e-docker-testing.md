@@ -28,7 +28,7 @@ do not abort the others.
 | `proxbox_api_runtime` | `python`, `pyo3-rust` | Runs each cell against the default Python backend and the experimental PyO3/Rust reconciliation backend. |
 | `proxmox_service` | `pve`, `pbs`, `pdm` | Selects which `proxmox-sdk` mock service image is used as the Proxmox side. |
 
-The default cross-product is **3 × 9 × 1 × 2 × 3 = 162 cells**. Manual
+The default cross-product is **3 × 11 × 1 × 2 × 3 = 198 cells**. Manual
 dispatch (`workflow_dispatch`) and reusable callers can pin any axis to a
 single value (for example `proxmox_service: pve`) to run a narrower slice.
 
@@ -40,12 +40,18 @@ and the experimental PyO3/Rust reconciliation path:
 | Runtime | Dev mode | Published Docker mode | Package-index mode |
 |---|---|---|---|
 | `python` | Builds `proxbox-api` target `raw`. | Pulls `emersonfelipesp/proxbox-api:<version>`. | Installs `proxbox-api==<version>`. |
-| `pyo3-rust` | Builds target `raw-pyo3-rust`. | Pulls `emersonfelipesp/proxbox-api:<version>-pyo3-rust`. | Tries `proxbox-api[pyo3-rust]==<version>`, then falls back to the matching `-pyo3-rust` Docker image with a workflow warning. |
+| `pyo3-rust` | Builds target `raw-pyo3-rust`. | Pulls `emersonfelipesp/proxbox-api:<version>-pyo3-rust`. | Unsupported: admission refuses the request because packages do not ship the Rust engine. |
 
 Rust cells set `PROXBOX_RECONCILIATION_ENGINE=rust` and run an early
 `rust_available()` assertion inside the backend container before the NetBox
-sync checks begin. A Rust import or runtime mismatch therefore fails the E2E
-cell before package publication can proceed.
+sync checks begin. A Rust import or runtime mismatch therefore fails that
+experimental E2E cell before its sync checks run.
+
+Package-index modes select only `python`. Explicit `pyo3-rust` and `both`
+requests fail during prerequisite planning and never substitute the Python
+runtime or a published image. Release validation retains a narrow published-
+image PyO3/Rust row, while default published and development runs retain both
+runtime axes.
 
 ### Proxmox Service Axis
 

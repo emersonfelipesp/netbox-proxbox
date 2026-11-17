@@ -65,15 +65,16 @@ sequenceDiagram
     PublicWF->>TP: Upload the exact Gitea package bytes
     PublicWF->>E2E: TestPyPI plugin + stable PyPI proxbox-api
     E2E->>NB: pip install netbox-proxbox==X.Y.ZrcN from TestPyPI
-    E2E->>API: validate proxbox-api Python and PyO3/Rust runtimes
-    E2E-->>PublicWF: Release-candidate checks pass for both runtimes
+    E2E->>API: validate the proxbox-api Python package runtime
+    PublicWF->>E2E: run a narrow advisory paired published PyO3/Rust image row
+    E2E-->>PublicWF: Package validation passes (blocking) and advisory image coverage completes
 
     Tag->>PublicWF: published GitHub Release for vX.Y.Z or vX.Y.Z.postN
     PublicWF->>PY: Upload netbox-proxbox package
     PublicWF->>E2E: install_source=pypi, dependency_mode=pypi-package
     E2E->>NB: pip install netbox-proxbox==X.Y.Z or X.Y.Z.postN from PyPI
-    E2E->>API: validate proxbox-api Python and PyO3/Rust runtimes
-    E2E-->>PublicWF: Post-publish checks pass for both runtimes
+    E2E->>API: validate the proxbox-api Python package runtime
+    E2E-->>PublicWF: Post-publish package checks pass
 ```
 
 ## Workflow Rules
@@ -244,11 +245,13 @@ sequenceDiagram
   implemented or published by this repository.
 - TestPyPI and PyPI candidate validation run the mocked suite with
   `-p no:django`; the separate real-NetBox matrix keeps pytest-django enabled.
-- Release E2E runs with `proxbox_api_runtime: both`. The Python backend and the
-  PyO3/Rust backend must both pass before PyPI publication can proceed.
-- In package-index E2E, Rust mode tries `proxbox-api[pyo3-rust]` first and
-  falls back to the matching `<version>-pyo3-rust` Docker image when the backend
-  package has not published that extra yet.
+- Package-index release E2E runs with `proxbox_api_runtime: python`, matching
+  the runtime that proxbox-api publishes in its Python package. An explicit
+  `pyo3-rust` or `both` request is refused and never falls back to another
+  runtime or artifact source.
+- TestPyPI candidate validation also exercises one NetBox 4.7 PVE row against
+  the paired published `<version>-pyo3-rust` image. The default published and
+  development E2E matrices retain both runtime axes.
 - `proxbox_api_version` can be supplied manually for an intentional coordinated
   candidate. If omitted, both TestPyPI and PyPI plugin validation read
   `PROXBOX_API_PYPI_VERSION`, then `PROXBOX_API_RELEASE_VERSION`, then the
@@ -333,6 +336,6 @@ a changed build; use a new `rcN` or `.postN` version instead.
 
 The released runtime pairing is netbox-proxbox 0.0.31 with proxbox-api 0.0.29. Publish and qualify the backend before publishing the plugin final.
 
-The `0.0.32rc1` candidate pairs with proxbox-api `0.0.31`. Publish and qualify
+The `0.0.32rc2` candidate pairs with proxbox-api `0.0.31`. Publish and qualify
 the backend first, then publish the plugin candidate. The two projects release
 as a pair.

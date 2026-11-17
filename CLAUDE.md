@@ -1,6 +1,6 @@
 # netbox-proxbox Repository Guide
 
-Current source: netbox-proxbox 0.0.32rc1 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), deployed before the plugin. The netbox-sdk dependency remains proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source: netbox-proxbox 0.0.32rc2 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), deployed before the plugin. The netbox-sdk dependency remains proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 > **LLM Agent Safety:** Before any destruction-adjacent operation, read
 > `AGENTS.md` § "LLM Agent Safety Guardrails". Automated agents may inspect and
@@ -92,9 +92,9 @@ depends on the backend network parser.
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.99` (the whole 4.7 series is admitted by the numeric gate; CI verifies GA `4.7.0`). The current
-plugin version is `0.0.32rc1`.
+plugin version is `0.0.32rc2`.
 
-Current source compatibility: netbox-proxbox 0.0.32rc1 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source compatibility: netbox-proxbox 0.0.32rc2 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The documented released runtime pairing for this release line is
 netbox-proxbox 0.0.31 <-> proxbox-api 0.0.29 <-> proxmox-sdk 0.0.15
@@ -121,7 +121,10 @@ documentation in the same change.
 Docker E2E certification admits selected direct package and image inputs once
 before expanding its unchanged compatibility matrix. Keep hash-bound package
 URLs, admitted image digests, explicit development source identity, and exact
-selected-index behavior. Readiness must reject terminal or unhealthy required
+selected-index behavior. Package dependency modes run only the Python runtime
+that proxbox-api packages ship and must refuse explicit `both` or `pyo3-rust`
+requests; published-image and development modes retain PyO3/Rust coverage.
+Readiness must reject terminal or unhealthy required
 containers immediately while preserving explicit monotonic startup deadlines.
 Keep the public result non-security evidence and leave trusted Django workflow
 pins unchanged. See `docs/developer/ci-e2e-workflows.md` for the contract.

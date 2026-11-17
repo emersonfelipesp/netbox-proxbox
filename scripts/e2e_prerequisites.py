@@ -24,6 +24,7 @@ NETBOX_IMAGES = (
 )
 INDEXES = {"pypi": "https://pypi.org", "testpypi": "https://test.pypi.org"}
 BACKEND_REPOSITORY = "https://github.com/emersonfelipesp/proxbox-api.git"
+PACKAGE_DEPENDENCY_MODES = ("pypi-package", "testpypi-package")
 
 
 def select_axis(value: str, choices: tuple[str, ...], full: str) -> list[str]:
@@ -42,8 +43,25 @@ def validate_image(reference: str) -> str:
     return reference
 
 
+def select_runtimes(value: str, dependency_mode: str) -> list[str]:
+    """Keep package installs on the only runtime their artifacts provide."""
+    if dependency_mode not in PACKAGE_DEPENDENCY_MODES:
+        return select_axis(value, ("python", "pyo3-rust"), "both")
+    if value in ("", "python"):
+        return ["python"]
+    if value in ("both", "pyo3-rust"):
+        raise ValueError(
+            f"Package dependency mode {dependency_mode!r} cannot request "
+            f"proxbox_api_runtime={value!r}: proxbox-api packages ship only the "
+            "Python runtime; use dependency_mode='published' or 'dev' for "
+            "pyo3-rust"
+        )
+    return select_axis(value, ("python", "pyo3-rust"), "both")
+
+
 def build_plan(event: str, inputs: dict[str, str], defaults: dict[str, str]) -> dict:
     """Retain the full certification axes and existing narrow PR selection."""
+    dependency_mode = resolve_dependency_mode(inputs.get("dependency_mode", ""))
     sources = select_axis(
         inputs.get("install_source", ""),
         ("local", "pypi", "container", "testpypi"),
@@ -51,9 +69,7 @@ def build_plan(event: str, inputs: dict[str, str], defaults: dict[str, str]) -> 
     )
     if inputs.get("install_source", "") in ("", "both"):
         sources.remove("testpypi")
-    runtimes = select_axis(
-        inputs.get("proxbox_api_runtime", ""), ("python", "pyo3-rust"), "both"
-    )
+    runtimes = select_runtimes(inputs.get("proxbox_api_runtime", ""), dependency_mode)
     services = select_axis(
         inputs.get("proxmox_service", ""), ("pve", "pbs", "pdm"), "all"
     )
@@ -72,7 +88,7 @@ def build_plan(event: str, inputs: dict[str, str], defaults: dict[str, str]) -> 
             "proxbox_api_runtime": runtimes,
             "proxmox_service": services,
         },
-        "dependency_mode": resolve_dependency_mode(inputs.get("dependency_mode", "")),
+        "dependency_mode": dependency_mode,
         "backend_version": validate_version(
             inputs.get("proxbox_api_version", "") or defaults["backend_version"]
         ),
@@ -263,21 +279,20 @@ def admit_plugins(sources: list[str], plugin_version: str) -> tuple[dict, dict]:
 def admit_backend_package(plan: dict) -> dict[str, str]:
     """Require the selected backend package instead of falling back to an image."""
     mode = plan["dependency_mode"]
-    if mode not in ("pypi-package", "testpypi-package"):
+    if mode not in PACKAGE_DEPENDENCY_MODES:
         return {}
+    runtimes = plan["matrix"]["proxbox_api_runtime"]
+    if runtimes != ["python"]:
+        requested = runtimes[0] if len(runtimes) == 1 else "both"
+        select_runtimes(requested, mode)
     index = "testpypi" if mode == "testpypi-package" else "pypi"
     admitted = admit_package(
         "proxbox-api",
         plan["backend_version"],
         index,
         "3.13",
-        rust="pyo3-rust" in plan["matrix"]["proxbox_api_runtime"],
     )
-    specs = {}
-    for runtime in plan["matrix"]["proxbox_api_runtime"]:
-        extra = "[pyo3-rust]" if runtime == "pyo3-rust" else ""
-        specs[runtime] = f"proxbox-api{extra} @ {admitted['spec']}"
-    return specs
+    return {"python": f"proxbox-api @ {admitted['spec']}"}
 
 
 def development_source(mode: str) -> str:

@@ -159,32 +159,85 @@ def test_missing_package_stops_before_images_or_matrix_outputs(monkeypatch):
         gate.admit_plan(plan(), "0.0.31")
 
 
-def test_package_backend_requires_selected_rust_extra_without_image_fallback(
-    monkeypatch,
+@pytest.mark.parametrize("runtime", ["pyo3-rust", "both"])
+def test_package_mode_refuses_requested_rust_for_backend_without_extra(
+    monkeypatch, runtime
 ):
-    calls = []
+    document = metadata(name="proxbox-api", version="0.0.31")
+    document["info"]["provides_extra"] = [
+        "test",
+        "e2e",
+        "playwright",
+        "docs",
+        "granian",
+        "pbs",
+        "pdm",
+    ]
+    metadata_reads = []
+    monkeypatch.setattr(
+        gate,
+        "fetch_package_metadata",
+        lambda *args: metadata_reads.append(args) or document,
+    )
+    with pytest.raises(
+        ValueError,
+        match=(
+            "proxbox-api packages ship only the Python runtime; use "
+            "dependency_mode='published' or 'dev' for pyo3-rust"
+        ),
+    ):
+        plan(
+            install_source="local",
+            dependency_mode="pypi-package",
+            proxbox_api_runtime=runtime,
+        )
+    assert metadata_reads == []
 
-    def admit(*args, **kwargs):
-        calls.append((args, kwargs))
-        return {
-            "version": "0.0.29",
-            "spec": "https://test-files.pythonhosted.org/api.whl#sha256=" + "b" * 64,
-        }
 
-    monkeypatch.setattr(gate, "admit_package", admit)
+def test_package_backend_without_rust_extra_is_admitted_for_python(monkeypatch):
+    document = metadata(
+        name="proxbox-api",
+        version="0.0.29",
+        url="https://test-files.pythonhosted.org/packages/test/package.whl",
+    )
+    document["info"]["provides_extra"] = ["test", "e2e", "playwright", "docs"]
+    monkeypatch.setattr(gate, "fetch_package_metadata", lambda *args: document)
     images = []
     monkeypatch.setattr(
         gate, "resolve_image", lambda ref: images.append(ref) or f"{ref}@{DIGEST}"
     )
     result = gate.admit_plan(
-        plan(install_source="local", dependency_mode="testpypi-package"), "0.0.31"
+        plan(
+            install_source="local",
+            dependency_mode="testpypi-package",
+            proxbox_api_runtime="python",
+        ),
+        "0.0.31",
     )
-    assert calls == [(("proxbox-api", "0.0.29", "testpypi", "3.13"), {"rust": True})]
-    assert result["backend_specs"]["pyo3-rust"].startswith(
-        "proxbox-api[pyo3-rust] @ https://test-files."
+    assert result["backend_specs"]["python"] == (
+        "proxbox-api @ "
+        "https://test-files.pythonhosted.org/packages/test/package.whl#sha256="
+        + "b"
+        * 64
     )
     assert not any(ref.startswith("emersonfelipesp/proxbox-api:") for ref in images)
     assert "python:3.13-slim" in images
+
+
+def test_handcrafted_package_plan_cannot_bypass_runtime_refusal(monkeypatch):
+    selected = plan(
+        install_source="local",
+        dependency_mode="pypi-package",
+        proxbox_api_runtime="python",
+    )
+    selected["matrix"]["proxbox_api_runtime"] = ["pyo3-rust"]
+    monkeypatch.setattr(
+        gate,
+        "admit_package",
+        lambda *args, **kwargs: pytest.fail("Package admitted after runtime refusal"),
+    )
+    with pytest.raises(ValueError, match="packages ship only the Python runtime"):
+        gate.admit_backend_package(selected)
 
 
 @pytest.mark.parametrize(
@@ -306,6 +359,35 @@ def test_workflow_waits_for_shared_admission_and_uses_bound_inputs():
     assert '"${ADMITTED_PLUGIN_SPEC}"' not in source  # transported through GITHUB_ENV
     assert "NETBOX_PLUGIN_INSTALL_SPEC=${ADMITTED_PLUGIN_SPEC}" in source
     assert '--required "${required[@]}" --timeout 1200' in source
+
+
+def test_release_workflow_requests_only_admissible_package_runtime_combinations():
+    from pathlib import Path
+
+    workflow = yaml.load(
+        Path(".github/workflows/publish-testpypi.yml").read_text(),
+        Loader=yaml.BaseLoader,
+    )
+    jobs = workflow["jobs"]
+    package_jobs = (
+        "e2e-docker-testpypi",
+        "e2e-docker-pypi-candidate",
+        "e2e-docker-pypi",
+    )
+    for job_name in package_jobs:
+        inputs = jobs[job_name]["with"]
+        assert inputs["dependency_mode"] == "pypi-package"
+        assert inputs["proxbox_api_runtime"] == "python"
+
+    advisory_job = jobs["e2e-docker-testpypi-pyo3"]
+    assert advisory_job["name"].endswith("(advisory)")
+    for publish_job in ("publish-testpypi", "publish-pypi"):
+        assert "e2e-docker-testpypi-pyo3" not in jobs[publish_job].get("needs", [])
+    published_rust = advisory_job["with"]
+    assert published_rust["dependency_mode"] == "published"
+    assert published_rust["proxbox_api_runtime"] == "pyo3-rust"
+    assert published_rust["proxmox_service"] == "pve"
+    assert published_rust["netbox_image"].startswith("netboxcommunity/netbox:v4.7.0-")
 
 
 def test_selected_testpypi_artifact_cannot_use_the_pypi_file_host(monkeypatch):

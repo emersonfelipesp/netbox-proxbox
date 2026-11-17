@@ -106,6 +106,9 @@ facts that an agent must have even when `@CLAUDE.md` expansion is unavailable:
 - Keep Docker E2E prerequisite admission ahead of the unchanged matrix. Check
   only selected package/index/image inputs, retain admitted hashes and digests,
   and never fall back to another package, runtime, or image after refusal.
+  Package dependency modes run only the Python runtime that proxbox-api packages
+  ship and refuse explicit `both` or `pyo3-rust` requests. Published-image and
+  development modes retain PyO3/Rust coverage.
   Reject terminal or unhealthy required containers before readiness probes while
   retaining monotonic startup deadlines. Public results remain non-security
   evidence; leave trusted Django pins unchanged.
@@ -164,9 +167,9 @@ The complete semantic bridge contract is
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.99` (the whole 4.7 series is admitted by the numeric gate; CI verifies GA `4.7.0`). The current
-plugin version is `0.0.32rc1`.
+plugin version is `0.0.32rc2`.
 
-Current source compatibility: netbox-proxbox 0.0.32rc1 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source compatibility: netbox-proxbox 0.0.32rc2 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The documented released runtime pairing for this release line is
 netbox-proxbox 0.0.31 <-> proxbox-api 0.0.29 <-> proxmox-sdk 0.0.15

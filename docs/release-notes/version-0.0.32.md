@@ -2,13 +2,22 @@
 
 ## Summary
 
-Version `0.0.32rc1` is a maintenance release candidate that strengthens the
-public end-to-end validation workflow. It resolves the selected plugin package,
-backend source, and immutable container-image prerequisites once before the
-compatibility matrix expands. Unavailable inputs are refused instead of being
-replaced with a different backend runtime. Required containers that terminate
-or become unhealthy stop validation immediately, while slow but valid startups
-remain inside the existing monotonic deadlines.
+Version `0.0.32rc2` corrects a release-validation defect exposed by the first
+candidate. PyPI and TestPyPI proxbox-api packages contain the Python runtime,
+while the PyO3/Rust reconciliation engine is distributed in dedicated container
+images. Package-index validation now runs only the Python runtime and clearly
+refuses an explicit PyO3/Rust request. A narrow advisory published-image row continues to
+exercise the paired backend's PyO3/Rust runtime without substituting it for the
+selected package. PyO3/Rust cells are non-blocking: their result is evidence
+and does not gate publication.
+
+The staged `0.0.32rc1` strengthened the public end-to-end validation workflow.
+It resolves the selected plugin package, backend source, and immutable
+container-image prerequisites once before the compatibility matrix expands.
+Unavailable inputs are refused instead of being replaced with a different
+backend runtime. Required containers that terminate or become unhealthy stop
+validation immediately, while slow but valid startups remain inside the
+existing monotonic deadlines.
 
 Plugin runtime behavior, models, migrations, and dependencies are unchanged
 from `0.0.31`. This release moves the supported backend pairing to proxbox-api
@@ -22,6 +31,13 @@ bound to its distribution hash, each selected image is retained by immutable
 digest, and development source selection retains its resolved identity. The
 matrix consumes those admitted values without falling back to another package,
 runtime, or image after refusal.
+
+Package-index modes accept only `proxbox_api_runtime: python`. Explicit
+`pyo3-rust` or `both` requests fail during prerequisite planning because no
+published proxbox-api package contains that engine. Development mode continues
+to build the Rust target, and published-image mode continues to resolve the
+paired `<version>-pyo3-rust` image by immutable digest. Release validation adds
+one published-image PyO3/Rust row beside its Python package rows.
 
 Readiness checks now stop as soon as a required service reaches a terminal or
 unhealthy state. Services that are still starting continue to use the existing
@@ -44,6 +60,7 @@ client and does not provide the semantic MCP bridge.
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |---|---|---|---|---|
+| 4.5.8-4.7.0 GA | v0.0.32rc2 | v0.0.31 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.32rc1 | v0.0.31 | v0.0.13 | v0.0.15 |
 
 The declared stable NetBox range remains `4.5.8` through `4.7.99`, with actual
