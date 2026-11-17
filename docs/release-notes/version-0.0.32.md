@@ -2,8 +2,9 @@
 
 ## Summary
 
-Version `0.0.32rc2` corrects a release-validation defect exposed by the first
-candidate. PyPI and TestPyPI proxbox-api packages contain the Python runtime,
+Version `0.0.32` strengthens public end-to-end validation and makes release
+validation match the artifacts that proxbox-api publishes. PyPI and TestPyPI
+proxbox-api packages contain the Python runtime,
 while the PyO3/Rust reconciliation engine is distributed in dedicated container
 images. Package-index validation now runs only the Python runtime and clearly
 refuses an explicit PyO3/Rust request. A narrow advisory published-image row continues to
@@ -11,8 +12,7 @@ exercise the paired backend's PyO3/Rust runtime without substituting it for the
 selected package. PyO3/Rust cells are non-blocking: their result is evidence
 and does not gate publication.
 
-The staged `0.0.32rc1` strengthened the public end-to-end validation workflow.
-It resolves the selected plugin package, backend source, and immutable
+The release resolves the selected plugin package, backend source, and immutable
 container-image prerequisites once before the compatibility matrix expands.
 Unavailable inputs are refused instead of being replaced with a different
 backend runtime. Required containers that terminate or become unhealthy stop
@@ -60,8 +60,14 @@ client and does not provide the semantic MCP bridge.
 
 | NetBox | netbox-proxbox | proxbox-api | netbox-sdk | proxmox-sdk |
 |---|---|---|---|---|
-| 4.5.8-4.7.0 GA | v0.0.32rc2 | v0.0.31 | v0.0.13 | v0.0.15 |
-| 4.5.8-4.7.0 GA | v0.0.32rc1 | v0.0.31 | v0.0.13 | v0.0.15 |
+| 4.5.8-4.7.0 GA | v0.0.32 | v0.0.31 | v0.0.13 | v0.0.15 |
 
 The declared stable NetBox range remains `4.5.8` through `4.7.99`, with actual
 GA matrix evidence at `4.7.0`.
+
+## Candidate history
+
+- `0.0.32rc1` introduced prerequisite admission and fail-fast readiness, but
+  its own release validation rejected package-mode PyO3/Rust requests.
+- `0.0.32rc2` corrected package-mode runtime selection, refused unsupported
+  explicit PyO3/Rust requests, and retained one advisory published-image row.

@@ -163,11 +163,11 @@ topology.
 
 ### Version
 
-- Plugin version: `0.0.32rc2`
+- Plugin version: `0.0.32`
 - NetBox compatibility: `4.5.8` through `4.7.99`
-- Current source compatibility: `netbox-proxbox 0.0.32rc2` requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with `proxmox-sdk 0.0.15` and `netbox-sdk 0.0.13`.
-- Documented released runtime pairing: `netbox-proxbox 0.0.31`,
-  `proxbox-api 0.0.29`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`
+- Current source compatibility: `netbox-proxbox 0.0.32` requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with `proxmox-sdk 0.0.15` and `netbox-sdk 0.0.13`.
+- Documented released runtime pairing: `netbox-proxbox 0.0.32`,
+  `proxbox-api 0.0.31`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`
 
 ---
 
@@ -1722,11 +1722,11 @@ and use reviewed explicit recovery rather than rewriting applied history.
 
 ## Released backend pairing
 
-The released runtime pairing is netbox-proxbox 0.0.31 with proxbox-api 0.0.29, proxmox-sdk 0.0.15, and netbox-sdk 0.0.13. Deploy and qualify the backend before the plugin.
+The released runtime pairing is netbox-proxbox 0.0.32 with proxbox-api 0.0.31, proxmox-sdk 0.0.15, and netbox-sdk 0.0.13. Deploy and qualify the backend before the plugin.
 
 ## Version 0.0.32
 
-Version 0.0.32rc2 corrects release validation so package-index rows run only
+Version 0.0.32 strengthens public end-to-end validation and ensures package-index rows run only
 the Python runtime that proxbox-api packages ship and refuse explicit PyO3/Rust
 requests. A narrow advisory published-image row retains PyO3/Rust coverage without
 substituting it for the selected package; PyO3/Rust cells are non-blocking and do not gate publication. The staged first candidate resolves

@@ -110,9 +110,9 @@ replacement hidden key or delete the accepted remote key as a rollback tactic.
 
 - Proxbox `0.0.29` source supports NetBox `4.5.8` through `4.7.99`, including official v4.7.0 GA and later 4.7 patch releases such as v4.7.2. It is validated against `v4.5.8` through `v4.5.10`, `v4.6.0` through `v4.6.6`, and exact v4.7.0 source commit `5f06007e4c9bacc93ce17c1e645fc1143d60df3d`. The current sibling source and released runtime stack is `proxbox-api 0.0.27.post4`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`.
 
-Current released runtime requirement: netbox-proxbox 0.0.31 requires proxbox-api 0.0.29 or later (the release that adds endpoint-owned cluster bindings). Deploy that backend before upgrading the plugin. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+Current released runtime requirement: netbox-proxbox 0.0.32 requires proxbox-api 0.0.31. Deploy that backend before upgrading the plugin. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
-- Upgrading from `0.0.31` to `0.0.32rc2` adds no migration and does not change plugin runtime behavior, models, or dependencies. Deploy proxbox-api `0.0.31` first, then install the plugin candidate, run the normal `collectstatic` step, and restart every deployment-owned NetBox application and worker process. The two projects release as a pair.
+- Upgrading from `0.0.31` to `0.0.32` adds no migration and does not change plugin runtime behavior, models, or dependencies. Deploy proxbox-api `0.0.31` first, then install the plugin, run the normal `collectstatic` step, and restart every deployment-owned NetBox application and worker process. The two projects release as a pair.
 - Upgrading to `0.0.31` applies `0108_v0_0_31_schema_validation` after the immutable `0107_v0_0_30_release`. A database already at the `0.0.30rc1` candidate applies only 0108; a database at `0106_device_sync_scope_and_netbox_token_approval` applies 0107 and then 0108 in separate atomic transactions. Deploy proxbox-api `0.0.29` first, then install the plugin, run migrations and `collectstatic`, and restart the deployment-owned NetBox application and worker processes. Installations already at `0.0.31rc1` or `0.0.31rc2` apply no new migration.
 - Databases that applied the unpublished development migration `0107_endpoint_native_cluster_binding` adopt the existing column, constraint, and data through 0107. Reversing the older `0107_v0_0_30_release` migration removes the Cloud Image and SSH-service schema but keeps the native cluster ownership column and values. Reversing validation-only 0108 is a no-op that preserves all 0107 objects and data.
 
@@ -148,7 +148,7 @@ install a backend build containing that fix, or the next fixed backend release,
 before re-testing VM IP sync.
 
 
-> **Current source:** netbox-proxbox `0.0.32rc2` supports NetBox `4.5.8`-`4.7.99` stable, including v4.7.0 GA and later 4.7 patch releases. It requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), deployed before the plugin, with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+> **Current source:** netbox-proxbox `0.0.32` supports NetBox `4.5.8`-`4.7.99` stable, including v4.7.0 GA and later 4.7 patch releases. It requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), deployed before the plugin, with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
 
 ## Post-candidate validation boundary
@@ -168,4 +168,4 @@ rewrite deployed history, or silently repair an unexpected schema. Reverse of
 and data evidence for explicit reviewed recovery. The original 0107 reverse
 controls remain historical and do not prove that 0108 removes those objects.
 
-The released runtime pairing is netbox-proxbox 0.0.31 with proxbox-api 0.0.29, proxmox-sdk 0.0.15, and netbox-sdk 0.0.13. Deploy and qualify the backend before the plugin.
+The released runtime pairing is netbox-proxbox 0.0.32 with proxbox-api 0.0.31, proxmox-sdk 0.0.15, and netbox-sdk 0.0.13. Deploy and qualify the backend before the plugin.

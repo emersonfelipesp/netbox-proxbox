@@ -106,16 +106,17 @@ commit, final `release.yaml` metadata, and upstream requirements checksum before
 installing a reviewed Python 3.12/Linux lock with artifact hashes and an
 explicit PyPI first-index policy.
 
-Current source compatibility: netbox-proxbox 0.0.32rc2 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source compatibility: netbox-proxbox 0.0.32 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
-Current released runtime pairing: netbox-proxbox 0.0.31 <-> proxbox-api 0.0.29 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. Deploy proxbox-api 0.0.29 before netbox-proxbox 0.0.31.
+Current released runtime pairing: netbox-proxbox 0.0.32 <-> proxbox-api 0.0.31 <-> proxmox-sdk 0.0.15 <-> netbox-sdk 0.0.13. Deploy proxbox-api 0.0.31 before netbox-proxbox 0.0.32.
 
-The first row declares the current candidate pairing. The following rows
+The first row declares the current released pairing. The following rows
 preserve the released runtime pairing, staged candidates, and preceding
 releases.
 
 | netbox-proxbox | NetBox | Python | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |---|---|---|---|---|---|
+| v0.0.32 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.31 | v0.0.13 | v0.0.15 |
 | v0.0.32rc2 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.31 | v0.0.13 | v0.0.15 |
 | v0.0.32rc1 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.31 | v0.0.13 | v0.0.15 |
 | v0.0.31 | 4.5.8-4.7.0 GA | >=3.12 | v0.0.29 | v0.0.13 | v0.0.15 |
