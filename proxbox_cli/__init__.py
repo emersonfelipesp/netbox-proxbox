@@ -20,10 +20,8 @@ from rich.console import Console
 from pydantic import ValidationError
 
 from proxbox_cli.commands.dcim import dcim_app
-from proxbox_cli.commands.extras import extras_app
 from proxbox_cli.commands.netbox import netbox_app
 from proxbox_cli.commands.proxmox import proxmox_app
-from proxbox_cli.commands.proxbox import proxbox_app
 from proxbox_cli.commands.sync import sync_app
 from proxbox_cli.commands.virtualization import virtualization_app
 from proxbox_cli.config import (
@@ -52,10 +50,8 @@ app = typer.Typer(
 # Wire sub-apps
 app.add_typer(netbox_app, name="netbox")
 app.add_typer(proxmox_app, name="proxmox")
-app.add_typer(proxbox_app, name="proxbox")
 app.add_typer(dcim_app, name="dcim")
 app.add_typer(virtualization_app, name="virtualization")
-app.add_typer(extras_app, name="extras")
 app.add_typer(sync_app, name="sync")
 
 docs_app = typer.Typer(no_args_is_help=True, help="Documentation generation commands.")

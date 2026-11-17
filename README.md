@@ -239,10 +239,20 @@ other tenants.
   after an upgrade, use **Repair / Rebuild Proxbox sync-state**. It has its own
   page at `/plugins/proxbox/sync-state/`, reached from the **Repair / Rebuild
   sync-state** link in the Proxbox Home page footer (it is intentionally kept
-  out of the navigation menu). It reconciles proxbox-api custom-field definitions,
-  queues a normal full sync job, and shows `GET /extras/bootstrap-status` output
+  out of the navigation menu). It queues a normal full sync job and shows
+  `GET /extras/bootstrap-status` output
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
+
+## What's New in v0.0.32.post1
+
+This maintenance release aligns node inventory routes, sync-state repair, and
+the command-line client with proxbox-api `0.0.31`. The backend pairing remains
+unchanged.
+
+Current source compatibility: netbox-proxbox 0.0.32.post1 requires proxbox-api 0.0.31.
+
+[Release Notes - v0.0.32.post1](docs/release-notes/version-0.0.32.post1.md).
 
 ## What's New in v0.0.32
 

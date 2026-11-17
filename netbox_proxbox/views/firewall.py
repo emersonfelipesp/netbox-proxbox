@@ -36,6 +36,7 @@ from netbox_proxbox.services.endpoint_enabled import endpoint_is_enabled
 from netbox_proxbox.views.proxbox_access import (
     EndpointOperationalPermissionRequiredMixin,
     TokenWriteScopeRequiredMixin,
+    actor_from_request as _actor_from_request,
     user_can_run_endpoint_action,
 )
 
@@ -176,14 +177,6 @@ def _firewall_action_allowed(user: object, obj: object) -> bool:
         and endpoint_is_enabled(endpoint)
         and user_can_run_endpoint_action(user, getattr(endpoint, "pk", None))
     )
-
-
-def _actor_from_request(request: HttpRequest) -> str:
-    user = getattr(request, "user", None)
-    get_username = getattr(user, "get_username", None)
-    if callable(get_username):
-        return str(get_username())
-    return str(getattr(user, "username", "") or getattr(user, "pk", "") or "netbox")
 
 
 # ── ProxmoxFirewallSecurityGroup ─────────────────────────────────────────────

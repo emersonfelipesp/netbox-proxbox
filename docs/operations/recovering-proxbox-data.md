@@ -1,9 +1,8 @@
 # Recovering / Regenerating Proxbox Data
 
 Use this guide when a NetBox upgrade, plugin reinstall, or failed bootstrap leaves
-Proxbox setup data incomplete. A common symptom is that legacy Proxbox custom
-fields are missing, so old synced records no longer show the expected Proxmox
-metadata.
+Proxbox setup data incomplete. A common symptom is missing or stale typed
+sync-state data, so synced records no longer show the expected Proxmox metadata.
 
 ## Where To Find The Card
 
@@ -33,11 +32,8 @@ permissions:
 
 When you click **Repair / Rebuild**, the plugin:
 
-1. Calls proxbox-api `POST /extras/custom-fields/reconcile` to recreate or
-   update the Proxbox custom-field definitions. This is a **best-effort first
-   step, not a gate** (see below).
-2. Queues a normal NetBox background job using `ProxboxSyncJob.enqueue`.
-3. Runs a full Proxbox sync through the existing sync pipeline. The sync's
+1. Queues a normal NetBox background job using `ProxboxSyncJob.enqueue`.
+2. Runs a full Proxbox sync through the existing sync pipeline. The sync's
    preflight re-pushes the NetBox and Proxmox endpoint credentials to
    proxbox-api and rebuilds the typed sync-state sidecars from live Proxmox
    data — this is the step that recovers a stale/invalid backend credential.
@@ -71,17 +67,11 @@ Permissions:
 5. Open the linked NetBox job from the flash message and wait for it to finish,
    then re-check the bootstrap status.
 
-The custom-field reconcile is **non-fatal**: if proxbox-api rejects it — which is
-expected when the backend holds a stale/invalid NetBox credential, since the
-reconcile authenticates with that same credential — the plugin records the
-reconcile error as a **warning** and still queues the rebuild sync. The queued
-sync's preflight re-pushes the endpoint credentials to proxbox-api and rebuilds
-sync-state, which is what actually recovers the `Invalid v1 token` state. The
-flash message links the job; open it and confirm the sync completed. Only a
-failure to *queue* the sync, a missing permission, or an already-running repair
-sync is a hard stop. If the reconcile error persists after the sync completes,
-verify the NetBox API token configured on the **NetBox Endpoint** row is valid,
-then retry.
+The queued sync's preflight re-pushes endpoint credentials to proxbox-api and
+rebuilds sync-state, which recovers stale backend credentials. The flash
+message links the job; open it and confirm the sync completed. A failure to
+queue the sync, a missing permission, or an already-running repair sync is a
+hard stop.
 
 ### Missing backend NetBox endpoint
 

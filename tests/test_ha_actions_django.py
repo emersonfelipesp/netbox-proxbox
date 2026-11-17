@@ -181,6 +181,10 @@ class HaActionPermissionTests(TestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(self._posted_backend_ids(), {str(self.endpoint_a.pk + 1000)})
+        self.assertEqual(
+            self.posts[0]["headers"]["X-Proxbox-Actor"],
+            self.scoped_operator.username,
+        )
         result_ids = {row["endpoint_id"] for row in response.json()["results"]}
         self.assertEqual(result_ids, {self.endpoint_a.pk})
 
@@ -334,3 +338,30 @@ class HaActionPermissionTests(TestCase):
 
         self.assertNotEqual(response.status_code, 200)
         self.assertEqual(self.posts, [])
+
+
+def test_actor_header_value_is_latin1_safe_and_reversible():
+    """A username outside Latin-1 must still be a valid HTTP header value."""
+    from types import SimpleNamespace
+    from urllib.parse import unquote
+
+    from netbox_proxbox.views.proxbox_access import actor_from_request
+
+    username = "用户"
+    request = SimpleNamespace(user=SimpleNamespace(get_username=lambda: username))
+
+    actor = actor_from_request(request)
+
+    actor.encode("latin-1")
+    assert unquote(actor) == username
+
+
+def test_actor_header_value_keeps_latin1_usernames_unchanged():
+    """Names an HTTP header can carry are sent without transformation."""
+    from types import SimpleNamespace
+
+    from netbox_proxbox.views.proxbox_access import actor_from_request
+
+    request = SimpleNamespace(user=SimpleNamespace(get_username=lambda: "josé.ops"))
+
+    assert actor_from_request(request) == "josé.ops"

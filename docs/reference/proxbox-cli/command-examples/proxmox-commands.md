@@ -2,7 +2,7 @@
 
 Representative command help output captured automatically from the local checkout.
 
-Generated: `2026-09-14T17:13:11.556323+00:00`
+Generated: `2026-11-17T14:30:50.842882+00:00`
 
 ## Proxmox Help
 
@@ -47,14 +47,31 @@ Code-generation pipeline entrypoint for the proxmox viewer endpoints.
 
  Usage: python -m proxbox_cli proxmox viewer generate [OPTIONS]
 
- Run the Proxmox API Viewer crawl and code generation pipeline.
+ Run viewer code generation; the backend must enable runtime code generation.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --body-json        <str>   JSON config string.                               │
-│ --body-file        <path>  Path to JSON config file.                         │
-│ --json                     Output raw JSON.                                  │
-│ --yaml                     Output YAML.                                      │
-│ --help                     Show this message and exit.                       │
+│ --persist             --no-persist                       Persist generated   │
+│                                                          artifacts.          │
+│                                                          [default: persist]  │
+│ --workers                             <int range>        [default: 10]       │
+│                                       [1<=x<=32]                             │
+│ --retry-count                         <int range>        [default: 2]        │
+│                                       [0<=x<=10]                             │
+│ --retry-backoff                       <float range>      [default: 0.35]     │
+│                                       [0.0<=x<=5.0]                          │
+│ --checkpoint-every                    <int range>        [default: 50]       │
+│                                       [1<=x<=500]                            │
+│ --source-url                          <str>              Proxmox API viewer  │
+│                                                          URL.                │
+│                                                          [default:           │
+│                                                          https://pve.proxmo… │
+│ --version-tag                         <str>              Generated artifact  │
+│                                                          version tag.        │
+│                                                          [default: latest]   │
+│ --json                                                   Output raw JSON.    │
+│ --yaml                                                   Output YAML.        │
+│ --help                                                   Show this message   │
+│                                                          and exit.           │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -82,29 +99,6 @@ Example of a command with required arguments and optional filters.
 │ --json                  Output raw JSON.                                     │
 │ --yaml                  Output YAML.                                         │
 │ --help                  Show this message and exit.                          │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-```
-
-## Proxmox Nodes LXC Help
-
-Command: `pxb proxmox nodes lxc --help`
-
-LXC container listing on a specific node.
-
-```text
-
- Usage: python -m proxbox_cli proxmox nodes lxc [OPTIONS] {node}
-
- List LXC containers on a specific node.
-
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    node      <str>  Node name. [required]                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --json          Output raw JSON.                                             │
-│ --yaml          Output YAML.                                                 │
-│ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ```

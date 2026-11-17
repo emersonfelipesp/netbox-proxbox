@@ -156,9 +156,15 @@ class ProxboxApiClient:
         """Handle get."""
         return await self.request("GET", path, query=query)
 
-    async def post(self, path: str, *, payload: JSONValue | None = None) -> ApiResponse:
+    async def post(
+        self,
+        path: str,
+        *,
+        query: Mapping[str, QueryValue] | None = None,
+        payload: JSONValue | None = None,
+    ) -> ApiResponse:
         """Handle post."""
-        return await self.request("POST", path, payload=payload)
+        return await self.request("POST", path, query=query, payload=payload)
 
     async def put(self, path: str, *, payload: JSONValue | None = None) -> ApiResponse:
         """Handle put."""

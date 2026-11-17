@@ -62,8 +62,22 @@ def test_cluster_viewsets_defined_in_views():
 
 def test_cluster_viewsets_registered_in_urls():
     content = _read("netbox_proxbox/api/urls.py")
-    assert "clusters" in content
-    assert "nodes" in content
+    assert (
+        'router.register("proxmox-nodes", views.ProxmoxNodeViewSet, basename="proxmoxnode")'
+        in content
+    )
+    assert (
+        'router.register("nodes", views.ProxmoxNodeViewSet, basename="proxmoxnode-alias")'
+        in content
+    )
+
+
+def test_node_filterset_accepts_exact_name_filter():
+    content = _read("netbox_proxbox/filtersets.py")
+    node_filter = content.split("class ProxmoxNodeFilterSet", 1)[1].split(
+        "@register_filterset", 1
+    )[0]
+    assert '"name"' in node_filter
 
 
 # ---------------------------------------------------------------------------

@@ -179,6 +179,7 @@ nav:
     - Containers: 'models/containers.md'
     - Other Models: 'models/others.md'
   - Release Notes:
+    - Version 0.0.32.post1: 'release-notes/version-0.0.32.post1.md'
     - Version 0.0.32: 'release-notes/version-0.0.32.md'
     - Version 0.0.31: 'release-notes/version-0.0.31.md'
     - Version 0.0.30: 'release-notes/version-0.0.30.md'

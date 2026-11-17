@@ -184,7 +184,7 @@ def test_repeated_identity_retains_conflict_and_provenance(metrics_module) -> No
     assert rows[0]["also_seen_in"] == ["pull"]
 
 
-def test_pull_payload_is_fixed_to_the_netbox_endpoint_and_bounded(
+def test_pull_payload_uses_the_backend_database_endpoint_and_is_bounded(
     metrics_module,
 ) -> None:
     mapping = types.SimpleNamespace(endpoint=types.SimpleNamespace(pk=17, name="pve-a"))
@@ -200,11 +200,12 @@ def test_pull_payload_is_fixed_to_the_netbox_endpoint_and_bounded(
             "limit": 250,
         },
         now=now,
+        backend_endpoint_id=91,
     )
 
     assert payload == {
-        "source": "netbox",
-        "endpoint_id": 17,
+        "source": "database",
+        "endpoint_id": 91,
         "start_time": int(now.timestamp()) - 5400,
         "history": True,
         "local_only": False,
@@ -227,7 +228,10 @@ def test_influx_field_filter_queries_every_official_alias(metrics_module) -> Non
     ]
     mapping = types.SimpleNamespace(endpoint=types.SimpleNamespace(pk=17))
     assert metrics_module._build_pull_payload(
-        mapping, {"field": "diskread", "time_start": "-1h"}, now=datetime.now(UTC)
+        mapping,
+        {"field": "diskread", "time_start": "-1h"},
+        now=datetime.now(UTC),
+        backend_endpoint_id=91,
     )["metric_names"] == ["disk_read"]
 
 
@@ -296,7 +300,14 @@ def test_pull_only_policy_never_loads_an_influx_credential(
     monkeypatch.setattr(
         metrics_module,
         "_backend_context",
-        lambda: types.SimpleNamespace(http_url="https://backend.test", headers={}),
+        lambda: types.SimpleNamespace(
+            http_url="https://backend.test", headers={}, verify_ssl=True
+        ),
+    )
+    monkeypatch.setattr(
+        metrics_module,
+        "_enabled_backend_endpoint_scope",
+        lambda **_kwargs: ({}, {17: 91}, None),
     )
 
     def refuse_token(_mapping: object) -> str:
@@ -327,7 +338,32 @@ def test_pull_only_policy_never_loads_an_influx_credential(
     assert response["partial"] is False
     assert response["source_mode"] == "pull"
     assert [path for path, _payload in observed] == ["/proxmox/metrics/pull/query"]
-    assert observed[0][1]["endpoint_id"] == 17
+    assert observed[0][1]["source"] == "database"
+    assert observed[0][1]["endpoint_id"] == 91
+
+
+def test_pull_fails_safely_when_backend_endpoint_id_is_unresolved(
+    metrics_module, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    mapping = types.SimpleNamespace(endpoint=types.SimpleNamespace(pk=17))
+    context = types.SimpleNamespace(
+        http_url="https://backend.test", headers={}, verify_ssl=True
+    )
+    monkeypatch.setattr(
+        metrics_module,
+        "_enabled_backend_endpoint_scope",
+        lambda **_kwargs: (None, {}, None),
+    )
+
+    with pytest.raises(metrics_module.MetricsProxyError, match="not registered"):
+        metrics_module._query_source(
+            "pull",
+            mapping,
+            {"time_start": "-1h"},
+            context=context,
+            timeout=(10, 60),
+            now=datetime.now(UTC),
+        )
 
 
 def test_reconciled_query_degrades_when_one_source_normalization_fails(

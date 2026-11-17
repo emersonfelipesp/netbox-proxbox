@@ -92,7 +92,6 @@ class SyncStateRepairOutcome:
     message: str
     job: object | None = None
     backend_status: int | None = None
-    reconcile_warning: str | None = None
 
     @property
     def ok(self) -> bool:
@@ -257,33 +256,6 @@ def _visible_fastapi_endpoint(request: HttpRequest) -> object | None:
     )
 
 
-def _reconcile_backend_custom_fields(
-    endpoint_id: int | None = None,
-) -> tuple[dict[str, object], int]:
-    """Lazy import wrapper so status helpers do not create startup import cycles."""
-    try:
-        from netbox_proxbox.services.backend_proxy import (
-            reconcile_backend_custom_fields,
-        )
-
-        return reconcile_backend_custom_fields(endpoint_id=endpoint_id)
-    except Exception as exc:  # noqa: BLE001 - repair action must surface, not 500
-        logger.warning("Unable to reconcile Proxbox custom fields: %s", exc)
-        return {"ok": False, "detail": str(exc)}, 503
-
-
-def _reconcile_backend_custom_fields_for_request(
-    request: HttpRequest,
-) -> tuple[dict[str, object], int]:
-    endpoint = _visible_fastapi_endpoint(request)
-    if endpoint is None:
-        return {
-            "ok": False,
-            "detail": "No viewable enabled FastAPI endpoint is configured.",
-        }, 404
-    return _reconcile_backend_custom_fields(endpoint_id=getattr(endpoint, "pk", None))
-
-
 def _get_backend_bootstrap_status(
     endpoint_id: int | None = None,
 ) -> tuple[dict[str, object], int]:
@@ -352,12 +324,11 @@ def build_sync_state_repair_outcome(
     *,
     user: object,
     can_enqueue: bool,
-    reconcile_backend: Callable[[], tuple[dict[str, object], int]] | None = None,
     enqueue_sync: Callable[..., object] | None = None,
     endpoint_ids: list[int] | None = None,
     active_job_check: Callable[[object, list[int]], object | None] | None = None,
 ) -> SyncStateRepairOutcome:
-    """Reconcile backend custom fields, then enqueue a normal full sync job."""
+    """Enqueue a normal full sync job to rebuild sync-state."""
     if not can_enqueue:
         return SyncStateRepairOutcome(
             status="permission_denied",
@@ -378,42 +349,6 @@ def build_sync_state_repair_outcome(
             job=active_job,
         )
 
-    # Custom-field reconcile is a best-effort *first* step, not a gate. When
-    # proxbox-api holds a stale/invalid NetBox credential (e.g. the
-    # "Invalid v1 token" bootstrap failure), the reconcile POST authenticates
-    # with that same broken credential and fails. Aborting here would skip the
-    # one recovery path that heals it: the full ProxboxSyncJob preflight
-    # (`_ensure_backend_endpoints`) re-pushes the NetBox (and Proxmox) endpoint
-    # credentials to proxbox-api, and the sync rebuilds the typed
-    # Proxbox*SyncState sidecars from live Proxmox data (custom fields are
-    # deprecated / off by default). So a reconcile failure is recorded as a
-    # warning and the rebuild sync is still queued.
-    reconcile = reconcile_backend or _reconcile_backend_custom_fields
-    reconcile_warning: str | None = None
-    backend_status: int | None = None
-    try:
-        payload, backend_status = reconcile()
-    except Exception as exc:  # noqa: BLE001 - dependency injection tests/backend stubs
-        backend_status = 503
-        # str(exc) can be empty (e.g. a bare exception); keep reconcile_warning
-        # truthy so the warning path is taken instead of a false success flash.
-        reconcile_warning = str(exc).strip() or type(exc).__name__
-        logger.warning(
-            "Proxbox custom-field reconcile raised during repair; "
-            "queuing rebuild sync anyway: %s",
-            exc,
-        )
-    else:
-        backend_result = backend_payload_result(payload, backend_status)
-        if not backend_result.ok:
-            reconcile_warning = backend_result.detail
-            logger.warning(
-                "Proxbox custom-field reconcile failed during repair "
-                "(HTTP %s); queuing rebuild sync anyway: %s",
-                backend_status,
-                backend_result.detail,
-            )
-
     enqueue = enqueue_sync or ProxboxSyncJob.enqueue
     try:
         job = enqueue(
@@ -425,40 +360,15 @@ def build_sync_state_repair_outcome(
             proxmox_endpoint_ids=target_endpoint_ids,
         )
     except Exception as exc:  # noqa: BLE001 - surface enqueue failures, never 500
-        prefix = (
-            "Custom fields could not be reconciled "
-            f"({reconcile_warning}), and the Proxbox rebuild sync job "
-            if reconcile_warning
-            else "Custom fields were reconciled, but the Proxbox rebuild sync job "
-        )
         return SyncStateRepairOutcome(
             status="enqueue_error",
-            message=f"{prefix}could not be queued: {exc}",
-            backend_status=backend_status,
-            reconcile_warning=reconcile_warning,
-        )
-
-    if reconcile_warning:
-        message = (
-            "Proxbox custom fields could not be reconciled "
-            f"({reconcile_warning}), but a rebuild sync job has been queued. "
-            "The sync re-pushes NetBox credentials to proxbox-api and rebuilds "
-            "sync-state from live Proxmox data. If the reconcile error persists "
-            "after the sync, verify the NetBox API token configured on the "
-            "NetBox endpoint is valid."
-        )
-    else:
-        message = (
-            "Proxbox custom fields were reconciled and a rebuild sync job has "
-            "been queued."
+            message=f"The Proxbox rebuild sync job could not be queued: {exc}",
         )
 
     return SyncStateRepairOutcome(
         status="success",
-        message=message,
+        message="A Proxbox rebuild sync job has been queued.",
         job=job,
-        backend_status=backend_status,
-        reconcile_warning=reconcile_warning,
     )
 
 
@@ -560,7 +470,7 @@ class RepairSyncStateView(
     ContentTypePermissionRequiredMixin,
     View,
 ):
-    """POST action that reconciles Proxbox custom fields and queues a full sync."""
+    """POST action that queues a full sync-state rebuild."""
 
     http_method_names = ["post", "head", "options"]
 
@@ -575,16 +485,10 @@ class RepairSyncStateView(
         outcome = build_sync_state_repair_outcome(
             user=request.user,
             can_enqueue=request.user.has_perm(self.get_required_permission()),
-            reconcile_backend=lambda: _reconcile_backend_custom_fields_for_request(
-                request
-            ),
         )
 
         if outcome.ok and outcome.job is not None:
-            # A queued rebuild whose custom-field reconcile warned is surfaced as
-            # a warning (still linking the job) rather than an unqualified success.
-            level = messages.warning if outcome.reconcile_warning else messages.success
-            level(
+            messages.success(
                 request,
                 format_html(
                     '{} <a href="{}">{}</a>',

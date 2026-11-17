@@ -23,6 +23,7 @@ from rest_framework.routers import APIRootView
 from rest_framework.views import APIView
 from utilities.permissions import get_permission_for_model
 
+from netbox_proxbox.utils.actor_header import header_safe_actor
 from netbox_proxbox.choices import ProxmoxVMTypeChoices
 from netbox_proxbox.intent.firewall_common import (
     FirewallPushError,
@@ -2704,8 +2705,10 @@ def _actor_from_request(request: Request) -> str:
     user = getattr(request, "user", None)
     get_username = getattr(user, "get_username", None)
     if callable(get_username):
-        return str(get_username())
-    return str(getattr(user, "username", "") or getattr(user, "pk", "") or "netbox")
+        return header_safe_actor(str(get_username()))
+    return header_safe_actor(
+        str(getattr(user, "username", "") or getattr(user, "pk", "") or "netbox")
+    )
 
 
 class ProxmoxFirewallSecurityGroupViewSet(_FirewallPushActionMixin, NetBoxModelViewSet):

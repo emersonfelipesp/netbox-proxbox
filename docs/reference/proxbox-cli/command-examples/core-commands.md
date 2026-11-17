@@ -2,7 +2,7 @@
 
 Representative command help output captured automatically from the local checkout.
 
-Generated: `2026-09-14T17:13:11.556323+00:00`
+Generated: `2026-11-17T14:30:50.842882+00:00`
 
 ## Root Help
 
@@ -31,10 +31,8 @@ Top-level entrypoint and root command groups.
 │                 long-running operation]                                      │
 │ netbox          NetBox integration commands.                                 │
 │ proxmox         Proxmox integration commands.                                │
-│ proxbox         Proxbox plugin and backend info commands.                    │
 │ dcim            DCIM (datacenter infrastructure) commands.                   │
 │ virtualization  Virtualization commands.                                     │
-│ extras          Extras commands (custom fields, etc.).                       │
 │ sync            Run Proxbox sync jobs from the CLI.                          │
 │ docs            Documentation generation commands.                           │
 ╰──────────────────────────────────────────────────────────────────────────────╯
@@ -78,52 +76,6 @@ Regenerates the machine-generated CLI reference artifacts used by MkDocs.
 │ --raw-dir               <str>  Raw JSON artifact directory.                  │
 │ --catalog-output        <str>  Command catalog JSON output path.             │
 │ --help                         Show this message and exit.                   │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-```
-
-## Extras Help
-
-Command: `pxb extras --help`
-
-Shows extras-related CLI commands (custom fields, etc.).
-
-```text
-
- Usage: python -m proxbox_cli extras [OPTIONS] COMMAND [ARGS]...
-
- Extras commands (custom fields, etc.).
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ custom-fields-create  Create predefined Proxbox custom fields in NetBox      │
-│                       (proxmox_vm_id, start_at_boot, etc.).                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-```
-
-## Proxbox Help
-
-Command: `pxb proxbox --help`
-
-Plugin configuration and backend info commands.
-
-```text
-
- Usage: python -m proxbox_cli proxbox [OPTIONS] COMMAND [ARGS]...
-
- Proxbox plugin and backend info commands.
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ settings          Show resolved Proxbox plugin configuration from NetBox.    │
-│ plugins-config    Show plugin configuration from NetBox PLUGINS_CONFIG.      │
-│ default-settings  Show Proxbox default settings from the NetBox plugin       │
-│                   config.                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ```

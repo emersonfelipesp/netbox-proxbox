@@ -147,6 +147,10 @@ PATCH  /api/plugins/proxbox/proxmox-nodes/{id}/
 DELETE /api/plugins/proxbox/proxmox-nodes/{id}/
 ```
 
+The compatibility alias `/api/plugins/proxbox/nodes/` supports the same list,
+detail, mutation, and `?name=` filtering behavior. Serializer hyperlinks and
+canonical URL names continue to use `/proxmox-nodes/`.
+
 **Example — list all nodes for a specific endpoint:**
 
 ```bash

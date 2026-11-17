@@ -9,6 +9,7 @@ from utilities.views import ContentTypePermissionRequiredMixin
 from core.models import Job
 from utilities.permissions import get_permission_for_model
 
+from netbox_proxbox.utils.actor_header import header_safe_actor
 from netbox_proxbox.operational_security import (
     LEGACY_PROXMOX_ACTION_PERMISSION,
     endpoint_action_is_authorized,
@@ -31,6 +32,7 @@ __all__ = (
     "TokenWriteScopeRequiredMixin",
     "ENDPOINT_OPERATIONAL_ACTION",
     "permission_authorize_deletion_request",
+    "actor_from_request",
     "permission_change_fastapi_endpoint",
     "permission_change_proxbox_plugin_settings",
     "permission_enqueue_proxbox_sync",
@@ -57,6 +59,17 @@ ENDPOINT_OPERATIONAL_ACTION = "run_proxmox_action"
 SSH_TERMINAL_ACTION = "open_ssh_terminal"
 CONSOLE_ACTION = "open_console"
 TOKEN_WRITE_REQUIRED_MESSAGE = "API token does not allow write operations."
+
+
+def actor_from_request(request: HttpRequest) -> str:
+    """Return the authenticated actor name used by proxbox-api write routes."""
+    user = getattr(request, "user", None)
+    get_username = getattr(user, "get_username", None)
+    if callable(get_username):
+        return header_safe_actor(str(get_username()))
+    return header_safe_actor(
+        str(getattr(user, "username", "") or getattr(user, "pk", "") or "netbox")
+    )
 
 
 class TokenWriteScopeRequiredMixin:

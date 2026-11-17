@@ -2,7 +2,7 @@
 
 Representative command help output captured automatically from the local checkout.
 
-Generated: `2026-09-14T17:13:11.556323+00:00`
+Generated: `2026-11-17T14:30:50.842882+00:00`
 
 ## DCIM Help
 
@@ -114,28 +114,6 @@ Long-running VM snapshot synchronization command.
 │ --json          Output raw JSON.                                             │
 │ --yaml          Output YAML.                                                 │
 │ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-```
-
-## Extras Help
-
-Command: `pxb extras --help`
-
-Custom-field initialization and related helper commands.
-
-```text
-
- Usage: python -m proxbox_cli extras [OPTIONS] COMMAND [ARGS]...
-
- Extras commands (custom fields, etc.).
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ custom-fields-create  Create predefined Proxbox custom fields in NetBox      │
-│                       (proxmox_vm_id, start_at_boot, etc.).                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ```

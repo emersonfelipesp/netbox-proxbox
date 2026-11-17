@@ -85,6 +85,13 @@ _DURATION_SECONDS = {
 }
 
 
+def _enabled_backend_endpoint_scope(**kwargs: Any) -> tuple:
+    """Resolve backend endpoint IDs without widening this module's import surface."""
+    from netbox_proxbox.services.endpoint_scope import enabled_backend_endpoint_scope
+
+    return enabled_backend_endpoint_scope(**kwargs)
+
+
 def _invalid_response() -> MetricsProxyError:
     return MetricsProxyError(
         "The proxbox-api metrics backend returned an invalid payload."
@@ -274,6 +281,7 @@ def _build_pull_payload(
     filters: dict[str, Any],
     *,
     now: datetime,
+    backend_endpoint_id: int,
 ) -> dict[str, Any]:
     object_ids: list[str] = []
     if filters.get("node"):
@@ -285,8 +293,8 @@ def _build_pull_payload(
         [_INFLUX_METRIC_ALIASES.get(raw_field, raw_field)] if raw_field else []
     )
     return {
-        "source": "netbox",
-        "endpoint_id": mapping.endpoint.pk,
+        "source": "database",
+        "endpoint_id": backend_endpoint_id,
         "start_time": _time_to_epoch(filters.get("time_start") or "-1h", now=now),
         "history": True,
         "local_only": False,
@@ -732,7 +740,23 @@ def _query_source(
         payload = _build_query_payload(mapping, _load_query_token(mapping), filters)
         path = "/proxmox/metrics/influx/query"
     else:
-        payload = _build_pull_payload(mapping, filters, now=now)
+        _, backend_ids, error = _enabled_backend_endpoint_scope(
+            base_url=context.http_url,
+            auth_headers=context.headers or {},
+            backend_verify_ssl=context.verify_ssl,
+            endpoint_ids=[mapping.endpoint.pk],
+        )
+        backend_endpoint_id = backend_ids.get(mapping.endpoint.pk)
+        if error or backend_endpoint_id is None:
+            raise MetricsProxyError(
+                "The Proxmox endpoint is not registered on the metrics backend."
+            )
+        payload = _build_pull_payload(
+            mapping,
+            filters,
+            now=now,
+            backend_endpoint_id=backend_endpoint_id,
+        )
         path = "/proxmox/metrics/pull/query"
     return _query_backend(context=context, path=path, payload=payload, timeout=timeout)
 

@@ -45,6 +45,12 @@ facts that an agent must have even when `@CLAUDE.md` expansion is unavailable:
   endpoint overrides, read each required global setting at most once per
   serializer, and derive OpenBao SSH readiness from one list-wide, actor-
   authorized credential metadata query without resolving credential material.
+- Keep proxbox-api 0.0.31 contract lookups explicit: VM cloud-init uses
+  `virtual_machine_id`; node lookups use `proxmox_cluster_id` (the tracked
+  Proxmox cluster primary key); SDN route maps use `order`; and SDN prefix lists
+  use `cidr`. Metrics pulls use `source=database` with the translated backend
+  endpoint ID, and HA writes send the authenticated username in
+  `X-Proxbox-Actor`.
 - Keep historical migrations immutable and add a migration for schema changes.
 - Keep `automatic_background_tasks` strictly boolean and default-enabled.
   Disabled startup discovery and system-monitor scheduling must preserve explicit
@@ -167,16 +173,16 @@ The complete semantic bridge contract is
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.99` (the whole 4.7 series is admitted by the numeric gate; CI verifies GA `4.7.0`). The current
-plugin version is `0.0.32`.
+plugin version is `0.0.32.post1`.
 
-Current source compatibility: netbox-proxbox 0.0.32 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source compatibility: netbox-proxbox 0.0.32.post1 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The documented released runtime pairing for this release line is
-netbox-proxbox 0.0.32 <-> proxbox-api 0.0.31 <-> proxmox-sdk 0.0.15
+netbox-proxbox 0.0.32.post1 <-> proxbox-api 0.0.31 <-> proxmox-sdk 0.0.15
 <-> netbox-sdk 0.0.13. Do not rewrite historical release notes when the source
 pairing advances.
 
-Current released runtime requirement: deploy proxbox-api 0.0.31 before netbox-proxbox 0.0.32. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+Current released runtime requirement: deploy proxbox-api 0.0.31 before netbox-proxbox 0.0.32.post1. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
 ## Current implementation surfaces
 

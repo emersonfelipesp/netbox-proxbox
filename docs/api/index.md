@@ -202,6 +202,8 @@ Two models perform an **upsert** on POST — if a matching record already exists
 | `/api/plugins/proxbox/proxmox-clusters/{id}/` | GET PUT PATCH DELETE | [ProxmoxCluster](infrastructure.md#proxmox-cluster) |
 | `/api/plugins/proxbox/proxmox-nodes/` | GET POST | [ProxmoxNode](infrastructure.md#proxmox-node) |
 | `/api/plugins/proxbox/proxmox-nodes/{id}/` | GET PUT PATCH DELETE | [ProxmoxNode](infrastructure.md#proxmox-node) |
+| `/api/plugins/proxbox/nodes/` | GET POST | [ProxmoxNode compatibility alias](infrastructure.md#proxmox-node) |
+| `/api/plugins/proxbox/nodes/{id}/` | GET PUT PATCH DELETE | [ProxmoxNode compatibility alias](infrastructure.md#proxmox-node) |
 | `/api/plugins/proxbox/storage/` | GET POST | [ProxmoxStorage](infrastructure.md#proxmox-storage) |
 | `/api/plugins/proxbox/storage/{id}/` | GET PUT PATCH DELETE | [ProxmoxStorage](infrastructure.md#proxmox-storage) |
 | `/api/plugins/proxbox/backups/` | GET POST | [VMBackup](vm-data.md#vm-backup) |

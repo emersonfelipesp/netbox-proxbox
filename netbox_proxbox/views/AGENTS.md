@@ -155,7 +155,7 @@ per node, or issuing an authenticated request for every membership entry.
 - [`proxmox_create_instance.py`](./proxmox_create_instance.py): POST-only registered ProxmoxEndpoint action (`path="create-instance"`) for the Templates-tab wizard. Requires the exact endpoint in the caller's `run_proxmox_action` ObjectPermission scope and a write-enabled token for token-authenticated requests, validates JSON server-side, rejects disabled endpoints before backend context resolution, pre-checks `allow_writes`, and binds that same endpoint through `services/operational_target.py` before calling proxbox-api for QEMU/LXC provisioning. It retries QEMU VMID collisions, surfaces proxbox-api 403 reasons verbatim, and performs best-effort single-object VM sync-back. That sync-back first enforces the shared branch-isolation guard, then passes the active branch schema ID, the already selected FastAPI endpoint ID, and the exact resolved backend Proxmox endpoint ID to `sync_individual()`; a missing isolation boundary or backend pin leaves the sync pending and never widens the mutation.
 - [`operational.py`](./operational.py) and [`firewall.py`](./firewall.py): operational verb, migrate, and firewall dispatches authorize the owning endpoint, reject disabled endpoints, and use `services/operational_target.py` so proxbox-api receives the translated backend endpoint ID rather than the NetBox pk. Firewall service helpers repeat the enabled check before context or HTTP work.
 - [`dashboard.py`](./dashboard.py): operational cluster and node summary dashboard.
-- [`ha_actions.py`](./ha_actions.py): POST-only HA arm/disarm views. They require the grantable custom action `run_proxmox_action` on `ProxmoxEndpoint` (`proxbox_access.permission_run_endpoint_action()`; the literal `core.run_proxmox_action` cannot be granted to non-superusers through NetBox ObjectPermissions), `ProxmoxEndpoint.objects.restrict(user, "run_proxmox_action")` scoping, and a local `allow_writes` check that reports `endpoint_writes_disabled` instead of calling the backend. An optional `endpoint_id` narrows the action to one permitted endpoint (404 outside scope); a failed backend scope lookup returns 502. Session (CSRF) authentication only: NetBox's token mixin ignores `write_enabled`, so tokens are not accepted. `ok` is true only when HTTP succeeds and every proxbox-api result row reports `status: ok` (proxbox-api returns 200 with per-cluster `status: error`). Never iterate unrestricted `ProxmoxEndpoint.objects` here.
+- [`ha_actions.py`](./ha_actions.py): POST-only HA arm/disarm views. They require the grantable custom action `run_proxmox_action` on `ProxmoxEndpoint` (`proxbox_access.permission_run_endpoint_action()`; the literal `core.run_proxmox_action` cannot be granted to non-superusers through NetBox ObjectPermissions), `ProxmoxEndpoint.objects.restrict(user, "run_proxmox_action")` scoping, and a local `allow_writes` check that reports `endpoint_writes_disabled` instead of calling the backend. An optional `endpoint_id` narrows the action to one permitted endpoint (404 outside scope); a failed backend scope lookup returns 502. Session (CSRF) authentication only: NetBox's token mixin ignores `write_enabled`, so tokens are not accepted. Every backend write sends the authenticated username in `X-Proxbox-Actor`. `ok` is true only when HTTP succeeds and every proxbox-api result row reports `status: ok` (proxbox-api returns 200 with per-cluster `status: error`). Never iterate unrestricted `ProxmoxEndpoint.objects` here.
 - [`vm_ha.py`](./vm_ha.py): the per-VM HA tab resolves the VM's typed endpoint
   with `resolve_vm_endpoint_context()`, intersects it with
   `viewable_enabled_endpoint_ids(user)`, and passes only that endpoint to
@@ -223,23 +223,17 @@ per node, or issuing an authenticated request for every membership entry.
   three submitted key fields sensitive for Django exception reports; both views
   provide actor/request metadata to the secret-free recovery audit trail.
 - [`sync_state_repair.py`](./sync_state_repair.py): operator recovery surface
-  for missing Proxbox bootstrap/custom-field setup. It builds the shared
+  for missing Proxbox bootstrap or sync-state setup. It builds the shared
   Home/Settings repair-card context without blocking page render, gates the
   on-demand `GET /extras/bootstrap-status` JSON endpoint with
   `view_fastapiendpoint`, and exposes the session-only `RepairSyncStateView`
-  POST action requiring `core.add_job`. Bootstrap and repair backend calls use a
+  POST action requiring `core.add_job`. Bootstrap backend calls use a
   request-user-restricted `FastAPIEndpoint` lookup, classify the proxy envelope
   plus inner proxbox-api body, and treat inner `ok=false` / `success=false` /
-  error responses as failures. **The repair reconcile is non-fatal (issue
-  #255):** `build_sync_state_repair_outcome()` calls
-  `POST /extras/custom-fields/reconcile` but a failure — which is expected when
-  proxbox-api holds a stale/invalid NetBox credential, since the reconcile
-  authenticates with that same credential — is recorded on
-  `SyncStateRepairOutcome.reconcile_warning` and the normal full `ProxboxSyncJob`
-  is **still enqueued**, because the sync's preflight re-pushes the
-  NetBox/Proxmox endpoint credentials to proxbox-api and rebuilds the sidecars
-  from live Proxmox data (the actual recovery). The view surfaces a reconcile
-  warning as `messages.warning` (still linking the job). Only `permission_denied`,
+  error responses as failures. `build_sync_state_repair_outcome()` directly
+  enqueues the normal full `ProxboxSyncJob`; the sync's preflight re-pushes the
+  NetBox and Proxmox endpoint credentials and rebuilds typed sidecars from live
+  Proxmox data. Only `permission_denied`,
   `already_running`, and `enqueue_error` are hard failures; all outcomes are
   flash messages that never 500. The card is always visible on its dedicated
   page; included elsewhere it stays hidden for a view-capable user and only

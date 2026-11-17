@@ -137,12 +137,11 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
   defaults.
 - [`backend_context.py`](./backend_context.py): defines `get_fastapi_request_context()` — resolves the active FastAPIEndpoint and builds the URL/header context used by all backend HTTP helpers.
 - [`vm_console.py`](./vm_console.py): fail-closed identity and backend resolution for the standalone VM console. It requires complete typed synchronization state, exact endpoint/node affinity, exactly one matching browser-capable proxbox-api, an HTTPS NetBox origin, and an exact opaque `/proxmox/console/browser-stream?token=...` relay path under the configured WSS authority.
-- [`metrics_influx.py`](./metrics_influx.py): server-side Proxmox metrics orchestrator. It enforces the mapping's persisted `influx`, `pull`, or `reconciled` policy, decrypts an InfluxDB token only when required, calls fixed proxbox-api routes, canonicalizes official Proxmox field/tag formats, and applies deterministic Influx-wins reconciliation with partial-source metadata.
+- [`metrics_influx.py`](./metrics_influx.py): server-side Proxmox metrics orchestrator. It enforces the mapping's persisted `influx`, `pull`, or `reconciled` policy, decrypts an InfluxDB token only when required, calls fixed proxbox-api routes, canonicalizes official Proxmox field/tag formats, and applies deterministic Influx-wins reconciliation with partial-source metadata. Pull requests use `source=database` and translate the plugin endpoint primary key to the backend endpoint primary key so proxbox-api resolves its stored credentials.
 - [`backend_proxy.py`](./backend_proxy.py): HTTP client helpers for proxbox-api,
   including SSE streaming (`run_sync_stream`, `iter_backend_sse_lines`), JSON
   requests (`sync_full_update_resource`, `sync_resource`), and operator
-  bootstrap repair helpers for `GET /extras/bootstrap-status` and
-  `POST /extras/custom-fields/reconcile`. Imports and re-exports
+  the bootstrap status helper for `GET /extras/bootstrap-status`. Imports and re-exports
   `get_fastapi_request_context` from `backend_context.py`. **It is also the
   redaction producer for the sync-stream error path** — see below. Every
   transport/OS exception that reaches a log, a stored `last_detail`, or an SSE

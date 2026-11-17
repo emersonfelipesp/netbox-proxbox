@@ -114,12 +114,12 @@ def test_bootstrap_status_uses_fastapi_view_permission():
     assert 'FastAPIEndpoint.objects.restrict(request.user, "view")' in view_source
 
 
-def test_backend_proxy_wires_extras_reconcile_and_bootstrap_status():
+def test_backend_proxy_wires_bootstrap_status_without_custom_field_reconcile():
     source = _read(BACKEND_PROXY_PATH)
 
-    assert '"extras/custom-fields/reconcile"' in source
+    assert '"extras/custom-fields/reconcile"' not in source
+    assert "reconcile_backend_custom_fields" not in source
     assert '"extras/bootstrap-status"' in source
-    assert 'method="POST"' in source
     assert 'method="GET"' in source
     assert "request_backend_json" in source
     assert "endpoint_id: int | None = None" in source
@@ -151,10 +151,7 @@ def test_backend_json_auth_retry_preserves_scoped_endpoint_id():
         for keyword in call.keywords
     )
 
-    for func_name in (
-        "get_backend_bootstrap_status",
-        "reconcile_backend_custom_fields",
-    ):
+    for func_name in ("get_backend_bootstrap_status",):
         wrapper = funcs[func_name]
         request_calls = [
             node
@@ -242,7 +239,7 @@ def test_bootstrap_status_card_is_hidden_until_it_needs_attention():
     assert "innerHTML" not in partial
 
 
-def test_repair_outcome_success_reconciles_then_queues_full_sync(monkeypatch):
+def test_repair_outcome_queues_full_sync_without_backend_reconcile(monkeypatch):
     module = load_plugin_module(
         "netbox_proxbox.views.sync_state_repair", monkeypatch=monkeypatch
     )
@@ -256,16 +253,20 @@ def test_repair_outcome_success_reconciles_then_queues_full_sync(monkeypatch):
         enqueue_calls.append(kwargs)
         return _Job()
 
+    def fail_reconcile():
+        raise AssertionError("repair must not call the backend reconcile route")
+
     outcome = module.build_sync_state_repair_outcome(
         user=SimpleNamespace(username="operator"),
         can_enqueue=True,
-        reconcile_backend=lambda: ({"ok": True, "response": {"created": 3}}, 200),
         enqueue_sync=enqueue_sync,
         endpoint_ids=[10, 20],
     )
 
     assert outcome.ok is True
     assert outcome.status == "success"
+    assert "custom field" not in outcome.message.lower()
+    assert "warning" not in outcome.message.lower()
     assert enqueue_calls == [
         {
             "instance": None,
@@ -278,13 +279,10 @@ def test_repair_outcome_success_reconciles_then_queues_full_sync(monkeypatch):
     ]
 
 
-def test_repair_outcome_permission_denied_skips_backend_and_enqueue(monkeypatch):
+def test_repair_outcome_permission_denied_skips_enqueue(monkeypatch):
     module = load_plugin_module(
         "netbox_proxbox.views.sync_state_repair", monkeypatch=monkeypatch
     )
-
-    def fail_reconcile():
-        raise AssertionError("reconcile must not run without permission")
 
     def fail_enqueue(**kwargs):
         raise AssertionError("enqueue must not run without permission")
@@ -292,7 +290,6 @@ def test_repair_outcome_permission_denied_skips_backend_and_enqueue(monkeypatch)
     outcome = module.build_sync_state_repair_outcome(
         user=SimpleNamespace(),
         can_enqueue=False,
-        reconcile_backend=fail_reconcile,
         enqueue_sync=fail_enqueue,
         endpoint_ids=[],
     )
@@ -302,83 +299,7 @@ def test_repair_outcome_permission_denied_skips_backend_and_enqueue(monkeypatch)
     assert "permission" in outcome.message
 
 
-def test_repair_outcome_reconcile_failure_still_queues_rebuild_sync(monkeypatch):
-    # A custom-field reconcile failure is non-fatal: proxbox-api may be holding a
-    # stale/invalid NetBox credential (the "Invalid v1 token" bootstrap failure),
-    # and the very reconcile POST authenticates with that broken credential. The
-    # rebuild sync's preflight re-pushes fresh credentials and rebuilds the
-    # sidecars, so the repair MUST still enqueue it and surface the reconcile
-    # detail as a warning rather than dead-ending.
-    module = load_plugin_module(
-        "netbox_proxbox.views.sync_state_repair", monkeypatch=monkeypatch
-    )
-    enqueue_calls: list[dict[str, object]] = []
-
-    class _Job:
-        def get_absolute_url(self):
-            return "/core/jobs/21/"
-
-    def enqueue_sync(**kwargs):
-        enqueue_calls.append(kwargs)
-        return _Job()
-
-    outcome = module.build_sync_state_repair_outcome(
-        user=SimpleNamespace(username="operator"),
-        can_enqueue=True,
-        reconcile_backend=lambda: (
-            {"ok": True, "response": {"ok": False, "detail": "Invalid v1 token"}},
-            200,
-        ),
-        enqueue_sync=enqueue_sync,
-        endpoint_ids=[1],
-    )
-
-    assert outcome.ok is True
-    assert outcome.status == "success"
-    assert outcome.backend_status == 200
-    assert outcome.reconcile_warning == "Invalid v1 token"
-    assert "Invalid v1 token" in outcome.message
-    assert "rebuild sync job has been queued" in outcome.message
-    assert len(enqueue_calls) == 1
-    assert enqueue_calls[0]["sync_types"] == ["all"]
-    assert enqueue_calls[0]["proxmox_endpoint_ids"] == [1]
-
-
-def test_repair_outcome_reconcile_exception_still_queues_rebuild_sync(monkeypatch):
-    module = load_plugin_module(
-        "netbox_proxbox.views.sync_state_repair", monkeypatch=monkeypatch
-    )
-    enqueue_calls: list[dict[str, object]] = []
-
-    class _Job:
-        def get_absolute_url(self):
-            return "/core/jobs/22/"
-
-    def raise_reconcile():
-        raise RuntimeError("backend unreachable")
-
-    def enqueue_sync(**kwargs):
-        enqueue_calls.append(kwargs)
-        return _Job()
-
-    outcome = module.build_sync_state_repair_outcome(
-        user=SimpleNamespace(username="operator"),
-        can_enqueue=True,
-        reconcile_backend=raise_reconcile,
-        enqueue_sync=enqueue_sync,
-        endpoint_ids=[1],
-    )
-
-    assert outcome.ok is True
-    assert outcome.status == "success"
-    assert outcome.backend_status == 503
-    assert outcome.reconcile_warning == "backend unreachable"
-    assert len(enqueue_calls) == 1
-
-
-def test_repair_outcome_enqueue_failure_after_reconcile_warning_is_fatal(monkeypatch):
-    # Reconcile is non-fatal, but a failure to actually QUEUE the rebuild sync is
-    # a hard error: nothing recovers the state, so the operator must be told.
+def test_repair_outcome_enqueue_failure_is_fatal(monkeypatch):
     module = load_plugin_module(
         "netbox_proxbox.views.sync_state_repair", monkeypatch=monkeypatch
     )
@@ -389,56 +310,14 @@ def test_repair_outcome_enqueue_failure_after_reconcile_warning_is_fatal(monkeyp
     outcome = module.build_sync_state_repair_outcome(
         user=SimpleNamespace(username="operator"),
         can_enqueue=True,
-        reconcile_backend=lambda: (
-            {"ok": True, "response": {"ok": False, "detail": "Invalid v1 token"}},
-            200,
-        ),
         enqueue_sync=enqueue_sync,
         endpoint_ids=[1],
     )
 
     assert outcome.ok is False
     assert outcome.status == "enqueue_error"
-    assert outcome.reconcile_warning == "Invalid v1 token"
     assert "could not be queued" in outcome.message
     assert "queue down" in outcome.message
-
-
-def test_repair_outcome_transport_error_reconcile_still_queues_rebuild_sync(
-    monkeypatch,
-):
-    # A transport-level reconcile failure (outer proxy envelope non-ok, non-2xx
-    # status) is classified as not-ok by backend_payload_result and must be
-    # treated exactly like an inner ok:false: warn and still queue the rebuild.
-    module = load_plugin_module(
-        "netbox_proxbox.views.sync_state_repair", monkeypatch=monkeypatch
-    )
-    enqueue_calls: list[dict[str, object]] = []
-
-    class _Job:
-        def get_absolute_url(self):
-            return "/core/jobs/23/"
-
-    def enqueue_sync(**kwargs):
-        enqueue_calls.append(kwargs)
-        return _Job()
-
-    outcome = module.build_sync_state_repair_outcome(
-        user=SimpleNamespace(username="operator"),
-        can_enqueue=True,
-        reconcile_backend=lambda: (
-            {"ok": False, "detail": "Unable to reach the ProxBox backend."},
-            503,
-        ),
-        enqueue_sync=enqueue_sync,
-        endpoint_ids=[1],
-    )
-
-    assert outcome.ok is True
-    assert outcome.status == "success"
-    assert outcome.backend_status == 503
-    assert outcome.reconcile_warning == "Unable to reach the ProxBox backend."
-    assert len(enqueue_calls) == 1
 
 
 def _run_repair_post(module, monkeypatch, outcome):
@@ -466,36 +345,15 @@ def _run_repair_post(module, monkeypatch, outcome):
     return calls, response
 
 
-def test_repair_view_uses_warning_flash_when_reconcile_warned(monkeypatch):
-    module = load_plugin_module(
-        "netbox_proxbox.views.sync_state_repair", monkeypatch=monkeypatch
-    )
-    job = SimpleNamespace(get_absolute_url=lambda: "/core/jobs/24/")
-    outcome = module.SyncStateRepairOutcome(
-        status="success",
-        message="queued with warning",
-        job=job,
-        backend_status=200,
-        reconcile_warning="Invalid v1 token",
-    )
-
-    calls, response = _run_repair_post(module, monkeypatch, outcome)
-
-    assert calls == ["warning"]
-    assert response.target == "plugins:netbox_proxbox:home"
-
-
-def test_repair_view_uses_success_flash_when_reconcile_clean(monkeypatch):
+def test_repair_view_uses_success_flash(monkeypatch):
     module = load_plugin_module(
         "netbox_proxbox.views.sync_state_repair", monkeypatch=monkeypatch
     )
     job = SimpleNamespace(get_absolute_url=lambda: "/core/jobs/25/")
     outcome = module.SyncStateRepairOutcome(
         status="success",
-        message="queued clean",
+        message="queued",
         job=job,
-        backend_status=200,
-        reconcile_warning=None,
     )
 
     calls, _ = _run_repair_post(module, monkeypatch, outcome)
@@ -503,14 +361,11 @@ def test_repair_view_uses_success_flash_when_reconcile_clean(monkeypatch):
     assert calls == ["success"]
 
 
-def test_repair_outcome_active_full_sync_skips_reconcile_and_enqueue(monkeypatch):
+def test_repair_outcome_active_full_sync_skips_enqueue(monkeypatch):
     module = load_plugin_module(
         "netbox_proxbox.views.sync_state_repair", monkeypatch=monkeypatch
     )
     active_job = SimpleNamespace(get_absolute_url=lambda: "/core/jobs/19/")
-
-    def fail_reconcile():
-        raise AssertionError("reconcile must not run when an active job exists")
 
     def fail_enqueue(**kwargs):
         raise AssertionError("enqueue must not run when an active job exists")
@@ -518,7 +373,6 @@ def test_repair_outcome_active_full_sync_skips_reconcile_and_enqueue(monkeypatch
     outcome = module.build_sync_state_repair_outcome(
         user=SimpleNamespace(username="operator"),
         can_enqueue=True,
-        reconcile_backend=fail_reconcile,
         enqueue_sync=fail_enqueue,
         endpoint_ids=[1],
         active_job_check=lambda user, endpoint_ids: active_job,

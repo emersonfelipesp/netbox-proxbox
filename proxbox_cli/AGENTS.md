@@ -31,7 +31,6 @@ This package contains the standalone Typer-based CLI client for the companion `p
   - `proxmox_cluster.py` (`pxb proxmox cluster ...`)
   - `proxmox_endpoints.py` (`pxb proxmox endpoints ...`)
   - `proxmox_nodes.py` (`pxb proxmox nodes ...`)
-  - `proxbox.py` (`pxb proxbox ...`)
   - `dcim.py` (`pxb dcim ...`)
   - `virtualization.py` (`pxb virtualization ...`)
   - `extras.py` (`pxb extras ...`)
@@ -48,6 +47,7 @@ This package contains the standalone Typer-based CLI client for the companion `p
 
 - The CLI is optional (`netbox-proxbox[cli]`) and can run independently from the NetBox plugin runtime.
 - Root command `pxb docs generate-capture` updates generated docs artifacts under `docs/generated/proxbox-cli/`.
+- `pxb proxmox viewer generate` uses typed query options and is available only when proxbox-api enables runtime code generation.
 - Global output flags `--json` and `--yaml` are mutually exclusive and enforced by shared helpers in `support/output.py`.
 - Backend authentication comes only from `PROXBOX_API_KEY` or config field `api_key`; do not add an API-key CLI flag or print the secret. Treat the backend origin and API key as one credential bundle: a `PROXBOX_URL` origin change must not reuse the file key without `PROXBOX_API_KEY`. `pxb init` reads the file separately and never persists the environment key; it preserves the stored key for the same normalized origin and requires explicit `--keep-api-key` to retain it across an origin change.
 - A configured API key requires HTTPS for non-loopback hosts. `PROXBOX_CLI_ALLOW_INSECURE_TRANSPORT=1` is the explicit cleartext opt-in and must print a warning to standard error. Every response body and HTTP exception must redact exact occurrences of the configured key before any human, JSON, or YAML rendering.

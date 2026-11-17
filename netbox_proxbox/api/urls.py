@@ -68,6 +68,7 @@ router.register(
     "proxmox-clusters", views.ProxmoxClusterViewSet, basename="proxmoxcluster"
 )
 router.register("proxmox-nodes", views.ProxmoxNodeViewSet, basename="proxmoxnode")
+router.register("nodes", views.ProxmoxNodeViewSet, basename="proxmoxnode-alias")
 router.register(
     "service-collections",
     views.ProxmoxServiceCollectionViewSet,

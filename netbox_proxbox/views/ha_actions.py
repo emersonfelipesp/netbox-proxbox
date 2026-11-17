@@ -29,6 +29,7 @@ from netbox_proxbox.services.backend_context import get_fastapi_request_context
 from netbox_proxbox.services.endpoint_scope import enabled_backend_endpoint_scope
 from netbox_proxbox.views.proxbox_access import (
     ENDPOINT_OPERATIONAL_ACTION,
+    actor_from_request,
     permission_run_endpoint_action,
 )
 
@@ -103,12 +104,13 @@ class _HaActionBaseView(ContentTypePermissionRequiredMixin, View):
         endpoint: ProxmoxEndpoint,
         backend_endpoint_id: int,
         ctx: BackendRequestContext,
+        actor: str,
     ) -> dict:
         """Send the HA verb for one endpoint and describe the outcome."""
         try:
             resp = requests.post(
                 url,
-                headers=ctx.headers or {},
+                headers={**(ctx.headers or {}), "X-Proxbox-Actor": actor},
                 params={"proxmox_endpoint_ids": str(backend_endpoint_id)},
                 timeout=_BACKEND_TIMEOUT_S,
                 verify=ctx.verify_ssl,
@@ -155,7 +157,9 @@ class _HaActionBaseView(ContentTypePermissionRequiredMixin, View):
             if not endpoint.allow_writes
         ]
         if writable:
-            dispatched, scope_error = self._dispatch_writable(ctx, writable)
+            dispatched, scope_error = self._dispatch_writable(
+                ctx, writable, actor_from_request(request)
+            )
             if scope_error:
                 return JsonResponse(
                     {"action": self._proxbox_action, "error": scope_error}, status=502
@@ -164,7 +168,10 @@ class _HaActionBaseView(ContentTypePermissionRequiredMixin, View):
         return JsonResponse({"action": self._proxbox_action, "results": results})
 
     def _dispatch_writable(
-        self, ctx: BackendRequestContext, writable: list[ProxmoxEndpoint]
+        self,
+        ctx: BackendRequestContext,
+        writable: list[ProxmoxEndpoint],
+        actor: str,
     ) -> tuple[list[dict], str | None]:
         """Resolve backend ids for ``writable`` and send the HA verb to each."""
         _, backend_id_by_pk, scope_error = enabled_backend_endpoint_scope(
@@ -187,7 +194,9 @@ class _HaActionBaseView(ContentTypePermissionRequiredMixin, View):
                     )
                 )
                 continue
-            results.append(self._post_endpoint(url, endpoint, backend_endpoint_id, ctx))
+            results.append(
+                self._post_endpoint(url, endpoint, backend_endpoint_id, ctx, actor)
+            )
         return results, None
 
 

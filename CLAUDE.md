@@ -1,6 +1,6 @@
 # netbox-proxbox Repository Guide
 
-Current source: netbox-proxbox 0.0.32 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), deployed before the plugin. The netbox-sdk dependency remains proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source: netbox-proxbox 0.0.32.post1 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), deployed before the plugin. The netbox-sdk dependency remains proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 > **LLM Agent Safety:** Before any destruction-adjacent operation, read
 > `AGENTS.md` § "LLM Agent Safety Guardrails". Automated agents may inspect and
@@ -92,16 +92,16 @@ depends on the backend network parser.
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.99` (the whole 4.7 series is admitted by the numeric gate; CI verifies GA `4.7.0`). The current
-plugin version is `0.0.32`.
+plugin version is `0.0.32.post1`.
 
-Current source compatibility: netbox-proxbox 0.0.32 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source compatibility: netbox-proxbox 0.0.32.post1 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The documented released runtime pairing for this release line is
-netbox-proxbox 0.0.32 <-> proxbox-api 0.0.31 <-> proxmox-sdk 0.0.15
+netbox-proxbox 0.0.32.post1 <-> proxbox-api 0.0.31 <-> proxmox-sdk 0.0.15
 <-> netbox-sdk 0.0.13. Preserve release-note and compatibility rows as
 historical records unless a release workflow changes them.
 
-Current released runtime requirement: deploy proxbox-api 0.0.31 before netbox-proxbox 0.0.32. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+Current released runtime requirement: deploy proxbox-api 0.0.31 before netbox-proxbox 0.0.32.post1. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
 CI pairing: the E2E Docker, page-coverage, documentation-screenshot, and
 release-validation defaults select proxbox-api `0.0.31`. These are intended
@@ -231,6 +231,12 @@ pins unchanged. See `docs/developer/ci-e2e-workflows.md` for the contract.
   permissions, verifies linked typed cluster and node consistency plus the
   synchronized VM ID match with `{vmid}`, and sends only that endpoint to the
   backend. Invalid or unresolved identity returns HTTP 400 without backend I/O.
+  Backend lookups use explicit filter contracts: VM cloud-init accepts
+  `virtual_machine_id`; node lookups accept `proxmox_cluster_id` (the tracked
+  Proxmox cluster primary key); SDN route maps accept `order`; and SDN prefix
+  lists accept `cidr`. HA arm/disarm writes include the authenticated username
+  in `X-Proxbox-Actor`. Proxmox metrics pulls use the backend database source
+  and the translated backend endpoint primary key.
   Proxmox operational actions use the grantable `run_proxmox_action` custom
   action on each `ProxmoxEndpoint`, with exact endpoint ObjectPermission
   scoping. The literal `core.run_proxmox_action` is a deprecated additive

@@ -10,7 +10,7 @@ python docs/generate_proxbox_cli_docs.py
 
 ## Metadata
 
-- Generated at: `2026-09-14T17:13:11.556323+00:00`
+- Generated at: `2026-11-17T14:30:50.842882+00:00`
 - Python: `3.14.3`
 - Platform: `Linux-7.0.6-2-pve-x86_64-with-glibc2.41`
 
@@ -43,10 +43,8 @@ Top-level entrypoint and root command groups.
 │                 long-running operation]                                      │
 │ netbox          NetBox integration commands.                                 │
 │ proxmox         Proxmox integration commands.                                │
-│ proxbox         Proxbox plugin and backend info commands.                    │
 │ dcim            DCIM (datacenter infrastructure) commands.                   │
 │ virtualization  Virtualization commands.                                     │
-│ extras          Extras commands (custom fields, etc.).                       │
 │ sync            Run Proxbox sync jobs from the CLI.                          │
 │ docs            Documentation generation commands.                           │
 ╰──────────────────────────────────────────────────────────────────────────────╯
@@ -90,52 +88,6 @@ Regenerates the machine-generated CLI reference artifacts used by MkDocs.
 │ --raw-dir               <str>  Raw JSON artifact directory.                  │
 │ --catalog-output        <str>  Command catalog JSON output path.             │
 │ --help                         Show this message and exit.                   │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-```
-
-### Extras Help
-
-Command: `pxb extras --help`
-
-Shows extras-related CLI commands (custom fields, etc.).
-
-```text
-
- Usage: python -m proxbox_cli extras [OPTIONS] COMMAND [ARGS]...
-
- Extras commands (custom fields, etc.).
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ custom-fields-create  Create predefined Proxbox custom fields in NetBox      │
-│                       (proxmox_vm_id, start_at_boot, etc.).                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-```
-
-### Proxbox Help
-
-Command: `pxb proxbox --help`
-
-Plugin configuration and backend info commands.
-
-```text
-
- Usage: python -m proxbox_cli proxbox [OPTIONS] COMMAND [ARGS]...
-
- Proxbox plugin and backend info commands.
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ settings          Show resolved Proxbox plugin configuration from NetBox.    │
-│ plugins-config    Show plugin configuration from NetBox PLUGINS_CONFIG.      │
-│ default-settings  Show Proxbox default settings from the NetBox plugin       │
-│                   config.                                                    │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -232,14 +184,31 @@ Code-generation pipeline entrypoint for the proxmox viewer endpoints.
 
  Usage: python -m proxbox_cli proxmox viewer generate [OPTIONS]
 
- Run the Proxmox API Viewer crawl and code generation pipeline.
+ Run viewer code generation; the backend must enable runtime code generation.
 
 ╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --body-json        <str>   JSON config string.                               │
-│ --body-file        <path>  Path to JSON config file.                         │
-│ --json                     Output raw JSON.                                  │
-│ --yaml                     Output YAML.                                      │
-│ --help                     Show this message and exit.                       │
+│ --persist             --no-persist                       Persist generated   │
+│                                                          artifacts.          │
+│                                                          [default: persist]  │
+│ --workers                             <int range>        [default: 10]       │
+│                                       [1<=x<=32]                             │
+│ --retry-count                         <int range>        [default: 2]        │
+│                                       [0<=x<=10]                             │
+│ --retry-backoff                       <float range>      [default: 0.35]     │
+│                                       [0.0<=x<=5.0]                          │
+│ --checkpoint-every                    <int range>        [default: 50]       │
+│                                       [1<=x<=500]                            │
+│ --source-url                          <str>              Proxmox API viewer  │
+│                                                          URL.                │
+│                                                          [default:           │
+│                                                          https://pve.proxmo… │
+│ --version-tag                         <str>              Generated artifact  │
+│                                                          version tag.        │
+│                                                          [default: latest]   │
+│ --json                                                   Output raw JSON.    │
+│ --yaml                                                   Output YAML.        │
+│ --help                                                   Show this message   │
+│                                                          and exit.           │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -267,29 +236,6 @@ Example of a command with required arguments and optional filters.
 │ --json                  Output raw JSON.                                     │
 │ --yaml                  Output YAML.                                         │
 │ --help                  Show this message and exit.                          │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-```
-
-### Proxmox Nodes LXC Help
-
-Command: `pxb proxmox nodes lxc --help`
-
-LXC container listing on a specific node.
-
-```text
-
- Usage: python -m proxbox_cli proxmox nodes lxc [OPTIONS] {node}
-
- List LXC containers on a specific node.
-
-╭─ Arguments ──────────────────────────────────────────────────────────────────╮
-│ *    node      <str>  Node name. [required]                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --json          Output raw JSON.                                             │
-│ --yaml          Output YAML.                                                 │
-│ --help          Show this message and exit.                                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ```
@@ -406,28 +352,6 @@ Long-running VM snapshot synchronization command.
 │ --json          Output raw JSON.                                             │
 │ --yaml          Output YAML.                                                 │
 │ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-
-```
-
-### Extras Help
-
-Command: `pxb extras --help`
-
-Custom-field initialization and related helper commands.
-
-```text
-
- Usage: python -m proxbox_cli extras [OPTIONS] COMMAND [ARGS]...
-
- Extras commands (custom fields, etc.).
-
-╭─ Options ────────────────────────────────────────────────────────────────────╮
-│ --help          Show this message and exit.                                  │
-╰──────────────────────────────────────────────────────────────────────────────╯
-╭─ Commands ───────────────────────────────────────────────────────────────────╮
-│ custom-fields-create  Create predefined Proxbox custom fields in NetBox      │
-│                       (proxmox_vm_id, start_at_boot, etc.).                  │
 ╰──────────────────────────────────────────────────────────────────────────────╯
 
 ```

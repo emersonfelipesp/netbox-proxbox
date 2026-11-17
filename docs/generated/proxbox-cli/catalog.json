@@ -1,12 +1,12 @@
 {
   "meta": {
-    "generated_at": "2026-09-14T17:13:11.556323+00:00",
+    "generated_at": "2026-11-17T14:30:50.842882+00:00",
     "python": "3.14.3",
     "platform": "Linux-7.0.6-2-pve-x86_64-with-glibc2.41"
   },
   "generated_by": "proxbox_cli.docgen",
-  "command_count": 64,
-  "group_count": 15,
+  "command_count": 59,
+  "group_count": 13,
   "commands": [
     {
       "path": [],
@@ -109,25 +109,6 @@
       "kind": "command",
       "summary": "Generate machine-readable CLI docs artifacts for the MkDocs site.",
       "example": "pxb docs generate-capture"
-    },
-    {
-      "path": [
-        "extras"
-      ],
-      "command": "pxb extras",
-      "kind": "group",
-      "summary": "Extras commands (custom fields, etc.).",
-      "example": "pxb extras --help"
-    },
-    {
-      "path": [
-        "extras",
-        "custom-fields-create"
-      ],
-      "command": "pxb extras custom-fields-create",
-      "kind": "command",
-      "summary": "Create predefined Proxbox custom fields in NetBox (proxmox_vm_id, start_at_boot, etc.).",
-      "example": "pxb extras custom-fields-create"
     },
     {
       "path": [
@@ -249,45 +230,6 @@
       "kind": "command",
       "summary": "Show NetBox API status.",
       "example": "pxb netbox status"
-    },
-    {
-      "path": [
-        "proxbox"
-      ],
-      "command": "pxb proxbox",
-      "kind": "group",
-      "summary": "Proxbox plugin and backend info commands.",
-      "example": "pxb proxbox --help"
-    },
-    {
-      "path": [
-        "proxbox",
-        "default-settings"
-      ],
-      "command": "pxb proxbox default-settings",
-      "kind": "command",
-      "summary": "Show Proxbox default settings from the NetBox plugin config.",
-      "example": "pxb proxbox default-settings"
-    },
-    {
-      "path": [
-        "proxbox",
-        "plugins-config"
-      ],
-      "command": "pxb proxbox plugins-config",
-      "kind": "command",
-      "summary": "Show plugin configuration from NetBox PLUGINS_CONFIG.",
-      "example": "pxb proxbox plugins-config"
-    },
-    {
-      "path": [
-        "proxbox",
-        "settings"
-      ],
-      "command": "pxb proxbox settings",
-      "kind": "command",
-      "summary": "Show resolved Proxbox plugin configuration from NetBox.",
-      "example": "pxb proxbox settings"
     },
     {
       "path": [
@@ -420,17 +362,6 @@
       "path": [
         "proxmox",
         "nodes",
-        "lxc"
-      ],
-      "command": "pxb proxmox nodes lxc",
-      "kind": "command",
-      "summary": "List LXC containers on a specific node.",
-      "example": "pxb proxmox nodes lxc <NODE>"
-    },
-    {
-      "path": [
-        "proxmox",
-        "nodes",
         "network"
       ],
       "command": "pxb proxmox nodes network",
@@ -538,7 +469,7 @@
       ],
       "command": "pxb proxmox viewer generate",
       "kind": "command",
-      "summary": "Run the Proxmox API Viewer crawl and code generation pipeline.",
+      "summary": "Run viewer code generation; the backend must enable runtime code generation.",
       "example": "pxb proxmox viewer generate"
     },
     {

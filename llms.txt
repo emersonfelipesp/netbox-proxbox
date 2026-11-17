@@ -163,10 +163,10 @@ topology.
 
 ### Version
 
-- Plugin version: `0.0.32`
+- Plugin version: `0.0.32.post1`
 - NetBox compatibility: `4.5.8` through `4.7.99`
-- Current source compatibility: `netbox-proxbox 0.0.32` requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with `proxmox-sdk 0.0.15` and `netbox-sdk 0.0.13`.
-- Documented released runtime pairing: `netbox-proxbox 0.0.32`,
+- Current source compatibility: `netbox-proxbox 0.0.32.post1` requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with `proxmox-sdk 0.0.15` and `netbox-sdk 0.0.13`.
+- Documented released runtime pairing: `netbox-proxbox 0.0.32.post1`,
   `proxbox-api 0.0.31`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`
 
 ---
@@ -1738,3 +1738,17 @@ Plugin runtime behavior, models, migrations, and dependencies are unchanged
 from 0.0.31. The supported pairing moves to proxbox-api 0.0.31. Deploy the
 backend first and then the plugin; the two projects release as a pair. There is
 no migration; upgrade directly from 0.0.31.
+
+## Version 0.0.32.post1 backend contract corrections
+
+Version 0.0.32.post1 adds the backend-facing Proxmox node route and removes the
+retired custom-field repair request. HA arm/disarm writes send the authenticated
+NetBox username in `X-Proxbox-Actor`. Backend lookups use explicit filters for
+VM cloud-init `virtual_machine_id`, node `proxmox_cluster_id` (the tracked Proxmox
+cluster primary key), SDN route-map `order`, and SDN prefix-list `cidr`. Proxmox metrics
+pulls use `source=database` with the translated proxbox-api endpoint ID.
+
+The CLI removes commands for backend routes absent from proxbox-api 0.0.31,
+including the empty `pxb proxbox` group. `pxb proxmox viewer generate` sends
+typed query parameters and requires runtime code generation to be enabled on
+the backend. The route fixture covers all 313 published OpenAPI operations.

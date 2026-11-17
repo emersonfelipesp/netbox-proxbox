@@ -106,20 +106,31 @@ def pxendpoint_delete(
 
 @viewer_app.command("generate")
 def viewer_generate(
-    body_json: Annotated[
-        str | None, typer.Option("--body-json", help="JSON config string.")
-    ] = None,
-    body_file: Annotated[
-        Path | None, typer.Option("--body-file", help="Path to JSON config file.")
-    ] = None,
+    persist: Annotated[bool, typer.Option(help="Persist generated artifacts.")] = True,
+    workers: Annotated[int, typer.Option(min=1, max=32)] = 10,
+    retry_count: Annotated[int, typer.Option(min=0, max=10)] = 2,
+    retry_backoff: Annotated[float, typer.Option(min=0.0, max=5.0)] = 0.35,
+    checkpoint_every: Annotated[int, typer.Option(min=1, max=500)] = 50,
+    source_url: Annotated[str, typer.Option(help="Proxmox API viewer URL.")] = (
+        "https://pve.proxmox.com/pve-docs/api-viewer/"
+    ),
+    version_tag: Annotated[
+        str, typer.Option(help="Generated artifact version tag.")
+    ] = "latest",
     as_json: JsonFlag = False,
     as_yaml: YamlFlag = False,
 ) -> None:
-    """Run the Proxmox API Viewer crawl and code generation pipeline."""
-    payload = load_json_payload(body_json, body_file)
-    resp = run_with_spinner(
-        _get_client().post("/proxmox/viewer/generate", payload=payload)
-    )
+    """Run viewer code generation; the backend must enable runtime code generation."""
+    query = {
+        "persist": str(persist).lower(),
+        "workers": workers,
+        "retry_count": retry_count,
+        "retry_backoff": retry_backoff,
+        "checkpoint_every": checkpoint_every,
+        "source_url": source_url,
+        "version_tag": version_tag,
+    }
+    resp = run_with_spinner(_get_client().post("/proxmox/viewer/generate", query=query))
     print_response(resp, as_json=as_json, as_yaml=as_yaml)
 
 

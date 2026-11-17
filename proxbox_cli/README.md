@@ -163,7 +163,6 @@ pxb proxmox cluster resources --type vm
 pxb proxmox nodes list
 pxb proxmox nodes network <node>
 pxb proxmox nodes qemu <node>
-pxb proxmox nodes lxc <node>
 
 # Proxmox endpoint CRUD (local database)
 pxb proxmox endpoints list
@@ -173,7 +172,7 @@ pxb proxmox endpoints update <id> --body-json '{"host": "pve02.example.com"}'
 pxb proxmox endpoints delete <id> --confirm
 
 # Proxmox API viewer (OpenAPI/Pydantic codegen)
-pxb proxmox viewer generate --body-json '{"parallel_workers": 4}'
+pxb proxmox viewer generate --workers 4 --retry-count 2
 pxb proxmox viewer openapi
 pxb proxmox viewer openapi-embedded
 pxb proxmox viewer contracts
@@ -228,28 +227,6 @@ pxb virtualization vms backups-sync-all --delete-stale
 pxb virtualization vms snapshots-create
 pxb virtualization vms snapshots-create --vmid 100 --node pve01
 pxb virtualization vms snapshots-sync-all
-```
-
-### `pxb extras` — NetBox custom fields
-
-```bash
-# Create predefined Proxbox custom fields in NetBox
-pxb extras custom-fields-create
-```
-
-### `pxb proxbox` — Plugin configuration and backend info
-
-Read plugin configuration from the NetBox side and backend info.
-
-```bash
-# Show resolved plugin configuration from NetBox
-pxb proxbox settings
-
-# Show full PLUGINS_CONFIG (all plugins)
-pxb proxbox plugins-config --all
-
-# Show Proxbox default settings
-pxb proxbox default-settings
 ```
 
 ### `pxb docs` — Documentation generation

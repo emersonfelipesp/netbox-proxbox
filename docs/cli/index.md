@@ -10,7 +10,6 @@ It is a Typer application with top-level operational commands plus grouped comma
 - `proxbox` — plugin configuration and backend info
 - `dcim` — device and interface sync from Proxmox nodes to NetBox
 - `virtualization` — VM, storage, snapshot, and backup sync operations
-- `extras` — custom fields initialization in NetBox
 - `docs` — documentation generation utilities
 
 ## Installation
@@ -117,9 +116,6 @@ pxb netbox endpoint list|get|create|update|delete
 pxb proxmox endpoints list|get|create|update|delete
 
 # Backend plugin settings
-pxb proxbox settings
-pxb proxbox plugins-config
-pxb proxbox default-settings
 ```
 
 ### Sync operations
@@ -148,7 +144,6 @@ pxb proxmox cluster resources
 pxb proxmox nodes list
 pxb proxmox nodes network <node>
 pxb proxmox nodes qemu <node>
-pxb proxmox nodes lxc <node>
 ```
 
 ## Output Formats

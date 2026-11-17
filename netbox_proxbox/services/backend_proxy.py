@@ -638,22 +638,6 @@ def get_backend_bootstrap_status(
     )
 
 
-def reconcile_backend_custom_fields(
-    endpoint_id: int | None = None,
-) -> tuple[dict[str, object], int]:
-    """Force-reconcile legacy Proxbox custom-field definitions on proxbox-api."""
-    context = get_fastapi_request_context(endpoint_id=endpoint_id)
-    if context is None or not context.http_url:
-        return {"ok": False, "detail": "No FastAPI URL found."}, 404
-    return request_backend_json(
-        context,
-        "extras/custom-fields/reconcile",
-        method="POST",
-        timeout=30,
-        endpoint_id=endpoint_id,
-    )
-
-
 def _stream_candidate_context(
     context: BackendRequestContext,
     *,

@@ -642,11 +642,17 @@ class VMTaskHistoryFilterSet(ProxboxModelFilterSet):
 class ProxmoxVMCloudInitFilterSet(ProxboxModelFilterSet):
     """Filter Proxmox VM cloud-init rows reflected from Proxmox (issue #363)."""
 
+    virtual_machine_id = MultiValueNumberFilter(
+        field_name="virtual_machine_id",
+        label="Virtual machine (ID)",
+    )
+
     class Meta:
         model = ProxmoxVMCloudInit
         fields = (
             "id",
             "virtual_machine",
+            "virtual_machine_id",
             "ciuser",
             "ipconfig0",
             "sshkeys_truncated",
@@ -1469,12 +1475,18 @@ class ProxmoxClusterFilterSet(ProxboxModelFilterSet):
 class ProxmoxNodeFilterSet(ProxboxModelFilterSet):
     """Filter Proxmox node records tracked by the plugin."""
 
+    proxmox_cluster_id = MultiValueNumberFilter(
+        field_name="proxmox_cluster_id",
+        label="Proxmox cluster (ID)",
+    )
+
     class Meta:
         model = ProxmoxNode
         fields = (
             "id",
             "endpoint",
             "proxmox_cluster",
+            "proxmox_cluster_id",
             "netbox_device",
             "name",
             "ip_address",
@@ -1880,7 +1892,15 @@ class ProxmoxSdnRouteMapFilterSet(ProxboxModelFilterSet):
 
     class Meta:
         model = ProxmoxSdnRouteMap
-        fields = ("id", "endpoint", "cluster_name", "name", "action", "status")
+        fields = (
+            "id",
+            "endpoint",
+            "cluster_name",
+            "name",
+            "order",
+            "action",
+            "status",
+        )
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         if not value.strip():
@@ -1896,7 +1916,15 @@ class ProxmoxSdnPrefixListFilterSet(ProxboxModelFilterSet):
 
     class Meta:
         model = ProxmoxSdnPrefixList
-        fields = ("id", "endpoint", "cluster_name", "name", "action", "status")
+        fields = (
+            "id",
+            "endpoint",
+            "cluster_name",
+            "name",
+            "cidr",
+            "action",
+            "status",
+        )
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         if not value.strip():

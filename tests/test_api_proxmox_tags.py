@@ -23,6 +23,20 @@ PROXMOX_TAGS_API = REPO_ROOT / "netbox_proxbox" / "api" / "proxmox_tags.py"
 BACKEND_PATH_MODULE = REPO_ROOT / "netbox_proxbox" / "services" / "backend_path.py"
 
 
+ACTOR_HEADER_MODULE = REPO_ROOT / "netbox_proxbox" / "utils" / "actor_header.py"
+
+
+def _load_actor_header_module() -> types.ModuleType:
+    """Path-load the dependency-free actor header encoder used by the API module."""
+    spec = importlib.util.spec_from_file_location(
+        "netbox_proxbox.utils.actor_header", ACTOR_HEADER_MODULE
+    )
+    assert spec is not None and spec.loader is not None
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module
+
+
 def _load_backend_path_module() -> types.ModuleType:
     """Path-load the dependency-free path validator used by the API module."""
     spec = importlib.util.spec_from_file_location(
@@ -143,6 +157,7 @@ def _load(monkeypatch: pytest.MonkeyPatch):
         "netbox_proxbox.views.proxbox_access": proxbox_access_mod,
         "netbox_proxbox.api.operational_permissions": operational_permissions_mod,
         "netbox_proxbox.utils": utils_mod,
+        "netbox_proxbox.utils.actor_header": _load_actor_header_module(),
         "rest_framework": rf,
         "rest_framework.status": rf_status,
         "rest_framework.response": rf_response,

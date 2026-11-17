@@ -3,9 +3,9 @@
 Machine-generated command inventory for the `proxbox_cli` package.
 
 !!! info "Generated"
-    Last updated: `2026-09-14T17:13:11.556323+00:00`
-    Command groups: `15`
-    Leaf commands: `64`
+    Last updated: `2026-11-17T14:30:50.842882+00:00`
+    Command groups: `13`
+    Leaf commands: `59`
 
 | Command | Kind | Summary | Example |
 |---------|------|---------|---------|
@@ -20,8 +20,6 @@ Machine-generated command inventory for the `proxbox_cli` package.
 | `pxb dcim interfaces-create-all` | `command` | Create interfaces for all node devices. | `pxb dcim interfaces-create-all` |
 | `pxb docs` | `group` | Documentation generation commands. | `pxb docs --help` |
 | `pxb docs generate-capture` | `command` | Generate machine-readable CLI docs artifacts for the MkDocs site. | `pxb docs generate-capture` |
-| `pxb extras` | `group` | Extras commands (custom fields, etc.). | `pxb extras --help` |
-| `pxb extras custom-fields-create` | `command` | Create predefined Proxbox custom fields in NetBox (proxmox_vm_id, start_at_boot, etc.). | `pxb extras custom-fields-create` |
 | `pxb full-update` | `command` | Run a full sync: creates devices (nodes) then VMs. [NOTE: long-running operation] | `pxb full-update` |
 | `pxb info` | `command` | Show proxbox-api project info. | `pxb info` |
 | `pxb init` | `command` | Interactively configure the proxbox-api base URL. | `pxb init` |
@@ -34,10 +32,6 @@ Machine-generated command inventory for the `proxbox_cli` package.
 | `pxb netbox endpoint update` | `command` | Update a NetBox endpoint record. | `pxb netbox endpoint update <NETBOX-ID>` |
 | `pxb netbox openapi` | `command` | Fetch the NetBox OpenAPI schema. | `pxb netbox openapi` |
 | `pxb netbox status` | `command` | Show NetBox API status. | `pxb netbox status` |
-| `pxb proxbox` | `group` | Proxbox plugin and backend info commands. | `pxb proxbox --help` |
-| `pxb proxbox default-settings` | `command` | Show Proxbox default settings from the NetBox plugin config. | `pxb proxbox default-settings` |
-| `pxb proxbox plugins-config` | `command` | Show plugin configuration from NetBox PLUGINS_CONFIG. | `pxb proxbox plugins-config` |
-| `pxb proxbox settings` | `command` | Show resolved Proxbox plugin configuration from NetBox. | `pxb proxbox settings` |
 | `pxb proxmox` | `group` | Proxmox integration commands. | `pxb proxmox --help` |
 | `pxb proxmox cluster` | `group` | Proxmox cluster commands. | `pxb proxmox cluster --help` |
 | `pxb proxmox cluster resources` | `command` | Get cluster resources, optionally filtered by type. | `pxb proxmox cluster resources` |
@@ -50,7 +44,6 @@ Machine-generated command inventory for the `proxbox_cli` package.
 | `pxb proxmox endpoints update` | `command` | Update a Proxmox endpoint record. | `pxb proxmox endpoints update <ENDPOINT-ID>` |
 | `pxb proxmox nodes` | `group` | Proxmox node commands. | `pxb proxmox nodes --help` |
 | `pxb proxmox nodes list` | `command` | Get node info (cpu, mem, status, fingerprint) from all sessions. | `pxb proxmox nodes list` |
-| `pxb proxmox nodes lxc` | `command` | List LXC containers on a specific node. | `pxb proxmox nodes lxc <NODE>` |
 | `pxb proxmox nodes network` | `command` | Get network interfaces for a node. | `pxb proxmox nodes network <NODE>` |
 | `pxb proxmox nodes qemu` | `command` | List QEMU VMs on a specific node. | `pxb proxmox nodes qemu <NODE>` |
 | `pxb proxmox overview` | `command` | Show Proxmox overview (access, cluster, nodes, pools, storage, version). | `pxb proxmox overview` |
@@ -61,7 +54,7 @@ Machine-generated command inventory for the `proxbox_cli` package.
 | `pxb proxmox version` | `command` | Get Proxmox version from all connected sessions. | `pxb proxmox version` |
 | `pxb proxmox viewer` | `group` | Proxmox API codegen and viewer commands. | `pxb proxmox viewer --help` |
 | `pxb proxmox viewer contracts` | `command` | Report Proxmox and NetBox schema contract diagnostics. | `pxb proxmox viewer contracts` |
-| `pxb proxmox viewer generate` | `command` | Run the Proxmox API Viewer crawl and code generation pipeline. | `pxb proxmox viewer generate` |
+| `pxb proxmox viewer generate` | `command` | Run viewer code generation; the backend must enable runtime code generation. | `pxb proxmox viewer generate` |
 | `pxb proxmox viewer openapi` | `command` | Return the generated Proxmox OpenAPI schema. | `pxb proxmox viewer openapi` |
 | `pxb proxmox viewer openapi-embedded` | `command` | Return the Proxmox OpenAPI as embedded in the FastAPI custom schema. | `pxb proxmox viewer openapi-embedded` |
 | `pxb proxmox viewer pydantic` | `command` | Print the generated Pydantic v2 model source code. | `pxb proxmox viewer pydantic` |

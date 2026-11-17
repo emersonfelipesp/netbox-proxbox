@@ -14,6 +14,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from virtualization.models import VirtualMachine
 
+from netbox_proxbox.utils.actor_header import header_safe_actor
 from netbox_proxbox.api.operational_permissions import (
     EndpointOperationalActionPermission,
     TokenWriteScopePermission,
@@ -42,8 +43,10 @@ def _actor_from_request(request: Request) -> str:
     user = getattr(request, "user", None)
     get_username = getattr(user, "get_username", None)
     if callable(get_username):
-        return str(get_username())
-    return str(getattr(user, "username", "") or getattr(user, "pk", "") or "netbox")
+        return header_safe_actor(str(get_username()))
+    return header_safe_actor(
+        str(getattr(user, "username", "") or getattr(user, "pk", "") or "netbox")
+    )
 
 
 def _vm_for_tags_request(

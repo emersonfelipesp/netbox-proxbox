@@ -770,6 +770,7 @@ def test_plugin_api_routes_register_all_plugin_objects():
         "guest-vm-interface-addresses",
         "guest-vm-interfaces",
         "metrics-influxdb",
+        "nodes",
         "pdm-remotes",
         "proxmox-clusters",
         "proxmox-nodes",
