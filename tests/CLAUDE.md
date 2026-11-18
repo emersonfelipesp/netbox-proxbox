@@ -228,6 +228,12 @@ endpoints without requiring an OpenBao deployment for tenant behavior.
   once, advances only Proxbox to its own floor, emits `post_migrate` with that
   class-floor state, applies the same boundary cleanup, and uses the resulting
   dedicated database as a PostgreSQL template.
+  Each `_migrate_to()` transition creates a fresh executor and consumes the
+  historical registry from its returned `ProjectState.apps`; do not rebuild
+  the same target state afterward. Preserve all non-plugin dependency leaves,
+  target ordering, same-target registry reuse, and cached-target advancement
+  only after the migration and registry resolution succeed. This does not cache
+  executors, skip migrations, or change any database ownership or isolation rule.
   Each test then clones the class template with
   `CREATE DATABASE ... TEMPLATE ...`, uses the
   clone, and drops it afterward. The helper temporarily rebinds Django's
