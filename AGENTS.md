@@ -513,3 +513,13 @@ rewrite deployed history, or silently repair an unexpected schema. Reverse of
 0108 is a no-op for schema/data; reapply validates again. Preserve actual recorder
 and data evidence for explicit reviewed recovery. The original 0107 reverse
 controls remain historical and do not prove that 0108 removes those objects.
+
+## Public CI scheduling and merge summaries
+
+Public core and real-Django quality run once for feature pull requests and retain main/develop push coverage. Existing Django release-tag and manual events are retained. Only superseded pull-request work is cancelled; main and integration push checks finish independently. Core CI complete requires every original producer, including the complete mocked-test matrix. Django matrix complete requires all eight original compatibility cells with unchanged pins and test commands.
+
+E2E selection complete is emitted for every pull request. A checked Git diff applies the original E2E path list; unrelated paths skip the expensive producer graph only after successful selection. Matching paths retain the original prerequisite admission and complete dynamic matrix, including the existing experimental Rust allowance. Failed selection, admission, mandatory producers or incomplete outcomes fail the summary. Page Coverage now runs before integration into main as well as develop, preserving its existing reusable and post-merge events.
+
+These summaries must receive genuine exact-candidate results before public merge enforcement is installed. Source changes alone do not prove hosted runtime success, authorize publication or replace canonical native checks.
+
+Public source promotion uses reviewed pull requests with the original strict documentation build and every required quality check. Once strict public checks are installed, the legacy direct-main mirror workflow registration must remain disabled; its retained source is historical and does not authorize a direct push. A CI-only promotion must not publish Pages, packages, release assets or container images. Preserve all other writer controls and require separately authorized publication workflows for those actions.

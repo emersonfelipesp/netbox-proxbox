@@ -8,7 +8,7 @@ run-name: Django Tests (${{ github.event_name }} ${{ github.ref }} @ ${{ github.
 
 on:
   push:
-    branches: ['**']
+    branches: [main, develop]
     tags: ['v*']
   pull_request:
     branches: ['**']
@@ -16,6 +16,10 @@ on:
 
 permissions:
   contents: read
+
+concurrency:
+  group: public-django-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   django-tests:
@@ -533,3 +537,17 @@ jobs:
           .venv/bin/coverage report \
             --include='netbox_proxbox/api/serializers/resource_views.py' \
             --fail-under=85
+
+  complete:
+    name: Django matrix complete
+    if: ${{ always() }}
+    needs: [django-tests]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - name: Require every original matrix row
+        env:
+          MATRIX_RESULT: ${{ needs.django-tests.result }}
+        run: |
+          set -euo pipefail
+          [[ "$MATRIX_RESULT" == success ]]
