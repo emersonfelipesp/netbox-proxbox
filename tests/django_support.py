@@ -6,7 +6,7 @@ import atexit
 from collections.abc import Iterable
 import os
 from time import monotonic
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from django.apps import apps as global_apps
 from django.contrib.auth import get_user_model
@@ -25,6 +25,9 @@ from tests.django_database_reclamation import (
     open_maintenance_connection,
     reclaim_stale_harness_databases,
 )
+
+if TYPE_CHECKING:
+    from django.db.migrations.state import StateApps
 
 
 _CREATED_DATABASES: set[str] = set()
@@ -378,13 +381,15 @@ class ForwardOnlyMigrationTestCase(TransactionTestCase):
     def _fixture_teardown(self) -> None:
         """The dropped clone contains every write; the shared database stayed clean."""
 
-    def _migrate_to(self, target: tuple[str, str]):
+    def _migrate_to(self, target: tuple[str, str]) -> StateApps:
+        """Return the real migration's coherent historical apps registry."""
         if target == self._current_migration_target:
             return self.migration_apps
         executor = MigrationExecutor(connection)
         targets = self._migration_targets(executor, target)
-        executor.migrate(targets)
-        self.migration_apps = executor.loader.project_state(targets).apps
+        state = executor.migrate(targets)
+        state.clear_delayed_apps_cache()
+        self.migration_apps = state.apps
         self._current_migration_target = target
         return self.migration_apps
 
