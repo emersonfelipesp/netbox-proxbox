@@ -34,7 +34,7 @@ dependencies = [
     # Keep the published runtime contract above that range; the wheel does not
     # ship uv.lock, so downstream pip resolution relies on this declaration.
     "cryptography>=50.0.0",
-    "pydantic>=2.13.3,<2.14.0",
+    "pydantic>=2.13.3,<2.15.0",
     "requests>=2.33.0",
     # Security floor: 2.8.0 fixes HTTPS proxy TLS policy bypass and two
     # unbounded/infinite streaming denial-of-service paths. The package is
