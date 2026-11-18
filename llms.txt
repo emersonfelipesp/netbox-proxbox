@@ -24,6 +24,35 @@ The full scheduled matrix retains 198 rows and the PR matrix retains 33 rows.
 Only selected direct inputs are admitted. See the CI guide for the 60/1200/180-
 second readiness deadlines and failure diagnostics.
 
+## Public CI completion and source promotion
+
+Core and real-Django quality retain main/develop push validation and run once
+for feature pull requests. Only superseded pull-request work cancels. Core CI
+complete requires every original producer and mocked-test row; Django matrix
+complete requires all eight original compatibility cells with unchanged pins,
+profiles, locks and commands.
+
+E2E selection complete is emitted for every pull request. A checked three-dot
+Git diff preserves the original E2E path list, uses NUL-delimited names and
+disables rename detection so selected deletions and rename-away changes cannot
+bypass the graph. Only a successful unrelated-path decision skips prerequisite
+admission and the matrix. Matching changes retain the complete original graph
+and experimental Rust allowance. Failed selection, admission or mandatory
+producer outcomes fail the summary. Page Coverage validates main and develop
+pull requests and preserves reusable and merged-PR events.
+
+Public source promotion uses reviewed pull requests with genuine exact-head
+Core CI complete, Django matrix complete, E2E selection complete, Page Coverage
+and strict documentation build results. Bind required check identities to the
+actual GitHub Actions application. Public results remain non-security evidence
+and do not replace canonical native checks. Once strict checks are installed,
+the legacy direct-main mirror registration must remain disabled; retained
+source does not authorize direct pushes. CI-only integration must not publish
+Pages, packages, release assets or images. Pause only the original docs writer
+around the main event and restore it only after complete qualification and
+processed-event/no-active-writer proof, without publication replay. Preserve all
+other separately authorized writers. See `docs/developer/ci-e2e-workflows.md`.
+
 ## Project Overview
 
 netbox-proxbox is a NetBox plugin that synchronizes Proxmox infrastructure data into NetBox. It keeps DCIM data up-to-date with real Proxmox clusters, nodes, virtual machines, containers (LXC), backups, and snapshots.

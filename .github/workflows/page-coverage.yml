@@ -16,7 +16,7 @@ env:
 
 concurrency:
   group: page-coverage-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.event_name == 'pull_request' && github.event.action != 'closed' }}
 
 jobs:
   page-coverage:
@@ -27,7 +27,7 @@ jobs:
     # Run on:  push to develop  |  workflow_call (from publish pipeline)
     #          release: published (from publish pipeline, official releases)
     #          workflow_dispatch (manual publish dispatch)
-    #          PR opened/sync/reopened against develop
+    #          PR opened/sync/reopened against develop or main
     #          PR merged to any branch
     # NOTE: when this workflow is reached via `uses:` from publish-testpypi.yml,
     # `github.event_name` is inherited from the *calling* workflow (e.g. `release`
@@ -39,7 +39,8 @@ jobs:
       github.event_name == 'release' ||
       github.event_name == 'workflow_dispatch' ||
       (github.event_name == 'pull_request' &&
-       github.event.pull_request.base.ref == 'develop' &&
+       (github.event.pull_request.base.ref == 'develop' ||
+        github.event.pull_request.base.ref == 'main') &&
        github.event.action != 'closed') ||
       (github.event_name == 'pull_request' &&
        github.event.action == 'closed' &&
