@@ -106,6 +106,9 @@ def git_fixture_command(repository: Path, *arguments: str) -> str:
         ("docs/guide.md", False),
         ("tests/test_e2e_example.txt", False),
         ("docs/netbox_proxbox/example.py", False),
+        ("scripts/e2e_nested/example.py", False),
+        ("tests/test_e2e_nested/example.py", False),
+        ("tests/test_backend_key_adoption_nested/example.py", False),
         ("netbox_proxbox/space and\nnewline.py", True),
     ],
 )

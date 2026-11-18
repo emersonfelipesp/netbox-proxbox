@@ -136,8 +136,12 @@ jobs:
           selected=false
           while IFS= read -r -d '' name; do
             case "$name" in
-              netbox_proxbox/*|tests/e2e/*|tests/test_backend_key_adoption*.py|.github/workflows/e2e-docker.yml|scripts/e2e_*.py|tests/test_e2e_*.py)
+              netbox_proxbox/*|tests/e2e/*|.github/workflows/e2e-docker.yml)
                 selected=true ;;
+              tests/test_backend_key_adoption*.py|scripts/e2e_*.py|tests/test_e2e_*.py)
+                if [[ "${name#*/}" != */* ]]; then
+                  selected=true
+                fi ;;
             esac
           done < "$changed"
           printf 'selected=%s\n' "$selected" >> "$GITHUB_OUTPUT"
