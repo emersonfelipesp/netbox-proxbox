@@ -2,9 +2,16 @@ name: CI
 
 on:
   push:
-    branches: ['**']
+    branches: [main, develop]
   pull_request:
     branches: ['**']
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   lint:
@@ -141,3 +148,23 @@ jobs:
         with:
           name: netbox-proxbox-coverage
           path: coverage.xml
+
+  complete:
+    name: Core CI complete
+    if: ${{ always() }}
+    needs: [lint, typecheck, compile, package, test]
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require every original producer
+        env:
+          LINT: ${{ needs.lint.result }}
+          TYPES: ${{ needs.typecheck.result }}
+          COMPILE: ${{ needs.compile.result }}
+          PACKAGE: ${{ needs.package.result }}
+          TESTS: ${{ needs.test.result }}
+        run: |
+          set -euo pipefail
+          for result in "$LINT" "$TYPES" "$COMPILE" "$PACKAGE" "$TESTS"; do
+            [[ "$result" == success ]]
+          done
