@@ -55,4 +55,5 @@ class ClusterSyncResult(ProxboxBaseModel):
     nodes_updated: int = 0
     nodes_deleted: int = 0
     mode_updated: bool = False
+    tracking_links_released: int = 0
     error: str | None = None

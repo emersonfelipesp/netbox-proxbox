@@ -10,7 +10,7 @@ permissions:
   contents: write
 
 env:
-  PROXBOX_API_RELEASE_VERSION: 0.0.31
+  PROXBOX_API_RELEASE_VERSION: 0.0.32
   NETBOX_IMAGE: netboxcommunity/netbox:v4.7.0-5.1.0@sha256:73a54ff279461170032b59a57a1930929965e3ba15c195af59f4b5f6d39a84a9
   PROXBOX_API_IMAGE: emersonfelipesp/proxbox-api
   PROXMOX_SDK_IMAGE: emersonfelipesp/proxmox-sdk
@@ -124,43 +124,20 @@ jobs:
       - name: Wait for stack readiness and create NetBox API token
         run: |
           set -eux
-          for i in $(seq 1 240); do
-            http_code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:18080/api/ 2>/dev/null || true)"
-            if [ "$http_code" -ge 100 ] 2>/dev/null && [ "$http_code" -lt 500 ]; then
-              break
-            fi
-            sleep 2
-            if [ "$i" -eq 240 ]; then
-              echo "NetBox did not become ready"
-              docker logs netbox-e2e || true
-              exit 1
-            fi
-          done
-
-          for i in $(seq 1 90); do
-            if curl -sk --max-time 5 https://127.0.0.1:18006/health >/dev/null 2>&1; then
-              break
-            fi
-            sleep 2
-            if [ "$i" -eq 90 ]; then
-              echo "proxmox mock did not become ready"
-              docker logs proxmox-e2e-mock || true
-              exit 1
-            fi
-          done
-
-          for i in $(seq 1 90); do
-            http_code="$(curl -sS --max-time 5 -o /dev/null -w '%{http_code}' http://127.0.0.1:18800/ 2>/dev/null || true)"
-            if [ "$http_code" -ge 100 ] 2>/dev/null && [ "$http_code" -lt 500 ]; then
-              break
-            fi
-            sleep 2
-            if [ "$i" -eq 90 ]; then
-              echo "proxbox-api did not become ready"
-              docker logs proxbox-e2e-api || true
-              exit 1
-            fi
-          done
+          # Initial NetBox migrations on an empty database regularly take six
+          # to eight minutes on hosted runners. Use the shared monotonic
+          # deadline helper with the same budget as the E2E Docker workflow,
+          # and refuse terminal or unhealthy containers immediately.
+          required=(netbox-e2e-postgres netbox-e2e-redis netbox-e2e proxbox-e2e-api proxmox-e2e-mock)
+          python -m scripts.e2e_readiness \
+            --required "${required[@]}" --timeout 1200 \
+            --url "http://127.0.0.1:18080/api/"
+          python -m scripts.e2e_readiness \
+            --required "${required[@]}" --timeout 180 \
+            --url "https://127.0.0.1:18006/health" --insecure
+          python -m scripts.e2e_readiness \
+            --required "${required[@]}" --timeout 180 \
+            --url "http://127.0.0.1:18800/"
 
           TOKEN_OUTPUT=$(docker exec netbox-e2e /opt/netbox/venv/bin/python /opt/netbox/netbox/manage.py shell -c "from users.models import Token, User; u=User.objects.get(username='admin'); t=Token.objects.create(user=u, version=1, token='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa'); print(f'{t.id}:{t.plaintext}')")
           TOKEN_ID=$(printf '%s' "$TOKEN_OUTPUT" | tail -n 1 | cut -d: -f1)

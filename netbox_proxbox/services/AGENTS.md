@@ -219,6 +219,29 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
   re-raises the job deadline and the worker timeout, which both derive from
   `Exception`, so a cancelled job stops instead of continuing to the backfill.
 - [`sync_cluster.py`](./sync_cluster.py): sync coordination for cluster and node inventory.
+- [`cluster_tracking_repair.py`](./cluster_tracking_repair.py): endpoint-local
+  release of stale cross-endpoint tracking links. Releases before
+  endpoint-scoped discovery gave every endpoint a tracking row for every
+  cluster, and the former backend name-based repair linked each one, so every
+  tracking save and `sync-cluster` claim was refused. `sync_cluster_and_nodes()`
+  calls `release_foreign_tracking_links()` after the scoped status read and
+  before the persist transaction, unless cluster sync is disabled or the live
+  response does not hold exactly one cluster record with a non-empty name (the
+  endpoint-name fallback used for tracking persistence is never release
+  evidence). The secret-free `discovery_target_identity()` (built from
+  `connection_target_data()`) is captured before the backend read and compared
+  again under the endpoint lock, so a target edited mid-discovery refuses the
+  release. The pure
+  `plan_foreign_link_release()` acts only when the endpoint's linked rows span
+  more than one native cluster, exactly one linked row has the live discovered
+  name, and the endpoint authority is absent or equals that row's cluster. It
+  clears only the other rows' links and the cluster sidecar pointers to them
+  with guarded exact-PK updates in their own transaction (endpoint, native
+  cluster, tracking, sidecar lock order). The release commits even when the
+  following tracking save still conflicts with another endpoint's stale claim;
+  that endpoint releases its own claim on its turn. It never deletes rows,
+  writes another endpoint, or changes native clusters or endpoint authority.
+  Pinned by `tests/test_cluster_tracking_repair_django.py`.
 
 ## Dependencies
 

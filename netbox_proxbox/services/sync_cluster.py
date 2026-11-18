@@ -29,6 +29,10 @@ from netbox_proxbox.schemas import (
 )
 from netbox_proxbox.schemas._formatters import iter_node_records, iter_scalar_records
 from netbox_proxbox.services.backend_proxy import get_fastapi_request_context
+from netbox_proxbox.services.cluster_tracking_repair import (
+    discovery_target_identity,
+    release_foreign_tracking_links,
+)
 from netbox_proxbox.services.proxmox_mode import derive_proxmox_endpoint_mode
 from netbox_proxbox.sync_stages import (
     _add_bootstrap_only_tag,
@@ -352,6 +356,31 @@ def _persist_cluster_and_nodes(
         )
 
 
+def _release_stale_tracking_links(
+    endpoint: ProxmoxEndpoint,
+    cluster_data: ProxmoxClusterStatusResponse,
+    cluster_mode: str,
+    discovered_target: str,
+) -> int:
+    """Release this endpoint's stale cross-endpoint tracking links before persisting.
+
+    Released links commit in their own transaction (see
+    ``cluster_tracking_repair``), so the live evidence must be unambiguous:
+    exactly one cluster record with a non-empty name. An unnamed record would
+    turn the editable endpoint name into release authority, and several
+    records mean the response is unscoped or malformed, so both refuse.
+    """
+    if cluster_mode == SyncModeChoices.DISABLED:
+        return 0
+    clusters = [record for record in cluster_data.records if record.type == "cluster"]
+    if len(clusters) != 1:
+        return 0
+    live_name = clusters[0].name or ""
+    if not live_name.strip():
+        return 0
+    return release_foreign_tracking_links(endpoint.pk, live_name, discovered_target)
+
+
 def sync_cluster_and_nodes(
     endpoint_id: int,
     fastapi_url: str | None = None,
@@ -428,6 +457,8 @@ def sync_cluster_and_nodes(
     # endpoint and the plugin would attribute foreign clusters/nodes to this
     # endpoint. Fail loud rather than syncing the wrong endpoint.
     # ------------------------------------------------------------------
+    # Bind any later tracking-link release to the target discovery reads from.
+    discovered_target = discovery_target_identity(endpoint)
     backend_endpoint_id, resolve_error = resolve_backend_endpoint_id(
         endpoint,
         base_url=fastapi_url,
@@ -474,6 +505,9 @@ def sync_cluster_and_nodes(
     # DB phase — single atomic transaction for all writes.
     # ------------------------------------------------------------------
     try:
+        result.tracking_links_released = _release_stale_tracking_links(
+            endpoint, cluster_data, cluster_mode, discovered_target
+        )
         _persist_cluster_and_nodes(
             endpoint,
             endpoint_id,

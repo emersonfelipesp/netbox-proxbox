@@ -434,7 +434,7 @@ def test_development_identity_never_falls_back_on_missing_or_invalid_source(
 def test_missing_image_cannot_publish_matrix_outputs(monkeypatch, tmp_path):
     monkeypatch.setenv("E2E_INPUTS", json.dumps({"install_source": "local"}))
     monkeypatch.setenv("GITHUB_EVENT_NAME", "pull_request")
-    monkeypatch.setenv("PROXBOX_API_RELEASE_VERSION", "0.0.31")
+    monkeypatch.setenv("PROXBOX_API_RELEASE_VERSION", "0.0.32")
     monkeypatch.setenv("PROXBOX_API_IMAGE", "emersonfelipesp/proxbox-api")
     monkeypatch.setenv("PROXMOX_SDK_IMAGE", "emersonfelipesp/proxmox-sdk")
     monkeypatch.setenv("PROXMOX_SDK_TAG_PREFIX", "latest")
@@ -455,7 +455,7 @@ def test_success_publishes_all_admitted_inputs_atomically(monkeypatch, tmp_path)
     monkeypatch.setenv("E2E_INPUTS", "null")
     monkeypatch.setenv("GITHUB_EVENT_NAME", "schedule")
     for name, value in {
-        "PROXBOX_API_RELEASE_VERSION": "0.0.31",
+        "PROXBOX_API_RELEASE_VERSION": "0.0.32",
         "PROXBOX_API_IMAGE": "test/api",
         "PROXMOX_SDK_IMAGE": "test/mock",
         "PROXMOX_SDK_TAG_PREFIX": "latest",
@@ -588,7 +588,7 @@ def test_missing_selected_package_identifies_request_on_stderr_without_outputs(
     monkeypatch.setenv("E2E_INPUTS", json.dumps({"install_source": "testpypi"}))
     monkeypatch.setenv("GITHUB_EVENT_NAME", "workflow_dispatch")
     for name, value in {
-        "PROXBOX_API_RELEASE_VERSION": "0.0.31",
+        "PROXBOX_API_RELEASE_VERSION": "0.0.32",
         "PROXBOX_API_IMAGE": "test/api",
         "PROXMOX_SDK_IMAGE": "test/mock",
         "PROXMOX_SDK_TAG_PREFIX": "latest",

@@ -1,6 +1,6 @@
 # netbox-proxbox Repository Guide
 
-Current source: netbox-proxbox 0.0.32.post1 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), deployed before the plugin. The netbox-sdk dependency remains proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source: netbox-proxbox 0.0.32.post2 requires proxbox-api 0.0.32 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), deployed before the plugin. The netbox-sdk dependency remains proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 > **LLM Agent Safety:** Before any destruction-adjacent operation, read
 > `AGENTS.md` § "LLM Agent Safety Guardrails". Automated agents may inspect and
@@ -92,19 +92,19 @@ depends on the backend network parser.
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.99` (the whole 4.7 series is admitted by the numeric gate; CI verifies GA `4.7.0`). The current
-plugin version is `0.0.32.post1`.
+plugin version is `0.0.32.post2`.
 
-Current source compatibility: netbox-proxbox 0.0.32.post1 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source compatibility: netbox-proxbox 0.0.32.post2 requires proxbox-api 0.0.32 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The documented released runtime pairing for this release line is
-netbox-proxbox 0.0.32.post1 <-> proxbox-api 0.0.31 <-> proxmox-sdk 0.0.15
+netbox-proxbox 0.0.32.post2 <-> proxbox-api 0.0.32 <-> proxmox-sdk 0.0.15
 <-> netbox-sdk 0.0.13. Preserve release-note and compatibility rows as
 historical records unless a release workflow changes them.
 
-Current released runtime requirement: deploy proxbox-api 0.0.31 before netbox-proxbox 0.0.32.post1. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+Current released runtime requirement: deploy proxbox-api 0.0.32 before netbox-proxbox 0.0.32.post2. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
 CI pairing: the E2E Docker, page-coverage, documentation-screenshot, and
-release-validation defaults select proxbox-api `0.0.31`. These are intended
+release-validation defaults select proxbox-api `0.0.32`. These are intended
 source selections, not evidence that the backend package or image is public.
 Verify backend publication and qualification before candidate publication or
 ordinary E2E execution. E2E uses the exact published image by default; source-head
@@ -584,8 +584,18 @@ metadata synchronization reuses the linked tracking identity across renames.
 Claims are exclusive to the protected action; ordinary tracking saves can clear
 obsolete evidence but cannot populate endpoint authority. Sidecar ownership is
 server-owned and metadata writes serialize on the native parent. Keep endpoint,
-native cluster, tracking, then sidecar lock order. The action explicitly derives
-tracking/sidecar maintenance authority from endpoint/core grants and reports
+native cluster, tracking, then sidecar lock order.
+The cluster/node pass (`services/cluster_tracking_repair.py`) recovers
+installations that old releases cross-linked: before endpoint-scoped discovery,
+every endpoint received a tracking row for every cluster, and the former
+backend name-based link repair linked all of them. Using only the endpoint's
+live backend-scoped cluster name, it clears the native link on the endpoint's
+own rows for other clusters and the sidecar pointers to those rows, in a
+separate transaction, so every endpoint converges in one job. It requires exactly one named cluster record in the live
+response, and acts only when the endpoint links more than one native cluster, exactly one linked row has the
+live name, and the endpoint authority is absent or equals that row's cluster.
+It never deletes rows, writes another endpoint, or transfers ownership.
+The action explicitly derives tracking/sidecar maintenance authority from endpoint/core grants and reports
 substantive native updates through its additive `changed` response flag.
 UI and API relation disclosure require visibility of the related object.
 See [the operator contract](docs/features/proxmox-cluster-binding.md) and

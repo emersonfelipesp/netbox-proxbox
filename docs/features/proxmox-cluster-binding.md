@@ -141,6 +141,52 @@ and existing data, investigate the exact malformed schema, and obtain an explici
 reviewed repair before retrying the same migration. Do not fake its recorder row,
 delete retained ownership, or remove constraints merely to make validation pass.
 
+### Automatic recovery of cross-linked tracking rows
+
+Releases before endpoint-scoped cluster discovery received every endpoint's
+cluster from proxbox-api during each endpoint's cluster/node pass. They created
+a tracking row on every endpoint for every cluster. An older proxbox-api then
+linked each of those rows to the native cluster with the same name. After an
+upgrade, each endpoint links several native clusters and each native cluster is
+claimed by several endpoints. The ownership model refuses this state. The
+cluster/node pass reports "Resolve this endpoint's conflicting tracking links
+first.", and the `devices` stage returns a cluster ownership conflict for every
+endpoint.
+
+The cluster/node pass repairs this state automatically for each enabled
+endpoint whose cluster sync mode is not `disabled`. The only evidence is the
+endpoint's own live, backend-scoped `/proxmox/cluster/status` result. The
+repair acts only when all of these conditions are true:
+
+- the live result contains exactly one cluster record, and that record has a
+  non-empty name (an unnamed or multi-cluster response is never evidence, and
+  the endpoint's own name is never used in its place);
+- the endpoint's own tracking rows link more than one native cluster;
+- exactly one of those linked rows has the live discovered cluster name;
+- the endpoint's authoritative native cluster is empty or equals that row's
+  native cluster;
+- the endpoint's connection target, re-read under its row lock, is still the
+  target the discovery request was sent to. An endpoint retargeted while
+  discovery was in flight is skipped and re-evaluated by the next run.
+
+The repair then clears the native-cluster link on the endpoint's other linked
+rows and the typed cluster sidecar pointers that reference those rows. It runs
+in its own transaction before the tracking update, with the documented lock
+order. It never deletes tracking rows, never writes another endpoint's rows,
+never changes a native cluster, and never sets or changes endpoint authority.
+The job log reports each released link.
+
+Each endpoint releases only its own stale claims. The first endpoints in a job
+can therefore still report a conflict for their own tracking metadata while a
+later endpoint holds a stale claim on the same cluster. After every selected
+endpoint has run its cluster/node pass, the `devices` stage claims succeed in
+the same job, and the next run is clean. A stale claim held by an endpoint that
+is disabled, not selected, or has cluster sync disabled is not released. Clear
+it through validated tracking CRUD, or enable and synchronize that endpoint.
+Any state outside the rule above, such as no linked row with the live name, an
+authority conflict, or two endpoints that report the same cluster name, still
+requires the operator review described below.
+
 A unique endpoint/core pair is different from a unique tracking row. Several
 historical rows for one identical pair permit the migration to backfill the
 endpoint relation, but synchronization still refuses to choose one tracking row.

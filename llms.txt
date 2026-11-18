@@ -192,11 +192,11 @@ topology.
 
 ### Version
 
-- Plugin version: `0.0.32.post1`
+- Plugin version: `0.0.32.post2`
 - NetBox compatibility: `4.5.8` through `4.7.99`
-- Current source compatibility: `netbox-proxbox 0.0.32.post1` requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with `proxmox-sdk 0.0.15` and `netbox-sdk 0.0.13`.
-- Documented released runtime pairing: `netbox-proxbox 0.0.32.post1`,
-  `proxbox-api 0.0.31`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`
+- Current source compatibility: `netbox-proxbox 0.0.32.post2` requires proxbox-api 0.0.32 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with `proxmox-sdk 0.0.15` and `netbox-sdk 0.0.13`.
+- Documented released runtime pairing: `netbox-proxbox 0.0.32.post2`,
+  `proxbox-api 0.0.32`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`
 
 ---
 
@@ -1736,7 +1736,11 @@ metadata writes may repeat but cannot replace the server-owned link. All writers
 share endpoint, native cluster, tracking, then sidecar lock order. The additive
 `changed` response flag reports substantive native updates, excluding timestamps.
 Ambiguous historical tracking pairs stay unclaimed; ordinary synchronization
-cannot transfer existing ownership. Relations render only when the related
+cannot transfer existing ownership. The cluster/node pass releases only the
+endpoint's own stale cross-endpoint tracking links (left by releases before
+endpoint-scoped discovery) when its live backend-scoped cluster name matches
+exactly one linked row; it clears links and sidecar pointers, never deletes
+rows or writes another endpoint. Relations render only when the related
 object is visible to the caller, including native clusters without sidecars.
 See `docs/features/proxmox-cluster-binding.md` and the real-Django regressions in
 `tests/test_endpoint_cluster_binding_django.py` for the complete contract.
@@ -1751,7 +1755,7 @@ and use reviewed explicit recovery rather than rewriting applied history.
 
 ## Released backend pairing
 
-The released runtime pairing is netbox-proxbox 0.0.32 with proxbox-api 0.0.31, proxmox-sdk 0.0.15, and netbox-sdk 0.0.13. Deploy and qualify the backend before the plugin.
+The released runtime pairing is netbox-proxbox 0.0.32.post2 with proxbox-api 0.0.32, proxmox-sdk 0.0.15, and netbox-sdk 0.0.13. Deploy and qualify the backend before the plugin.
 
 ## Version 0.0.32
 
@@ -1781,3 +1785,14 @@ The CLI removes commands for backend routes absent from proxbox-api 0.0.31,
 including the empty `pxb proxbox` group. `pxb proxmox viewer generate` sends
 typed query parameters and requires runtime code generation to be enabled on
 the backend. The route fixture covers all 313 published OpenAPI operations.
+
+## Version 0.0.32.post2 pairing and maintenance fixes
+
+Version 0.0.32.post2 pairs with proxbox-api 0.0.32. The backend adds `talos` to
+the cloud-provisioning product-type enum without changing its 313 HTTP
+operations. Plugin REST routes and filters are unchanged.
+
+The release also repairs stale cross-endpoint cluster tracking left by older
+multi-endpoint releases and makes the documentation-screenshot workflow use
+deadline-aware, fail-fast readiness checks. It adds no migration;
+`0108_v0_0_31_schema_validation` remains the schema tip.

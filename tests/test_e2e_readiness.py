@@ -343,3 +343,50 @@ def test_successful_probe_before_deadline_remains_valid(monkeypatch):
 
     readiness.wait_until_ready(["netbox"], timely_probe, 5)
     assert clock[0] == 4.9
+
+
+def _screenshot_readiness_calls() -> tuple[str, list[list[str]]]:
+    """Return the readiness step and its executable helper invocations."""
+    import shlex
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    workflow = (root / ".github" / "workflows" / "docs-screenshots.yml").read_text()
+    step = workflow.split("- name: Wait for stack readiness", 1)[1]
+    step = step.split("\n      - name:", 1)[0]
+    joined = step.replace("\\\n", " ")
+    calls = []
+    for line in joined.splitlines():
+        stripped = line.strip()
+        if stripped.startswith("python -m scripts.e2e_readiness"):
+            calls.append(shlex.split(stripped))
+    return step, calls
+
+
+def test_docs_screenshots_uses_shared_deadline_readiness() -> None:
+    """The screenshot stack must not regress to a fixed iteration budget.
+
+    Initial NetBox migrations on an empty database took more than eight minutes
+    on hosted runners, which exhausted the former 240-iteration loop on final
+    release tags. The workflow must use the shared monotonic-deadline helper
+    with the same budgets as the E2E Docker workflow.
+    """
+    step, calls = _screenshot_readiness_calls()
+    required = [
+        "netbox-e2e-postgres",
+        "netbox-e2e-redis",
+        "netbox-e2e",
+        "proxbox-e2e-api",
+        "proxmox-e2e-mock",
+    ]
+    assert "set -eux" in step
+    assert "seq 1 " not in step
+    assert step.count("required=") == 1
+    assert f"required=({' '.join(required)})" in step
+    prefix = ["python", "-m", "scripts.e2e_readiness"]
+    prefix += ["--required", "${required[@]}", "--timeout"]
+    assert calls == [
+        [*prefix, "1200", "--url", "http://127.0.0.1:18080/api/"],
+        [*prefix, "180", "--url", "https://127.0.0.1:18006/health", "--insecure"],
+        [*prefix, "180", "--url", "http://127.0.0.1:18800/"],
+    ]
