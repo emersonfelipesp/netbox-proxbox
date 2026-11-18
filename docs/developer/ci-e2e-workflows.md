@@ -8,13 +8,63 @@ the staged TestPyPI/PyPI release pipeline.
 
 | Workflow | Trigger | Purpose |
 |---|---|---|
-| `.github/workflows/ci.yml` | Push and pull request | Runs lint, type checks, compile checks, and the mocked pytest suite. NetBox-dependent Django tests skip here. |
-| `.github/workflows/django-tests.yml` | Push, tag, and pull request | Provisions real NetBox 4.5.x, 4.6.x, and 4.7.x source trees plus PostgreSQL and Redis, then runs the NetBox-backed Django suite. Five ordinary rows cover the supported releases; a sixth NetBox 4.6.6 row installs pinned `netbox-pdm` source so the optional registry override is exercised. It hard-fails a missing harness and independently enforces at least 85% branch coverage for `services.endpoint_autoconfiguration` and `api.serializers.resource_views`; aggregate coverage cannot let either module mask the other. |
+| `.github/workflows/ci.yml` | Main/develop push and pull request | Runs lint, type checks, compile checks, and the complete mocked pytest matrix. Core CI complete requires every original producer. NetBox-dependent Django tests skip here. |
+| `.github/workflows/django-tests.yml` | Main/develop push, version tag, pull request and manual dispatch | Provisions real NetBox 4.5.x, 4.6.x, and 4.7.x source trees plus PostgreSQL and Redis, then runs all eight original NetBox-backed compatibility rows, including the PDM override, all-companion and OpenBao profiles. Django matrix complete requires the entire original matrix. It hard-fails a missing harness and independently enforces at least 85% branch coverage for `services.endpoint_autoconfiguration` and `api.serializers.resource_views`; aggregate coverage cannot let either module mask the other. |
 | `.github/workflows/e2e-docker.yml` | Pull request, manual, scheduled, reusable workflow call | Builds a real NetBox stack with the plugin, rqworker, proxbox-api `0.0.31`, PostgreSQL, Redis, and a mocked Proxmox API. The harness relies on typed sync-state sidecars and does not call the removed backend custom-field creation route. |
 | `.github/workflows/publish-testpypi.yml` | `v*rc*` tag push or RC-only manual dispatch (TestPyPI); GitHub Release published (PyPI) | Promotes the exact linked Gitea artifacts. Each isolated upload job checks out the exact source SHA before its locked publisher sync. Official PyPI releases require the already-pushed, package-verified final tag and `gh release create --verify-tag`; plain non-RC tag pushes do not trigger publishing. |
-| `.github/workflows/docs.yml` | Docs changes on main / PR | Builds and publishes the MkDocs site. |
+| `.github/workflows/docs.yml` | Main/develop push and pull request | Runs the strict MkDocs build. Only push events deploy the site; pull requests do not publish Pages. |
+| `.github/workflows/page-coverage.yml` | Develop push, reusable call and pull-request events | Validates pages before integration into main or develop and preserves the existing merged-PR validation. It does not publish Pages. |
 | `.github/workflows/docs-screenshots.yml` | Manual dispatch | Refreshes committed UI screenshots used by the docs site. |
 | `.github/workflows/nightly-contracts.yml` | Schedule / manual dispatch | Checks cross-repo contracts that must stay aligned with `proxbox-api`. |
+
+## Complete checks and public source promotion
+
+Core and Django quality run once for feature pull requests, while main/develop
+pushes retain independent validation. Their existing version-tag and manual
+events remain unchanged. Only superseded pull-request work cancels; main and
+integration pushes finish independently. Core CI complete requires every
+original lint, type, compile, package and mocked-test producer. Django matrix
+complete requires all eight original compatibility cells with their unchanged
+profiles, dependency locks, source pins and test commands.
+
+E2E selection complete is emitted for every pull request. A checked three-dot
+Git diff applies the original path list:
+
+```text
+netbox_proxbox/**
+tests/e2e/**
+tests/test_backend_key_adoption*.py
+.github/workflows/e2e-docker.yml
+scripts/e2e_*.py
+tests/test_e2e_*.py
+```
+
+The classifier uses NUL-delimited names and disables rename detection so a
+selected deletion or rename to an unrelated destination still runs E2E. A
+successful unrelated-path selection skips only the expensive prerequisite and
+matrix graph. Matching changes retain the original prerequisite admission and
+complete dynamic matrix, including the existing experimental Rust allowance.
+Invalid or failed selection, missing output, failed admission and incomplete or
+failed mandatory producers fail the completion check. Non-PR events retain the
+original selected graph. Page Coverage now also validates open main pull
+requests; its reusable and merged-PR events remain unchanged, and only
+superseded live pull-request work cancels.
+
+Public source promotion uses reviewed pull requests. Strict public protection
+must use genuine exact-candidate results for Core CI complete, Django matrix
+complete, E2E selection complete, Page Coverage and the original strict docs
+build, with their actual emitted check identities bound to GitHub Actions.
+Local summaries alone cannot authorize integration or replace canonical native
+checks. These public results remain non-security evidence.
+
+Once strict public checks are installed, the legacy direct-main mirror workflow
+registration must remain disabled. Its retained source is historical and does
+not authorize a direct push. A CI-only integration must not publish Pages,
+packages, release assets or container images. Temporarily pause only the
+original docs writer around its main event, then restore its original state
+after complete quality outcomes and proof that the event is processed with no
+active writer. Do not replay that event or dispatch a Pages publication. Other
+writer controls and their separate publication authorization remain unchanged.
 
 ## E2E prerequisite admission and readiness
 
