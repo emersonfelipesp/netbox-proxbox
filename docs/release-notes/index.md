@@ -4,7 +4,7 @@ This section tracks the release line represented by this repository and keeps ol
 
 ## Current Release Line
 
-The plugin source in this repository is currently `0.0.32.post1`. The sibling plugins (`netbox-pbs`,
+The plugin source in this repository is currently `0.0.32.post2`. The sibling plugins (`netbox-pbs`,
 `netbox-ceph`, and `netbox-pdm`) live in standalone repositories under
 [@emersonfelipesp](https://github.com/emersonfelipesp) and declare
 `netbox-proxbox>=0.0.25.post2,<0.1.0` as an install-time dependency.
@@ -81,6 +81,7 @@ part of the same plugin family.
 
 | Version | Summary |
 |---------|---------|
+| `0.0.32.post2` | Pairs with proxbox-api `0.0.32`, adds the Talos product type to the paired backend contract, improves screenshot readiness checks, and repairs cluster tracking for upgraded multi-endpoint installations. No migration. See [Version 0.0.32.post2](version-0.0.32.post2.md). |
 | `0.0.32.post1` | Aligns plugin node routes, sync-state repair, and CLI commands with proxbox-api `0.0.31`. See [Version 0.0.32.post1](version-0.0.32.post1.md). |
 | `0.0.32` | Maintenance release that admits selected prerequisites before matrix expansion, fails fast on terminal or unhealthy services, runs package modes only with Python, refuses explicit PyO3/Rust package requests, and retains one advisory published-image row. Pairs with proxbox-api `0.0.31`, deployed first. See [Version 0.0.32](version-0.0.32.md). |
 | `0.0.32rc2` | Corrects release validation so package-index rows run only the Python runtime that proxbox-api packages provide, refuse explicit PyO3/Rust package requests, and retain narrow PyO3/Rust coverage through the paired published image. See [Version 0.0.32](version-0.0.32.md). |
@@ -161,6 +162,6 @@ part of the same plugin family.
 - Older pages are intentionally brief because the repository does not preserve fuller release-note prose for those versions.
 
 
-> **Current source:** netbox-proxbox `0.0.32` supports NetBox `4.5.8`-`4.7.99`, including official v4.7.0 GA and later 4.7 patch releases. It requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+> **Current source:** netbox-proxbox `0.0.32.post2` supports NetBox `4.5.8`-`4.7.99`, including official v4.7.0 GA and later 4.7 patch releases. It requires proxbox-api 0.0.32 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
-Current released runtime requirement: deploy proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired) before netbox-proxbox 0.0.32. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+Current released runtime requirement: deploy proxbox-api 0.0.32 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired) before netbox-proxbox 0.0.32.post2. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.

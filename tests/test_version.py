@@ -107,11 +107,11 @@ CERTIFICATION_PATH = REPO_ROOT / "CERTIFICATION.md"
 DOCS_CERTIFICATION_PATH = REPO_ROOT / "docs" / "certification.md"
 APPLICATION_PACKET_PATH = REPO_ROOT / "docs" / "application-packet.md"
 
-CURRENT_PLUGIN_VERSION = "0.0.32.post1"
-CURRENT_RELEASE_VERSION = "0.0.32.post1"
-CURRENT_PACKAGE_VERSION = "0.0.32.post1"
-CURRENT_BACKEND_REQUIREMENT = "proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired)"
-PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.31"
+CURRENT_PLUGIN_VERSION = "0.0.32.post2"
+CURRENT_RELEASE_VERSION = "0.0.32.post2"
+CURRENT_PACKAGE_VERSION = "0.0.32.post2"
+CURRENT_BACKEND_REQUIREMENT = "proxbox-api 0.0.32 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired)"
+PROXBOX_API_WORKFLOW_DEFAULT_VERSION = "0.0.32"
 CURRENT_NETBOX_MIN_VERSION = "4.5.8"
 # Ceiling of the backward-compatible stable tier: the whole NetBox 4.7 series.
 CURRENT_NETBOX_STABLE_MAX_VERSION = "4.7.99"
@@ -278,7 +278,7 @@ PREVIOUS_PLUGIN_VERSION = "0.0.22"
 PREVIOUS_PROXBOX_API_VERSION = "0.0.19.post5"
 RELEASE_NOTES_029_PATH = REPO_ROOT / "docs" / "release-notes" / "version-0.0.29.md"
 CURRENT_RELEASE_NOTES_PATH = (
-    REPO_ROOT / "docs" / "release-notes" / "version-0.0.32.post1.md"
+    REPO_ROOT / "docs" / "release-notes" / "version-0.0.32.post2.md"
 )
 
 

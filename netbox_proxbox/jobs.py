@@ -2070,6 +2070,12 @@ def _cluster_result_summary(
     result: object,
 ) -> str:
     """Log and return one cluster/node service result summary."""
+    released = getattr(result, "tracking_links_released", 0)
+    if isinstance(released, int) and released > 0:
+        job.logger.warning(
+            f"Released {released} stale cross-endpoint cluster tracking link(s) "
+            f"for endpoint {endpoint_id}; live discovery reports a different cluster"
+        )
     if result.success:
         summary = (
             f"{result.clusters_created} cluster(s) created, "

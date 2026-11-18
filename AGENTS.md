@@ -45,7 +45,7 @@ facts that an agent must have even when `@CLAUDE.md` expansion is unavailable:
   endpoint overrides, read each required global setting at most once per
   serializer, and derive OpenBao SSH readiness from one list-wide, actor-
   authorized credential metadata query without resolving credential material.
-- Keep proxbox-api 0.0.31 contract lookups explicit: VM cloud-init uses
+- Keep proxbox-api 0.0.32 contract lookups explicit: VM cloud-init uses
   `virtual_machine_id`; node lookups use `proxmox_cluster_id` (the tracked
   Proxmox cluster primary key); SDN route maps use `order`; and SDN prefix lists
   use `cidr`. Metrics pulls use `source=database` with the translated backend
@@ -173,16 +173,16 @@ The complete semantic bridge contract is
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.99` (the whole 4.7 series is admitted by the numeric gate; CI verifies GA `4.7.0`). The current
-plugin version is `0.0.32.post1`.
+plugin version is `0.0.32.post2`.
 
-Current source compatibility: netbox-proxbox 0.0.32.post1 requires proxbox-api 0.0.31 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source compatibility: netbox-proxbox 0.0.32.post2 requires proxbox-api 0.0.32 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The documented released runtime pairing for this release line is
-netbox-proxbox 0.0.32.post1 <-> proxbox-api 0.0.31 <-> proxmox-sdk 0.0.15
+netbox-proxbox 0.0.32.post2 <-> proxbox-api 0.0.32 <-> proxmox-sdk 0.0.15
 <-> netbox-sdk 0.0.13. Do not rewrite historical release notes when the source
 pairing advances.
 
-Current released runtime requirement: deploy proxbox-api 0.0.31 before netbox-proxbox 0.0.32.post1. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+Current released runtime requirement: deploy proxbox-api 0.0.32 before netbox-proxbox 0.0.32.post2. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
 ## Current implementation surfaces
 
@@ -494,6 +494,15 @@ metadata updates may repeat the same relation. Use endpoint → native cluster �
 tracking → sidecar lock order, and refresh preflight endpoint identity under its
 lock. The action derives tracking/sidecar authority from exact endpoint/core
 grants. Its additive `changed` flag excludes timestamp-only updates.
+The cluster/node pass releases stale cross-endpoint tracking links that
+releases before endpoint-scoped discovery left behind
+(`services/cluster_tracking_repair.py`). It requires exactly one named cluster
+record in the live response, then acts only on the endpoint's own
+rows when they link more than one native cluster, exactly one linked row has
+the endpoint's live backend-scoped cluster name, and the endpoint authority is
+absent or equal to that row's cluster. It clears only the other rows' native
+links and the sidecar pointers to them, in its own transaction. It never
+deletes rows, writes another endpoint, or changes native clusters.
 See [the operator contract](docs/features/proxmox-cluster-binding.md).
 
 
