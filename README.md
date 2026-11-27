@@ -244,7 +244,7 @@ other tenants.
   for troubleshooting. See
   [Recovering / Regenerating Proxbox Data](docs/operations/recovering-proxbox-data.md).
 
-## What's New in v0.0.33rc2
+## What's New in v0.0.33rc3
 
 This release candidate establishes stable Proxmox VE 9.3 guest UID identity.
 Migration `0109_guest_uid_identity` adds `proxmox_vm_uid` and
@@ -253,9 +253,9 @@ Proxmox cluster model. The UID pair is the primary guest identity when present;
 the legacy endpoint, VMID, and guest-type chain remains the fallback. Existing
 name-collision and `duplicate_name_resolved` behavior is unchanged.
 
-Current source compatibility: netbox-proxbox 0.0.33rc2 requires proxbox-api 0.0.33 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.16.post1 and netbox-sdk 0.0.13. Deploy proxbox-api 0.0.33 before the plugin.
+Current source compatibility: netbox-proxbox 0.0.33rc3 requires proxbox-api 0.0.33 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.16.post1 and netbox-sdk 0.0.13. Deploy proxbox-api 0.0.33 before the plugin.
 
-[Release Notes - v0.0.33rc2](docs/release-notes/version-0.0.33.md).
+[Release Notes - v0.0.33rc3](docs/release-notes/version-0.0.33.md).
 
 ## What's New in v0.0.32.post2
 
@@ -598,7 +598,7 @@ Full notes: [Release Notes — v0.0.18](https://emersonfelipesp.github.io/netbox
 
 | NetBox | netbox-proxbox | proxbox-api | proxbox-api internal netbox-sdk (REST only) | proxmox-sdk |
 |--------|----------------|-------------|------------|-------------|
-| 4.5.8-4.7.0 GA | v0.0.33rc2 | v0.0.33 | v0.0.13 | v0.0.16.post1 |
+| 4.5.8-4.7.0 GA | v0.0.33rc3 | v0.0.33 | v0.0.13 | v0.0.16.post1 |
 | 4.5.8-4.7.0 GA | v0.0.32.post2 | v0.0.32 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.32 | v0.0.31 | v0.0.13 | v0.0.15 |
 | 4.5.8-4.7.0 GA | v0.0.32rc2 | v0.0.31 | v0.0.13 | v0.0.15 |

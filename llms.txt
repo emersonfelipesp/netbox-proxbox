@@ -197,10 +197,10 @@ topology.
 
 ### Version
 
-- Plugin version: `0.0.33rc2`
+- Plugin version: `0.0.33rc3`
 - NetBox compatibility: `4.5.8` through `4.7.99`
-- Current source compatibility: `netbox-proxbox 0.0.33rc2` requires proxbox-api 0.0.33 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with `proxmox-sdk 0.0.16.post1` and `netbox-sdk 0.0.13`.
-- Documented release-candidate runtime pairing: `netbox-proxbox 0.0.33rc2`,
+- Current source compatibility: `netbox-proxbox 0.0.33rc3` requires proxbox-api 0.0.33 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with `proxmox-sdk 0.0.16.post1` and `netbox-sdk 0.0.13`.
+- Documented release-candidate runtime pairing: `netbox-proxbox 0.0.33rc3`,
   `proxbox-api 0.0.33`, `proxmox-sdk 0.0.16.post1`, and `netbox-sdk 0.0.13`
 
 ---
@@ -1776,11 +1776,11 @@ and use reviewed explicit recovery rather than rewriting applied history.
 
 ## Release-candidate backend pairing
 
-The release-candidate runtime pairing is netbox-proxbox 0.0.33rc2 with proxbox-api 0.0.33, proxmox-sdk 0.0.16.post1, and netbox-sdk 0.0.13. Deploy and qualify the backend before the plugin.
+The release-candidate runtime pairing is netbox-proxbox 0.0.33rc3 with proxbox-api 0.0.33, proxmox-sdk 0.0.16.post1, and netbox-sdk 0.0.13. Deploy and qualify the backend before the plugin.
 
-## Version 0.0.33rc2 stable Proxmox VE 9.3 guest UID identity
+## Version 0.0.33rc3 stable Proxmox VE 9.3 guest UID identity
 
-Version 0.0.33rc2 adds migration 0109_guest_uid_identity. It stores the
+Version 0.0.33rc3 adds migration 0109_guest_uid_identity. It stores the
 20-character lowercase-base32 Proxmox guest UID and cluster UID in VM sync
 state and stores the cluster UID on tracked Proxmox clusters. A partial unique
 constraint protects each non-empty UID pair. Filters, serializers, tables, and

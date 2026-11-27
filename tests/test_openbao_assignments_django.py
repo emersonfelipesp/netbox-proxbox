@@ -1165,6 +1165,10 @@ def test_policy_slug_migration_round_trip(pytestconfig, transactional_db) -> Non
                 "ALTER TABLE netbox_proxbox_proxboxpluginsettings "
                 "ALTER COLUMN sync_job_timeout SET DEFAULT 7200"
             )
+            cursor.execute(
+                "ALTER TABLE netbox_proxbox_proxboxpluginsettings "
+                "ALTER COLUMN storage_download_allowed_hosts SET DEFAULT '[]'::jsonb"
+            )
         try:
             old_row = old_model.objects.create(singleton_key="default")
         finally:
@@ -1180,6 +1184,10 @@ def test_policy_slug_migration_round_trip(pytestconfig, transactional_db) -> Non
                 cursor.execute(
                     "ALTER TABLE netbox_proxbox_proxboxpluginsettings "
                     "ALTER COLUMN sync_job_timeout DROP DEFAULT"
+                )
+                cursor.execute(
+                    "ALTER TABLE netbox_proxbox_proxboxpluginsettings "
+                    "ALTER COLUMN storage_download_allowed_hosts DROP DEFAULT"
                 )
 
         executor = MigrationExecutor(connection)

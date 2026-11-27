@@ -110,9 +110,9 @@ replacement hidden key or delete the accepted remote key as a rollback tactic.
 
 - Proxbox `0.0.29` source supports NetBox `4.5.8` through `4.7.99`, including official v4.7.0 GA and later 4.7 patch releases such as v4.7.2. It is validated against `v4.5.8` through `v4.5.10`, `v4.6.0` through `v4.6.6`, and exact v4.7.0 source commit `5f06007e4c9bacc93ce17c1e645fc1143d60df3d`. The current sibling source and released runtime stack is `proxbox-api 0.0.27.post4`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`.
 
-Current release-candidate runtime requirement: netbox-proxbox 0.0.33rc2 requires proxbox-api 0.0.33. Deploy that backend before upgrading the plugin. The proxmox-sdk and netbox-sdk versions are 0.0.16.post1 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+Current release-candidate runtime requirement: netbox-proxbox 0.0.33rc3 requires proxbox-api 0.0.33. Deploy that backend before upgrading the plugin. The proxmox-sdk and netbox-sdk versions are 0.0.16.post1 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
-- Upgrading from `0.0.32.post2` to `0.0.33rc2` adds exactly one migration, `0109_guest_uid_identity` (guest and cluster UID identity plus the storage download host allowlist setting). Deploy proxbox-api `0.0.33` first, install the plugin, run the normal `migrate` and `collectstatic` steps, and restart every deployment-owned NetBox application and worker process.
+- Upgrading from `0.0.32.post2` to `0.0.33rc3` adds exactly one migration, `0109_guest_uid_identity` (guest and cluster UID identity plus the storage download host allowlist setting). Deploy proxbox-api `0.0.33` first, install the plugin, run the normal `migrate` and `collectstatic` steps, and restart every deployment-owned NetBox application and worker process.
 
 - Upgrading from `0.0.32.post1` to `0.0.32.post2` adds no migration. Deploy proxbox-api `0.0.32` first, then install the plugin, run the normal `collectstatic` step, and restart every deployment-owned NetBox application and worker process. The first cluster/node pass conservatively repairs stale cross-endpoint cluster tracking created by older releases.
 - Upgrading from `0.0.31` to `0.0.32.post1` adds no migration and does not change plugin runtime behavior, models, or dependencies. Deploy proxbox-api `0.0.31` first, then install the plugin, run the normal `collectstatic` step, and restart every deployment-owned NetBox application and worker process. The two projects release as a pair.
@@ -151,7 +151,7 @@ install a backend build containing that fix, or the next fixed backend release,
 before re-testing VM IP sync.
 
 
-> **Current source:** netbox-proxbox `0.0.33rc2` supports NetBox `4.5.8`-`4.7.99` stable, including v4.7.0 GA and later 4.7 patch releases. It requires proxbox-api 0.0.33 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), deployed before the plugin, with proxmox-sdk 0.0.16.post1 and netbox-sdk 0.0.13. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+> **Current source:** netbox-proxbox `0.0.33rc3` supports NetBox `4.5.8`-`4.7.99` stable, including v4.7.0 GA and later 4.7 patch releases. It requires proxbox-api 0.0.33 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), deployed before the plugin, with proxmox-sdk 0.0.16.post1 and netbox-sdk 0.0.13. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
 
 ## Post-candidate validation boundary
@@ -171,4 +171,4 @@ rewrite deployed history, or silently repair an unexpected schema. Reverse of
 and data evidence for explicit reviewed recovery. The original 0107 reverse
 controls remain historical and do not prove that 0108 removes those objects.
 
-The release-candidate runtime pairing is netbox-proxbox 0.0.33rc2 with proxbox-api 0.0.33, proxmox-sdk 0.0.16.post1, and netbox-sdk 0.0.13. Deploy and qualify the backend before the plugin.
+The release-candidate runtime pairing is netbox-proxbox 0.0.33rc3 with proxbox-api 0.0.33, proxmox-sdk 0.0.16.post1, and netbox-sdk 0.0.13. Deploy and qualify the backend before the plugin.
