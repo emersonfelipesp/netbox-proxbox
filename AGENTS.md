@@ -45,7 +45,7 @@ facts that an agent must have even when `@CLAUDE.md` expansion is unavailable:
   endpoint overrides, read each required global setting at most once per
   serializer, and derive OpenBao SSH readiness from one list-wide, actor-
   authorized credential metadata query without resolving credential material.
-- Keep proxbox-api 0.0.32 contract lookups explicit: VM cloud-init uses
+- Keep proxbox-api 0.0.33 contract lookups explicit: VM cloud-init uses
   `virtual_machine_id`; node lookups use `proxmox_cluster_id` (the tracked
   Proxmox cluster primary key); SDN route maps use `order`; and SDN prefix lists
   use `cidr`. Metrics pulls use `source=database` with the translated backend
@@ -66,6 +66,10 @@ facts that an agent must have even when `@CLAUDE.md` expansion is unavailable:
 - Keep `ProxboxPluginSettings.sync_job_timeout` UI-backed and bounded to
   3600–604800 seconds. Resolve it when enqueueing a sync job, preserve explicit
   per-enqueue overrides, and never mutate the timeout of an already-running job.
+- Keep `ProxboxPluginSettings.storage_download_allowed_hosts` as the normalized
+  exact hostname allowlist used by backend consumers for Proxmox ISO URL downloads.
+  Permit only HTTPS port 443, treat an empty list as deny-all, and configure
+  only trusted vendor hosts without open redirects.
 - Keep `Dockerfile.oci` testing-only, preserve its separate NetBox and
   proxbox-api Python runtimes, and keep its OCI entrypoint equivalent to the
   Proxmox LXC `/sbin/init` path. Release builds must use the single
@@ -173,21 +177,25 @@ The complete semantic bridge contract is
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.99` (the whole 4.7 series is admitted by the numeric gate; CI verifies GA `4.7.0`). The current
-plugin version is `0.0.32.post2`.
+plugin version is `0.0.33rc1`.
 
-Current source compatibility: netbox-proxbox 0.0.32.post2 requires proxbox-api 0.0.32 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source compatibility: netbox-proxbox 0.0.33rc1 requires proxbox-api 0.0.33 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.16.post1 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The documented released runtime pairing for this release line is
-netbox-proxbox 0.0.32.post2 <-> proxbox-api 0.0.32 <-> proxmox-sdk 0.0.15
+netbox-proxbox 0.0.33rc1 <-> proxbox-api 0.0.33 <-> proxmox-sdk 0.0.16.post1
 <-> netbox-sdk 0.0.13. Do not rewrite historical release notes when the source
 pairing advances.
 
-Current released runtime requirement: deploy proxbox-api 0.0.32 before netbox-proxbox 0.0.32.post2. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+Current release-candidate runtime requirement: deploy proxbox-api 0.0.33 before netbox-proxbox 0.0.33rc1. The proxmox-sdk and netbox-sdk versions are 0.0.16.post1 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
 ## Current implementation surfaces
 
-The current schema tip is migration `0108_v0_0_31_schema_validation`, which
-validates the physical objects of the immutable `0107_v0_0_30_release`. The
+The current schema tip is migration `0109_guest_uid_identity`, which adds
+Proxmox VE 9.3 guest and cluster UID identity and the
+`storage_download_allowed_hosts` plugin setting (the development-only `0110`
+was consolidated into it for 0.0.33) after
+`0108_v0_0_31_schema_validation` validates the physical objects of the immutable
+`0107_v0_0_30_release`. The
 prior 0107 consolidates the
 three unpublished development migrations for native cluster binding,
 endpoint-owned SSH services, and Cloud Image SSH binding. Installations that
@@ -215,6 +223,12 @@ legacy candidates, never ownership proof. A consumer must corroborate actual
 cluster, site, and placement even for a singleton candidate before adoption.
 Device-sidecar claims lock the row; NULL-to-ID and same-ID writes are allowed,
 while changing a committed ID returns `endpoint_ownership_conflict`.
+VM sync-state identity stores Proxmox VE 9.3 guest `uid` and cluster
+`cluster-id` as `proxmox_vm_uid` and `proxmox_cluster_uid`. proxbox-api uses
+the unique non-empty `(proxmox_cluster_uid, proxmox_vm_uid)` pair as primary
+guest identity; legacy `(endpoint, vmid, type)` remains the fallback, and name
+suffixing is unchanged. `ProxmoxCluster.proxmox_cluster_uid` is separate from
+the existing `cluster_id`; pre-9.3 status without `cluster-id` must not erase it.
 Remote NetBox connection approval binds the effective token version and its
 non-secret v1 token reference or effective v2 key selected for transmission.
 Token changes require explicit

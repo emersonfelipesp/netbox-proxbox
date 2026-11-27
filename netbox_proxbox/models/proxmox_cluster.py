@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import models, transaction
 from django.urls import NoReverseMatch, reverse
 from django.utils.translation import gettext_lazy as _
@@ -44,6 +45,20 @@ class ProxmoxCluster(NetBoxModel):
         blank=True,
         verbose_name=_("Cluster ID"),
         help_text=_("Proxmox cluster ID."),
+    )
+    proxmox_cluster_uid = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_default="",
+        validators=[
+            RegexValidator(
+                regex=r"^[^\s\x00-\x1f\x7f]+\Z",
+                message="Cluster UID cannot contain whitespace or control characters.",
+            )
+        ],
+        verbose_name=_("Proxmox cluster UID"),
+        help_text=_("Stable cluster-id reported by Proxmox VE 9.3 or later."),
     )
     mode = models.CharField(
         max_length=255,

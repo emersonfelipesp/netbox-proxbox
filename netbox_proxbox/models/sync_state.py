@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from django.core.exceptions import ValidationError
+from django.core.validators import RegexValidator
 from django.db import models
 from django.utils.translation import gettext_lazy as _
 
@@ -77,6 +78,31 @@ class ProxboxVirtualMachineSyncState(ProxboxSyncStateBase):
     proxmox_endpoint_raw_id = models.IntegerField(null=True, blank=True)
 
     proxmox_vm_id = models.IntegerField(null=True, blank=True)
+    proxmox_vm_uid = models.CharField(
+        max_length=20,
+        blank=True,
+        default="",
+        db_default="",
+        db_index=True,
+        validators=[
+            RegexValidator(
+                regex=r"^[a-z2-7]{20}$",
+                message="Enter a valid 20-character Proxmox guest UID.",
+            )
+        ],
+    )
+    proxmox_cluster_uid = models.CharField(
+        max_length=64,
+        blank=True,
+        default="",
+        db_default="",
+        validators=[
+            RegexValidator(
+                regex=r"^[^\s\x00-\x1f\x7f]+\Z",
+                message="Cluster UID cannot contain whitespace or control characters.",
+            )
+        ],
+    )
     proxmox_vm_type = models.CharField(max_length=64, blank=True)
     # Name this VM had in Proxmox as of the last successful sync.
     #
@@ -132,6 +158,15 @@ class ProxboxVirtualMachineSyncState(ProxboxSyncStateBase):
         ordering = ("virtual_machine",)
         verbose_name = _("Proxbox virtual machine sync state")
         verbose_name_plural = _("Proxbox virtual machine sync states")
+        constraints = [
+            models.UniqueConstraint(
+                fields=("proxmox_cluster_uid", "proxmox_vm_uid"),
+                condition=(
+                    ~models.Q(proxmox_vm_uid="") & ~models.Q(proxmox_cluster_uid="")
+                ),
+                name="netbox_proxbox_vm_sync_unique_cluster_guest_uid",
+            )
+        ]
 
     def __str__(self) -> str:
         return f"{self.virtual_machine} Proxbox sync state"

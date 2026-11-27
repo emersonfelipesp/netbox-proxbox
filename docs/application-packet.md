@@ -64,6 +64,6 @@ evidence on disposable data — not a production certification.
 
 ## Maintenance source
 
-The current release source is `0.0.32.post2`.
+The current release-candidate source is `0.0.33rc1`.
 The artifact and certification evidence described above remain the preceding
 `0.0.29` baseline; this release identity does not establish new certification.

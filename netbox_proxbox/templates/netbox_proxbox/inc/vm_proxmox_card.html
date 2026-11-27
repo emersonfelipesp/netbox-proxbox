@@ -9,6 +9,14 @@
                     <td>{{ sync_state.proxmox_vm_id|default_if_none:"—" }}</td>
                 </tr>
                 <tr>
+                    <th scope="row">{% trans "Proxmox guest UID" %}</th>
+                    <td>{{ sync_state.proxmox_vm_uid|default:"—" }}</td>
+                </tr>
+                <tr>
+                    <th scope="row">{% trans "Proxmox cluster UID" %}</th>
+                    <td>{{ sync_state.proxmox_cluster_uid|default:"—" }}</td>
+                </tr>
+                <tr>
                     <th scope="row">{% trans "VM type" %}</th>
                     <td>{{ sync_state.proxmox_vm_type|default:"—" }}</td>
                 </tr>

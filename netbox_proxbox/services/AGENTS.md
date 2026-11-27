@@ -218,7 +218,10 @@ This directory contains service-layer modules for backend HTTP proxy, keepalive 
   cancellation is never recorded that way: `jobs._is_job_cancellation()`
   re-raises the job deadline and the worker timeout, which both derive from
   `Exception`, so a cancelled job stops instead of continuing to the backfill.
-- [`sync_cluster.py`](./sync_cluster.py): sync coordination for cluster and node inventory.
+- [`sync_cluster.py`](./sync_cluster.py): sync coordination for cluster and node
+  inventory. It stores Proxmox VE 9.3 `cluster-id` from the cluster status row,
+  or from the `local==1` node for standalone mode. An omitted pre-9.3 value
+  never clears `ProxmoxCluster.proxmox_cluster_uid`.
 - [`cluster_tracking_repair.py`](./cluster_tracking_repair.py): endpoint-local
   release of stale cross-endpoint tracking links. Releases before
   endpoint-scoped discovery gave every endpoint a tracking row for every

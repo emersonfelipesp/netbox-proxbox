@@ -1,0 +1,8 @@
+{
+  "ProxmoxVMCloudInitFilterSet": ["virtual_machine_id"],
+  "ProxmoxNodeFilterSet": ["name", "proxmox_cluster_id"],
+  "ProxboxVirtualMachineSyncStateFilterSet": ["proxmox_vm_uid", "proxmox_cluster_uid"],
+  "ProxmoxSdnRouteMapFilterSet": ["endpoint", "cluster_name", "name", "order"],
+  "ProxmoxSdnPrefixListFilterSet": ["endpoint", "cluster_name", "name", "cidr"],
+  "ReplicationFilterSet": ["endpoint", "replication_id", "status"]
+}

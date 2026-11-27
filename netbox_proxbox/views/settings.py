@@ -197,6 +197,9 @@ class SettingsView(
                 "cloud_network_lock_enabled",
                 False,
             ),
+            "storage_download_allowed_hosts": "\n".join(
+                getattr(settings_obj, "storage_download_allowed_hosts", []) or []
+            ),
             "cloud_customer_prefix_id": getattr(
                 settings_obj,
                 "cloud_customer_prefix_id",
@@ -419,6 +422,9 @@ class SettingsView(
             settings_obj.cloud_network_lock_enabled = form.cleaned_data.get(
                 "cloud_network_lock_enabled", False
             )
+            settings_obj.storage_download_allowed_hosts = form.cleaned_data.get(
+                "storage_download_allowed_hosts", []
+            )
             settings_obj.cloud_customer_prefix_id = form.cleaned_data.get(
                 "cloud_customer_prefix_id"
             )
@@ -597,6 +603,7 @@ def _save_settings(settings_obj: ProxboxPluginSettings) -> None:
             "enable_tenant_tag_assignment",
             "enable_tenant_from_cluster",
             "cloud_network_lock_enabled",
+            "storage_download_allowed_hosts",
             "cloud_customer_prefix_id",
             "cloud_customer_bridge",
             "cloud_customer_vlan_tag",

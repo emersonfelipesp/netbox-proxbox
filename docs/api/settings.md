@@ -62,6 +62,7 @@ curl -X PATCH \
   "ignore_ipv6_link_local_addresses": true,
   "delete_orphans": false,
   "cloud_network_lock_enabled": true,
+  "storage_download_allowed_hosts": ["downloads.example.com"],
   "cloud_customer_prefix_id": 123,
   "cloud_customer_bridge": "vmbr1",
   "cloud_customer_vlan_tag": 2050,
@@ -194,6 +195,7 @@ than the task timeout are rejected by the model, form, and API serializer.
 | Field | Type | Description |
 |---|---|---|
 | `cloud_network_lock_enabled` | boolean | When `true`, cloud provisioning integrations should treat the configured customer network fields as authoritative |
+| `storage_download_allowed_hosts` | array of strings | Exact normalized hostnames allowed for Proxmox ISO URL downloads over HTTPS port 443. An empty list denies every download. Allow only trusted vendor hosts without open redirects. |
 | `cloud_customer_prefix_id` | integer or null | Primary key of the NetBox IPAM Prefix designated as the cloud customer network |
 | `cloud_customer_bridge` | string | Proxmox bridge name used for customer-facing cloud interfaces |
 | `cloud_customer_vlan_tag` | integer or null | VLAN tag associated with the designated cloud customer network |

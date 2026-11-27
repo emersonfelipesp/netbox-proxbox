@@ -78,7 +78,7 @@ def test_migration_graph_has_exactly_one_leaf() -> None:
         "This normally means two branches added a migration against the same "
         "parent. Renumber the later one and depend it on the earlier."
     )
-    assert leaves == ["0108_v0_0_31_schema_validation"]
+    assert leaves == ["0109_guest_uid_identity"]
 
 
 def test_release_migration_replaces_development_lineage() -> None:

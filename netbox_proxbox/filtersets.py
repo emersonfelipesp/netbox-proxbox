@@ -928,6 +928,8 @@ class ProxboxVirtualMachineSyncStateFilterSet(ProxboxSyncStateFilterSet):
             "proxmox_node",
             "proxmox_node_id",
             "proxmox_cluster",
+            "proxmox_vm_uid",
+            "proxmox_cluster_uid",
             "proxmox_cluster_id",
             "proxmox_vm_id",
             "proxmox_vm_type",
@@ -1460,14 +1462,24 @@ class ProxmoxClusterFilterSet(ProxboxModelFilterSet):
 
     class Meta:
         model = ProxmoxCluster
-        fields = ("id", "endpoint", "netbox_cluster", "name", "mode", "quorate")
+        fields = (
+            "id",
+            "endpoint",
+            "netbox_cluster",
+            "name",
+            "proxmox_cluster_uid",
+            "mode",
+            "quorate",
+        )
 
     def search(self, queryset: QuerySet, name: str, value: str) -> QuerySet:
         """Match cluster name or cluster ID."""
         if not value.strip():
             return queryset
         return queryset.filter(
-            Q(name__icontains=value) | Q(cluster_id__icontains=value)
+            Q(name__icontains=value)
+            | Q(cluster_id__icontains=value)
+            | Q(proxmox_cluster_uid__icontains=value)
         )
 
 

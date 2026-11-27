@@ -92,6 +92,7 @@ from netbox_proxbox.filtersets import (  # noqa: E402
     ProxboxVirtualDiskSyncStateFilterSet,
     ProxboxVirtualMachineSyncStateFilterSet,
     ProxboxVMInterfaceSyncStateFilterSet,
+    ProxmoxClusterFilterSet,
 )
 from netbox_proxbox.models import (  # noqa: E402
     ProxboxClusterGroupSyncState,
@@ -112,6 +113,10 @@ from netbox_proxbox.models import (  # noqa: E402
     ProxmoxEndpoint,
     ProxmoxNode,
     ProxmoxStorage,
+)
+from netbox_proxbox.services.sync_cluster import (  # noqa: E402
+    _cluster_tracking_values,
+    _status_cluster_uid,
 )
 from tests.django_support import (  # noqa: E402
     ForwardOnlyMigrationTestCase,
@@ -483,6 +488,112 @@ class ProxboxSyncStateModelTest(_SyncStateFixturesMixin, TestCase):
         self.assertEqual(vm_row.proxmox_node_name, "unresolved-node")
         self.assertEqual(vm_row.proxmox_endpoint_raw_id, 99999)
 
+    def test_guest_uid_validators_accept_valid_and_blank_values(self) -> None:
+        for vm_uid, cluster_uid in (
+            ("abcde23456abcde23456", "cluster-uid-01"),
+            ("", ""),
+        ):
+            with self.subTest(vm_uid=vm_uid, cluster_uid=cluster_uid):
+                row = ProxboxVirtualMachineSyncState(
+                    virtual_machine=self.vm,
+                    proxmox_vm_uid=vm_uid,
+                    proxmox_cluster_uid=cluster_uid,
+                )
+                row.full_clean()
+
+    def test_cluster_uid_reads_alias_and_extra_sdk_shapes(self) -> None:
+        aliased = SimpleNamespace(cluster_id="a1b2c3d4-e5f6-7890")
+        self.assertEqual(
+            _status_cluster_uid(aliased, []),
+            "a1b2c3d4-e5f6-7890",
+        )
+
+        cluster_extra = SimpleNamespace(
+            cluster_id=None,
+            model_extra={"cluster-id": "cluster-extra-uid"},
+        )
+        self.assertEqual(
+            _status_cluster_uid(cluster_extra, []),
+            "cluster-extra-uid",
+        )
+
+        local_node = SimpleNamespace(
+            local=True,
+            cluster_id=None,
+            model_extra={"cluster-id": "standalone-extra-uid"},
+        )
+        self.assertEqual(
+            _status_cluster_uid(None, [local_node]),
+            "standalone-extra-uid",
+        )
+
+    def test_absent_cluster_uid_is_omitted_from_tracking_update(self) -> None:
+        record = SimpleNamespace(
+            id="cluster/pve",
+            nodes=1,
+            quorate=True,
+            version=1,
+            cluster_id=None,
+            model_extra={},
+        )
+        self.assertIsNone(_status_cluster_uid(record, []))
+        self.assertNotIn(
+            "proxmox_cluster_uid",
+            _cluster_tracking_values(record, "pve", "cluster", []),
+        )
+
+    def test_guest_uid_validators_reject_invalid_values(self) -> None:
+        invalid_pairs = (
+            ("too-short", "cluster-uid-01"),
+            ("abcde23456abcde2345!", "cluster-uid-01"),
+            ("abcde23456abcde23456", "cluster uid"),
+            ("abcde23456abcde23456", "cluster\nuid"),
+            ("abcde23456abcde23456", "cluster-uid\n"),
+        )
+        for vm_uid, cluster_uid in invalid_pairs:
+            with self.subTest(vm_uid=vm_uid, cluster_uid=cluster_uid):
+                row = ProxboxVirtualMachineSyncState(
+                    virtual_machine=self.vm,
+                    proxmox_vm_uid=vm_uid,
+                    proxmox_cluster_uid=cluster_uid,
+                )
+                with self.assertRaises(ValidationError):
+                    row.full_clean()
+
+        self.proxmox_cluster.proxmox_cluster_uid = "cluster uid"
+        with self.assertRaises(ValidationError) as cluster_error:
+            self.proxmox_cluster.full_clean()
+        self.assertIn("proxmox_cluster_uid", cluster_error.exception.message_dict)
+
+    def test_guest_uid_pair_is_unique_only_when_both_values_are_set(self) -> None:
+        first_vm = create_test_virtualmachine("sync-state-uid-first")
+        second_vm = create_test_virtualmachine("sync-state-uid-second")
+        ProxboxVirtualMachineSyncState.objects.create(
+            virtual_machine=first_vm,
+            proxmox_vm_uid="abcde23456abcde23456",
+            proxmox_cluster_uid="cluster-uid-01",
+        )
+        with self.assertRaises(IntegrityError):
+            with transaction.atomic():
+                ProxboxVirtualMachineSyncState.objects.create(
+                    virtual_machine=second_vm,
+                    proxmox_vm_uid="abcde23456abcde23456",
+                    proxmox_cluster_uid="cluster-uid-01",
+                )
+
+        for index, (vm_uid, cluster_uid) in enumerate(
+            (("", "cluster-uid-01"), ("abcde23456abcde23456", ""), ("", ""))
+        ):
+            for duplicate in range(2):
+                vm = create_test_virtualmachine(
+                    f"sync-state-uid-blank-{index}-{duplicate}"
+                )
+                ProxboxVirtualMachineSyncState.objects.create(
+                    virtual_machine=vm,
+                    proxmox_vm_uid=vm_uid,
+                    proxmox_cluster_uid=cluster_uid,
+                )
+
     def test_model_clean_rejects_cross_parent_node_and_cluster_relations(self) -> None:
         other_device = create_test_device("sync-state-model-other-device")
         other_node = ProxmoxNode.objects.create(
@@ -636,6 +747,8 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
                     "proxmox_cluster_name": "pve-sync",
                     "proxmox_endpoint_raw_id": self.endpoint.pk,
                     "proxmox_vm_id": 9001,
+                    "proxmox_vm_uid": "abcde23456abcde23456",
+                    "proxmox_cluster_uid": "cluster-uid-01",
                     "proxmox_vm_type": "qemu",
                     "proxmox_last_synced_role_id": 11,
                     "proxmox_start_at_boot": True,
@@ -651,6 +764,8 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
             virtual_machine=self.vm_for_api
         )
         self.assertEqual(row.proxmox_vm_id, 9001)
+        self.assertEqual(row.proxmox_vm_uid, "abcde23456abcde23456")
+        self.assertEqual(row.proxmox_cluster_uid, "cluster-uid-01")
         self.assertEqual(row.proxmox_last_synced_role_id, 11)
         self.assertEqual(row.endpoint, self.endpoint)
         self.assertEqual(row.proxmox_node, self.proxmox_node)
@@ -667,6 +782,134 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
         self.assertEqual(patch_response.status_code, 200, patch_response.content)
         row.refresh_from_db()
         self.assertEqual(row.proxmox_status, "stopped")
+
+    def test_vm_sync_state_exposes_proxmox_93_guest_identity_end_to_end(self) -> None:
+        row = ProxboxVirtualMachineSyncState.objects.create(
+            virtual_machine=self.vm_for_api,
+            proxmox_vm_uid="abcde23456abcde23456",
+            proxmox_cluster_uid="cluster-uid-runtime",
+        )
+        detail_url = reverse(
+            "plugins-api:netbox_proxbox-api:proxboxvirtualmachinesyncstate-detail",
+            args=[row.pk],
+        )
+        response = self.client.get(detail_url, **self._auth_headers())
+        self.assertEqual(response.status_code, 200, response.content)
+        self.assertEqual(response.json()["proxmox_vm_uid"], row.proxmox_vm_uid)
+        self.assertEqual(
+            response.json()["proxmox_cluster_uid"], row.proxmox_cluster_uid
+        )
+        filtered = self.client.get(
+            reverse(
+                "plugins-api:netbox_proxbox-api:proxboxvirtualmachinesyncstate-list"
+            ),
+            {"proxmox_vm_uid": row.proxmox_vm_uid},
+            **self._auth_headers(),
+        )
+        self.assertEqual(filtered.status_code, 200, filtered.content)
+        self.assertEqual(filtered.json()["count"], 1)
+
+    def test_vm_sync_state_serializer_patch_clears_guest_identity(self) -> None:
+        row = ProxboxVirtualMachineSyncState.objects.create(
+            virtual_machine=self.vm_for_api,
+            proxmox_vm_uid="abcde23456abcde23456",
+            proxmox_cluster_uid="cluster-uid-clear",
+        )
+        response = self.client.patch(
+            reverse(
+                "plugins-api:netbox_proxbox-api:proxboxvirtualmachinesyncstate-detail",
+                args=[row.pk],
+            ),
+            data=json.dumps({"proxmox_vm_uid": "", "proxmox_cluster_uid": ""}),
+            content_type="application/json",
+            **self._auth_headers(),
+        )
+        self.assertEqual(response.status_code, 200, response.content)
+        row.refresh_from_db()
+        self.assertEqual(row.proxmox_vm_uid, "")
+        self.assertEqual(row.proxmox_cluster_uid, "")
+
+    def test_vm_sync_state_serializer_accepts_omitted_uid_fields(self) -> None:
+        vm = create_test_virtualmachine("sync-state-api-no-uids")
+        url = reverse(
+            "plugins-api:netbox_proxbox-api:proxboxvirtualmachinesyncstate-list"
+        )
+        response = self.client.post(
+            url,
+            data=json.dumps(
+                {
+                    "virtual_machine": {"id": vm.pk},
+                    "proxmox_vm_id": 9002,
+                    "proxmox_vm_type": "qemu",
+                }
+            ),
+            content_type="application/json",
+            **self._auth_headers(),
+        )
+        self.assertEqual(response.status_code, 201, response.content)
+        self.assertEqual(response.json()["proxmox_vm_uid"], "")
+        self.assertEqual(response.json()["proxmox_cluster_uid"], "")
+
+    def test_api_maps_duplicate_guest_uid_pair_to_conflict(self) -> None:
+        existing_vm = create_test_virtualmachine("sync-state-api-existing-uid")
+        new_vm = create_test_virtualmachine("sync-state-api-duplicate-uid")
+        ProxboxVirtualMachineSyncState.objects.create(
+            virtual_machine=existing_vm,
+            proxmox_vm_uid="abcde23456abcde23456",
+            proxmox_cluster_uid="cluster-uid-01",
+        )
+        url = reverse(
+            "plugins-api:netbox_proxbox-api:proxboxvirtualmachinesyncstate-list"
+        )
+        response = self.client.post(
+            url,
+            data=json.dumps(
+                {
+                    "virtual_machine": {"id": new_vm.pk},
+                    "proxmox_vm_uid": "abcde23456abcde23456",
+                    "proxmox_cluster_uid": "cluster-uid-01",
+                }
+            ),
+            content_type="application/json",
+            **self._auth_headers(),
+        )
+        self.assertEqual(response.status_code, 409, response.content)
+
+    def test_api_maps_concurrent_duplicate_guest_uid_pair_to_conflict(self) -> None:
+        existing_vm = create_test_virtualmachine("sync-state-api-racing-uid")
+        new_vm = create_test_virtualmachine("sync-state-api-race-loser")
+        ProxboxVirtualMachineSyncState.objects.create(
+            virtual_machine=existing_vm,
+            proxmox_vm_uid="abcde23456abcde23456",
+            proxmox_cluster_uid="cluster-uid-race",
+        )
+        serializer_path = (
+            "netbox_proxbox.api.serializers.sync_state."
+            "ProxboxVirtualMachineSyncStateSerializer._validate_parent_uniqueness"
+        )
+        constraint_path = (
+            "netbox_proxbox.models.sync_state."
+            "ProxboxVirtualMachineSyncState.validate_constraints"
+        )
+        with (
+            patch(serializer_path, return_value=None),
+            patch(constraint_path, return_value=None),
+        ):
+            response = self.client.post(
+                reverse(
+                    "plugins-api:netbox_proxbox-api:proxboxvirtualmachinesyncstate-list"
+                ),
+                data=json.dumps(
+                    {
+                        "virtual_machine": {"id": new_vm.pk},
+                        "proxmox_vm_uid": "abcde23456abcde23456",
+                        "proxmox_cluster_uid": "cluster-uid-race",
+                    }
+                ),
+                content_type="application/json",
+                **self._auth_headers(),
+            )
+        self.assertEqual(response.status_code, 409, response.content)
 
     def test_device_sync_state_endpoint_scope_round_trip(self) -> None:
         url = reverse("plugins-api:netbox_proxbox-api:proxboxdevicesyncstate-list")
@@ -1695,6 +1938,31 @@ class ProxboxSyncStateAPITest(_SyncStateFixturesMixin, TestCase):
         ).qs
         self.assertEqual(filtered.count(), 1)
         self.assertEqual(filtered.get().virtual_machine, self.vm)
+
+    def test_filterset_filters_guest_and_cluster_uids(self) -> None:
+        row = ProxboxVirtualMachineSyncState.objects.get(virtual_machine=self.vm)
+        row.proxmox_vm_uid = "abcde23456abcde23456"
+        row.proxmox_cluster_uid = "cluster-uid-filter"
+        row.save(update_fields=["proxmox_vm_uid", "proxmox_cluster_uid"])
+
+        for field, value in (
+            ("proxmox_vm_uid", row.proxmox_vm_uid),
+            ("proxmox_cluster_uid", row.proxmox_cluster_uid),
+        ):
+            with self.subTest(field=field):
+                filtered = ProxboxVirtualMachineSyncStateFilterSet(
+                    data={field: [value]},
+                    queryset=ProxboxVirtualMachineSyncState.objects.all(),
+                ).qs
+                self.assertEqual(list(filtered), [row])
+
+        self.proxmox_cluster.proxmox_cluster_uid = "cluster-uid-filter"
+        self.proxmox_cluster.save(update_fields=["proxmox_cluster_uid"])
+        clusters = ProxmoxClusterFilterSet(
+            data={"proxmox_cluster_uid": ["cluster-uid-filter"]},
+            queryset=ProxmoxCluster.objects.all(),
+        ).qs
+        self.assertEqual(list(clusters), [self.proxmox_cluster])
 
 
 class ProxboxSyncStateBackfillTest(_SyncStateFixturesMixin, TestCase):

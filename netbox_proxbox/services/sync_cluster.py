@@ -6,6 +6,7 @@
 from __future__ import annotations
 
 import logging
+import re
 
 import requests
 
@@ -43,6 +44,54 @@ from netbox_proxbox.views.backend_sync import resolve_backend_endpoint_id
 from netbox_proxbox.services.sync_deadline import remaining_timeout
 
 logger = logging.getLogger(__name__)
+
+_CLUSTER_UID_PATTERN = re.compile(r"^[^\s\x00-\x1f\x7f]{1,64}$")
+
+
+def _record_cluster_uid(record: object | None) -> str | None:
+    """Read a Proxmox ``cluster-id`` from aliased or extra SDK data."""
+    if record is None:
+        return None
+    value = getattr(record, "cluster_id", None)
+    if value is None and isinstance(record, dict):
+        value = record.get("cluster-id") or record.get("cluster_id")
+    if value is None:
+        model_extra = getattr(record, "model_extra", None)
+        if isinstance(model_extra, dict):
+            value = model_extra.get("cluster-id") or model_extra.get("cluster_id")
+    if not isinstance(value, str) or not _CLUSTER_UID_PATTERN.fullmatch(value):
+        return None
+    return value
+
+
+def _status_cluster_uid(
+    cluster_record: object | None,
+    node_records: list,
+) -> str | None:
+    """Return cluster UID from the cluster row or the standalone local node."""
+    cluster_uid = _record_cluster_uid(cluster_record)
+    if cluster_uid is not None:
+        return cluster_uid
+    if cluster_record is not None:
+        return None
+    local_node = next(
+        (record for record in node_records if getattr(record, "local", False)),
+        None,
+    )
+    return _record_cluster_uid(local_node)
+
+
+def _cluster_identity_record(
+    cluster_record: object | None,
+    node_records: list,
+) -> object | None:
+    """Use the cluster row, or the standalone local node as its identity row."""
+    if cluster_record is not None:
+        return cluster_record
+    return next(
+        (record for record in node_records if getattr(record, "local", False)),
+        None,
+    )
 
 
 def _endpoint_sync_mode(endpoint: ProxmoxEndpoint, resource_type: str) -> str:
@@ -211,7 +260,7 @@ def _record_cluster_sync_outcome(
 def _cluster_tracking_values(
     record: object, name: str, mode: str, nodes: list
 ) -> dict[str, object]:
-    return {
+    values = {
         "name": name,
         "cluster_id": record.id or "",
         "mode": mode,
@@ -219,6 +268,10 @@ def _cluster_tracking_values(
         "quorate": bool(record.quorate or 0),
         "version": record.version,
     }
+    cluster_uid = _status_cluster_uid(record, nodes)
+    if cluster_uid is not None:
+        values["proxmox_cluster_uid"] = cluster_uid
+    return values
 
 
 def _sync_node_records(
@@ -332,7 +385,7 @@ def _persist_cluster_and_nodes(
         cluster = _sync_cluster_record(
             endpoint,
             endpoint_id,
-            cluster_record,
+            _cluster_identity_record(cluster_record, node_records),
             node_records,
             cluster_mode,
             mode,

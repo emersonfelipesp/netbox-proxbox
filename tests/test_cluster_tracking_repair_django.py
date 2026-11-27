@@ -185,6 +185,45 @@ class _CrossLinkedFixture:
 
 
 class CrossLinkedTrackingRecoveryTest(_CrossLinkedFixture, TestCase):
+    def test_standalone_sync_stores_local_node_cluster_uid(self) -> None:
+        endpoint = ProxmoxEndpoint.objects.create(
+            name="standalone-uid-endpoint",
+            domain="standalone-uid.example.test",
+            enabled=True,
+        )
+        status = ProxmoxClusterStatusResponse.model_validate(
+            [
+                {
+                    "type": "node",
+                    "name": "standalone-uid-node",
+                    "id": "node/standalone-uid-node",
+                    "local": 1,
+                    "online": 1,
+                    "cluster-id": "standalone-cluster-uid",
+                }
+            ]
+        )
+        with (
+            patch.object(
+                sync_cluster, "resolve_backend_endpoint_id", return_value=(7, None)
+            ),
+            patch.object(
+                sync_cluster,
+                "_fetch_cluster_and_node_data",
+                return_value=(status, []),
+            ),
+        ):
+            result = sync_cluster.sync_cluster_and_nodes(
+                endpoint.pk,
+                fastapi_url="https://backend.example.test",
+                auth_headers={},
+            )
+        self.assertTrue(result.success, result.error)
+        tracking = ProxmoxCluster.objects.get(
+            endpoint=endpoint, name="standalone-uid-node"
+        )
+        self.assertEqual(tracking.proxmox_cluster_uid, "standalone-cluster-uid")
+
     def test_poisoned_state_reproduces_both_reported_failures(self) -> None:
         row = ProxmoxCluster.objects.get(endpoint=self.endpoints[0], name=NAMES[0])
         row.quorate = True

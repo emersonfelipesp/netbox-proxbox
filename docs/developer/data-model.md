@@ -250,6 +250,16 @@ existing `ProxmoxCluster` model is endpoint-scoped by `(endpoint, name)` and
 only optionally links to a NetBox core cluster. It is not a one-to-one extension
 of `virtualization.Cluster`.
 
+Proxmox VE 9.3 adds stable guest and cluster identifiers. The VM sidecar stores
+the guest `uid` in `proxmox_vm_uid` and the cluster `cluster-id` in
+`proxmox_cluster_uid`. `ProxmoxCluster.proxmox_cluster_uid` stores the same
+cluster identifier without changing the meaning of the existing `cluster_id`
+field. proxbox-api uses `(proxmox_cluster_uid, proxmox_vm_uid)` as the primary
+VM and container identity when both values are present. The legacy `(endpoint,
+vmid, type)` identity remains the compatibility fallback for older Proxmox or
+proxbox-api versions. Existing name collision and suffixing behavior is
+unchanged.
+
 Legacy backend IDs are preserved as raw data rather than guessed as plugin
 primary keys. The VM and device sidecars store proxbox-api's independent
 `proxmox_endpoint_id` in `proxmox_endpoint_raw_id`; the cluster sidecar stores legacy

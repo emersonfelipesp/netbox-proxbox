@@ -1,6 +1,6 @@
 # netbox-proxbox Repository Guide
 
-Current source: netbox-proxbox 0.0.32.post2 requires proxbox-api 0.0.32 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), deployed before the plugin. The netbox-sdk dependency remains proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source: netbox-proxbox 0.0.33rc1 requires proxbox-api 0.0.33 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), deployed before the plugin. The netbox-sdk dependency remains proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 > **LLM Agent Safety:** Before any destruction-adjacent operation, read
 > `AGENTS.md` § "LLM Agent Safety Guardrails". Automated agents may inspect and
@@ -75,6 +75,10 @@ depends on the backend network parser.
 - `ProxboxPluginSettings.sync_job_timeout` is the UI-backed RQ wall-clock limit
   for newly enqueued synchronization jobs. It defaults to 7200 seconds, accepts
   3600–604800 seconds, and never changes an already-running job's captured timeout.
+- `ProxboxPluginSettings.storage_download_allowed_hosts` is the exact hostname
+  allowlist backend consumers use for Proxmox ISO URL downloads. Only HTTPS port 443
+  is permitted, and an empty list denies every download. Configure only trusted
+  vendor hosts without open redirects.
 - `proxbox_cli/` is a standalone client and must not import Django or NetBox.
 - `docs/` is the source for the MkDocs site; `llms.txt` is committed generated
   documentation and must remain consistent with the source documentation.
@@ -92,19 +96,19 @@ depends on the backend network parser.
 ## Supported versions
 
 The certified stable NetBox range is `4.5.8` through `4.7.99` (the whole 4.7 series is admitted by the numeric gate; CI verifies GA `4.7.0`). The current
-plugin version is `0.0.32.post2`.
+plugin version is `0.0.33rc1`.
 
-Current source compatibility: netbox-proxbox 0.0.32.post2 requires proxbox-api 0.0.32 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.15 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
+Current source compatibility: netbox-proxbox 0.0.33rc1 requires proxbox-api 0.0.33 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with proxmox-sdk 0.0.16.post1 and netbox-sdk 0.0.13. The netbox-sdk version is proxbox-api's REST dependency only and does not provide the semantic MCP bridge.
 
 The documented released runtime pairing for this release line is
-netbox-proxbox 0.0.32.post2 <-> proxbox-api 0.0.32 <-> proxmox-sdk 0.0.15
+netbox-proxbox 0.0.33rc1 <-> proxbox-api 0.0.33 <-> proxmox-sdk 0.0.16.post1
 <-> netbox-sdk 0.0.13. Preserve release-note and compatibility rows as
 historical records unless a release workflow changes them.
 
-Current released runtime requirement: deploy proxbox-api 0.0.32 before netbox-proxbox 0.0.32.post2. The proxmox-sdk and netbox-sdk versions remain 0.0.15 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
+Current release-candidate runtime requirement: deploy proxbox-api 0.0.33 before netbox-proxbox 0.0.33rc1. The proxmox-sdk and netbox-sdk versions are 0.0.16.post1 and 0.0.13 respectively. The netbox-sdk dependency is REST-only and does not provide the semantic MCP bridge.
 
 CI pairing: the E2E Docker, page-coverage, documentation-screenshot, and
-release-validation defaults select proxbox-api `0.0.32`. These are intended
+release-validation defaults select proxbox-api `0.0.33`. These are intended
 source selections, not evidence that the backend package or image is public.
 Verify backend publication and qualification before candidate publication or
 ordinary E2E execution. E2E uses the exact published image by default; source-head
@@ -142,7 +146,10 @@ pins unchanged. See `docs/developer/ci-e2e-workflows.md` for the contract.
   material reads require object-level reveal access and the exact enabled
   assignment. Provider writes and supported assignment cleanup run inside one
   settings-first transaction; raw deletes refuse remaining provider state.
-  Migration `0107_v0_0_30_release` is the current schema tip. It consolidates
+  Migration `0109_guest_uid_identity` is the current schema tip. It follows the
+  `0108_v0_0_31_schema_validation` boundary and adds Proxmox VE 9.3 guest and
+  cluster UID identity plus the `storage_download_allowed_hosts` plugin
+  setting (the development-only `0110` was consolidated into it for 0.0.33). Migration `0107_v0_0_30_release` consolidates
   the three unpublished development migrations for native cluster binding,
   endpoint-owned SSH services, and Cloud Image SSH binding. Installations that
   applied the former development `0107_endpoint_native_cluster_binding` retain
@@ -163,6 +170,13 @@ pins unchanged. See `docs/developer/ci-e2e-workflows.md` for the contract.
   cluster, site, and placement even for a singleton candidate before adoption.
   Device-sidecar claims lock the row; NULL-to-ID and same-ID writes are allowed,
   while changing a committed ID returns `endpoint_ownership_conflict`.
+  VM sync-state identity stores Proxmox VE 9.3 guest `uid` and cluster
+  `cluster-id` as `proxmox_vm_uid` and `proxmox_cluster_uid`. proxbox-api uses
+  the unique non-empty `(proxmox_cluster_uid, proxmox_vm_uid)` pair as primary
+  guest identity; legacy `(endpoint, vmid, type)` remains the fallback, and
+  name suffixing is unchanged. `ProxmoxCluster.proxmox_cluster_uid` is separate
+  from the existing `cluster_id`; pre-9.3 status without `cluster-id` must not
+  erase it.
   Remote NetBox connection approval binds the effective token version and its
   non-secret v1 token reference or effective v2 key selected for transmission.
   Token changes require explicit

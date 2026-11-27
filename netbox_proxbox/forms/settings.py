@@ -715,6 +715,16 @@ class ProxboxPluginSettingsForm(BootstrapCheckboxFormMixin, forms.Form):
             "network as the authoritative NetBox source for instance networking."
         ),
     )
+    storage_download_allowed_hosts = forms.CharField(
+        required=False,
+        widget=forms.Textarea(attrs={"rows": 4, "cols": 60}),
+        label="Storage download allowed hosts",
+        help_text=(
+            "Exact trusted vendor hostnames, one per line. Downloads use HTTPS port "
+            "443 only. An empty list denies every download; do not allow hosts with "
+            "open redirects."
+        ),
+    )
     cloud_customer_prefix_id = forms.IntegerField(
         required=False,
         min_value=1,
@@ -946,6 +956,24 @@ class ProxboxPluginSettingsForm(BootstrapCheckboxFormMixin, forms.Form):
             )
             or []
         )
+
+    def clean_storage_download_allowed_hosts(self) -> list[str]:
+        """Normalize the newline-separated exact-hostname allowlist."""
+
+        # Imported lazily so lightweight form tests that stub django.core keep working.
+        from django.core.exceptions import ValidationError as CoreValidationError
+
+        from netbox_proxbox.storage_download_hosts import (
+            normalize_storage_download_allowed_hosts,
+        )
+
+        value = self.cleaned_data.get("storage_download_allowed_hosts") or ""
+        lines = value.splitlines() if isinstance(value, str) else list(value)
+        entries = [line for line in lines if not isinstance(line, str) or line.strip()]
+        try:
+            return normalize_storage_download_allowed_hosts(entries)
+        except CoreValidationError as exc:
+            raise forms.ValidationError(exc.messages) from exc
 
     def clean_backend_log_file_path(self) -> str:
         """Require an absolute log file path including a filename."""

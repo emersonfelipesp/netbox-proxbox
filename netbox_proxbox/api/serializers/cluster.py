@@ -127,6 +127,7 @@ class ProxmoxClusterSerializer(NetBoxModelSerializer):
             "netbox_cluster",
             "name",
             "cluster_id",
+            "proxmox_cluster_uid",
             "mode",
             "nodes_count",
             "node_count",

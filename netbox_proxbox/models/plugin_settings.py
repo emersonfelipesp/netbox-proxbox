@@ -23,6 +23,9 @@ from netbox_proxbox.constants import (
     SYNC_JOB_TIMEOUT_MAX,
     SYNC_JOB_TIMEOUT_MIN,
 )
+from netbox_proxbox.storage_download_hosts import (
+    normalize_storage_download_allowed_hosts,
+)
 from netbox_proxbox.validators import validate_node_device_name_template
 
 DEFAULT_BACKEND_LOG_FILE_PATH = "/var/log/proxbox.log"
@@ -862,6 +865,16 @@ class ProxboxPluginSettings(NetBoxModel):
             "customer-facing instance networking."
         ),
     )
+    storage_download_allowed_hosts = models.JSONField(
+        default=list,
+        blank=True,
+        verbose_name=_("Storage download allowed hosts"),
+        help_text=_(
+            "Exact hostnames allowed for Proxmox ISO URL downloads, one per entry. "
+            "Downloads use HTTPS port 443 only; an empty list denies every download. "
+            "Allow only trusted vendor hosts that do not provide open redirects."
+        ),
+    )
     cloud_customer_prefix_id = models.PositiveIntegerField(
         null=True,
         blank=True,
@@ -1036,6 +1049,9 @@ class ProxboxPluginSettings(NetBoxModel):
         """Reject timing combinations that cannot perform another status poll."""
 
         super().clean()
+        self.storage_download_allowed_hosts = normalize_storage_download_allowed_hosts(
+            self.storage_download_allowed_hosts
+        )
         timeout = self.ceph_task_timeout
         poll_interval = self.ceph_task_poll_interval
         if timeout is None or poll_interval is None:

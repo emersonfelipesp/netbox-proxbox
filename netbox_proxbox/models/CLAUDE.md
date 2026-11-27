@@ -1,7 +1,9 @@
 # Model Guide
 
-The current schema tip is migration `0107_v0_0_30_release`. It consolidates the
-three unpublished development migrations for native cluster binding,
+The current schema tip is migration `0109_guest_uid_identity`. It follows
+`0108_v0_0_31_schema_validation` and adds Proxmox VE 9.3 guest and cluster UID
+identity. Migration `0107_v0_0_30_release` consolidates the three unpublished
+development migrations for native cluster binding,
 endpoint-owned SSH services, and Cloud Image SSH binding. A staging installation
 that applied the former development `0107_endpoint_native_cluster_binding` keeps
 that ignored orphan recorder row while the release migration adopts its schema.
@@ -101,6 +103,11 @@ because a referenced secret is unavailable.
   view. Verified rotation bypasses the queryset guard only through one exact
   settings-locked internal permit.
 - `ProxmoxCluster`: stores synchronized cluster metadata and relationships to the source endpoint and NetBox cluster.
+- `ProxmoxCluster.proxmox_cluster_uid` stores Proxmox VE 9.3 `cluster-id`
+  separately from the legacy `cluster_id`. The VM sidecar stores that value
+  with `proxmox_vm_uid`; their unique non-empty pair is proxbox-api's primary
+  guest identity. Legacy `(endpoint, vmid, type)` remains the fallback, and
+  name suffixing is unchanged.
 - `ProxmoxNode`: stores synchronized hypervisor nodes and their relationships to the source endpoint and NetBox device.
 - `ProxmoxMetricsInfluxDB`: stores the InfluxDB URL, organization, bucket, TLS
   flag, enabled state, and plugin-owned Fernet ciphertext for a Proxmox cluster.
@@ -349,6 +356,10 @@ explicitly legacy endpoint while preserving assignments for other owners.
   `ensure_cloud_customer_network` management command so proxbox-api and other
   external automation discover the designated customer network from NetBox
   instead of hardcoded estate constants.
+- `ProxboxPluginSettings.storage_download_allowed_hosts` is the normalized exact
+  hostname allowlist used by backend consumers for Proxmox ISO URL downloads. It
+  permits only HTTPS port 443, and an empty list denies every download. Entries
+  must be trusted vendor hosts without open redirects.
 
 ## Links
 

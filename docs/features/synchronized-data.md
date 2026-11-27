@@ -98,6 +98,21 @@ concurrency for these APIs is available on NetBox 4.6+.
 Automated writers must treat the sidecar rows as proxbox-api-owned. Reflection
 custom fields are no longer a parallel source of truth.
 
+### Proxmox VE 9.3 Guest Identity
+
+`ProxboxVirtualMachineSyncState.proxmox_vm_uid` stores the guest `uid`, and
+`proxmox_cluster_uid` stores the guest's cluster `cluster-id`. The pair is
+unique when both values are non-empty and is the primary VM or container
+identity for proxbox-api. `ProxmoxCluster.proxmox_cluster_uid` stores the same
+cluster identifier separately from the legacy `cluster_id` field. Cluster sync
+reads it from the cluster status entry, or from the `local==1` node entry for a
+standalone node. A pre-9.3 response that omits `cluster-id` does not clear a
+stored value.
+
+Older proxbox-api clients may omit both fields. In that case, the legacy
+`(endpoint, vmid, type)` identity remains the fallback. VM name collision and
+suffixing behavior does not change.
+
 ## Sync Endpoints
 
 | Plugin Path | Backend Path Used By Job | Description |

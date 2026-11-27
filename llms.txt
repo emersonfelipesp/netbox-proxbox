@@ -5,6 +5,11 @@ Automatic background work can be disabled with the strictly boolean
 The default is `True`. Restart application and worker processes; stock system
 timers drain without polling, while explicit user jobs and audit records remain.
 
+`ProxboxPluginSettings.storage_download_allowed_hosts` is the normalized exact
+hostname allowlist used by backend consumers for Proxmox ISO URL downloads. Downloads
+use HTTPS port 443 only, an empty list denies every download, and operators
+should configure only trusted vendor hosts without open redirects.
+
 > This file provides comprehensive context for LLMs working with the netbox-proxbox codebase.
 
 ## Docker E2E admission
@@ -192,11 +197,11 @@ topology.
 
 ### Version
 
-- Plugin version: `0.0.32.post2`
+- Plugin version: `0.0.33rc1`
 - NetBox compatibility: `4.5.8` through `4.7.99`
-- Current source compatibility: `netbox-proxbox 0.0.32.post2` requires proxbox-api 0.0.32 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with `proxmox-sdk 0.0.15` and `netbox-sdk 0.0.13`.
-- Documented released runtime pairing: `netbox-proxbox 0.0.32.post2`,
-  `proxbox-api 0.0.32`, `proxmox-sdk 0.0.15`, and `netbox-sdk 0.0.13`
+- Current source compatibility: `netbox-proxbox 0.0.33rc1` requires proxbox-api 0.0.33 (the latest backend release; the latest netbox-proxbox and proxbox-api releases are always paired), with `proxmox-sdk 0.0.16.post1` and `netbox-sdk 0.0.13`.
+- Documented release-candidate runtime pairing: `netbox-proxbox 0.0.33rc1`,
+  `proxbox-api 0.0.33`, `proxmox-sdk 0.0.16.post1`, and `netbox-sdk 0.0.13`
 
 ---
 
@@ -283,9 +288,11 @@ invalidates the hint and immediately retries full discovery and registration.
 This generated context summary follows the executable source. The authoritative
 inventories are `netbox_proxbox/models/`, `netbox_proxbox/urls.py`,
 `netbox_proxbox/api/urls.py`, `netbox_proxbox/jobs.py`, `proxbox_cli/`, and the
-workflow files. The current schema tip is `0107_v0_0_30_release`. It consolidates
-the three unpublished development migrations for native cluster binding,
-endpoint-owned SSH services, and Cloud Image SSH binding. Staging installations
+workflow files. The current schema tip is `0109_guest_uid_identity`. It follows
+`0108_v0_0_31_schema_validation` and adds Proxmox VE 9.3 guest and cluster UID
+identity. `0107_v0_0_30_release` consolidates the three unpublished development
+migrations for native cluster binding, endpoint-owned SSH services, and Cloud
+Image SSH binding. Staging installations
 that applied the former development `0107_endpoint_native_cluster_binding` keep
 its ignored orphan recorder row while the release migration safely adopts the
 existing schema and data. The plugin-owned `ProxmoxEndpointService` is parented
@@ -1710,6 +1717,20 @@ exact-PK updates without signals and stores bounded reasons beside the historica
 endpoint-backfill summary. Selected-VM batch jobs share the run stamp and map;
 direct per-object Sync Now requests do not invent missing authority.
 
+## Proxmox VE 9.3 guest identity
+
+`ProxboxVirtualMachineSyncState.proxmox_vm_uid` stores the guest `uid`, and
+`proxmox_cluster_uid` stores its cluster `cluster-id`. The unique non-empty
+`(proxmox_cluster_uid, proxmox_vm_uid)` pair is proxbox-api's primary VM and
+container identity. Legacy `(endpoint, vmid, type)` remains the compatibility
+fallback, and existing VM name suffixing is unchanged.
+
+`ProxmoxCluster.proxmox_cluster_uid` stores the same stable identifier without
+repurposing `cluster_id`. Cluster synchronization reads it from the cluster
+status entry or from the `local==1` node for standalone mode. A pre-9.3 status
+response that omits `cluster-id` does not erase the stored value. Older
+proxbox-api clients may omit both VM sidecar UID fields.
+
 ## Local E2E mock telemetry
 
 The local Proxmox mock uses optional FastAPI[standard]>=0.143.0 native telemetry.
@@ -1753,9 +1774,23 @@ objects. Failure in 0108 leaves committed 0107 recorded; reversing 0108 preserve
 those objects and values. Preserve database backup, source and recorder evidence,
 and use reviewed explicit recovery rather than rewriting applied history.
 
-## Released backend pairing
+## Release-candidate backend pairing
 
-The released runtime pairing is netbox-proxbox 0.0.32.post2 with proxbox-api 0.0.32, proxmox-sdk 0.0.15, and netbox-sdk 0.0.13. Deploy and qualify the backend before the plugin.
+The release-candidate runtime pairing is netbox-proxbox 0.0.33rc1 with proxbox-api 0.0.33, proxmox-sdk 0.0.16.post1, and netbox-sdk 0.0.13. Deploy and qualify the backend before the plugin.
+
+## Version 0.0.33rc1 stable Proxmox VE 9.3 guest UID identity
+
+Version 0.0.33rc1 adds migration 0109_guest_uid_identity. It stores the
+20-character lowercase-base32 Proxmox guest UID and cluster UID in VM sync
+state and stores the cluster UID on tracked Proxmox clusters. A partial unique
+constraint protects each non-empty UID pair. Filters, serializers, tables, and
+templates expose the identity, and conflicting serializer writes return HTTP
+409. Cluster synchronization records cluster-id. The UID pair is primary guest
+identity; the endpoint, VMID, and guest-type chain remains the fallback, while
+name-collision and duplicate_name_resolved behavior remains unchanged.
+
+The candidate pairs with proxbox-api 0.0.33 and proxmox-sdk 0.0.16.post1.
+Deploy proxbox-api 0.0.33 first. Exactly one migration, 0109, is new.
 
 ## Version 0.0.32
 
@@ -1794,5 +1829,5 @@ operations. Plugin REST routes and filters are unchanged.
 
 The release also repairs stale cross-endpoint cluster tracking left by older
 multi-endpoint releases and makes the documentation-screenshot workflow use
-deadline-aware, fail-fast readiness checks. It adds no migration;
-`0108_v0_0_31_schema_validation` remains the schema tip.
+deadline-aware, fail-fast readiness checks. The later unreleased guest identity
+work adds `0109_guest_uid_identity`, which is now the schema tip.

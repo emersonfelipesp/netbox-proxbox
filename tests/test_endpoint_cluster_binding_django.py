@@ -457,6 +457,42 @@ class EndpointClusterBindingReviewTest(EndpointClusterBindingTest):
         )
         self.assertEqual(response.status_code, 403, response.content)
 
+    def test_tracking_api_round_trips_optional_cluster_uid(self) -> None:
+        user = make_user("tracking-uid-writer")
+        self._grant(user, ProxmoxCluster, ["view", "add", "change"])
+        self._grant(user, ProxmoxEndpoint, ["view"], {"id": self.endpoint.pk})
+        _, headers = make_api_token(user)
+        path = reverse("plugins-api:netbox_proxbox-api:proxmoxcluster-list")
+
+        with_uid = self.client.post(
+            path,
+            data={
+                "endpoint": self.endpoint.pk,
+                "name": "api-cluster-with-uid",
+                "cluster_id": "cluster/api-with-uid",
+                "proxmox_cluster_uid": "cluster-uid-api",
+                "mode": "cluster",
+            },
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(with_uid.status_code, 201, with_uid.content)
+        self.assertEqual(with_uid.json()["proxmox_cluster_uid"], "cluster-uid-api")
+
+        without_uid = self.client.post(
+            path,
+            data={
+                "endpoint": self.endpoint.pk,
+                "name": "api-cluster-without-uid",
+                "cluster_id": "cluster/api-without-uid",
+                "mode": "cluster",
+            },
+            content_type="application/json",
+            **headers,
+        )
+        self.assertEqual(without_uid.status_code, 201, without_uid.content)
+        self.assertEqual(without_uid.json()["proxmox_cluster_uid"], "")
+
     def test_tracking_metadata_and_clear_do_not_transfer_authority(self) -> None:
         core, tracking, _ = self.sync()
         other = ProxmoxEndpoint.objects.create(name="other-tracking-endpoint")

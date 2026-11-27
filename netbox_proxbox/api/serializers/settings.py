@@ -8,6 +8,9 @@ from rest_framework import serializers
 from netbox_proxbox.constants import OVERWRITE_FIELDS, SYNC_MODE_FIELDS
 from netbox_proxbox.models import ProxboxPluginSettings
 from netbox_proxbox.models.plugin_settings import CEPH_POLL_INTERVAL_TIMEOUT_ERROR
+from netbox_proxbox.storage_download_hosts import (
+    normalize_storage_download_allowed_hosts,
+)
 from netbox_proxbox.validators import validate_global_node_device_name_template
 
 
@@ -26,6 +29,14 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
         required=False,
         write_only=True,
     )
+
+    def validate_storage_download_allowed_hosts(self, value: object) -> list[str]:
+        """Normalize and validate exact storage download hostnames."""
+
+        try:
+            return normalize_storage_download_allowed_hosts(value)
+        except ValidationError as exc:
+            raise serializers.ValidationError(exc.messages) from exc
 
     def validate_credential_storage_backend(self, value: str) -> str:
         """Reject an unavailable backend or a switch that strands OpenBao state."""
@@ -163,6 +174,7 @@ class ProxboxPluginSettingsSerializer(NetBoxModelSerializer):
             "enable_tenant_tag_assignment",
             "enable_tenant_from_cluster",
             "cloud_network_lock_enabled",
+            "storage_download_allowed_hosts",
             "cloud_customer_prefix_id",
             "cloud_customer_bridge",
             "cloud_customer_vlan_tag",

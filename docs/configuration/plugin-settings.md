@@ -239,6 +239,7 @@ by data migration.
 | Field | Default | Env override | Description |
 |---|---|---|---|
 | **Enable cloud customer network lock** (`cloud_network_lock_enabled`) | `false` | _(plugin only)_ | Marks the configured cloud customer network as authoritative for cloud provisioning integrations. |
+| **Storage download allowed hosts** (`storage_download_allowed_hosts`) | `[]` | _(plugin only)_ | Exact trusted vendor hostnames that backend consumers may use for Proxmox ISO URL downloads. Enter one hostname per line. Downloads use HTTPS port 443 only, and an empty list denies every download. Do not allow hosts that provide open redirects. |
 | **Cloud customer Prefix ID** (`cloud_customer_prefix_id`) | `null` | _(plugin only)_ | Primary key of the NetBox IPAM Prefix designated as the cloud customer network. |
 | **Cloud customer bridge** (`cloud_customer_bridge`) | `vmbr1` | _(plugin only)_ | Proxmox bridge name used for customer-facing cloud interfaces. |
 | **Cloud customer VLAN tag** (`cloud_customer_vlan_tag`) | `null` | _(plugin only)_ | VLAN tag associated with the designated cloud customer network. |

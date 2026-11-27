@@ -44,6 +44,8 @@ class ProxboxVirtualMachineSyncStateTable(NetBoxTable):
             "proxmox_cluster",
             "proxmox_cluster_name",
             "proxmox_vm_id",
+            "proxmox_vm_uid",
+            "proxmox_cluster_uid",
             "proxmox_vm_type",
             "proxmox_status",
             "proxmox_start_at_boot",

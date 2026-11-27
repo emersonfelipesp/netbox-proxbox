@@ -1,4 +1,4 @@
-"""Guard literal CLI routes against the proxbox-api 0.0.32 OpenAPI contract."""
+"""Guard literal CLI routes against the proxbox-api 0.0.33 OpenAPI contract."""
 
 from __future__ import annotations
 
@@ -7,8 +7,8 @@ import json
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
-ROUTES = ROOT / "tests" / "fixtures" / "proxbox_api_0_0_32_routes.json"
-FILTERS = ROOT / "tests" / "fixtures" / "proxbox_api_0_0_32_plugin_filters.json"
+ROUTES = ROOT / "tests" / "fixtures" / "proxbox_api_0_0_33_routes.json"
+FILTERS = ROOT / "tests" / "fixtures" / "proxbox_api_0_0_33_plugin_filters.json"
 HTTP_METHODS = {"get", "post", "put", "patch", "delete"}
 BACKEND_PREFIXES = (
     "/admin/",
@@ -84,7 +84,7 @@ def test_literal_cli_routes_exist_in_published_backend_contract() -> None:
     assert operations == sorted(operations)
     published = {tuple(item) for item in operations}
     missing = _literal_cli_routes() - published - CONDITIONAL_ROUTES
-    assert not missing, f"Routes absent from proxbox-api 0.0.32: {sorted(missing)}"
+    assert not missing, f"Routes absent from proxbox-api 0.0.33: {sorted(missing)}"
 
 
 def test_literal_plugin_backend_paths_exist_in_published_backend_contract() -> None:
@@ -94,7 +94,7 @@ def test_literal_plugin_backend_paths_exist_in_published_backend_contract() -> N
         _literal_plugin_backend_paths() - published - conditional - NON_OPENAPI_ROUTES
     )
     assert not missing, (
-        f"Plugin paths absent from proxbox-api 0.0.32: {sorted(missing)}"
+        f"Plugin paths absent from proxbox-api 0.0.33: {sorted(missing)}"
     )
 
 
@@ -110,7 +110,7 @@ def test_removed_cli_commands_and_routes_are_absent() -> None:
 
 
 def test_backend_query_filters_exist_in_plugin_filtersets() -> None:
-    """Pin every filter sent by 0.0.32 for the audited plugin resources."""
+    """Pin every filter sent by 0.0.33 for the audited plugin resources."""
     source = (ROOT / "netbox_proxbox" / "filtersets.py").read_text()
     expected = json.loads(FILTERS.read_text())
     for class_name, filter_names in expected.items():

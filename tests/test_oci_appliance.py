@@ -743,7 +743,7 @@ def test_committed_compatibility_table_pairs_the_current_package_version() -> No
 
     assert resolve_oci_versions.paired_backend_version(
         source_version, ROOT / "COMPATIBILITY.md"
-    ) == Version("0.0.32")
+    ) == Version("0.0.33")
 
 
 def test_deleting_current_pairing_row_is_rejected(

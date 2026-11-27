@@ -445,8 +445,8 @@ class ProxboxSyncStateSerializerMixin:
             if self.instance is not None
             else None
         )
-        attrs = super().validate(attrs)
         self._validate_parent_uniqueness(attrs, current_parent=current_parent)
+        attrs = super().validate(attrs)
         self._validate_relation_coherence(attrs)
         return attrs
 
@@ -476,6 +476,8 @@ SYNC_TRAILER_FIELDS = (
 
 VM_PROXMOX_FIELDS = (
     "proxmox_vm_id",
+    "proxmox_vm_uid",
+    "proxmox_cluster_uid",
     "proxmox_vm_type",
     # proxbox-api writes this after each successful sync and reads it back to
     # tell a Proxmox-side rename apart from an operator renaming the VM in
@@ -548,6 +550,40 @@ class ProxboxVirtualMachineSyncStateSerializer(
         required=False,
         allow_null=True,
     )
+
+    def _validate_parent_uniqueness(
+        self,
+        attrs: dict,
+        current_parent=None,
+    ) -> None:
+        super()._validate_parent_uniqueness(
+            attrs,
+            current_parent=current_parent,
+        )
+        cluster_uid = attrs.get(
+            "proxmox_cluster_uid",
+            getattr(self.instance, "proxmox_cluster_uid", ""),
+        )
+        vm_uid = attrs.get(
+            "proxmox_vm_uid",
+            getattr(self.instance, "proxmox_vm_uid", ""),
+        )
+        if not cluster_uid or not vm_uid:
+            return
+        queryset = self.Meta.model.objects.filter(
+            proxmox_cluster_uid=cluster_uid,
+            proxmox_vm_uid=vm_uid,
+        )
+        if self.instance is not None:
+            queryset = queryset.exclude(pk=self.instance.pk)
+        if queryset.exists():
+            raise SyncStateConflict(
+                {
+                    "proxmox_vm_uid": (
+                        "This Proxmox cluster and guest UID pair already exists."
+                    )
+                }
+            )
 
     class Meta:
         model = ProxboxVirtualMachineSyncState

@@ -621,3 +621,69 @@ class Production0106ValidationUpgradeTest(ForwardOnlyMigrationTestCase):
                 connection.introspection.table_names(cursor),
             )
         self._migrate_to(self.migrate_to)
+
+
+class GuestUIDIdentityMigrationTest(ForwardOnlyMigrationTestCase):
+    """Apply the additive guest identity migration after the current leaf."""
+
+    migrate_from = ("netbox_proxbox", "0108_v0_0_31_schema_validation")
+    migrate_to = ("netbox_proxbox", "0109_guest_uid_identity")
+    migration_floor = migrate_from
+
+    def test_migration_adds_uid_fields_and_conditional_constraint(self) -> None:
+        try:
+            self._migrate_to(self.migrate_from)
+            apps = self._migrate_to(self.migrate_to)
+            Cluster = apps.get_model("netbox_proxbox", "ProxmoxCluster")
+            VMState = apps.get_model("netbox_proxbox", "ProxboxVirtualMachineSyncState")
+
+            self.assertEqual(
+                Cluster._meta.get_field("proxmox_cluster_uid").get_default(),
+                "",
+            )
+            self.assertEqual(VMState._meta.get_field("proxmox_vm_uid").max_length, 20)
+            self.assertTrue(VMState._meta.get_field("proxmox_vm_uid").db_index)
+            self.assertEqual(
+                VMState._meta.get_field("proxmox_cluster_uid").get_default(),
+                "",
+            )
+            self.assertIn(
+                "netbox_proxbox_vm_sync_unique_cluster_guest_uid",
+                {constraint.name for constraint in VMState._meta.constraints},
+            )
+        finally:
+            self._restore_current_leaf()
+
+    def test_reverse_keeps_database_defaults_for_previous_release_writes(self) -> None:
+        try:
+            self._migrate_to(self.migrate_from)
+            self._migrate_to(self.migrate_to)
+            apps = self._migrate_to(self.migrate_from)
+            Endpoint = apps.get_model("netbox_proxbox", "ProxmoxEndpoint")
+            Cluster = apps.get_model("netbox_proxbox", "ProxmoxCluster")
+            VirtualMachine = apps.get_model("virtualization", "VirtualMachine")
+            VMState = apps.get_model("netbox_proxbox", "ProxboxVirtualMachineSyncState")
+
+            endpoint = Endpoint.objects.create(name="uid-rollback-endpoint")
+            cluster = Cluster.objects.create(
+                endpoint_id=endpoint.pk,
+                name="uid-rollback-cluster",
+            )
+            virtual_machine = VirtualMachine.objects.create(name="uid-rollback-vm")
+            state = VMState.objects.create(virtual_machine_id=virtual_machine.pk)
+
+            with connection.cursor() as cursor:
+                cursor.execute(
+                    "SELECT proxmox_cluster_uid FROM "
+                    "netbox_proxbox_proxmoxcluster WHERE id = %s",
+                    [cluster.pk],
+                )
+                self.assertEqual(cursor.fetchone(), ("",))
+                cursor.execute(
+                    "SELECT proxmox_vm_uid, proxmox_cluster_uid FROM "
+                    "netbox_proxbox_proxboxvirtualmachinesyncstate WHERE id = %s",
+                    [state.pk],
+                )
+                self.assertEqual(cursor.fetchone(), ("", ""))
+        finally:
+            self._restore_current_leaf()

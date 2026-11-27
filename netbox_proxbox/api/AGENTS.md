@@ -22,6 +22,14 @@ writes are allowed, while changing a committed ID returns HTTP 409 with
 pre-change state and retain NetBox's submitted changelog message; rejected
 claims do not emit an ObjectChange. Connection-authority responses expose only
 the effective remote NetBox token identity, never its secret.
+The VM sync-state serializer and filterset expose optional
+`proxmox_vm_uid` and `proxmox_cluster_uid` fields. A duplicate non-empty pair
+returns the same HTTP 409 `sync_state_conflict` style as duplicate parent rows;
+omitting either field remains compatible with older proxbox-api clients.
+The settings serializer exposes and accepts `storage_download_allowed_hosts` as
+a normalized list of exact hostnames. Invalid, duplicate, wildcard, IP-literal,
+or URL-shaped entries are rejected before persistence; an empty list is the
+fail-closed value that denies every ISO URL download.
 
 
 Keep API behavior typed, permission-gated, and vendor-neutral. Use NetBox

@@ -38,6 +38,13 @@ def test_cluster_serializer_includes_netbox_cluster_field():
     assert "netbox_cluster" in content
 
 
+def test_cluster_serializer_and_filter_include_proxmox_cluster_uid():
+    serializer = _read("netbox_proxbox/api/serializers/cluster.py")
+    filtersets = _read("netbox_proxbox/filtersets.py")
+    assert '"proxmox_cluster_uid"' in serializer
+    assert '"proxmox_cluster_uid"' in filtersets
+
+
 def test_cluster_serializer_includes_netbox_device_field():
     content = _read("netbox_proxbox/api/serializers/cluster.py")
     assert "netbox_device" in content
@@ -120,6 +127,12 @@ def test_cluster_tables_define_expected_classes():
 def test_cluster_node_table_renders_memory_in_gb():
     content = _read("netbox_proxbox/tables/cluster.py")
     assert "render_memory" in content or "GB" in content
+
+
+def test_cluster_table_shows_proxmox_cluster_uid_by_default():
+    content = _read("netbox_proxbox/tables/cluster.py")
+    default_columns = content.split("default_columns = (", 1)[1].split(")", 1)[0]
+    assert '"proxmox_cluster_uid"' in default_columns
 
 
 def test_tables_init_exports_cluster_tables():
