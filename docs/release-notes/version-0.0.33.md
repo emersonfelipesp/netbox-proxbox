@@ -1,11 +1,15 @@
 # Version 0.0.33
 
-Version `0.0.33rc1` establishes stable Proxmox VE 9.3 guest UID identity and
+Version `0.0.33rc2` establishes stable Proxmox VE 9.3 guest UID identity and
 pairs netbox-proxbox with proxbox-api `0.0.33`. Deploy and qualify proxbox-api
 `0.0.33` before installing this plugin candidate. The paired backend pins
 proxmox-sdk `0.0.16.post1`; netbox-sdk remains `0.0.13`.
 The certified NetBox range remains `4.5.8` through `4.7.99`, including GA
 `4.7.0`.
+
+`0.0.33rc2` supersedes `0.0.33rc1` without a runtime change: it corrects the
+real-Django standalone cluster UID test fixture, which omitted the node `ip`
+that Proxmox VE always reports and the node model requires.
 
 ## Stable guest and cluster identity
 
@@ -43,7 +47,7 @@ field; the development-only `0110_storage_download_allowed_hosts` migration was
 consolidated into it before publication. Every field operation is idempotent.
 A development database that already applied both former migrations keeps a
 consistent schema; its orphan `0110` recorder row is ignored. Deploy
-proxbox-api `0.0.33` first, then install netbox-proxbox `0.0.33rc1`, run the
+proxbox-api `0.0.33` first, then install netbox-proxbox `0.0.33rc2`, run the
 normal NetBox migration and static-asset steps, and restart all application and
 worker processes.
 

@@ -453,7 +453,7 @@ sequenceDiagram
 - When changing sync contracts shared with the backend, run the mocked tests,
   the workflow contract tests, and a Docker E2E run before release.
 
-The release-candidate runtime pairing is netbox-proxbox 0.0.33rc1 with proxbox-api 0.0.33. Release validation deploys and qualifies that backend before the plugin.
+The release-candidate runtime pairing is netbox-proxbox 0.0.33rc2 with proxbox-api 0.0.33. Release validation deploys and qualifies that backend before the plugin.
 
 The `0.0.32` release pairs with proxbox-api `0.0.31`. Its prerequisite job resolves the
 selected package, source, and immutable image inputs once before matrix

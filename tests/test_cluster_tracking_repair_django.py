@@ -197,6 +197,7 @@ class CrossLinkedTrackingRecoveryTest(_CrossLinkedFixture, TestCase):
                     "type": "node",
                     "name": "standalone-uid-node",
                     "id": "node/standalone-uid-node",
+                    "ip": "127.0.0.1",
                     "local": 1,
                     "online": 1,
                     "cluster-id": "standalone-cluster-uid",
